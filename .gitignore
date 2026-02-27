@@ -36,6 +36,11 @@ docker-compose.override.yml
 *.db
 *.sqlite3
 
+# Node / Frontend
+node_modules/
+.next/
+package-lock.json
+
 # OS
 .DS_Store
 Thumbs.db
