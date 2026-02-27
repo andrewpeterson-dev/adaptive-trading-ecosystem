@@ -28,6 +28,13 @@ try:
 except ImportError:
     _has_auth = False
 
+try:
+    from dashboard.market_data import get_watchlist_quotes, get_historical_bars, get_current_price, DEFAULT_WATCHLIST
+    from dashboard.paper_engine import get_portfolio_summary, execute_buy, execute_sell, get_trade_history, get_or_create_portfolio
+    _has_paper = True
+except ImportError:
+    _has_paper = False
+
 # ── Page Config ──────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -46,6 +53,8 @@ if _has_auth:
         st.warning("Please verify your email address. Check your inbox for a verification link.")
 
 # ── Custom CSS ───────────────────────────────────────────────────────────
+
+st.markdown('<meta name="viewport" content="width=device-width, initial-scale=1">', unsafe_allow_html=True)
 
 st.markdown("""
 <style>
@@ -490,13 +499,36 @@ def run_models(selected_strategies: tuple = None):
 # ═══════════════════════════════════════════════════════════════════════════
 
 st.sidebar.markdown("## Adaptive Trading Ecosystem")
-st.sidebar.markdown(f"**{st.session_state['user_display_name']}**")
-st.sidebar.caption(st.session_state["user_email"])
+st.sidebar.markdown(f"**{st.session_state.get('user_display_name', 'Trader')}**")
+st.sidebar.caption(st.session_state.get("user_email", ""))
 if _has_auth:
-    if st.sidebar.button("Logout", use_container_width=True):
+    if st.sidebar.button("Logout", width="stretch"):
         logout()
         st.rerun()
 st.sidebar.divider()
+
+# Paper mode detection
+_user_id = st.session_state.get("user_id")
+_has_broker = False
+if _has_auth and _has_paper and _user_id:
+    from dashboard.auth import get_db as _get_db
+    from db.models import BrokerCredential as _BC
+    from sqlalchemy import select as _select
+    _db = _get_db()
+    try:
+        _has_broker = _db.execute(
+            _select(_BC).where(_BC.user_id == _user_id).limit(1)
+        ).scalar_one_or_none() is not None
+    finally:
+        _db.close()
+
+    if _has_broker:
+        st.sidebar.success("**Live Mode** — Broker connected")
+    else:
+        st.sidebar.info("**Paper Mode** — $1M virtual portfolio")
+        get_or_create_portfolio(_user_id)
+elif _has_paper:
+    _user_id = None
 
 # Data source toggle
 data_source = st.sidebar.radio(
@@ -627,7 +659,8 @@ selected_tuple = tuple(sorted(st.session_state.selected_strategies))
 
 st.sidebar.divider()
 
-data = run_models(selected_tuple)
+with st.spinner("Loading models..."):
+    data = run_models(selected_tuple)
 
 # System status
 regime = data["regime"]
@@ -641,7 +674,7 @@ st.sidebar.divider()
 
 # Controls
 st.sidebar.markdown("### Controls")
-if st.sidebar.button("Retrain All Models", use_container_width=True):
+if st.sidebar.button("Retrain All Models", width="stretch"):
     st.cache_resource.clear()
     st.rerun()
 
@@ -690,21 +723,21 @@ col5.metric("Status", "HALTED" if halted else "ACTIVE", delta="System OK" if not
 _is_admin = st.session_state.get("is_admin", False)
 
 if use_webull:
-    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Live Trading", "Allocation", "Risk", "Regime", "Trades", "Broker Settings"]
+    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Live Trading", "Allocation", "Risk", "Regime", "Trades", "Paper Trading", "Broker Settings"]
     if _is_admin:
         _tab_names.append("Admin")
     _tabs = st.tabs(_tab_names)
     (tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder,
-     tab_live, tab_allocation, tab_risk, tab_regime, tab_trades, tab_broker) = _tabs[:12]
-    tab_admin = _tabs[12] if _is_admin else None
+     tab_live, tab_allocation, tab_risk, tab_regime, tab_trades, tab_paper, tab_broker) = _tabs[:13]
+    tab_admin = _tabs[13] if _is_admin else None
 else:
-    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Allocation", "Risk", "Regime", "Trades", "Broker Settings"]
+    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Allocation", "Risk", "Regime", "Trades", "Paper Trading", "Broker Settings"]
     if _is_admin:
         _tab_names.append("Admin")
     _tabs = st.tabs(_tab_names)
     (tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder,
-     tab_allocation, tab_risk, tab_regime, tab_trades, tab_broker) = _tabs[:11]
-    tab_admin = _tabs[11] if _is_admin else None
+     tab_allocation, tab_risk, tab_regime, tab_trades, tab_paper, tab_broker) = _tabs[:12]
+    tab_admin = _tabs[12] if _is_admin else None
     tab_live = None
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -824,7 +857,7 @@ with tab_models:
         })
 
     perf_df = pd.DataFrame(perf_rows)
-    st.dataframe(perf_df, use_container_width=True, hide_index=True, height=250)
+    st.dataframe(perf_df, width="stretch", hide_index=True, height=250)
 
     # Visual comparisons
     col_sharpe, col_wr = st.columns(2)
@@ -1011,7 +1044,7 @@ with tab_ai:
         run_analysis = st.button(
             "Run AI Analysis",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=not has_api_key,
         )
         st.caption(f"Provider: **{_ai_settings.llm_provider}** | Model: **{_ai_settings.llm_model}**")
@@ -1097,7 +1130,7 @@ with tab_ai:
                         "Change": f"{change_pct:+.1f}%",
                         "Signal": {"increase": "Overweight", "decrease": "Underweight", "hold": "Neutral"}[direction],
                     })
-                st.dataframe(pd.DataFrame(adj_rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(adj_rows), width="stretch", hide_index=True)
 
                 # Show adjusted vs current weights
                 st.markdown("#### Weight Impact Preview")
@@ -1114,7 +1147,7 @@ with tab_ai:
                         "Adjusted": f"{adj_val:.1%}",
                         "Delta": f"{(adj_val - cur) * 100:+.1f}pp",
                     })
-                st.dataframe(pd.DataFrame(impact_rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(impact_rows), width="stretch", hide_index=True)
             else:
                 st.info("No adjustments recommended (neutral stance).")
 
@@ -1146,7 +1179,7 @@ with tab_ai:
                     "Model": h["model_used"],
                     "Latency": f"{h['latency_ms']}ms",
                 })
-            st.dataframe(pd.DataFrame(hist_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(hist_rows), width="stretch", hide_index=True)
 
     else:
         st.info("Click **Run AI Analysis** to generate an LLM-powered market assessment.")
@@ -1218,7 +1251,7 @@ with tab_competition:
             "Weight": f"{entry['weight']:.1%}",
             "PF": f"{min(entry['pf'], 10):.2f}",
         })
-    st.dataframe(pd.DataFrame(lb_rows), use_container_width=True, hide_index=True, height=min(400, 40 + 35 * len(lb_rows)))
+    st.dataframe(pd.DataFrame(lb_rows), width="stretch", hide_index=True, height=min(400, 40 + 35 * len(lb_rows)))
 
     # ── Score Visualization ──────────────────────────────────────────────
     col_score, col_radar = st.columns(2)
@@ -1383,7 +1416,7 @@ with tab_competition:
                         model_b: f"{vb:{fmt}}{suffix}",
                         "Winner": winner,
                     })
-                st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(comp_rows), width="stretch", hide_index=True)
     else:
         st.info("Select two different models to compare.")
 
@@ -1467,7 +1500,7 @@ with tab_allocation:
             "Raw Score": round(score, 4),
             "Final Weight": f"{data['weights'].get(m.name, 0):.1%}",
         })
-    st.dataframe(pd.DataFrame(score_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(score_rows), width="stretch", hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1502,7 +1535,7 @@ with tab_risk:
             {"Parameter": "Per-Position Stop Loss", "Value": "3%", "Status": "OK"},
             {"Parameter": "Trade Frequency Limit", "Value": "20/hr", "Status": "OK"},
         ])
-        st.dataframe(risk_params, use_container_width=True, hide_index=True, height=220)
+        st.dataframe(risk_params, width="stretch", hide_index=True, height=220)
 
     with col_gauge:
         st.markdown("#### Drawdown Gauge")
@@ -1546,7 +1579,7 @@ with tab_risk:
             "Allocation": f"${data['allocator'].get_allocation(m.name):,.0f}",
             "Risk Rating": "Low" if abs(met.max_drawdown) < 0.05 else "Medium" if abs(met.max_drawdown) < 0.10 else "High",
         })
-    st.dataframe(pd.DataFrame(risk_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(risk_rows), width="stretch", hide_index=True)
 
     # Signal quality gates
     st.subheader("Signal Quality Gates")
@@ -1561,7 +1594,7 @@ with tab_risk:
         {"Gate": "Minimum Weight to Signal", "Threshold": f"{risk_mgr.MIN_WEIGHT_TO_SIGNAL:.2f}", "Purpose": "Near-zero weight models can't trade"},
         {"Gate": "Minimum Consensus Ratio", "Threshold": f"{risk_mgr.MIN_CONSENSUS_RATIO:.0%}", "Purpose": "Ensemble must agree on direction"},
     ])
-    st.dataframe(gate_params, use_container_width=True, hide_index=True)
+    st.dataframe(gate_params, width="stretch", hide_index=True)
 
     # Run quality gate simulation on current signals
     st.markdown("#### Quality Gate Simulation (Current Signals)")
@@ -1585,7 +1618,7 @@ with tab_risk:
             })
     if gate_results:
         gate_df = pd.DataFrame(gate_results)
-        st.dataframe(gate_df, use_container_width=True, hide_index=True)
+        st.dataframe(gate_df, width="stretch", hide_index=True)
         passed_count = sum(1 for g in gate_results if g["Status"] == "PASS")
         st.caption(f"{passed_count}/{len(gate_results)} signals passed quality gates")
 
@@ -1620,7 +1653,7 @@ with tab_regime:
         st.markdown("#### Regime History")
         if data["regime_history"]:
             rh_df = pd.DataFrame(data["regime_history"])
-            st.dataframe(rh_df, use_container_width=True, hide_index=True, height=300)
+            st.dataframe(rh_df, width="stretch", hide_index=True, height=300)
 
     # Volatility chart
     st.subheader("Rolling Volatility")
@@ -1703,7 +1736,7 @@ with tab_builder:
 
         st.markdown("---")
         b_train_ratio = st.slider("Train/Test Split", 0.5, 0.9, 0.7, step=0.05, key="b_train_ratio")
-        run_backtest = st.button("Run Backtest", type="primary", use_container_width=True, key="run_builder_bt")
+        run_backtest = st.button("Run Backtest", type="primary", width="stretch", key="run_builder_bt")
 
     with builder_col2:
         if run_backtest:
@@ -1884,7 +1917,7 @@ with tab_builder:
 
                     st.dataframe(
                         compare_df.style.apply(highlight_custom, axis=1),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                     )
 
@@ -1942,7 +1975,7 @@ Enters when volatility compresses below historical norms, then expands direction
             ref_df = pd.DataFrame(ref_rows)
             ref_df["Sharpe"] = ref_df["Sharpe"].round(3)
             ref_df["Return"] = ref_df["Return"].apply(lambda x: f"{x:.2%}")
-            st.dataframe(ref_df, use_container_width=True, hide_index=True)
+            st.dataframe(ref_df, width="stretch", hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1963,7 +1996,7 @@ with tab_trades:
             direction_filter = st.multiselect("Filter by Direction", options=tl_df["Direction"].unique(), default=tl_df["Direction"].unique())
 
         filtered = tl_df[(tl_df["Model"].isin(model_filter)) & (tl_df["Direction"].isin(direction_filter))]
-        st.dataframe(filtered, use_container_width=True, hide_index=True, height=400)
+        st.dataframe(filtered, width="stretch", hide_index=True, height=400)
 
         # Trade distribution
         col_td1, col_td2 = st.columns(2)
@@ -2095,7 +2128,7 @@ if tab_live is not None:
                     "Bid": "${:.2f}",
                     "Ask": "${:.2f}",
                 })
-                st.dataframe(styled, use_container_width=True, hide_index=True, height=340)
+                st.dataframe(styled, width="stretch", hide_index=True, height=340)
             else:
                 st.info("No quote data available. Check connection or try again.")
 
@@ -2128,7 +2161,7 @@ if tab_live is not None:
                                     "market_value", "unrealized_pnl", "unrealized_pnl_pct"]
                     pos_display = pos_df[[c for c in display_cols if c in pos_df.columns]]
                     pos_display.columns = [c.replace("_", " ").title() for c in pos_display.columns]
-                    st.dataframe(pos_display, use_container_width=True, hide_index=True, height=250)
+                    st.dataframe(pos_display, width="stretch", hide_index=True, height=250)
                 else:
                     st.info("No open positions")
 
@@ -2177,7 +2210,7 @@ if tab_live is not None:
                         )
 
                     submit_label = "Submit Paper Order" if _is_paper else "Submit LIVE Order"
-                    if st.button(submit_label, type="primary", use_container_width=True, key="submit_order_btn"):
+                    if st.button(submit_label, type="primary", width="stretch", key="submit_order_btn"):
                         if not _can_submit:
                             st.error("You must check the confirmation box for live orders.")
                         else:
@@ -2209,7 +2242,7 @@ if tab_live is not None:
                     oo_df = pd.DataFrame(open_orders)
                     display_cols = ["symbol", "side", "order_type", "quantity", "price", "status"]
                     oo_display = oo_df[[c for c in display_cols if c in oo_df.columns]]
-                    st.dataframe(oo_display, use_container_width=True, hide_index=True, height=200)
+                    st.dataframe(oo_display, width="stretch", hide_index=True, height=200)
 
                     cancel_id = st.text_input("Order ID to cancel", key="cancel_order_id")
                     if st.button("Cancel Order", key="cancel_order_btn"):
@@ -2231,7 +2264,7 @@ if tab_live is not None:
                     display_cols = ["symbol", "side", "order_type", "quantity",
                                     "filled_qty", "price", "status"]
                     hist_display = hist_df[[c for c in display_cols if c in hist_df.columns]]
-                    st.dataframe(hist_display, use_container_width=True, hide_index=True, height=200)
+                    st.dataframe(hist_display, width="stretch", hide_index=True, height=200)
                 else:
                     st.info("No order history")
 
@@ -2286,6 +2319,103 @@ if tab_live is not None:
                         st.info("Live trading disabled. Orders will be blocked.")
                         st.rerun()
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAB: PAPER TRADING
+# ═══════════════════════════════════════════════════════════════════════════
+
+with tab_paper:
+    if not _has_paper:
+        st.info("Paper trading requires yfinance. Install with: pip install yfinance")
+    elif not _user_id:
+        st.info("Please log in to use paper trading.")
+    else:
+        st.subheader("Paper Trading Console")
+
+        # Portfolio summary
+        summary = get_portfolio_summary(_user_id)
+
+        col_cash, col_positions, col_equity, col_pnl = st.columns(4)
+        col_cash.metric("Cash", f"${summary['cash']:,.2f}")
+        col_positions.metric("Positions Value", f"${summary['positions_value']:,.2f}")
+        col_equity.metric("Total Equity", f"${summary['total_equity']:,.2f}")
+        pnl_delta = f"{summary['total_pnl_pct']:+.2f}%"
+        col_pnl.metric("Total P&L", f"${summary['total_pnl']:+,.2f}", delta=pnl_delta)
+
+        st.markdown("---")
+
+        # Trade execution
+        col_trade, col_watchlist = st.columns([1, 2])
+
+        with col_trade:
+            st.markdown("#### Place Trade")
+            with st.form("paper_trade_form"):
+                trade_symbol = st.text_input("Symbol", value="SPY", placeholder="SPY, AAPL, BTC-USD")
+                trade_qty = st.number_input("Quantity", min_value=0.01, value=10.0, step=1.0)
+                col_buy, col_sell = st.columns(2)
+                buy_btn = col_buy.form_submit_button("Buy", use_container_width=True)
+                sell_btn = col_sell.form_submit_button("Sell", use_container_width=True)
+
+                if buy_btn:
+                    ok, msg = execute_buy(_user_id, trade_symbol, trade_qty)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                    st.rerun()
+                elif sell_btn:
+                    ok, msg = execute_sell(_user_id, trade_symbol, trade_qty)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                    st.rerun()
+
+            # Current price preview
+            if trade_symbol:
+                live_price = get_current_price(trade_symbol)
+                if live_price > 0:
+                    st.markdown(f"**{trade_symbol.upper()}** current price: **${live_price:,.2f}**")
+                    st.markdown(f"Estimated cost: **${live_price * trade_qty:,.2f}**")
+
+        with col_watchlist:
+            st.markdown("#### Live Watchlist")
+            watchlist_input = st.text_input(
+                "Symbols (comma-separated)",
+                value=", ".join(DEFAULT_WATCHLIST),
+                key="paper_watchlist_symbols",
+            )
+            symbols = [s.strip().upper() for s in watchlist_input.split(",") if s.strip()]
+
+            if st.button("Refresh", key="refresh_paper_watchlist"):
+                st.cache_data.clear()
+
+            quotes_df = get_watchlist_quotes(symbols)
+            if not quotes_df.empty:
+                st.dataframe(quotes_df, use_container_width=True, hide_index=True, height=400)
+            else:
+                st.info("No quotes available.")
+
+        # Open positions
+        st.markdown("---")
+        st.markdown("#### Open Positions")
+        if summary["positions"]:
+            pos_df = pd.DataFrame(summary["positions"])
+            pos_df = pos_df[["symbol", "quantity", "avg_entry_price", "current_price", "unrealized_pnl", "market_value"]]
+            pos_df.columns = ["Symbol", "Qty", "Avg Entry", "Current", "Unrealized P&L", "Market Value"]
+            st.dataframe(pos_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No open positions. Place a trade above.")
+
+        # Trade history
+        st.markdown("---")
+        st.markdown("#### Trade History")
+        trades = get_trade_history(_user_id)
+        if trades:
+            trades_df = pd.DataFrame(trades)
+            st.dataframe(trades_df, use_container_width=True, hide_index=True, height=300)
+        else:
+            st.info("No trades yet.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TAB: BROKER SETTINGS
