@@ -20,6 +20,10 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import streamlit as st
 
+from dashboard.auth import render_auth_page, logout, init_session_state
+from dashboard.broker_settings import render_broker_settings
+from dashboard.admin import render_admin_dashboard
+
 # ── Page Config ──────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -29,133 +33,188 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Auth Gate ───────────────────────────────────────────────────────────
+init_session_state()
+
+if not render_auth_page():
+    st.stop()
+
+# Show email verification banner if needed
+if not st.session_state.get("email_verified"):
+    st.warning("Please verify your email address. Check your inbox for a verification link.")
+
 # ── Custom CSS ───────────────────────────────────────────────────────────
 
 st.markdown("""
 <style>
-    /* Dark trading terminal aesthetic */
-    .stApp { background-color: #0a0e14; }
-    [data-testid="stHeader"] { background-color: #0a0e14; }
+    /* ── Apple-inspired Black & White ─────────────────────────────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
-    /* Metric cards */
+    * { font-family: -apple-system, 'Inter', BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif !important; }
+
+    .stApp { background-color: #000000; }
+    [data-testid="stHeader"] { background-color: #000000; }
+
+    /* Metric cards — clean flat cards */
     [data-testid="stMetric"] {
-        background: linear-gradient(135deg, #12161f 0%, #0d1117 100%);
-        border: 1px solid #1c2333;
-        border-radius: 6px;
-        padding: 15px 20px;
+        background: #0a0a0a;
+        border: 1px solid #1a1a1a;
+        border-radius: 12px;
+        padding: 16px 20px;
     }
     [data-testid="stMetricLabel"] {
-        color: #6b7b8d;
-        font-size: 0.75rem;
+        color: #666666;
+        font-size: 0.7rem;
+        font-weight: 500;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.08em;
     }
-    [data-testid="stMetricValue"] { color: #d4dae3; font-size: 1.5rem; font-weight: 500; }
+    [data-testid="stMetricValue"] { color: #ffffff; font-size: 1.5rem; font-weight: 500; }
+    [data-testid="stMetricDelta"] { font-weight: 400; }
 
-    /* Sidebar */
+    /* Sidebar — clean, minimal */
     [data-testid="stSidebar"] {
-        background: #0c1018;
-        border-right: 1px solid #161d29;
+        background: #000000;
+        border-right: 1px solid #1a1a1a;
     }
 
-    /* Tables */
-    .stDataFrame { border-radius: 4px; overflow: hidden; }
+    /* Tables — rounded, subtle */
+    .stDataFrame { border-radius: 8px; overflow: hidden; }
 
-    /* Section headers */
-    h1 { color: #d4dae3 !important; font-weight: 500; letter-spacing: -0.01em; }
+    /* Section headers — clean hierarchy */
+    h1 { color: #ffffff !important; font-weight: 600; letter-spacing: -0.02em; }
     h2, h3 {
-        color: #9daab8 !important;
-        border-bottom: 1px solid #161d29;
-        padding-bottom: 8px;
-        font-weight: 400;
-        letter-spacing: 0.01em;
+        color: #999999 !important;
+        border-bottom: 1px solid #1a1a1a;
+        padding-bottom: 10px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
     }
+    h4 { color: #888888 !important; font-weight: 500; letter-spacing: -0.01em; }
+    p, span, li { letter-spacing: -0.01em; }
 
     /* Hide streamlit branding */
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
 
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap: 4px; }
+    /* Tabs — minimal underline style */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        border-bottom: 1px solid #1a1a1a;
+    }
     .stTabs [data-baseweb="tab"] {
-        background-color: #0f1319;
-        border: 1px solid #1c2333;
-        border-radius: 4px;
-        color: #6b7b8d;
-        padding: 8px 18px;
-        font-size: 0.85rem;
+        background-color: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        color: #555555;
+        padding: 10px 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.06em;
+        transition: all 0.2s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #999999;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #141c2b !important;
-        border-color: #2563eb !important;
-        color: #d4dae3 !important;
+        background-color: transparent !important;
+        border-bottom: 2px solid #ffffff !important;
+        color: #ffffff !important;
     }
 
-    /* Buttons */
+    /* Buttons — minimal, outlined */
     .stButton > button {
-        background-color: #141c2b;
-        border: 1px solid #1c2333;
-        color: #9daab8;
+        background-color: transparent;
+        border: 1px solid #333333;
+        border-radius: 8px;
+        color: #ffffff;
         font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        transition: all 0.2s ease;
     }
     .stButton > button:hover {
-        background-color: #1a2436;
-        border-color: #2563eb;
-        color: #d4dae3;
+        background-color: #ffffff;
+        border-color: #ffffff;
+        color: #000000;
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #ffffff;
+        border-color: #ffffff;
+        color: #000000;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #cccccc;
+        border-color: #cccccc;
     }
 
-    /* Paper/Live mode banners */
+    /* Selectbox / Inputs */
+    [data-baseweb="select"] { border-radius: 8px !important; }
+    [data-baseweb="input"] { border-radius: 8px !important; }
+
+    /* Dividers */
+    hr { border-color: #1a1a1a !important; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #000000; }
+    ::-webkit-scrollbar-thumb { background: #333333; border-radius: 3px; }
+
+    /* Paper/Live mode banners — clean B&W */
     .mode-banner-paper {
-        background: linear-gradient(135deg, #0d2818 0%, #0a1f14 100%);
-        border: 2px solid #238636;
-        border-radius: 6px;
+        background: #0a0a0a;
+        border: 1px solid #333333;
+        border-radius: 8px;
         padding: 10px 16px;
         text-align: center;
         font-weight: 600;
-        font-size: 0.95rem;
-        color: #3fb950;
-        letter-spacing: 0.05em;
+        font-size: 0.9rem;
+        color: #ffffff;
+        letter-spacing: 0.04em;
     }
     .mode-banner-live {
-        background: linear-gradient(135deg, #2d1117 0%, #2a0f0f 100%);
-        border: 2px solid #da3633;
-        border-radius: 6px;
+        background: #0a0a0a;
+        border: 2px solid #ffffff;
+        border-radius: 8px;
         padding: 10px 16px;
         text-align: center;
         font-weight: 700;
-        font-size: 0.95rem;
-        color: #f85149;
-        letter-spacing: 0.05em;
+        font-size: 0.9rem;
+        color: #ffffff;
+        letter-spacing: 0.04em;
         animation: pulse-live 2s ease-in-out infinite;
     }
     @keyframes pulse-live {
-        0%, 100% { border-color: #da3633; }
-        50% { border-color: #f85149; box-shadow: 0 0 15px rgba(248, 81, 73, 0.3); }
+        0%, 100% { border-color: #ffffff; }
+        50% { border-color: #ffffff; box-shadow: 0 0 20px rgba(255, 255, 255, 0.15); }
     }
     .sidebar-mode-paper {
-        background: #0d2818;
-        border: 1px solid #238636;
-        border-radius: 4px;
-        padding: 6px 10px;
-        color: #3fb950;
-        font-weight: 600;
-        font-size: 0.85rem;
+        background: #0a0a0a;
+        border: 1px solid #333333;
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: #ffffff;
+        font-weight: 500;
+        font-size: 0.8rem;
         text-align: center;
+        letter-spacing: 0.04em;
     }
     .sidebar-mode-live {
-        background: #2d1117;
-        border: 1px solid #da3633;
-        border-radius: 4px;
-        padding: 6px 10px;
-        color: #f85149;
-        font-weight: 700;
-        font-size: 0.85rem;
+        background: #0a0a0a;
+        border: 2px solid #ffffff;
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 0.8rem;
         text-align: center;
+        letter-spacing: 0.04em;
     }
+
+    /* Info/Warning/Error boxes */
+    [data-testid="stAlert"] { border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -429,6 +488,12 @@ def run_models(selected_strategies: tuple = None):
 # ═══════════════════════════════════════════════════════════════════════════
 
 st.sidebar.markdown("## Adaptive Trading Ecosystem")
+st.sidebar.markdown(f"**{st.session_state['user_display_name']}**")
+st.sidebar.caption(st.session_state["user_email"])
+if st.sidebar.button("Logout", use_container_width=True):
+    logout()
+    st.rerun()
+st.sidebar.divider()
 
 # Data source toggle
 data_source = st.sidebar.radio(
@@ -520,7 +585,7 @@ if use_webull:
                     st.warning("Both App Key and App Secret are required")
 
     elif _wb_client and _wb_client.is_connected:
-        mode_color = "#3fb950" if _wb_client.is_paper else "#f85149"
+        mode_color = "#ffffff" if _wb_client.is_paper else "#888888"
         st.sidebar.markdown(
             f"**Webull:** <span style='color:{mode_color}'>{_wb_client.mode_label} Mode</span>",
             unsafe_allow_html=True,
@@ -619,14 +684,24 @@ col5.metric("Status", "HALTED" if halted else "ACTIVE", delta="System OK" if not
 
 # ── Tabs ─────────────────────────────────────────────────────────────────
 
+_is_admin = st.session_state.get("is_admin", False)
+
 if use_webull:
-    tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder, tab_live, tab_allocation, tab_risk, tab_regime, tab_trades = st.tabs([
-        "Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Live Trading", "Allocation", "Risk", "Regime", "Trades",
-    ])
+    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Live Trading", "Allocation", "Risk", "Regime", "Trades", "Broker Settings"]
+    if _is_admin:
+        _tab_names.append("Admin")
+    _tabs = st.tabs(_tab_names)
+    (tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder,
+     tab_live, tab_allocation, tab_risk, tab_regime, tab_trades, tab_broker) = _tabs[:12]
+    tab_admin = _tabs[12] if _is_admin else None
 else:
-    tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder, tab_allocation, tab_risk, tab_regime, tab_trades = st.tabs([
-        "Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Allocation", "Risk", "Regime", "Trades",
-    ])
+    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Allocation", "Risk", "Regime", "Trades", "Broker Settings"]
+    if _is_admin:
+        _tab_names.append("Admin")
+    _tabs = st.tabs(_tab_names)
+    (tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder,
+     tab_allocation, tab_risk, tab_regime, tab_trades, tab_broker) = _tabs[:11]
+    tab_admin = _tabs[11] if _is_admin else None
     tab_live = None
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -654,16 +729,16 @@ with tab_overview:
         x=data["test_df"]["timestamp"],
         y=combined_eq,
         name="Combined Portfolio",
-        line=dict(color="#58a6ff", width=3),
+        line=dict(color="#ffffff", width=3),
     ))
 
     fig.update_layout(
         height=450,
         template="plotly_dark",
-        paper_bgcolor="#0a0e14",
-        plot_bgcolor="#0a0e14",
-        xaxis=dict(gridcolor="#161d29", title=""),
-        yaxis=dict(gridcolor="#161d29", title="Equity ($)", tickprefix="$"),
+        paper_bgcolor="#000000",
+        plot_bgcolor="#000000",
+        xaxis=dict(gridcolor="#1a1a1a", title=""),
+        yaxis=dict(gridcolor="#1a1a1a", title="Equity ($)", tickprefix="$"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left"),
         margin=dict(l=60, r=20, t=40, b=40),
         hovermode="x unified",
@@ -681,17 +756,17 @@ with tab_overview:
             x=data["test_df"]["timestamp"],
             y=dd_series,
             fill="tozeroy",
-            fillcolor="rgba(248, 81, 73, 0.2)",
-            line=dict(color="#f85149", width=1),
+            fillcolor="rgba(255, 255, 255, 0.08)",
+            line=dict(color="#666666", width=1),
             name="Drawdown",
         ))
         fig_dd.update_layout(
             height=300,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
-            plot_bgcolor="#0e1117",
-            yaxis=dict(title="Drawdown %", gridcolor="#161d29", ticksuffix="%"),
-            xaxis=dict(gridcolor="#161d29"),
+            paper_bgcolor="#000000",
+            plot_bgcolor="#000000",
+            yaxis=dict(title="Drawdown %", gridcolor="#1a1a1a", ticksuffix="%"),
+            xaxis=dict(gridcolor="#1a1a1a"),
             margin=dict(l=60, r=20, t=20, b=40),
             showlegend=False,
         )
@@ -711,10 +786,10 @@ with tab_overview:
         fig_price.update_layout(
             height=300,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
-            plot_bgcolor="#0e1117",
-            xaxis=dict(gridcolor="#161d29", rangeslider=dict(visible=False)),
-            yaxis=dict(gridcolor="#161d29", tickprefix="$"),
+            paper_bgcolor="#000000",
+            plot_bgcolor="#000000",
+            xaxis=dict(gridcolor="#1a1a1a", rangeslider=dict(visible=False)),
+            yaxis=dict(gridcolor="#1a1a1a", tickprefix="$"),
             margin=dict(l=60, r=20, t=20, b=40),
             showlegend=False,
         )
@@ -755,7 +830,7 @@ with tab_models:
         st.subheader("Sharpe Ratio by Model")
         names = [m.name for m in data["models"]]
         sharpes = [m.metrics.sharpe_ratio for m in data["models"]]
-        colors = ["#3fb950" if s > 0 else "#f85149" for s in sharpes]
+        colors = ["#ffffff" if s > 0 else "#555555" for s in sharpes]
 
         fig_sharpe = go.Figure(data=[go.Bar(
             x=names, y=sharpes,
@@ -766,10 +841,10 @@ with tab_models:
         fig_sharpe.update_layout(
             height=350,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
-            plot_bgcolor="#0e1117",
-            yaxis=dict(title="Sharpe Ratio", gridcolor="#161d29"),
-            xaxis=dict(gridcolor="#161d29"),
+            paper_bgcolor="#000000",
+            plot_bgcolor="#000000",
+            yaxis=dict(title="Sharpe Ratio", gridcolor="#1a1a1a"),
+            xaxis=dict(gridcolor="#1a1a1a"),
             margin=dict(l=60, r=20, t=20, b=80),
         )
         st.plotly_chart(fig_sharpe, use_container_width=True)
@@ -782,24 +857,24 @@ with tab_models:
         fig_wr = go.Figure()
         fig_wr.add_trace(go.Bar(
             name="Win Rate %", x=names, y=win_rates,
-            marker_color="#58a6ff",
+            marker_color="#ffffff",
             text=[f"{w:.1f}%" for w in win_rates],
             textposition="outside",
         ))
         fig_wr.add_trace(go.Scatter(
             name="Profit Factor", x=names, y=[p * 20 for p in pf],
             mode="markers+lines",
-            marker=dict(size=12, color="#d29922"),
+            marker=dict(size=12, color="#888888"),
             yaxis="y2",
         ))
         fig_wr.update_layout(
             height=350,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
-            plot_bgcolor="#0e1117",
-            yaxis=dict(title="Win Rate %", gridcolor="#161d29"),
+            paper_bgcolor="#000000",
+            plot_bgcolor="#000000",
+            yaxis=dict(title="Win Rate %", gridcolor="#1a1a1a"),
             yaxis2=dict(title="Profit Factor", overlaying="y", side="right", showgrid=False),
-            xaxis=dict(gridcolor="#161d29"),
+            xaxis=dict(gridcolor="#1a1a1a"),
             margin=dict(l=60, r=60, t=20, b=80),
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
         )
@@ -808,7 +883,7 @@ with tab_models:
     # Per-model equity curves
     st.subheader("Individual Model Equity Curves")
     fig_ind = go.Figure()
-    colors_list = px.colors.qualitative.Set2
+    colors_list = ["#ffffff", "#cccccc", "#aaaaaa", "#888888", "#666666", "#555555", "#444444", "#333333", "#bbbbbb"]
     for i, (name, eq) in enumerate(data["equity_curves"].items()):
         fig_ind.add_trace(go.Scatter(
             x=data["test_df"]["timestamp"],
@@ -819,10 +894,10 @@ with tab_models:
     fig_ind.update_layout(
         height=400,
         template="plotly_dark",
-        paper_bgcolor="#0a0e14",
-        plot_bgcolor="#0a0e14",
-        yaxis=dict(title="Equity ($)", gridcolor="#161d29", tickprefix="$"),
-        xaxis=dict(gridcolor="#161d29"),
+        paper_bgcolor="#000000",
+        plot_bgcolor="#000000",
+        yaxis=dict(title="Equity ($)", gridcolor="#1a1a1a", tickprefix="$"),
+        xaxis=dict(gridcolor="#1a1a1a"),
         margin=dict(l=60, r=20, t=20, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
         hovermode="x unified",
@@ -854,9 +929,9 @@ with tab_catalog:
 
         with col_metrics:
             st.markdown("**Performance**")
-            sharpe_color = "#3fb950" if met.sharpe_ratio > 0 else "#f85149"
+            sharpe_color = "#ffffff" if met.sharpe_ratio > 0 else "#555555"
             st.markdown(f"Sharpe: **<span style='color:{sharpe_color}'>{met.sharpe_ratio:.3f}</span>**", unsafe_allow_html=True)
-            ret_color = "#3fb950" if met.total_return > 0 else "#f85149"
+            ret_color = "#ffffff" if met.total_return > 0 else "#555555"
             st.markdown(f"Return: **<span style='color:{ret_color}'>{met.total_return:.2%}</span>**", unsafe_allow_html=True)
             st.markdown(f"Win Rate: **{met.win_rate:.1%}**")
             st.markdown(f"Max DD: **{met.max_drawdown:.2%}**")
@@ -867,7 +942,7 @@ with tab_catalog:
             if name in data["equity_curves"]:
                 eq = data["equity_curves"][name]
                 fig_mini = go.Figure()
-                eq_color = "#3fb950" if eq.iloc[-1] > eq.iloc[0] else "#f85149"
+                eq_color = "#ffffff" if eq.iloc[-1] > eq.iloc[0] else "#555555"
                 fig_mini.add_trace(go.Scatter(
                     x=data["test_df"]["timestamp"],
                     y=eq,
@@ -880,8 +955,8 @@ with tab_catalog:
                     height=140,
                     margin=dict(l=0, r=0, t=5, b=5),
                     template="plotly_dark",
-                    paper_bgcolor="#0a0e14",
-                    plot_bgcolor="#0a0e14",
+                    paper_bgcolor="#000000",
+                    plot_bgcolor="#000000",
                     xaxis=dict(visible=False),
                     yaxis=dict(visible=False),
                     showlegend=False,
@@ -1045,7 +1120,7 @@ with tab_ai:
                 st.markdown("#### Strategy Type Rotation")
                 for sector, sentiment in display_analysis.sector_rotation.items():
                     icon = {"overweight": "^", "underweight": "v", "neutral": "-"}.get(sentiment, "-")
-                    color = {"overweight": "#3fb950", "underweight": "#f85149", "neutral": "#8b949e"}.get(sentiment, "#8b949e")
+                    color = {"overweight": "#ffffff", "underweight": "#555555", "neutral": "#777777"}.get(sentiment, "#777777")
                     st.markdown(
                         f"<span style='color:{color}'>{icon}</span> **{sector.replace('_', ' ').title()}**: {sentiment}",
                         unsafe_allow_html=True,
@@ -1149,7 +1224,7 @@ with tab_competition:
         st.markdown("#### Composite Score Ranking")
         names = [e["name"] for e in leaderboard]
         scores = [e["score"] for e in leaderboard]
-        colors = ["#3fb950" if s > 0 else "#f85149" for s in scores]
+        colors = ["#ffffff" if s > 0 else "#555555" for s in scores]
 
         fig_score = go.Figure(data=[go.Bar(
             x=scores, y=names,
@@ -1161,10 +1236,10 @@ with tab_competition:
         fig_score.update_layout(
             height=max(250, 40 * len(names)),
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
-            plot_bgcolor="#0e1117",
-            xaxis=dict(title="Composite Score", gridcolor="#161d29"),
-            yaxis=dict(gridcolor="#161d29", autorange="reversed"),
+            paper_bgcolor="#000000",
+            plot_bgcolor="#000000",
+            xaxis=dict(title="Composite Score", gridcolor="#1a1a1a"),
+            yaxis=dict(gridcolor="#1a1a1a", autorange="reversed"),
             margin=dict(l=120, r=60, t=20, b=40),
         )
         st.plotly_chart(fig_score, use_container_width=True)
@@ -1175,7 +1250,7 @@ with tab_competition:
         categories = ["Sharpe", "Win Rate", "Return", "Low DD", "Profit Factor"]
 
         fig_radar = go.Figure()
-        radar_colors = ["#58a6ff", "#3fb950", "#d29922"]
+        radar_colors = ["#ffffff", "#999999", "#555555"]
 
         for i, entry in enumerate(top3):
             # Normalize each metric to 0-1 for radar
@@ -1202,11 +1277,11 @@ with tab_competition:
         fig_radar.update_layout(
             height=380,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
+            paper_bgcolor="#000000",
             polar=dict(
-                bgcolor="#0e1117",
-                radialaxis=dict(visible=True, range=[0, 1], gridcolor="#161d29"),
-                angularaxis=dict(gridcolor="#161d29"),
+                bgcolor="#000000",
+                radialaxis=dict(visible=True, range=[0, 1], gridcolor="#1a1a1a"),
+                angularaxis=dict(gridcolor="#1a1a1a"),
             ),
             margin=dict(l=60, r=60, t=30, b=30),
             legend=dict(orientation="h", yanchor="bottom", y=-0.15),
@@ -1234,19 +1309,19 @@ with tab_competition:
             fig_h2h = go.Figure()
             fig_h2h.add_trace(go.Scatter(
                 x=test_df["timestamp"], y=eq_a,
-                name=model_a, line=dict(color="#58a6ff", width=2),
+                name=model_a, line=dict(color="#ffffff", width=2),
             ))
             fig_h2h.add_trace(go.Scatter(
                 x=test_df["timestamp"], y=eq_b,
-                name=model_b, line=dict(color="#d29922", width=2),
+                name=model_b, line=dict(color="#888888", width=2),
             ))
             fig_h2h.update_layout(
                 height=350,
                 template="plotly_dark",
-                paper_bgcolor="#0a0e14",
-                plot_bgcolor="#0a0e14",
-                yaxis=dict(title="Equity ($)", gridcolor="#161d29", tickprefix="$"),
-                xaxis=dict(gridcolor="#161d29"),
+                paper_bgcolor="#000000",
+                plot_bgcolor="#000000",
+                yaxis=dict(title="Equity ($)", gridcolor="#1a1a1a", tickprefix="$"),
+                xaxis=dict(gridcolor="#1a1a1a"),
                 margin=dict(l=60, r=20, t=20, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02),
                 hovermode="x unified",
@@ -1259,18 +1334,18 @@ with tab_competition:
             fig_rel.add_trace(go.Scatter(
                 x=test_df["timestamp"], y=rel_perf,
                 fill="tozeroy",
-                fillcolor="rgba(88, 166, 255, 0.15)",
-                line=dict(color="#58a6ff", width=1.5),
+                fillcolor="rgba(255, 255, 255, 0.06)",
+                line=dict(color="#ffffff", width=1.5),
                 name=f"{model_a} vs {model_b}",
             ))
-            fig_rel.add_hline(y=0, line_dash="dash", line_color="#30363d")
+            fig_rel.add_hline(y=0, line_dash="dash", line_color="#333333")
             fig_rel.update_layout(
                 height=250,
                 template="plotly_dark",
-                paper_bgcolor="#0a0e14",
-                plot_bgcolor="#0e1117",
-                yaxis=dict(title="Relative Performance (%)", gridcolor="#161d29", ticksuffix="%"),
-                xaxis=dict(gridcolor="#161d29"),
+                paper_bgcolor="#000000",
+                plot_bgcolor="#000000",
+                yaxis=dict(title="Relative Performance (%)", gridcolor="#1a1a1a", ticksuffix="%"),
+                xaxis=dict(gridcolor="#1a1a1a"),
                 margin=dict(l=60, r=20, t=20, b=40),
                 showlegend=False,
             )
@@ -1326,14 +1401,14 @@ with tab_allocation:
             labels=list(w.keys()),
             values=list(w.values()),
             hole=0.45,
-            marker=dict(colors=px.colors.qualitative.Set2),
+            marker=dict(colors=["#ffffff", "#dddddd", "#bbbbbb", "#999999", "#777777", "#555555", "#444444", "#333333", "#aaaaaa"]),
             textinfo="label+percent",
             textfont=dict(size=11),
         )])
         fig_pie.update_layout(
             height=400,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
+            paper_bgcolor="#000000",
             margin=dict(l=20, r=20, t=30, b=20),
             showlegend=False,
         )
@@ -1346,17 +1421,17 @@ with tab_allocation:
         fig_alloc = go.Figure(data=[go.Bar(
             x=list(cap.keys()),
             y=list(cap.values()),
-            marker_color=px.colors.qualitative.Set2[:len(cap)],
+            marker_color=["#ffffff", "#dddddd", "#bbbbbb", "#999999", "#777777", "#555555", "#444444", "#333333", "#aaaaaa"][:len(cap)],
             text=[f"${v:,.0f}" for v in cap.values()],
             textposition="outside",
         )])
         fig_alloc.update_layout(
             height=400,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
-            plot_bgcolor="#0e1117",
-            yaxis=dict(title="Allocation ($)", gridcolor="#161d29", tickprefix="$"),
-            xaxis=dict(gridcolor="#161d29"),
+            paper_bgcolor="#000000",
+            plot_bgcolor="#000000",
+            yaxis=dict(title="Allocation ($)", gridcolor="#1a1a1a", tickprefix="$"),
+            xaxis=dict(gridcolor="#1a1a1a"),
             margin=dict(l=60, r=20, t=30, b=80),
         )
         st.plotly_chart(fig_alloc, use_container_width=True)
@@ -1434,15 +1509,15 @@ with tab_risk:
             domain=dict(x=[0, 1], y=[0, 1]),
             gauge=dict(
                 axis=dict(range=[0, 20], ticksuffix="%"),
-                bar=dict(color="#58a6ff"),
-                bgcolor="#0f1319",
+                bar=dict(color="#ffffff"),
+                bgcolor="#0a0a0a",
                 steps=[
-                    dict(range=[0, 5], color="#1a3a1a"),
-                    dict(range=[5, 10], color="#3a3a1a"),
-                    dict(range=[10, 15], color="#3a2a1a"),
-                    dict(range=[15, 20], color="#3a1a1a"),
+                    dict(range=[0, 5], color="#111111"),
+                    dict(range=[5, 10], color="#1a1a1a"),
+                    dict(range=[10, 15], color="#222222"),
+                    dict(range=[15, 20], color="#333333"),
                 ],
-                threshold=dict(line=dict(color="#f85149", width=4), thickness=0.8, value=15),
+                threshold=dict(line=dict(color="#ffffff", width=4), thickness=0.8, value=15),
             ),
             number=dict(suffix="%", font=dict(size=36)),
             title=dict(text="Portfolio Drawdown", font=dict(size=14)),
@@ -1450,7 +1525,7 @@ with tab_risk:
         fig_gauge.update_layout(
             height=280,
             template="plotly_dark",
-            paper_bgcolor="#0a0e14",
+            paper_bgcolor="#000000",
             margin=dict(l=20, r=20, t=40, b=20),
         )
         st.plotly_chart(fig_gauge, use_container_width=True)
@@ -1554,21 +1629,21 @@ with tab_regime:
     fig_vol = go.Figure()
     fig_vol.add_trace(go.Scatter(
         x=full_df["timestamp"], y=vol_20,
-        name="20-day Vol", line=dict(color="#58a6ff", width=2),
+        name="20-day Vol", line=dict(color="#ffffff", width=2),
     ))
     fig_vol.add_trace(go.Scatter(
         x=full_df["timestamp"], y=vol_60,
-        name="60-day Vol", line=dict(color="#d29922", width=2),
+        name="60-day Vol", line=dict(color="#888888", width=2),
     ))
-    fig_vol.add_hline(y=vol_20.median(), line_dash="dash", line_color="#30363d",
+    fig_vol.add_hline(y=vol_20.median(), line_dash="dash", line_color="#333333",
                       annotation_text="Median Vol")
     fig_vol.update_layout(
         height=350,
         template="plotly_dark",
-        paper_bgcolor="#0a0e14",
-        plot_bgcolor="#0a0e14",
-        yaxis=dict(title="Annualized Volatility %", gridcolor="#161d29", ticksuffix="%"),
-        xaxis=dict(gridcolor="#161d29"),
+        paper_bgcolor="#000000",
+        plot_bgcolor="#000000",
+        yaxis=dict(title="Annualized Volatility %", gridcolor="#1a1a1a", ticksuffix="%"),
+        xaxis=dict(gridcolor="#1a1a1a"),
         margin=dict(l=60, r=20, t=20, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
     )
@@ -1728,7 +1803,7 @@ with tab_builder:
                         y=custom_equity,
                         mode="lines",
                         name=custom_model.name,
-                        line=dict(color="#22d3ee", width=2),
+                        line=dict(color="#ffffff", width=2),
                     ))
 
                     # Overlay combined portfolio for comparison
@@ -1738,16 +1813,16 @@ with tab_builder:
                         y=combined_eq,
                         mode="lines",
                         name="Portfolio (Existing)",
-                        line=dict(color="#6b7b8d", width=1, dash="dash"),
+                        line=dict(color="#555555", width=1, dash="dash"),
                     ))
 
                     fig_eq.update_layout(
                         height=350,
                         template="plotly_dark",
-                        paper_bgcolor="#0a0e14",
-                        plot_bgcolor="#0a0e14",
-                        xaxis=dict(gridcolor="#161d29"),
-                        yaxis=dict(gridcolor="#161d29", tickprefix="$"),
+                        paper_bgcolor="#000000",
+                        plot_bgcolor="#000000",
+                        xaxis=dict(gridcolor="#1a1a1a"),
+                        yaxis=dict(gridcolor="#1a1a1a", tickprefix="$"),
                         margin=dict(l=60, r=20, t=30, b=40),
                         legend=dict(orientation="h", y=1.12),
                     )
@@ -1760,17 +1835,17 @@ with tab_builder:
                         x=test_df["timestamp"] if "timestamp" in test_df.columns else test_df.index,
                         y=pos_series,
                         marker_color=[
-                            "#22c55e" if p > 0 else "#ef4444" if p < 0 else "#333"
+                            "#ffffff" if p > 0 else "#555555" if p < 0 else "#1a1a1a"
                             for p in pos_series
                         ],
                     ))
                     fig_pos.update_layout(
                         height=200,
                         template="plotly_dark",
-                        paper_bgcolor="#0a0e14",
-                        plot_bgcolor="#0a0e14",
-                        xaxis=dict(gridcolor="#161d29"),
-                        yaxis=dict(gridcolor="#161d29", title="Position Size"),
+                        paper_bgcolor="#000000",
+                        plot_bgcolor="#000000",
+                        xaxis=dict(gridcolor="#1a1a1a"),
+                        yaxis=dict(gridcolor="#1a1a1a", title="Position Size"),
                         margin=dict(l=60, r=20, t=10, b=40),
                         showlegend=False,
                     )
@@ -1801,7 +1876,7 @@ with tab_builder:
                     # Highlight custom row
                     def highlight_custom(row):
                         if row["Model"].startswith("Custom"):
-                            return ["background-color: #1a2332; font-weight: bold"] * len(row)
+                            return ["background-color: #111111; font-weight: bold"] * len(row)
                         return [""] * len(row)
 
                     st.dataframe(
@@ -1898,10 +1973,10 @@ with tab_trades:
                 marker_color=px.colors.qualitative.Set2[:len(trade_counts)],
             )])
             fig_tc.update_layout(
-                height=300, template="plotly_dark", paper_bgcolor="#0a0e14",
-                plot_bgcolor="#0e1117",
-                yaxis=dict(title="Count", gridcolor="#161d29"),
-                xaxis=dict(gridcolor="#161d29"),
+                height=300, template="plotly_dark", paper_bgcolor="#000000",
+                plot_bgcolor="#000000",
+                yaxis=dict(title="Count", gridcolor="#1a1a1a"),
+                xaxis=dict(gridcolor="#1a1a1a"),
                 margin=dict(l=60, r=20, t=20, b=80),
             )
             st.plotly_chart(fig_tc, use_container_width=True)
@@ -1911,11 +1986,11 @@ with tab_trades:
             dir_counts = filtered["Direction"].value_counts()
             fig_dir = go.Figure(data=[go.Pie(
                 labels=dir_counts.index, values=dir_counts.values,
-                marker=dict(colors=["#3fb950", "#f85149", "#8b949e"]),
+                marker=dict(colors=["#ffffff", "#555555", "#777777"]),
                 hole=0.4,
             )])
             fig_dir.update_layout(
-                height=300, template="plotly_dark", paper_bgcolor="#0a0e14",
+                height=300, template="plotly_dark", paper_bgcolor="#000000",
                 margin=dict(l=20, r=20, t=20, b=20),
             )
             st.plotly_chart(fig_dir, use_container_width=True)
@@ -1976,8 +2051,8 @@ if tab_live is not None:
 
             # Connection status bar
             trade_status = "READY" if _wb_client.is_trade_ready else "CONNECTED (view only)"
-            trade_color = "#3fb950" if _wb_client.is_trade_ready else "#d29922"
-            mode_tag = f'<span style="color:{"#3fb950" if _is_paper else "#f85149"}; font-weight:700">[{_wb_client.mode_label}]</span>'
+            trade_color = "#ffffff" if _wb_client.is_trade_ready else "#888888"
+            mode_tag = f'<span style="color:{"#ffffff" if _is_paper else "#888888"}; font-weight:700">[{_wb_client.mode_label}]</span>'
             st.markdown(
                 f"**Status:** <span style='color:{trade_color}'>{trade_status}</span> "
                 f"| **Mode:** {mode_tag} "
@@ -2003,7 +2078,7 @@ if tab_live is not None:
             if not quotes_df.empty:
                 def _color_change(val):
                     if isinstance(val, (int, float)):
-                        color = "#3fb950" if val > 0 else "#f85149" if val < 0 else "#8b949e"
+                        color = "#ffffff" if val > 0 else "#555555" if val < 0 else "#777777"
                         return f"color: {color}"
                     return ""
 
@@ -2181,16 +2256,16 @@ if tab_live is not None:
                     fig_live.add_trace(go.Scatter(
                         x=x_axis, y=bars["close"],
                         name=chart_symbol.upper(),
-                        line=dict(color="#58a6ff", width=2),
+                        line=dict(color="#ffffff", width=2),
                     ))
 
                 fig_live.update_layout(
                     height=450,
                     template="plotly_dark",
-                    paper_bgcolor="#0a0e14",
-                    plot_bgcolor="#0a0e14",
-                    xaxis=dict(gridcolor="#161d29", rangeslider=dict(visible=False)),
-                    yaxis=dict(gridcolor="#161d29", tickprefix="$"),
+                    paper_bgcolor="#000000",
+                    plot_bgcolor="#000000",
+                    xaxis=dict(gridcolor="#1a1a1a", rangeslider=dict(visible=False)),
+                    yaxis=dict(gridcolor="#1a1a1a", tickprefix="$"),
                     margin=dict(l=60, r=20, t=20, b=40),
                     showlegend=False,
                 )
@@ -2210,6 +2285,21 @@ if tab_live is not None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# TAB: BROKER SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════
+
+with tab_broker:
+    render_broker_settings()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAB: ADMIN (admin users only)
+# ═══════════════════════════════════════════════════════════════════════════
+
+if tab_admin is not None:
+    with tab_admin:
+        render_admin_dashboard()
+
+# ═══════════════════════════════════════════════════════════════════════════
 # FOOTER
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -2218,7 +2308,7 @@ _footer_mode_str = _trading_mode_str if use_webull else "Demo"
 footer_mode = f"Webull {_footer_mode_str} Trading" if use_webull else "Standalone Demo Mode"
 footer_data = "Live market data via Webull" if use_webull else "Models trained on synthetic data"
 st.markdown(f"""
-<div style="text-align: center; color: #484f58; font-size: 0.8rem;">
+<div style="text-align: center; color: #444444; font-size: 0.8rem;">
     Adaptive Trading Ecosystem v1.0.0 &nbsp;|&nbsp; {footer_mode} &nbsp;|&nbsp;
     {footer_data} &nbsp;|&nbsp; Refresh page to retrain
 </div>
