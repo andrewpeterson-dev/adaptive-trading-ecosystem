@@ -1,0 +1,43 @@
+{
+  "id": "vwap",
+  "name": "Volume Weighted Average Price",
+  "category": "Volume",
+  "description_simple": "VWAP is the average price at which a stock has traded throughout the day, weighted by how much volume occurred at each price level.",
+  "description_detailed": "VWAP calculates the running average price of all trades executed during a session, where each trade is weighted by its volume. A transaction of 10,000 shares at $50.00 has ten times the influence on VWAP as a transaction of 1,000 shares at $50.10. The result is a single price level that represents the true average transaction cost for the day. Because it is volume-weighted rather than time-weighted, VWAP reflects where the majority of capital has actually changed hands, making it far more meaningful than a simple price average.\n\nVWAP is the most important intraday reference level used by institutional traders and algorithmic execution systems. Institutional orders are typically benchmarked against VWAP: a buy order 'filled at VWAP' means the institution received the same average cost as the overall market for the day, which is considered neutral performance. VWAP-beating execution (buying below VWAP, selling above VWAP) is considered outperformance. Because large institutions actively try to execute near VWAP, price tends to gravitate toward it throughout the session, particularly in large-cap, highly liquid stocks.\n\nVWAP resets at the start of each trading session and has no meaning on higher timeframes where it would span multiple days. For multi-day or swing trading contexts, traders use anchored VWAP (AVWAP), which calculates VWAP starting from a significant price event — an earnings date, breakout level, or major market low — rather than the beginning of the calendar day. VWAP also generates standard deviation bands (similar in concept to Bollinger Bands) that many institutional traders use as support and resistance zones.",
+  "formula": "Typical Price (TP) = (High + Low + Close) / 3\nCumulative TP×V = Σ(TP × Volume)  [from session open]\nCumulative Volume = Σ(Volume)  [from session open]\nVWAP = Cumulative TP×V / Cumulative Volume",
+  "parameters": {},
+  "output_type": "single_line",
+  "outputs": ["vwap"],
+  "how_traders_use_it": [
+    "Institutional trend bias: price consistently trading above VWAP throughout the session indicates institutional buyers are in control and the intraday trend is bullish; price below VWAP indicates distribution.",
+    "Intraday support and resistance: VWAP frequently acts as a magnetic support/resistance level during the session. Pullbacks to VWAP in an uptrend offer low-risk long entries; failed bounces at VWAP in a downtrend offer short entries.",
+    "Execution benchmark: algorithmic systems buying large blocks of stock try to execute as close to VWAP as possible. Traders can time smaller trades to piggyback on this institutional demand when price approaches VWAP.",
+    "Opening range filter: if price opens and immediately rallies above VWAP, it signals strong opening interest; if it fails to reclaim VWAP after an early dip, it warns of weak demand.",
+    "Trend confirmation at close: stocks closing significantly above VWAP have seen net buying pressure all day, which often leads to continuation the following session; stocks closing far below VWAP have experienced net selling."
+  ],
+  "pros": [
+    "The single most important intraday reference price used by institutional traders and execution algorithms, making it a self-reinforcing support/resistance level due to widespread usage.",
+    "Automatically accounts for volume distribution throughout the day — a price level with 10x the normal volume has 10x the influence, making VWAP reflect genuine market participation.",
+    "No parameters to optimize: VWAP is a deterministic calculation with no lookback settings to curve-fit, making it robust against over-optimization.",
+    "Provides both a price benchmark (institutional fairness) and an intraday trend indicator (above/below VWAP bias) in a single line."
+  ],
+  "cons": [
+    "Only meaningful on intraday charts; on daily or weekly charts, a session-reset VWAP is irrelevant and only anchored VWAP variants provide useful reference levels.",
+    "VWAP becomes less reliable late in the session for thinly traded stocks where early volume clusters distort the weighted average toward early prices.",
+    "The morning spike: in the first 15-30 minutes of the session, large volume on wide-range bars can pull VWAP to an unrepresentative level that it may take hours to correct.",
+    "Not useful for futures markets that trade nearly 24 hours, as session-reset VWAP is sensitive to which session start time is chosen."
+  ],
+  "common_mistakes": [
+    "Applying VWAP to daily, weekly, or monthly charts where it resets each session and therefore shows a meaningless line across multiple bars.",
+    "Treating a VWAP touch as an automatic entry without assessing the broader session trend, volume confirmation, and whether VWAP has been acting as support or resistance during the current session.",
+    "Ignoring the VWAP drift phenomenon: VWAP is anchored to the open and influenced heavily by the first hour's large-volume bars, so it may not represent the 'fair price' for the afternoon trading session.",
+    "Using VWAP for illiquid small-cap stocks where one or two large institutional blocks can move VWAP significantly, making it an unreliable support/resistance level for retail-sized orders."
+  ],
+  "when_it_fails": [
+    "Trending gap days: when a stock gaps significantly above or below the prior close and trends all day in one direction, price never revisits VWAP and VWAP-based mean-reversion setups produce nothing but losing trades.",
+    "Pre-market and after-hours trading: VWAP only reflects regular session volume, so pre/after-hours price levels relative to VWAP can be misleading and should not be used as entry triggers.",
+    "Low-float stocks undergoing momentum runs: when volume surges and price moves in a near-vertical fashion, VWAP chases price upward without providing a usable intraday support level."
+  ],
+  "advanced_quant_note": "VWAP is the minimum variance execution benchmark for a risk-neutral agent with uniform execution pressure throughout the session, which is why it is embedded in virtually all institutional TWAP/VWAP execution algorithms. From a market microstructure perspective, the deviation of price from VWAP (price - VWAP, normalized by session realized volatility) is a stationary process with strong mean-reversion properties in large-cap equities — the half-life of VWAP deviations on liquid names is typically 15-45 minutes during normal sessions. VWAP standard deviation bands, computed as VWAP ± k × rolling standard deviation of (TP - VWAP) weighted by volume, provide statistically grounded intraday support and resistance levels used by market makers and statistical arbitrage desks.",
+  "related_indicators": ["obv", "mfi", "sma", "rvol"]
+}

@@ -1,0 +1,55 @@
+{
+  "id": "rsi",
+  "name": "Relative Strength Index",
+  "category": "Momentum",
+  "description_simple": "RSI measures how fast and how much price has moved recently, producing a 0-100 score that signals whether an asset is overbought or oversold.",
+  "description_detailed": "The Relative Strength Index, developed by J. Welles Wilder in 1978, is a bounded oscillator that compares the magnitude of recent price gains to recent price losses over a lookback window. The calculation produces a value between 0 and 100. Readings above 70 traditionally indicate overbought conditions, while readings below 30 suggest oversold conditions. The boundary nature of the oscillator makes it intuitive to interpret: a score near 100 means nearly all recent price action has been up, while a score near 0 means nearly all recent movement has been down.\n\nRSI is most useful in ranging, mean-reverting markets where price oscillates within a channel. In these conditions, extreme readings genuinely precede reversals. The 14-period default was chosen by Wilder empirically and represents roughly half a trading month, but shorter periods (7-9) produce more signals with more noise, while longer periods (21-25) produce fewer, higher-conviction signals. The indicator's usefulness extends beyond overbought/oversold readings: divergence between RSI and price — where price makes a new high but RSI does not — is considered one of the most reliable reversal signals in technical analysis.\n\nUnder the hood, RSI uses Wilder's smoothing method, which is equivalent to an EMA with alpha = 1/n rather than the standard 2/(n+1). This means the smoothing constant decays more slowly than a conventional EMA of the same period, making RSI somewhat more sluggish than traders often expect. In trending markets, RSI can remain in overbought or oversold territory for extended periods, which is a feature rather than a bug: in a genuine uptrend, RSI persistently above 50 confirms trend strength.",
+  "formula": "RS = Avg Gain(n) / Avg Loss(n)\nRSI = 100 - (100 / (1 + RS))\n\nWhere Avg Gain and Avg Loss use Wilder smoothing:\nAvg Gain(current) = (Avg Gain(prev) × (n-1) + Current Gain) / n",
+  "parameters": {
+    "length": {
+      "type": "integer",
+      "default": 14,
+      "min": 2,
+      "max": 200,
+      "description": "Lookback period for computing average gains and losses. Lower values react faster but generate more false signals; higher values are smoother and more reliable but lag price."
+    }
+  },
+  "output_type": "single_line",
+  "outputs": ["rsi"],
+  "how_traders_use_it": [
+    "Oversold bounce: Enter long when RSI drops below 30 and then crosses back above it, signaling that selling pressure has exhausted and buyers are returning.",
+    "Overbought reversal: Exit longs or enter short positions when RSI rises above 70 and then crosses back below, indicating weakening buying momentum.",
+    "Bullish divergence: Price makes a lower low but RSI makes a higher low, suggesting the downtrend is losing momentum and a reversal may be imminent.",
+    "Bearish divergence: Price makes a higher high but RSI makes a lower high, warning that the uptrend is weakening even as price continues climbing.",
+    "Centerline crossover: A move from below 50 to above 50 signals a shift from net bearish to net bullish momentum and is used to confirm trend direction changes."
+  ],
+  "pros": [
+    "Bounded between 0 and 100, making overbought and oversold readings immediately interpretable without calibration.",
+    "Divergence signals between RSI and price are among the most reliable leading indicators in technical analysis.",
+    "Effective across multiple timeframes and asset classes with minimal parameter adjustment.",
+    "Provides both momentum direction (above/below 50) and momentum extremes (above 70, below 30) in a single indicator."
+  ],
+  "cons": [
+    "In strong trending markets, RSI can remain overbought or oversold for very long periods, generating repeated false reversal signals.",
+    "The 14-period default is applied universally but is not optimal for all instruments or timeframes — no single length works everywhere.",
+    "Whipsaw signals are common in choppy, low-volatility markets where price oscillates without directional conviction.",
+    "RSI does not account for volume, so a price move driven by weak volume produces the same signal as one driven by strong volume."
+  ],
+  "common_mistakes": [
+    "Using RSI as a standalone reversal signal in a strong trend: when SPY is in a multi-week uptrend, RSI above 70 does not mean sell — it means trend strength is high.",
+    "Applying the default 14-period setting without testing: a 14-period RSI on a 1-minute chart measures 14 minutes of data, which is nearly useless for most strategies.",
+    "Ignoring divergence in favor of overbought/oversold levels alone: the most actionable RSI signals are divergences, not threshold crossings.",
+    "Treating an RSI signal as sufficient on its own without price structure confirmation such as support/resistance levels, candlestick patterns, or volume."
+  ],
+  "when_it_fails": [
+    "Strong trending markets: during sustained breakouts or momentum runs, RSI parks above 70 (or below 30) and fading the trend based on overbought/oversold readings produces repeated losses.",
+    "Low-volatility drift: when price grinds slowly in one direction without large swings, RSI hovers near the centerline and generates no actionable signals.",
+    "News-driven moves: sudden gap moves caused by earnings, Fed announcements, or macro events are not captured by RSI's smooth lookback window and produce misleading readings immediately after."
+  ],
+  "advanced_quant_note": "Wilder's smoothing (alpha = 1/n) is equivalent to an EMA with a longer effective lookback than 2/(n+1) EMA — for n=14, Wilder smoothing has an effective half-life of approximately 13.5 bars, versus 9.4 bars for a standard 14-period EMA. This makes RSI more stable but also slower than most traders assume. From a signal processing perspective, RSI can be interpreted as a nonlinear transformation of first-order price momentum autocorrelation: when short-horizon returns are positively autocorrelated (momentum regime), RSI trends toward extremes; when autocorrelation is negative (mean-reversion regime), RSI oscillates around 50. Regime-aware RSI strategies that condition entry rules on detected autocorrelation sign significantly outperform static overbought/oversold systems in backtests.",
+  "related_indicators": ["stochastic", "macd", "cci", "mfi"],
+  "default_thresholds": {
+    "overbought": 70,
+    "oversold": 30
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "id": "obv",
+  "name": "On-Balance Volume",
+  "category": "Volume",
+  "description_simple": "OBV adds today's full volume when price closes up and subtracts it when price closes down, creating a running total that shows whether volume is flowing into or out of an asset.",
+  "description_detailed": "On-Balance Volume, developed by Joseph Granville in 1963 and popularized in his 1963 book 'Granville's New Key to Stock Market Profits,' is one of the earliest volume-based technical indicators. The core premise is Granville's observation that volume precedes price: smart money accumulates positions quietly (volume increases without major price movement) before a breakout, and distributes positions quietly before a decline. OBV captures this accumulation and distribution by treating every up day as net buying pressure and every down day as net selling pressure.\n\nThe absolute value of OBV is meaningless — it depends entirely on the starting point of the calculation. What matters is the direction and slope of the OBV line and, crucially, how it compares to the price trend. When price and OBV are both making higher highs and higher lows, volume is confirming the price uptrend. When price is making higher highs but OBV is making lower highs or flat highs, smart money is not participating in the breakout — a warning sign called bearish OBV divergence. This divergence principle is the core use case for OBV in professional analysis.\n\nBecause OBV assigns the entire day's volume to either buyers or sellers based on a single price comparison, it is a blunt instrument. A day that closes up by 0.01% gets the same full volume as a day that closes up 5%. More sophisticated volume analysis tools like the Volume Price Analysis (VPA) framework or Chaikin Money Flow address this limitation by incorporating the position of the close within the day's range. Despite this simplicity, OBV has an impressive track record: studies have consistently found that OBV trend direction is positively correlated with subsequent price direction over horizons of 1-4 weeks in liquid equity markets.",
+  "formula": "If Close > Close_prev:  OBV = OBV_prev + Volume\nIf Close < Close_prev:  OBV = OBV_prev - Volume\nIf Close = Close_prev:  OBV = OBV_prev\n\nEquivalently: OBV = OBV_prev + Volume × sign(Close - Close_prev)\n(where sign returns 0 for equal closes)",
+  "parameters": {},
+  "output_type": "single_line",
+  "outputs": ["obv"],
+  "how_traders_use_it": [
+    "OBV trend confirmation: OBV making new highs alongside price confirms strong institutional participation and supports holding longs; OBV failing to confirm price highs suggests distribution.",
+    "Bearish OBV divergence: price makes a higher high but OBV makes a lower high or fails to break above its prior peak, indicating that volume is not supporting the advance — a warning to exit longs or tighten stops.",
+    "Bullish OBV divergence: price makes a lower low but OBV makes a higher low, indicating that selling pressure is declining and buyers are stepping in even as price dips — a potential bottom signal.",
+    "OBV breakout anticipation: when OBV breaks above a multi-month horizontal resistance level before price does, it can foreshadow a subsequent price breakout as accumulated buying pressure eventually manifests in price.",
+    "OBV moving average crossover: applying a 20-period EMA to OBV and looking for OBV to cross above its EMA provides a systematic, rule-based signal that volume trend has shifted, useful for algorithmic screening."
+  ],
+  "pros": [
+    "Provides a direct, continuous measure of volume flow that reveals accumulation and distribution patterns not visible from price charts alone.",
+    "Divergence between OBV and price is a leading signal: OBV often turns before price, giving traders advance warning of trend changes.",
+    "No parameters to optimize, making OBV resistant to curve-fitting and consistently comparable across different assets and time periods.",
+    "Simple binary logic (up day = add volume, down day = subtract volume) makes the calculation fully transparent and easy to verify."
+  ],
+  "cons": [
+    "The binary up/down assignment ignores close position within the day's range — a tiny green close adds the full day's volume, potentially overstating buying pressure.",
+    "OBV is cumulative and has no natural scale, making its absolute level meaningless and direct comparison across different instruments or time periods impossible.",
+    "Volume data quality varies significantly: in futures markets, rolling contract volumes require adjustment; in crypto markets, wash trading can completely distort OBV signals.",
+    "In markets where price gaps are common (equities around earnings), OBV misses the price movement during the gap (when no volume trades) and can significantly misclassify the session."
+  ],
+  "common_mistakes": [
+    "Comparing the absolute OBV value across different stocks or time periods: OBV is a relative cumulative measure and has no cross-asset meaning.",
+    "Using OBV divergence as an immediate entry trigger without confirming with price action: OBV can diverge from price for weeks or months before a reversal materializes.",
+    "Ignoring volume quality in the asset class: for low-float small-cap stocks, a single large block trade can cause a massive OBV spike that does not represent broad market participation.",
+    "Treating OBV as a complete volume analysis system: OBV assigns all volume to buyers or sellers based on close direction, but close-to-close analysis misses intraday accumulation, distribution, and order flow dynamics."
+  ],
+  "when_it_fails": [
+    "Earnings events and news-driven gaps: when a stock gaps up on earnings and then fades all day, closing near the low of the session, OBV will subtract the entire day's enormous volume, massively distorting the indicator even though the gap itself represented a large price increase.",
+    "Low-quality volume data: in thinly traded markets, over-the-counter stocks, or cryptocurrency exchanges with high wash trade volume, OBV accumulates random noise rather than genuine buying/selling pressure.",
+    "Sideways consolidation periods: when price oscillates without a trend, OBV also oscillates without providing a directional signal, making it no more informative than the price chart itself."
+  ],
+  "advanced_quant_note": "OBV is mathematically equivalent to a signed random walk driven by volume, where the sign is determined by the daily return sign function. Research by Granville and subsequent quantitative studies have found that OBV 52-week slope is a statistically significant predictor of next-month equity returns with a t-statistic of approximately 2.5-3.0 in large-cap US equity samples, consistent with the hypothesis that institutional accumulation is partially detectable via volume flow before price responds. More statistically robust alternatives include Accumulation/Distribution Line (which weights volume by close position within the range) and Chaikin Money Flow (which normalizes by total period volume), but these come at the cost of introducing parameters. OBV's no-parameter construction makes it particularly useful in cross-sectional momentum screening where identical methodology across hundreds of assets is required.",
+  "related_indicators": ["vwap", "mfi", "chaikin_mf", "ad_line"]
+}

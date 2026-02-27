@@ -1,0 +1,69 @@
+{
+  "id": "stochastic",
+  "name": "Stochastic Oscillator",
+  "category": "Momentum",
+  "description_simple": "The Stochastic Oscillator shows where the current closing price sits within the high-low range of recent bars, signaling whether momentum is at an extreme high or low.",
+  "description_detailed": "The Stochastic Oscillator, developed by George Lane in the 1950s, is based on the principle that in an uptrend, prices tend to close near the upper end of the recent trading range, and in a downtrend, prices tend to close near the lower end. The %K line measures where the current close falls within the high-low range of the past k_period bars, normalized to a 0-100 scale. A value of 100 means the current close is at the highest high of the period; a value of 0 means it is at the lowest low.\n\nThe raw %K is highly volatile, so it is smoothed by a simple moving average (the smooth_k parameter) to produce the 'slow %K' — in practice this is what most platforms display as %K. A second smoothing pass (the d_period average of slow %K) produces the %D line, which serves as the trigger line for crossover signals. The 'slow stochastic' (using smooth_k = 3) is far more popular than the 'fast stochastic' (smooth_k = 1) because it eliminates most false crossovers caused by single-bar noise.\n\nThe Stochastic oscillator shares the same fundamental premise as RSI — both are momentum oscillators that identify overbought and oversold conditions — but Stochastic measures where price closed within the range rather than the ratio of up-days to down-days. The Stochastic is generally considered more sensitive than RSI and more prone to whipsaws, but it can generate earlier signals at turning points precisely because of this sensitivity. Many traders use Stochastic for timing entries within trends identified by RSI or MACD, taking advantage of Stochastic's responsiveness while filtering noise with a higher-timeframe trend context.",
+  "formula": "Raw %K = ((Close - Lowest Low(k)) / (Highest High(k) - Lowest Low(k))) × 100\n\n%K (smoothed) = SMA(Raw %K, smooth_k)\n%D = SMA(%K, d_period)\n\nWhere Lowest Low and Highest High are over the k_period lookback",
+  "parameters": {
+    "k_period": {
+      "type": "integer",
+      "default": 14,
+      "min": 3,
+      "max": 100,
+      "description": "Lookback period for the highest high and lowest low used in the raw %K calculation. Shorter values produce a more sensitive, noisier oscillator."
+    },
+    "d_period": {
+      "type": "integer",
+      "default": 3,
+      "min": 1,
+      "max": 20,
+      "description": "Smoothing period for the %D signal line, calculated as a moving average of %K. Used as a trigger line for crossover signals."
+    },
+    "smooth_k": {
+      "type": "integer",
+      "default": 3,
+      "min": 1,
+      "max": 10,
+      "description": "Smoothing applied to raw %K before computing %D. A value of 1 gives the 'fast stochastic'; a value of 3 gives the more reliable 'slow stochastic'."
+    }
+  },
+  "output_type": "multi_line",
+  "outputs": ["k", "d"],
+  "how_traders_use_it": [
+    "Overbought/oversold reversal: when %K drops below 20 and then crosses back above, it signals selling exhaustion and a potential bounce; when %K exceeds 80 and then crosses back below, it signals buying exhaustion.",
+    "%K/%D crossover: %K crossing above %D below the 20 level is a bullish signal; %K crossing below %D above the 80 level is a bearish signal. These crossovers within extreme zones are more reliable than crossovers in the middle range.",
+    "Bullish divergence: price makes a lower low but Stochastic makes a higher low, suggesting sellers are losing conviction even as price tests new lows.",
+    "Trend confirmation with higher timeframe: use weekly Stochastic to identify the macro trend direction, then enter on daily Stochastic pullbacks in the direction of the weekly trend.",
+    "Dual timeframe alignment: wait for both the 15-minute and the 5-minute Stochastic to reach oversold simultaneously before entering an intraday long, filtering out premature entries."
+  ],
+  "pros": [
+    "More sensitive than RSI to short-term momentum shifts, allowing earlier entry signals at potential turning points within the lookback range.",
+    "The %D line provides a natural signal trigger via %K/%D crossovers, giving a built-in entry mechanism beyond just level-based overbought/oversold readings.",
+    "Bounded 0-100 scale makes overbought (above 80) and oversold (below 20) conditions immediately intuitive and directly comparable across different assets.",
+    "Highly configurable via three parameters — k_period, smooth_k, and d_period — allowing fine-tuning for different timeframes and volatility regimes."
+  ],
+  "cons": [
+    "More susceptible to false signals and whipsaws than RSI because of its higher sensitivity, particularly when smooth_k is set to 1 (fast stochastic).",
+    "In strongly trending markets, Stochastic can remain in overbought or oversold territory for long stretches, generating repeated false reversal signals against the trend.",
+    "Three parameters create a large optimization space that is easily over-fitted to historical data — the default 14/3/3 is preferred partly because it resists over-fitting.",
+    "Stochastic is sensitive to the price range used: in instruments with very high intraday volatility, a 14-bar high-low range can be extremely wide, compressing most closes to the middle of the scale and reducing indicator sensitivity."
+  ],
+  "common_mistakes": [
+    "Taking every crossover below 80 as a sell signal regardless of trend context: in a bull market, Stochastic routinely cycles from 80+ back to 60 and then resumes higher without any meaningful reversal.",
+    "Using the fast stochastic (smooth_k = 1) for trade signals: the raw %K is extremely noisy and generates far too many crossovers to be useful without additional filtering.",
+    "Ignoring the zone of the crossover: a %K/%D crossover at the 50 level has far less predictive value than a crossover occurring below 20 or above 80.",
+    "Comparing Stochastic values across very different lookback periods without understanding that a 5-period Stochastic and a 21-period Stochastic measure fundamentally different things about price momentum."
+  ],
+  "when_it_fails": [
+    "Trending markets with low volatility consolidations: when price trends at a modest pace with shallow pullbacks, Stochastic may oscillate between 60-90 without ever reaching the oversold zone, eliminating mean-reversion entry setups entirely.",
+    "Illiquid markets with wide bid-ask spreads: in thin markets, the close frequently prints near the high or low of the range depending on the last transaction, producing Stochastic values near 0 or 100 that do not reflect genuine momentum extremes.",
+    "Opening 30-minute volatility: in the first 30 minutes of a trading session, Stochastic is calibrated only on a partial day's range and can produce extreme readings that reverse as the full day's range develops."
+  ],
+  "advanced_quant_note": "The Stochastic %K is a nonlinear normalization of price into the rolling range [0,1], making it equivalent to the empirical CDF of closing prices over the lookback window evaluated at the current close. Unlike RSI, which measures first-order autocorrelation of returns, Stochastic measures the ordinal rank of the current close within the recent price distribution. Research has shown that Stochastic is more effective than RSI for identifying short-term mean reversion in highly liquid, electronically traded markets, while RSI is more effective for trend and momentum signals over medium-term horizons — a result consistent with Stochastic's rank-based construction being better suited to microstructure noise than RSI's return-ratio construction.",
+  "related_indicators": ["rsi", "cci", "williams_r", "macd"],
+  "default_thresholds": {
+    "overbought": 80,
+    "oversold": 20
+  }
+}

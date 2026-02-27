@@ -1,0 +1,58 @@
+{
+  "id": "bollinger_bands",
+  "name": "Bollinger Bands",
+  "category": "Volatility",
+  "description_simple": "Bollinger Bands draw an upper and lower boundary around price based on recent volatility, so the bands widen when markets are volatile and narrow when markets are calm.",
+  "description_detailed": "Bollinger Bands, created by John Bollinger in the 1980s, consist of three lines: a middle band (typically a 20-period SMA), an upper band set k standard deviations above the middle band, and a lower band set k standard deviations below. The standard deviation is calculated over the same lookback window as the moving average. Because standard deviation expands during high-volatility periods and contracts during quiet periods, the bands dynamically adjust their width to reflect current market conditions. This adaptive quality distinguishes Bollinger Bands from fixed-channel indicators like Donchian Channels.\n\nThe core insight behind Bollinger Bands is statistical normalization: in a normally distributed price environment, approximately 95% of price action should fall within two standard deviations of the mean. When price touches or breaches the upper band, it is statistically extreme for the current volatility regime. However, Bollinger himself emphasized that touching a band is not a signal on its own — it is a condition that requires additional context. A touch of the upper band in a strong uptrend followed by continued closes above it is a 'band walk,' which confirms trend strength rather than predicting reversal.\n\nTwo derived outputs add significant analytical value. The Bandwidth metric quantifies how wide the bands are relative to the middle band — extremely low Bandwidth (the 'Bollinger Squeeze') often precedes a significant directional breakout as compressed volatility typically expands. The %B output (Percent B) normalizes price relative to the band range, producing a 0-1 oscillator where 1.0 means price is at the upper band and 0.0 means price is at the lower band. %B below 0 or above 1 indicates price is outside the bands, which can quantify extreme conditions more precisely than visual inspection.",
+  "formula": "Middle Band = SMA(Close, n)\nσ = Standard Deviation(Close, n)\nUpper Band = Middle Band + k × σ\nLower Band = Middle Band - k × σ\nBandwidth = (Upper - Lower) / Middle\n%B = (Close - Lower) / (Upper - Lower)",
+  "parameters": {
+    "length": {
+      "type": "integer",
+      "default": 20,
+      "min": 5,
+      "max": 200,
+      "description": "Lookback period for the middle band SMA and standard deviation calculation. Shorter periods make the bands more reactive; longer periods produce smoother, wider bands."
+    },
+    "std_dev": {
+      "type": "float",
+      "default": 2.0,
+      "min": 0.5,
+      "max": 4.0,
+      "description": "Number of standard deviations for the upper and lower bands. The default of 2.0 encloses approximately 95% of price data. Increase to 2.5-3.0 for fewer but higher-confidence signals."
+    }
+  },
+  "output_type": "multi_line",
+  "outputs": ["upper", "middle", "lower", "width", "pct_b"],
+  "how_traders_use_it": [
+    "Bollinger Squeeze breakout: when Bandwidth compresses to multi-month lows (the squeeze), it signals coiled energy. Traders wait for the breakout direction — a close above the upper band suggests bullish resolution; below the lower band suggests bearish resolution.",
+    "Mean reversion: in ranging markets, price touching the lower band and then reversing back toward the middle band provides a long entry, with the middle band as the target.",
+    "Band walk confirmation: in a strong uptrend, price consistently closing near or above the upper band confirms trend strength and supports holding long positions without exiting on upper band touches.",
+    "Divergence with %B: when price makes a new high but %B makes a lower high (price is rising but hitting lower on the band scale), it signals weakening momentum relative to volatility — a subtle leading reversal warning.",
+    "Volatility regime identification: expanding bands signal increasing uncertainty and risk; contracting bands signal low volatility conditions where breakout strategies become favorable."
+  ],
+  "pros": [
+    "Adapts automatically to changing volatility — the bands widen and narrow with market conditions, making them relevant across both calm and turbulent periods without parameter changes.",
+    "Bandwidth and %B derived outputs give precise, quantifiable readings on volatility and price position that visual inspection alone cannot provide.",
+    "The Bollinger Squeeze is one of the most reliable setups for anticipating major directional moves, with well-documented historical precedent across equities, futures, and forex.",
+    "Works across multiple timeframes and asset classes with the same default parameters, making it a versatile foundational tool."
+  ],
+  "cons": [
+    "The standard deviation calculation assumes normally distributed returns, which real-world financial data violates significantly — fat tails mean price stays outside the bands more often than statistical theory predicts.",
+    "Not a directional indicator: the bands show where price is relative to volatility, but they do not indicate whether price will continue or reverse from a band touch.",
+    "In strongly trending markets, price can walk along the upper or lower band for extended periods, making mean-reversion trades off band touches consistently unprofitable.",
+    "The combination of two parameters (length and standard deviations) creates a larger optimization space that is easy to overfit in backtesting."
+  ],
+  "common_mistakes": [
+    "Selling every time price hits the upper band or buying every time it hits the lower band without considering trend context — band touches in trends are continuation signals, not reversals.",
+    "Using Bollinger Bands as the sole entry trigger without confirming with volume, RSI, or candlestick patterns to distinguish mean-reversion setups from band walks.",
+    "Misinterpreting the Squeeze: low Bandwidth signals that a move is coming, not which direction it will go. Trading the squeeze before direction is confirmed results in 50/50 breakout attempts.",
+    "Changing the standard deviation parameter from 2.0 without understanding that doing so changes the statistical interpretation — 2.5 standard deviations captures approximately 99% of data, making touches extremely rare and potentially less actionable."
+  ],
+  "when_it_fails": [
+    "Persistent trending markets: when a stock or index is in a sustained momentum run, price continually touches or exceeds the upper band and the lower band provides no meaningful support, rendering mean-reversion strategies ineffective.",
+    "Markets with non-stationary volatility: during regime shifts (e.g., a calm equity market transitioning into a bear market), historical standard deviation based on the lookback window understates forward risk, making the bands too narrow just when wider bands are needed.",
+    "Very thin, illiquid markets: large individual transactions can spike price outside the bands without representing genuine directional sentiment, generating false extremes."
+  ],
+  "advanced_quant_note": "Bollinger Bands apply a sample standard deviation estimator to a rolling window, which is a biased estimator with significant variance for short lookback periods. For a 20-period window, the standard error of the standard deviation estimate is approximately σ/sqrt(2×19) ≈ 0.16σ, meaning the band width itself fluctuates by roughly 16% due to estimation error alone. The %B output is closely related to the z-score of price relative to its rolling mean — a %B of 1.0 corresponds to a z-score of +2. Researchers have found that combining %B with Bandwidth (to filter for setups where volatility is already expanding) significantly improves the predictive power of upper-band touch signals versus using %B alone.",
+  "related_indicators": ["sma", "atr", "keltner_channel", "donchian_channel", "rsi"]
+}

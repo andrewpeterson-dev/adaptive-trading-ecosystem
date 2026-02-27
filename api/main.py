@@ -9,7 +9,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import trading, models as models_routes, dashboard, system
+from api.routes import trading, models as models_routes, dashboard, system, strategies, explainer
 from config.settings import get_settings
 from db.database import init_db, close_db
 
@@ -47,6 +47,8 @@ app.include_router(trading.router, prefix="/api/trading", tags=["Trading"])
 app.include_router(models_routes.router, prefix="/api/models", tags=["Models"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(strategies.router, prefix="/api", tags=["Strategies"])
+app.include_router(explainer.router, prefix="/api", tags=["Explainer"])
 
 
 @app.get("/health")

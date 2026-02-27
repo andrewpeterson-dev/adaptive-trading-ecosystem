@@ -1,0 +1,50 @@
+{
+  "id": "ema",
+  "name": "Exponential Moving Average",
+  "category": "Trend",
+  "description_simple": "The Exponential Moving Average is a version of the moving average that gives more weight to recent prices, making it react faster to new price information than a simple average.",
+  "description_detailed": "The Exponential Moving Average applies a multiplier to the most recent price so that it contributes more to the average than older prices. The weighting multiplier k = 2/(n+1) means that for a 20-period EMA, the most recent close receives a weight of approximately 9.5%, while each preceding bar receives exponentially less weight. Unlike the SMA, no data is ever fully dropped from the calculation — every historical close has some (increasingly tiny) influence on the current EMA value. In practice this means the EMA reaches its theoretical steady state within a few multiples of the period length.\n\nBecause the EMA is more responsive than the SMA, it produces earlier crossover signals and tracks price more closely during trends. This reduced lag comes at a cost: the EMA is more susceptible to whipsaws in volatile, directionless markets. The tradeoff between lag and noise sensitivity is the central tension in choosing between SMA and EMA, and many systematic traders experiment with both to find what works for a given instrument and timeframe. In practice, professional quant desks often use the EMA as the foundation for more sophisticated filters like DEMA (Double EMA) and TEMA (Triple EMA), which apply multiple exponential smoothing passes to reduce lag further.\n\nThe EMA is the building block for several of the most popular composite indicators: MACD uses the difference between two EMAs to identify momentum shifts, and Bollinger Bands optionally use an EMA as the middle band. Understanding EMA behavior — particularly how the smoothing constant k governs the effective memory of the indicator — is fundamental to understanding most derivative momentum and trend indicators.",
+  "formula": "k = 2 / (n + 1)\nEMA(current) = Close × k + EMA(prev) × (1 - k)\n\nInitial EMA value is typically set to SMA(n) of the first n bars.\nEquivalent form: EMA(current) = EMA(prev) + k × (Close - EMA(prev))",
+  "parameters": {
+    "length": {
+      "type": "integer",
+      "default": 20,
+      "min": 5,
+      "max": 200,
+      "description": "Number of periods determining the smoothing constant. Common values: 9, 12, 20, 26, 50, 200. Shorter periods react faster; longer periods are smoother."
+    }
+  },
+  "output_type": "single_line",
+  "outputs": ["ema"],
+  "how_traders_use_it": [
+    "Trend following: price above a rising EMA confirms uptrend; price below a falling EMA confirms downtrend, with the EMA acting as a dynamic entry filter.",
+    "Dynamic support and resistance: the 20-EMA frequently provides support during healthy pullbacks in trending equities; breaks below it can signal trend deterioration.",
+    "EMA crossovers: a short EMA (9 or 12) crossing above a longer EMA (21 or 26) signals bullish momentum; the reverse signals bearish momentum — faster and more responsive than equivalent SMA crossovers.",
+    "Ribbon analysis: stacking multiple EMAs of increasing length (8, 13, 21, 34, 55) forms an 'EMA ribbon'; a fanning ribbon with correct ordering confirms strong trend; a compressed ribbon signals consolidation.",
+    "Mean reversion entries: in range-bound conditions, price pulling back to a key EMA and showing reversal candlestick patterns can serve as a low-risk entry for continuation trades."
+  ],
+  "pros": [
+    "Responds faster to recent price changes than the SMA of equivalent period, reducing lag and producing earlier signals in trending markets.",
+    "Uses all historical price data with exponentially decaying weights, avoiding the 'data drop-off' effect where old large moves suddenly fall out of SMA calculations.",
+    "Computationally efficient: requires only the previous EMA value and the current close, making real-time streaming calculation trivial.",
+    "Flexible foundation for more advanced indicators: MACD, DEMA, TEMA, and many others are built directly from EMA calculations."
+  ],
+  "cons": [
+    "More sensitive to short-term price spikes than the SMA, which can produce false signals and whipsaws in volatile, noisy markets.",
+    "The starting value problem: EMA calculations are sensitive to the initial value used (typically the first SMA), and the indicator requires a 'warmup' period of at least n bars to stabilize.",
+    "The faster reaction to price is a double-edged sword — in choppy markets, an EMA crossover system generates more trades and more losses than an equivalent SMA system.",
+    "Difficult to interpret in isolation: because the EMA value itself is just a price level, context about trend direction requires comparing it to price or other EMAs."
+  ],
+  "common_mistakes": [
+    "Confusing EMA period with SMA period: a 20-period EMA reacts significantly faster than a 20-period SMA, so direct comparison or substitution changes indicator behavior meaningfully.",
+    "Not accounting for the warmup period: EMA values in the first n bars of a dataset are unreliable and should be excluded from backtesting results.",
+    "Over-relying on EMA crossovers in ranging markets: in sideways price action, fast/slow EMA crossovers chop back and forth continuously, generating small losses on every trade.",
+    "Ignoring the effective half-life: for a 20-period EMA, 50% of the weight is concentrated in approximately the last 10 bars — traders sometimes believe they are looking at a 20-bar average when they are effectively seeing a much shorter-term signal."
+  ],
+  "when_it_fails": [
+    "Whipsaw markets: when price oscillates rapidly around a flat EMA, crossover signals trigger repeatedly in both directions with no follow-through, producing a string of small losses.",
+    "Extreme outlier bars: a single massive spike candle (earnings gap, flash crash) immediately distorts the EMA due to the high weight given to the most recent bar, producing a misleading level that takes many subsequent bars to correct."
+  ],
+  "advanced_quant_note": "The EMA is an infinite impulse response (IIR) filter with a single pole at (1-k) in the z-domain. Its frequency response rolls off at 6 dB per octave above the cutoff frequency, which corresponds to a period of approximately 1/k bars. Unlike the SMA's rectangular window, the EMA's exponential decay window has no spectral sidelobes, meaning it does not exhibit the frequency leakage artifacts of the SMA. However, the IIR nature means the EMA has no linear phase response — its group delay is frequency-dependent, which causes phase distortion that can shift the apparent timing of peaks and troughs. Practitioners building dual-EMA crossover systems should be aware that the apparent signal lag is not uniform across different price oscillation frequencies.",
+  "related_indicators": ["sma", "macd", "dema", "tema", "bollinger_bands"]
+}

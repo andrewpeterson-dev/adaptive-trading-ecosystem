@@ -1,0 +1,50 @@
+{
+  "id": "sma",
+  "name": "Simple Moving Average",
+  "category": "Trend",
+  "description_simple": "The Simple Moving Average smooths price by averaging the closing prices of the last n bars, making it easier to see the underlying trend direction.",
+  "description_detailed": "The Simple Moving Average is the arithmetic mean of a security's closing prices over a specified period. Each bar in the lookback window receives identical weight: a 20-period SMA assigns 5% weight to each of the last 20 closing prices. This equal weighting is both the SMA's greatest strength and its most significant weakness — it treats a close from 20 bars ago the same as the most recent close, which produces significant lag relative to current price action.\n\nDespite its simplicity, the SMA remains one of the most widely followed technical indicators in existence. Institutional traders and algorithms actively reference key SMA levels such as the 50-day, 100-day, and 200-day SMAs as dynamic support and resistance. Because these levels are watched by so many participants, they function as self-fulfilling reference points: price frequently reacts at SMA levels precisely because traders expect it to. This reflexive property makes the 200-day SMA, for example, one of the most reliable support or resistance lines available.\n\nCrossovers between two SMAs of different lengths are among the most fundamental signals in trend-following. The 'Golden Cross' (50-day crossing above the 200-day) and the 'Death Cross' (50-day crossing below the 200-day) are widely reported in financial media and followed by retail and institutional traders alike. While these signals are lagging by nature, they provide clear, objective entry and exit rules that remove ambiguity from trend-following decision-making.",
+  "formula": "SMA(n) = (Close_1 + Close_2 + ... + Close_n) / n\n\nEquivalently: SMA(n) = Σ(Close_i, i=1 to n) / n",
+  "parameters": {
+    "length": {
+      "type": "integer",
+      "default": 20,
+      "min": 5,
+      "max": 200,
+      "description": "Number of bars to include in the average. Common values: 9, 20, 50, 100, 200. Shorter periods track price closely; longer periods show the macro trend."
+    }
+  },
+  "output_type": "single_line",
+  "outputs": ["sma"],
+  "how_traders_use_it": [
+    "Trend direction: price consistently above a rising SMA signals an uptrend; price consistently below a falling SMA signals a downtrend.",
+    "Dynamic support and resistance: the 20-day SMA often acts as support in bull markets, with price bouncing off it during pullbacks before resuming the trend.",
+    "Dual-SMA crossover signals: a faster SMA crossing above a slower SMA generates a buy signal (Golden Cross pattern); the reverse generates a sell signal (Death Cross).",
+    "Price filter for entries: many strategies require price to be above the 200-day SMA before taking any long positions, filtering out trades that go against the macro trend.",
+    "Trend strength confirmation: when price is far above its SMA, the trend is extended and overheated; when price is near the SMA, it is a more neutral condition."
+  ],
+  "pros": [
+    "Extremely simple to calculate and interpret, with no hidden complexity or smoothing constants.",
+    "Widely watched by institutions and algorithms, making key SMA levels (50-day, 200-day) self-reinforcing support and resistance zones.",
+    "Equal weighting across all bars provides a genuinely unbiased estimate of average price with no recency bias.",
+    "Very stable output: small changes in recent price have minimal impact on a long-period SMA, making it resistant to whipsaws."
+  ],
+  "cons": [
+    "Significant lag: a 200-period SMA on daily bars lags current price by roughly 100 bars, making it useless for short-term timing.",
+    "Equal weighting means a large price move from 19 bars ago still influences a 20-period SMA as much as today's close, creating 'echo' effects when old data drops off.",
+    "No predictive power in sideways markets: a flat SMA gives no actionable directional signal.",
+    "SMA crossover strategies have historically poor Sharpe ratios when transaction costs are included, particularly in choppy markets."
+  ],
+  "common_mistakes": [
+    "Using a short-period SMA (5-10) on noisy intraday data and trading every crossover, generating excessive transaction costs that erode any edge.",
+    "Ignoring the lag inherent in long-period SMAs: by the time the 200-day SMA turns up, the uptrend may already be mature.",
+    "Over-optimizing the SMA length on historical data to maximize backtest performance, which almost always results in curve-fitting that does not hold out-of-sample.",
+    "Treating an SMA cross as a standalone signal without confirming with volume, price structure, or other indicators."
+  ],
+  "when_it_fails": [
+    "Choppy sideways markets: when price oscillates above and below the SMA repeatedly without trending, crossover signals generate a series of small losses.",
+    "Sudden reversals and gap moves: because the SMA is a lagging average, it cannot respond to sharp V-shaped reversals caused by news events until well after the move has occurred."
+  ],
+  "advanced_quant_note": "In signal processing terms, the SMA is a finite impulse response (FIR) low-pass filter with a rectangular window function. Its frequency response has a first null at 1/n cycles per bar, meaning it fully attenuates frequency components at period n. The rectangular window produces significant spectral leakage — sidelobes in the frequency domain — which allows high-frequency noise components to bleed through the filter in ways that alternative windows (Hann, Gaussian) would suppress. This is why adaptive or weighted moving averages often produce cleaner trend signals on noisy data. The SMA's group delay is exactly (n-1)/2 bars, providing a precise mathematical characterization of its lag.",
+  "related_indicators": ["ema", "wma", "vwap", "macd"]
+}

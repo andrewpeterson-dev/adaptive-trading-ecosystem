@@ -1,0 +1,65 @@
+{
+  "id": "macd",
+  "name": "Moving Average Convergence Divergence",
+  "category": "Momentum",
+  "description_simple": "MACD measures the distance between two moving averages of price, revealing whether short-term momentum is accelerating or decelerating relative to the longer-term trend.",
+  "description_detailed": "MACD, developed by Gerald Appel in the late 1970s, captures momentum by taking the difference between a fast and a slow Exponential Moving Average. When the fast EMA (12-period) is above the slow EMA (26-period), MACD is positive, indicating that short-term momentum is bullish. A 9-period EMA of the MACD line itself, called the Signal line, then smooths the MACD to produce a trigger. The Histogram, the visual bar chart below the zero line, shows the distance between MACD and its Signal line — widening bars indicate accelerating momentum, and narrowing bars signal deceleration.\n\nMACDs three components carry distinct analytical value. The MACD line crossing above zero confirms that the shorter-term trend has overtaken the longer-term trend — a macro momentum shift. The MACD line crossing above the Signal line is a faster, more sensitive signal used for shorter-term entries. The Histogram is the most sensitive component: because it measures the rate of change of MACD itself (momentum of momentum), Histogram divergence from price — where price reaches a new high but the Histogram is lower than its previous peak — is considered one of the earliest warning signs of trend exhaustion available to technical traders.\n\nThe standard 12/26/9 parameters were selected by Appel for weekly data. On daily charts, these parameters have become the de facto standard, but traders running intraday strategies often compress the parameters (e.g., 5/13/4 or 3/10/16) to reduce lag. The relative nature of the indicator — it measures spread between two averages rather than price level — means MACD can be used across assets with vastly different price levels without rescaling.",
+  "formula": "MACD Line = EMA(Close, fast) - EMA(Close, slow)\nSignal Line = EMA(MACD Line, signal)\nHistogram = MACD Line - Signal Line\n\nDefault: fast=12, slow=26, signal=9",
+  "parameters": {
+    "fast": {
+      "type": "integer",
+      "default": 12,
+      "min": 2,
+      "max": 50,
+      "description": "Period for the fast EMA. Controls how quickly MACD responds to recent price changes. Shorter values increase sensitivity."
+    },
+    "slow": {
+      "type": "integer",
+      "default": 26,
+      "min": 5,
+      "max": 200,
+      "description": "Period for the slow EMA. Represents the longer-term baseline trend. Must be greater than the fast period."
+    },
+    "signal": {
+      "type": "integer",
+      "default": 9,
+      "min": 2,
+      "max": 50,
+      "description": "Period for the EMA smoothing of the MACD line to create the Signal line. Shorter values produce faster crossover signals."
+    }
+  },
+  "output_type": "multi_line",
+  "outputs": ["macd", "signal", "histogram"],
+  "how_traders_use_it": [
+    "Signal line crossover: MACD line crossing above the Signal line is a buy signal; crossing below is a sell signal. Most commonly used entry/exit trigger for MACD-based systems.",
+    "Zero line crossover: MACD crossing from negative to positive (zero line cross up) confirms the short-term trend has shifted bullish; used as a macro trend filter.",
+    "Histogram divergence: price making a new high while the Histogram prints a lower peak signals bullish momentum is weakening — a leading warning to exit longs or prepare for reversal.",
+    "Histogram expansion/contraction: increasing Histogram bars in the direction of the trend confirm trend acceleration; shrinking bars warn of deceleration before a signal line crossover occurs.",
+    "Trend identification: sustained positive MACD with the Histogram consistently above zero is a clean confirmation that an uptrend is in force and long bias is warranted."
+  ],
+  "pros": [
+    "Combines trend direction (zero line position) and momentum timing (signal line crossovers) in a single indicator, reducing the need for multiple separate tools.",
+    "The Histogram provides a visual, leading read on momentum acceleration and deceleration, often warning of reversals before the price chart does.",
+    "Scale-independent: because MACD is a difference of averages, it works across assets with very different price magnitudes without normalization.",
+    "Three distinct components (MACD, Signal, Histogram) give traders flexibility to use the most appropriate signal for their strategy timeframe and risk tolerance."
+  ],
+  "cons": [
+    "A lagging indicator built from two lagging EMAs: by the time a MACD crossover occurs, a significant portion of the move has already happened.",
+    "Frequent false signals in sideways, choppy markets where the fast and slow EMAs repeatedly converge and diverge without directional follow-through.",
+    "The 12/26/9 defaults were designed for weekly charts; applying them to intraday charts without adjustment often produces signals that are too slow to be actionable.",
+    "MACD does not have fixed bounds like RSI, making overbought/oversold readings relative rather than absolute — comparing extreme MACD values across different market regimes is not straightforward."
+  ],
+  "common_mistakes": [
+    "Taking every Signal line crossover as a trade signal without a trend filter: in ranging markets, crossovers fire constantly and most will lose money.",
+    "Using MACD Histogram divergence without price structure context: a lower Histogram peak only warns of weakening momentum, not an imminent reversal — confirmation from price action is required.",
+    "Applying the standard 12/26/9 parameters to all timeframes without adjustment: a 5-minute chart MACD with these settings uses EMAs spanning over 2 hours of data, which is too slow for most intraday strategies.",
+    "Confusing the Histogram crossing zero with the MACD line crossing zero: the Histogram zero cross simply means MACD and Signal are equal, which is a much less significant event than the MACD line crossing the zero line itself."
+  ],
+  "when_it_fails": [
+    "Volatile, trendless markets: rapid oscillations around a flat average cause the fast and slow EMAs to repeatedly cross, generating MACD signals in both directions with no sustained follow-through.",
+    "During gap moves: overnight or pre-market gaps cause the MACD to jump discontinuously, producing a false signal at the open before the indicator can re-stabilize.",
+    "During very slow, grinding trends: when price trends at a near-constant rate, the fast and slow EMAs stay nearly parallel and MACD hovers near a flat value, producing no actionable crossover signals."
+  ],
+  "advanced_quant_note": "MACD is mathematically equivalent to the difference of two IIR low-pass filters applied to the price series, which means it acts as a band-pass filter isolating cyclical components in the frequency range between the two EMA cutoff frequencies. For standard 12/26 parameters, this band corresponds roughly to cycles with periods between 12 and 26 bars. The Signal line applies a second IIR pass to further smooth the output, making the Histogram a second-difference (acceleration) measure of price. From a quantitative perspective, MACD divergence is an early warning because price momentum tends to lead price levels: the first derivative of price (momentum) peaks and troughs systematically before the price level itself in mean-reverting assets, a property directly exploitable via Histogram peak analysis.",
+  "related_indicators": ["ema", "rsi", "ppo", "dpo"]
+}

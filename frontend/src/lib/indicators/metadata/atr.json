@@ -1,0 +1,50 @@
+{
+  "id": "atr",
+  "name": "Average True Range",
+  "category": "Volatility",
+  "description_simple": "ATR measures how much a price typically moves in a single bar, giving traders an objective way to size positions and place stop losses based on actual market volatility.",
+  "description_detailed": "Average True Range, introduced by J. Welles Wilder in 1978 alongside RSI, quantifies volatility by measuring the average size of price bars over a given period. The critical innovation in ATR is the 'True Range' concept, which accounts for overnight gaps. A standard High-Low range would miss the case where price gaps up overnight and opens higher than the previous close — the True Range solves this by taking the maximum of three possible range calculations: current High minus current Low, the absolute value of current High minus previous Close, and the absolute value of current Low minus previous Close. This ensures that gap days are correctly identified as high-volatility events.\n\nATR itself is then the smoothed average of True Range over the lookback period, using Wilder's smoothing (equivalent to an EMA with alpha = 1/n). The output is expressed in price units — if a stock has an ATR of $2.50, it is moving an average of $2.50 per bar. This makes ATR directly actionable for position sizing and stop placement. The standard approach for volatility-adjusted stops is to place a stop loss 1.5x to 2x ATR below entry, so that normal price fluctuation will not stop out a position, but a genuine adverse move will.\n\nATR is not a directional indicator — it measures only the magnitude of moves, not their direction. A rising ATR means volatility is increasing regardless of whether price is going up or down. This property makes ATR useful as a market regime filter: high ATR environments call for wider stops and smaller position sizes; low ATR environments allow tighter stops and larger position sizes while maintaining constant dollar risk per trade.",
+  "formula": "True Range (TR) = max(\n  High - Low,\n  |High - Close_prev|,\n  |Low - Close_prev|\n)\n\nATR(1st) = Average(TR, n)  [simple average for first calculation]\nATR(current) = (ATR(prev) × (n-1) + TR(current)) / n  [Wilder smoothing]",
+  "parameters": {
+    "length": {
+      "type": "integer",
+      "default": 14,
+      "min": 1,
+      "max": 100,
+      "description": "Lookback period for the Wilder-smoothed average of True Range. Shorter values react quickly to volatility spikes; longer values provide a more stable baseline volatility estimate."
+    }
+  },
+  "output_type": "single_line",
+  "outputs": ["atr"],
+  "how_traders_use_it": [
+    "Volatility-adjusted stop loss placement: set stop loss at entry price minus (ATR multiplier × ATR) for longs, or plus for shorts. Common multipliers are 1.5x-2.5x, calibrated so normal noise does not trigger the stop.",
+    "Position sizing: calculate position size as (dollar risk per trade) / (ATR multiplier × ATR per share), ensuring every trade risks the same dollar amount regardless of the stock's absolute volatility.",
+    "Breakout filters: require that a breakout candle exceeds the previous bar's High by at least 0.5x ATR to filter out low-energy false breakouts from genuine high-momentum moves.",
+    "Trailing stop management: trail stops at a fixed ATR multiple below the highest high reached since entry, tightening as ATR contracts and widening as ATR expands.",
+    "Volatility regime identification: compare current ATR to its own 50-period average — ATR well above average indicates a high-volatility regime where strategies should use wider stops and smaller size; ATR below average signals a quiet period."
+  ],
+  "pros": [
+    "The True Range calculation correctly handles overnight gaps and limit moves, making it a reliable volatility measure for any market that can gap.",
+    "Output in price units makes ATR directly applicable to stop loss and position sizing calculations without unit conversion.",
+    "ATR is non-directional and non-predictive, which makes it genuinely useful as a risk management input rather than a trading signal subject to over-optimization.",
+    "Works identically across equities, futures, forex, and crypto with no normalization needed for the same asset over time."
+  ],
+  "cons": [
+    "ATR does not indicate direction: a high ATR reading means volatility is high but says nothing about whether price is going up or down.",
+    "Wilder smoothing means ATR responds slowly to sudden volatility spikes — a single extreme bar raises ATR by only 1/n of the spike magnitude, potentially understating risk immediately after a shock.",
+    "ATR is an absolute number that changes as price level changes over time. An ATR of $5 on a $50 stock (10%) is very different from $5 on a $500 stock (1%), so long-term historical ATR comparisons require normalization by price.",
+    "Provides no information about the distribution of moves within the range — a $2 ATR could result from consistently $2 moves or from mostly $0.50 moves and occasional $10 moves."
+  ],
+  "common_mistakes": [
+    "Using a fixed dollar stop loss amount instead of an ATR-based stop, resulting in stops that are too tight in high-volatility conditions and too wide in low-volatility conditions.",
+    "Ignoring ATR when sizing positions, leading to inconsistent dollar risk per trade: a high-ATR stock with a large position can produce a multi-R loss while the trader thought they were risking 1R.",
+    "Applying ATR stops only at entry and not adjusting them as ATR evolves — a stop set based on ATR at entry may become dangerously tight if the market subsequently becomes much more volatile.",
+    "Using ATR as a directional signal (e.g., thinking rising ATR means price will go down): ATR measures the size of moves, not their direction."
+  ],
+  "when_it_fails": [
+    "During regime shifts: ATR is a backward-looking measure, so it systematically underestimates volatility at the onset of high-volatility periods (market crashes, earnings shocks) because it is still averaging in the preceding calm period.",
+    "In markets with structural microstructure changes: when trading session hours change, new products launch, or liquidity conditions structurally shift, historical ATR no longer represents current typical range accurately."
+  ],
+  "advanced_quant_note": "ATR's Wilder smoothing is equivalent to an exponential moving average of True Range with alpha = 1/n, giving the n-period ATR an effective half-life of n × ln(2) ≈ 0.693n bars. This means volatility shocks are not fully absorbed for approximately 3-4 half-lives, or roughly 2-3 times the ATR period. From a risk management perspective, ATR is closely related to the realized volatility estimator used in options pricing, but the Yang-Zhang or Garman-Klass estimators that also incorporate Open prices are statistically more efficient (lower estimation variance) with the same number of observations. Professional volatility desks typically normalize ATR by price (ATR/Close × 100) to produce a percent-ATR metric that is comparable across different price levels and over long time series.",
+  "related_indicators": ["bollinger_bands", "keltner_channel", "adrp", "vix"]
+}
