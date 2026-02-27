@@ -20,9 +20,13 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import streamlit as st
 
-from dashboard.auth import render_auth_page, logout, init_session_state
-from dashboard.broker_settings import render_broker_settings
-from dashboard.admin import render_admin_dashboard
+try:
+    from dashboard.auth import render_auth_page, logout, init_session_state
+    from dashboard.broker_settings import render_broker_settings
+    from dashboard.admin import render_admin_dashboard
+    _has_auth = True
+except ImportError:
+    _has_auth = False
 
 # ── Page Config ──────────────────────────────────────────────────────────
 
@@ -33,15 +37,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Auth Gate ───────────────────────────────────────────────────────────
-init_session_state()
-
-if not render_auth_page():
-    st.stop()
-
-# Show email verification banner if needed
-if not st.session_state.get("email_verified"):
-    st.warning("Please verify your email address. Check your inbox for a verification link.")
+# ── Auth Gate (optional — requires asyncpg/postgres) ──────────────────
+if _has_auth:
+    init_session_state()
+    if not render_auth_page():
+        st.stop()
+    if not st.session_state.get("email_verified"):
+        st.warning("Please verify your email address. Check your inbox for a verification link.")
 
 # ── Custom CSS ───────────────────────────────────────────────────────────
 
@@ -490,9 +492,10 @@ def run_models(selected_strategies: tuple = None):
 st.sidebar.markdown("## Adaptive Trading Ecosystem")
 st.sidebar.markdown(f"**{st.session_state['user_display_name']}**")
 st.sidebar.caption(st.session_state["user_email"])
-if st.sidebar.button("Logout", use_container_width=True):
-    logout()
-    st.rerun()
+if _has_auth:
+    if st.sidebar.button("Logout", use_container_width=True):
+        logout()
+        st.rerun()
 st.sidebar.divider()
 
 # Data source toggle
@@ -2289,7 +2292,10 @@ if tab_live is not None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 with tab_broker:
-    render_broker_settings()
+    if _has_auth:
+        render_broker_settings()
+    else:
+        st.info("Broker settings require database connection. Install asyncpg and configure Postgres.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TAB: ADMIN (admin users only)
@@ -2297,7 +2303,10 @@ with tab_broker:
 
 if tab_admin is not None:
     with tab_admin:
-        render_admin_dashboard()
+        if _has_auth:
+            render_admin_dashboard()
+        else:
+            st.info("Admin panel requires database connection.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # FOOTER
