@@ -108,6 +108,14 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""  # Gmail app password
     base_url: str = "http://localhost:8501"  # Dashboard URL for email links
+    use_sqlite: bool = True  # Use SQLite for local dev (no PostgreSQL needed)
+
+    @property
+    def auth_database_url(self) -> str:
+        """Database URL for the auth/dashboard sync engine."""
+        if self.use_sqlite:
+            return "sqlite:///trading_ecosystem.db"
+        return self.database_url_sync
 
 
 @lru_cache()

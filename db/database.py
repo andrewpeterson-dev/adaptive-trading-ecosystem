@@ -1,38 +1,60 @@
 """
 Async database engine and session management.
+
+The async engine is created lazily so that importing this module (and Base)
+does not require asyncpg to be installed — needed by the Streamlit auth
+module which uses a separate sync engine.
 """
 
 from contextlib import asynccontextmanager
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from config.settings import get_settings
-
-settings = get_settings()
-
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-)
-
-async_session_factory = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
 
 
 class Base(DeclarativeBase):
     pass
 
 
+# Lazy async engine — only created when first accessed
+_engine = None
+_async_session_factory = None
+
+
+def _get_engine():
+    global _engine
+    if _engine is None:
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        settings = get_settings()
+        _engine = create_async_engine(
+            settings.database_url,
+            echo=False,
+            pool_size=20,
+            max_overflow=10,
+            pool_pre_ping=True,
+        )
+    return _engine
+
+
+def _get_session_factory():
+    global _async_session_factory
+    if _async_session_factory is None:
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+        _async_session_factory = async_sessionmaker(
+            _get_engine(),
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+    return _async_session_factory
+
+
 @asynccontextmanager
 async def get_session():
-    async with async_session_factory() as session:
+    factory = _get_session_factory()
+    async with factory() as session:
         try:
             yield session
             await session.commit()
@@ -42,9 +64,10 @@ async def get_session():
 
 
 async def init_db():
-    async with engine.begin() as conn:
+    async with _get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
 async def close_db():
-    await engine.dispose()
+    if _engine is not None:
+        await _engine.dispose()

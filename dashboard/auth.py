@@ -21,13 +21,29 @@ from db.models import User, EmailVerification
 
 settings = get_settings()
 
-# Sync engine for Streamlit (Streamlit doesn't support async natively)
-_sync_engine = create_engine(settings.database_url_sync, pool_pre_ping=True)
-_SyncSessionLocal = sessionmaker(bind=_sync_engine, expire_on_commit=False)
+# Sync engine for Streamlit (lazy init)
+_sync_engine = None
+_SyncSessionLocal = None
+
+
+def _init_engine():
+    global _sync_engine, _SyncSessionLocal
+    if _sync_engine is None:
+        db_url = settings.auth_database_url
+        connect_args = {}
+        if db_url.startswith("sqlite"):
+            connect_args = {"check_same_thread": False}
+        _sync_engine = create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
+        _SyncSessionLocal = sessionmaker(bind=_sync_engine, expire_on_commit=False)
+        # Auto-create tables for SQLite
+        if db_url.startswith("sqlite"):
+            from db.database import Base
+            Base.metadata.create_all(_sync_engine)
 
 
 def get_db() -> SyncSession:
     """Get a synchronous database session."""
+    _init_engine()
     return _SyncSessionLocal()
 
 
