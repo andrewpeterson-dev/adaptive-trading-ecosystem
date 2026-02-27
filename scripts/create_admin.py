@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sqlalchemy import create_engine
 from config.settings import get_settings
 from db.database import Base
-from db.models import User, EmailVerification, BrokerCredential  # noqa: F401 — registers models
+from db.models import User, EmailVerification, BrokerCredential, PaperPortfolio, PaperPosition, PaperTrade  # noqa: F401
 import bcrypt
 
 settings = get_settings()
