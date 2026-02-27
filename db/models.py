@@ -258,3 +258,65 @@ class BrokerCredential(Base):
     __table_args__ = (
         Index("ix_broker_cred_user", "user_id"),
     )
+
+
+class PaperTradeStatus(str, enum.Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class PaperPortfolio(Base):
+    __tablename__ = "paper_portfolios"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    cash = Column(Float, nullable=False, default=1_000_000.0)
+    initial_capital = Column(Float, nullable=False, default=1_000_000.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    positions = relationship("PaperPosition", back_populates="portfolio", cascade="all, delete-orphan")
+    trades = relationship("PaperTrade", back_populates="portfolio", cascade="all, delete-orphan")
+
+
+class PaperPosition(Base):
+    __tablename__ = "paper_positions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id = Column(Integer, ForeignKey("paper_portfolios.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    symbol = Column(String(16), nullable=False)
+    quantity = Column(Float, nullable=False)
+    avg_entry_price = Column(Float, nullable=False)
+    current_price = Column(Float, nullable=True)
+    unrealized_pnl = Column(Float, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    portfolio = relationship("PaperPortfolio", back_populates="positions")
+
+    __table_args__ = (
+        Index("ix_paper_pos_user_symbol", "user_id", "symbol", unique=True),
+    )
+
+
+class PaperTrade(Base):
+    __tablename__ = "paper_trades"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id = Column(Integer, ForeignKey("paper_portfolios.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    symbol = Column(String(16), nullable=False)
+    direction = Column(Enum(TradeDirection), nullable=False)
+    quantity = Column(Float, nullable=False)
+    entry_price = Column(Float, nullable=False)
+    exit_price = Column(Float, nullable=True)
+    pnl = Column(Float, nullable=True)
+    status = Column(Enum(PaperTradeStatus), default=PaperTradeStatus.OPEN)
+    entry_time = Column(DateTime, default=datetime.utcnow)
+    exit_time = Column(DateTime, nullable=True)
+
+    portfolio = relationship("PaperPortfolio", back_populates="trades")
+
+    __table_args__ = (
+        Index("ix_paper_trade_user", "user_id"),
+    )
