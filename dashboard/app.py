@@ -58,176 +58,151 @@ st.markdown('<meta name="viewport" content="width=device-width, initial-scale=1"
 
 st.markdown("""
 <style>
-    /* ── Apple-inspired Black & White ─────────────────────────────────── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+    /* ═══ PRODUCTION UI — Robinhood density + Apple polish ═══ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
     * { font-family: -apple-system, 'Inter', BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif !important; }
 
-    .stApp { background-color: #000000; }
-    [data-testid="stHeader"] { background-color: #000000; }
+    /* ── Core surfaces ───────────────────────────────────────── */
+    .stApp { background-color: #09090b; }
+    [data-testid="stHeader"] { background-color: #09090b; border-bottom: 1px solid #18181b; }
 
-    /* Metric cards — clean flat cards */
-    [data-testid="stMetric"] {
-        background: #0a0a0a;
-        border: 1px solid #1a1a1a;
-        border-radius: 12px;
-        padding: 16px 20px;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #666666;
-        font-size: 0.7rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-    [data-testid="stMetricValue"] { color: #ffffff; font-size: 1.5rem; font-weight: 500; }
-    [data-testid="stMetricDelta"] { font-weight: 400; }
-
-    /* Sidebar — clean, minimal */
+    /* ── Sidebar — dense, functional ─────────────────────────── */
     [data-testid="stSidebar"] {
-        background: #000000;
-        border-right: 1px solid #1a1a1a;
+        background: #09090b;
+        border-right: 1px solid #18181b;
+        padding-top: 0.5rem;
     }
+    [data-testid="stSidebar"] [data-testid="stMarkdown"] p { font-size: 0.82rem; margin-bottom: 0.2rem; }
 
-    /* Tables — rounded, subtle */
-    .stDataFrame { border-radius: 8px; overflow: hidden; }
+    /* Hide sidebar collapse & branding */
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    button[kind="header"],
+    #MainMenu, footer { display: none !important; visibility: hidden; }
 
-    /* Section headers — clean hierarchy */
-    h1 { color: #ffffff !important; font-weight: 600; letter-spacing: -0.02em; }
-    h2, h3 {
-        color: #999999 !important;
-        border-bottom: 1px solid #1a1a1a;
-        padding-bottom: 10px;
-        font-weight: 500;
-        letter-spacing: -0.01em;
+    /* ── Metric cards — Robinhood-style ──────────────────────── */
+    [data-testid="stMetric"] {
+        background: #111113;
+        border: 1px solid #1e1e22;
+        border-radius: 10px;
+        padding: 14px 18px;
+        transition: border-color 0.2s ease;
     }
-    h4 { color: #888888 !important; font-weight: 500; letter-spacing: -0.01em; }
-    p, span, li { letter-spacing: -0.01em; }
-
-    /* Hide streamlit branding */
-    #MainMenu { visibility: hidden; }
-    footer { visibility: hidden; }
-
-    /* Tabs — minimal underline style */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
-        border-bottom: 1px solid #1a1a1a;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: transparent;
-        border: none;
-        border-bottom: 2px solid transparent;
-        border-radius: 0;
-        color: #555555;
-        padding: 10px 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
+    [data-testid="stMetric"]:hover { border-color: #333338; }
+    [data-testid="stMetricLabel"] {
+        color: #71717a;
+        font-size: 0.65rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        transition: all 0.2s ease;
+        letter-spacing: 0.1em;
     }
-    .stTabs [data-baseweb="tab"]:hover {
-        color: #999999;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: transparent !important;
-        border-bottom: 2px solid #ffffff !important;
-        color: #ffffff !important;
-    }
+    [data-testid="stMetricValue"] { color: #fafafa; font-size: 1.4rem; font-weight: 600; }
+    [data-testid="stMetricDelta"] { font-weight: 500; font-size: 0.75rem; }
 
-    /* Buttons — minimal, outlined */
+    /* ── Typography — tight hierarchy ────────────────────────── */
+    h1 { color: #fafafa !important; font-weight: 700; font-size: 1.6rem !important; letter-spacing: -0.03em; margin-bottom: 0 !important; }
+    h2 { color: #fafafa !important; font-weight: 600; font-size: 1.1rem !important; letter-spacing: -0.02em; border: none !important; padding-bottom: 0 !important; margin-top: 0.5rem !important; }
+    h3 { color: #a1a1aa !important; font-weight: 600; font-size: 0.85rem !important; letter-spacing: -0.01em; border: none !important; padding-bottom: 0 !important; text-transform: uppercase; }
+    h4 { color: #71717a !important; font-weight: 600; font-size: 0.78rem !important; letter-spacing: 0.02em; text-transform: uppercase; }
+    p, span, li { letter-spacing: -0.01em; line-height: 1.5; }
+
+    /* ── Tables ───────────────────────────────────────────────── */
+    .stDataFrame { border-radius: 10px; overflow: hidden; border: 1px solid #1e1e22; }
+
+    /* ── Buttons — crisp, interactive ────────────────────────── */
     .stButton > button {
-        background-color: transparent;
-        border: 1px solid #333333;
+        background-color: #111113;
+        border: 1px solid #27272a;
         border-radius: 8px;
-        color: #ffffff;
-        font-size: 0.8rem;
+        color: #fafafa;
+        font-size: 0.78rem;
         font-weight: 500;
-        letter-spacing: 0.02em;
-        transition: all 0.2s ease;
+        letter-spacing: 0.01em;
+        padding: 0.4rem 1rem;
+        transition: all 0.15s ease;
     }
-    .stButton > button:hover {
-        background-color: #ffffff;
-        border-color: #ffffff;
-        color: #000000;
+    .stButton > button:hover { background-color: #1e1e22; border-color: #3f3f46; }
+    .stButton > button:active { transform: scale(0.98); }
+    .stButton > button[kind="primary"] { background-color: #fafafa; border-color: #fafafa; color: #09090b; font-weight: 600; }
+    .stButton > button[kind="primary"]:hover { background-color: #d4d4d8; border-color: #d4d4d8; }
+
+    /* ── Inputs ───────────────────────────────────────────────── */
+    [data-baseweb="select"], [data-baseweb="input"] { border-radius: 8px !important; }
+
+    /* ── Dividers — subtle ───────────────────────────────────── */
+    hr { border-color: #18181b !important; margin: 0.5rem 0 !important; }
+
+    /* ── Scrollbar ────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+    /* ── Sidebar navigation radio ────────────────────────────── */
+    div[data-testid="stRadio"] > div { gap: 0 !important; }
+    div[data-testid="stRadio"] > div > label {
+        padding: 7px 14px 7px 16px !important;
+        border-radius: 0 !important;
+        border-left: 3px solid transparent !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+        color: #a1a1aa !important;
+        transition: all 0.12s ease !important;
+        margin: 0 !important;
     }
-    .stButton > button[kind="primary"] {
-        background-color: #ffffff;
-        border-color: #ffffff;
-        color: #000000;
+    div[data-testid="stRadio"] > div > label:hover {
+        background: #111113 !important;
+        color: #fafafa !important;
     }
-    .stButton > button[kind="primary"]:hover {
-        background-color: #cccccc;
-        border-color: #cccccc;
+    div[data-testid="stRadio"] > div > label:has(input:checked) {
+        background: #111113 !important;
+        border-left: 3px solid #fafafa !important;
+        color: #fafafa !important;
+        font-weight: 600 !important;
     }
 
-    /* Selectbox / Inputs */
-    [data-baseweb="select"] { border-radius: 8px !important; }
-    [data-baseweb="input"] { border-radius: 8px !important; }
+    /* ── Alerts ───────────────────────────────────────────────── */
+    [data-testid="stAlert"] { border-radius: 8px; font-size: 0.82rem; }
 
-    /* Dividers */
-    hr { border-color: #1a1a1a !important; }
+    /* ── Expander ─────────────────────────────────────────────── */
+    [data-testid="stExpander"] { border: 1px solid #1e1e22 !important; border-radius: 10px !important; }
+    [data-testid="stExpander"] summary { font-size: 0.8rem; font-weight: 600; color: #a1a1aa; }
 
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #000000; }
-    ::-webkit-scrollbar-thumb { background: #333333; border-radius: 3px; }
+    /* ── Card container helper ────────────────────────────────── */
+    div.card-container {
+        background: #111113;
+        border: 1px solid #1e1e22;
+        border-radius: 10px;
+        padding: 16px;
+        transition: border-color 0.2s ease;
+    }
+    div.card-container:hover { border-color: #333338; }
 
-    /* Paper/Live mode banners — clean B&W */
-    .mode-banner-paper {
-        background: #0a0a0a;
-        border: 1px solid #333333;
-        border-radius: 8px;
-        padding: 10px 16px;
-        text-align: center;
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: #ffffff;
-        letter-spacing: 0.04em;
+    /* ── Mode banners ────────────────────────────────────────── */
+    .mode-banner-paper, .sidebar-mode-paper {
+        background: #111113; border: 1px solid #27272a; border-radius: 8px;
+        padding: 8px 14px; text-align: center; font-weight: 600; font-size: 0.78rem; color: #fafafa; letter-spacing: 0.03em;
     }
-    .mode-banner-live {
-        background: #0a0a0a;
-        border: 2px solid #ffffff;
-        border-radius: 8px;
-        padding: 10px 16px;
-        text-align: center;
-        font-weight: 700;
-        font-size: 0.9rem;
-        color: #ffffff;
-        letter-spacing: 0.04em;
-        animation: pulse-live 2s ease-in-out infinite;
-    }
-    @keyframes pulse-live {
-        0%, 100% { border-color: #ffffff; }
-        50% { border-color: #ffffff; box-shadow: 0 0 20px rgba(255, 255, 255, 0.15); }
-    }
-    .sidebar-mode-paper {
-        background: #0a0a0a;
-        border: 1px solid #333333;
-        border-radius: 8px;
-        padding: 8px 12px;
-        color: #ffffff;
-        font-weight: 500;
-        font-size: 0.8rem;
-        text-align: center;
-        letter-spacing: 0.04em;
-    }
-    .sidebar-mode-live {
-        background: #0a0a0a;
-        border: 2px solid #ffffff;
-        border-radius: 8px;
-        padding: 8px 12px;
-        color: #ffffff;
-        font-weight: 600;
-        font-size: 0.8rem;
-        text-align: center;
-        letter-spacing: 0.04em;
+    .mode-banner-live, .sidebar-mode-live {
+        background: #111113; border: 1px solid #fafafa; border-radius: 8px;
+        padding: 8px 14px; text-align: center; font-weight: 700; font-size: 0.78rem; color: #fafafa; letter-spacing: 0.03em;
     }
 
-    /* Info/Warning/Error boxes */
-    [data-testid="stAlert"] { border-radius: 8px; }
+    /* ── Reduce Streamlit default padding/gaps ───────────────── */
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
+    [data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
+    [data-testid="column"] { padding: 0 0.3rem; }
+
+    /* ── Plotly toolbar — only show on hover ─────────────────── */
+    .js-plotly-plot .modebar { opacity: 0; transition: opacity 0.2s ease; }
+    .js-plotly-plot:hover .modebar { opacity: 1; }
 </style>
 """, unsafe_allow_html=True)
+
+# ── Theme toggle state ──────────────────────────────────────────────────
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -499,12 +474,6 @@ def run_models(selected_strategies: tuple = None):
 # ═══════════════════════════════════════════════════════════════════════════
 
 st.sidebar.markdown("## Adaptive Trading Ecosystem")
-st.sidebar.markdown(f"**{st.session_state.get('user_display_name', 'Trader')}**")
-st.sidebar.caption(st.session_state.get("user_email", ""))
-if _has_auth:
-    if st.sidebar.button("Logout", width="stretch"):
-        logout()
-        st.rerun()
 st.sidebar.divider()
 
 # Paper mode detection
@@ -639,30 +608,34 @@ mode_label = f"Webull {_trading_mode_str}" if use_webull else "Standalone"
 st.sidebar.caption(f"v1.0.0 | {mode_label} Mode")
 st.sidebar.divider()
 
-# Strategy selection
-st.sidebar.markdown("### Strategies")
+# ── Active Models ────────────────────────────────────────────────────────
+# These strategies run as an ensemble — select which ones contribute
+# to portfolio signals and capital allocation.
+st.sidebar.markdown("### Active Models")
+st.sidebar.caption("Select which strategies run in the ensemble portfolio")
+
 if "selected_strategies" not in st.session_state:
     st.session_state.selected_strategies = set(STRATEGY_CATALOG.keys())
 
-for sname in STRATEGY_CATALOG:
-    checked = st.sidebar.checkbox(
-        sname,
-        value=sname in st.session_state.selected_strategies,
-        key=f"strat_{sname}",
-    )
-    if checked:
-        st.session_state.selected_strategies.add(sname)
-    else:
-        st.session_state.selected_strategies.discard(sname)
-
+all_names = list(STRATEGY_CATALOG.keys())
+selected_list = st.sidebar.multiselect(
+    "Ensemble strategies",
+    options=all_names,
+    default=[s for s in all_names if s in st.session_state.selected_strategies],
+    key="strat_multiselect",
+    label_visibility="collapsed",
+)
+st.session_state.selected_strategies = set(selected_list)
 selected_tuple = tuple(sorted(st.session_state.selected_strategies))
 
+st.sidebar.caption(f"{len(selected_list)} of {len(all_names)} active")
 st.sidebar.divider()
 
+# ── Load Models ─────────────────────────────────────────────────────────
 with st.spinner("Loading models..."):
     data = run_models(selected_tuple)
 
-# System status
+# ── Status ──────────────────────────────────────────────────────────────
 regime = data["regime"]
 regime_label = regime["regime"].value if hasattr(regime["regime"], "value") else str(regime["regime"])
 st.sidebar.markdown(f"**Regime:** `{regime_label}`")
@@ -672,8 +645,6 @@ st.sidebar.markdown(f"**Models Active:** {len(data['models'])}")
 
 st.sidebar.divider()
 
-# Controls
-st.sidebar.markdown("### Controls")
 if st.sidebar.button("Retrain All Models", width="stretch"):
     st.cache_resource.clear()
     st.rerun()
@@ -681,20 +652,50 @@ if st.sidebar.button("Retrain All Models", width="stretch"):
 capital = st.sidebar.number_input("Total Capital ($)", value=100_000, step=10_000)
 
 st.sidebar.divider()
-st.sidebar.markdown("### Risk Parameters")
-st.sidebar.markdown(f"Max Position: **10%**")
-st.sidebar.markdown(f"Max Exposure: **80%**")
-st.sidebar.markdown(f"Max Drawdown: **15%**")
-st.sidebar.markdown(f"Stop Loss: **3%**")
-st.sidebar.markdown(f"Max Trades/hr: **20**")
+
+# ── Settings (profile, theme, risk params) ──────────────────────────────
+with st.sidebar.expander("Settings", expanded=False):
+    # Theme toggle
+    st.markdown("**Appearance**")
+    theme_choice = st.radio(
+        "Theme",
+        ["Dark", "Light"],
+        index=0 if st.session_state.theme == "dark" else 1,
+        horizontal=True,
+        key="theme_radio",
+        label_visibility="collapsed",
+    )
+    if theme_choice.lower() != st.session_state.theme:
+        st.session_state.theme = theme_choice.lower()
+        st.rerun()
+
+    st.divider()
+
+    # Profile
+    st.markdown("**Account**")
+    display_name = st.session_state.get("user_display_name", "Trader")
+    email = st.session_state.get("user_email", "")
+    st.markdown(f"{display_name}")
+    if email:
+        st.caption(email)
+    if _has_auth:
+        if st.button("Logout", key="settings_logout"):
+            logout()
+            st.rerun()
+
+    st.divider()
+
+    # Risk parameters
+    st.markdown("**Risk Limits**")
+    st.caption("Max Position: 10%")
+    st.caption("Max Exposure: 80%")
+    st.caption("Max Drawdown: 15%")
+    st.caption("Stop Loss: 3%")
+    st.caption("Max Trades/hr: 20")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN CONTENT
 # ═══════════════════════════════════════════════════════════════════════════
-
-# Header
-st.markdown("# Adaptive Trading Ecosystem")
-st.markdown("Multi-model adaptive AI trading platform with dynamic capital allocation")
 
 # ── Key Metrics Row ──────────────────────────────────────────────────────
 
@@ -718,128 +719,158 @@ col4.metric("Best Sharpe", f"{best.metrics.sharpe_ratio:.3f}", best.name)
 halted = data["risk"].is_halted
 col5.metric("Status", "HALTED" if halted else "ACTIVE", delta="System OK" if not halted else "Risk Breach", delta_color="normal" if not halted else "inverse")
 
-# ── Tabs ─────────────────────────────────────────────────────────────────
+# ── Page Navigation (sidebar) ─────────────────────────────────────────────
 
 _is_admin = st.session_state.get("is_admin", False)
 
+_page_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Allocation", "Risk", "Regime", "Trades", "Paper Trading", "Broker Settings"]
 if use_webull:
-    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Live Trading", "Allocation", "Risk", "Regime", "Trades", "Paper Trading", "Broker Settings"]
-    if _is_admin:
-        _tab_names.append("Admin")
-    _tabs = st.tabs(_tab_names)
-    (tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder,
-     tab_live, tab_allocation, tab_risk, tab_regime, tab_trades, tab_paper, tab_broker) = _tabs[:13]
-    tab_admin = _tabs[13] if _is_admin else None
-else:
-    _tab_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Allocation", "Risk", "Regime", "Trades", "Paper Trading", "Broker Settings"]
-    if _is_admin:
-        _tab_names.append("Admin")
-    _tabs = st.tabs(_tab_names)
-    (tab_overview, tab_models, tab_catalog, tab_ai, tab_competition, tab_builder,
-     tab_allocation, tab_risk, tab_regime, tab_trades, tab_paper, tab_broker) = _tabs[:12]
-    tab_admin = _tabs[12] if _is_admin else None
-    tab_live = None
+    _page_names.insert(_page_names.index("Allocation"), "Live Trading")
+if _is_admin:
+    _page_names.append("Admin")
+
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "Overview"
+
+st.sidebar.divider()
+selected_page = st.sidebar.radio(
+    "Navigation",
+    _page_names,
+    index=_page_names.index(st.session_state.current_page) if st.session_state.current_page in _page_names else 0,
+    key="nav_radio",
+    label_visibility="collapsed",
+)
+st.session_state.current_page = selected_page
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TAB 1: OVERVIEW
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_overview:
+if selected_page == "Overview":
 
-    # Equity Curve
-    st.subheader("Portfolio Equity Curve")
+    # ── Hero: Portfolio Equity Curve ─────────────────────────────────────
     fig = go.Figure()
-
-    # Individual model curves
     for name, eq in data["equity_curves"].items():
         fig.add_trace(go.Scatter(
-            x=data["test_df"]["timestamp"],
-            y=eq,
-            name=name,
-            line=dict(width=1),
-            opacity=0.5,
+            x=data["test_df"]["timestamp"], y=eq,
+            name=name, line=dict(width=1), opacity=0.35,
         ))
-
-    # Combined portfolio
     fig.add_trace(go.Scatter(
-        x=data["test_df"]["timestamp"],
-        y=combined_eq,
-        name="Combined Portfolio",
-        line=dict(color="#ffffff", width=3),
+        x=data["test_df"]["timestamp"], y=combined_eq,
+        name="Portfolio", line=dict(color="#fafafa", width=2.5),
     ))
-
     fig.update_layout(
-        height=450,
-        template="plotly_dark",
-        paper_bgcolor="#000000",
-        plot_bgcolor="#000000",
-        xaxis=dict(gridcolor="#1a1a1a", title=""),
-        yaxis=dict(gridcolor="#1a1a1a", title="Equity ($)", tickprefix="$"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left"),
-        margin=dict(l=60, r=20, t=40, b=40),
+        height=300, template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(gridcolor="#1e1e22", title=""),
+        yaxis=dict(gridcolor="#1e1e22", title="", tickprefix="$"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", font=dict(size=10)),
+        margin=dict(l=50, r=10, t=10, b=25),
         hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Drawdown chart
-    col_dd, col_price = st.columns(2)
+    # ── Three-column dense strip ─────────────────────────────────────────
+    col_dd, col_price, col_perf = st.columns(3)
 
     with col_dd:
-        st.subheader("Portfolio Drawdown")
+        st.markdown("#### Drawdown")
         dd_series = (combined_eq - combined_eq.cummax()) / combined_eq.cummax() * 100
         fig_dd = go.Figure()
         fig_dd.add_trace(go.Scatter(
-            x=data["test_df"]["timestamp"],
-            y=dd_series,
-            fill="tozeroy",
-            fillcolor="rgba(255, 255, 255, 0.08)",
-            line=dict(color="#666666", width=1),
-            name="Drawdown",
+            x=data["test_df"]["timestamp"], y=dd_series,
+            fill="tozeroy", fillcolor="rgba(161,161,170,0.06)",
+            line=dict(color="#71717a", width=1), name="DD",
         ))
         fig_dd.update_layout(
-            height=300,
-            template="plotly_dark",
-            paper_bgcolor="#000000",
-            plot_bgcolor="#000000",
-            yaxis=dict(title="Drawdown %", gridcolor="#1a1a1a", ticksuffix="%"),
-            xaxis=dict(gridcolor="#1a1a1a"),
-            margin=dict(l=60, r=20, t=20, b=40),
-            showlegend=False,
+            height=180, template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(gridcolor="#1e1e22", ticksuffix="%", title=""),
+            xaxis=dict(gridcolor="#1e1e22", showticklabels=False),
+            margin=dict(l=35, r=5, t=5, b=5), showlegend=False,
         )
         st.plotly_chart(fig_dd, use_container_width=True)
 
     with col_price:
-        st.subheader("SPY Price (Test Period)")
+        st.markdown("#### SPY Price")
         fig_price = go.Figure()
         fig_price.add_trace(go.Candlestick(
             x=data["test_df"]["timestamp"],
-            open=data["test_df"]["open"],
-            high=data["test_df"]["high"],
-            low=data["test_df"]["low"],
-            close=data["test_df"]["close"],
+            open=data["test_df"]["open"], high=data["test_df"]["high"],
+            low=data["test_df"]["low"], close=data["test_df"]["close"],
             name="SPY",
         ))
         fig_price.update_layout(
-            height=300,
-            template="plotly_dark",
-            paper_bgcolor="#000000",
-            plot_bgcolor="#000000",
-            xaxis=dict(gridcolor="#1a1a1a", rangeslider=dict(visible=False)),
-            yaxis=dict(gridcolor="#1a1a1a", tickprefix="$"),
-            margin=dict(l=60, r=20, t=20, b=40),
-            showlegend=False,
+            height=180, template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="#1e1e22", rangeslider=dict(visible=False), showticklabels=False),
+            yaxis=dict(gridcolor="#1e1e22", tickprefix="$", title=""),
+            margin=dict(l=35, r=5, t=5, b=5), showlegend=False,
         )
         st.plotly_chart(fig_price, use_container_width=True)
+
+    with col_perf:
+        st.markdown("#### Model Rankings")
+        _ov_rows = []
+        for m in sorted(data["models"], key=lambda x: x.metrics.sharpe_ratio, reverse=True):
+            met = m.metrics
+            eq = data["equity_curves"].get(m.name)
+            eq_ret = ((eq.iloc[-1] / eq.iloc[0]) - 1) * 100 if eq is not None and len(eq) > 0 else 0
+            _ov_rows.append({
+                "Model": m.name,
+                "Sharpe": round(met.sharpe_ratio, 2),
+                "Ret": f"{eq_ret:+.1f}%",
+                "WR": f"{met.win_rate:.0%}",
+                "Wt": f"{data['weights'].get(m.name, 0):.0%}",
+            })
+        st.dataframe(pd.DataFrame(_ov_rows), width="stretch", hide_index=True, height=180)
+
+    # ── Regime + Recent Signals row ──────────────────────────────────────
+    col_regime, col_signals = st.columns([1, 2])
+
+    with col_regime:
+        st.markdown("#### Regime")
+        _regime_names = {
+            "low_vol_bull": "Low Vol Bull", "high_vol_bull": "High Vol Bull",
+            "low_vol_bear": "Low Vol Bear", "high_vol_bear": "High Vol Bear",
+            "sideways": "Sideways",
+        }
+        st.markdown(f"**{_regime_names.get(regime_label, regime_label)}** — {regime['confidence']:.0%}")
+        st.caption(f"Vol: {regime['volatility_20d']:.2%} | Trend: {regime['trend_strength']:.4f}")
+        if data["regime_history"]:
+            rh = data["regime_history"][-12:]
+            rh_conf = [r["Confidence"] for r in rh]
+            fig_rh = go.Figure()
+            fig_rh.add_trace(go.Scatter(
+                y=rh_conf, mode="lines+markers",
+                line=dict(color="#71717a", width=1.5),
+                marker=dict(size=3, color="#a1a1aa"),
+            ))
+            fig_rh.update_layout(
+                height=70, template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(visible=False), yaxis=dict(visible=False, range=[0, 1.1]),
+                margin=dict(l=0, r=0, t=0, b=0), showlegend=False,
+            )
+            st.plotly_chart(fig_rh, use_container_width=True, key="regime_spark")
+
+    with col_signals:
+        st.markdown("#### Recent Signals")
+        if data["trade_log"]:
+            recent = data["trade_log"][-15:]
+            sig_df = pd.DataFrame(recent)
+            sig_df["Time"] = pd.to_datetime(sig_df["Time"]).dt.strftime("%m/%d %H:%M")
+            sig_df = sig_df[["Time", "Model", "Direction", "Strength"]]
+            st.dataframe(sig_df, width="stretch", hide_index=True, height=180)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TAB 2: MODEL PERFORMANCE
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_models:
-    st.subheader("Model Performance Comparison")
+if selected_page == "Models":
+    st.markdown("#### Performance Comparison")
 
-    # Performance table
     perf_rows = []
     for m in data["models"]:
         met = m.metrics
@@ -848,22 +879,20 @@ with tab_models:
             "Sharpe": round(met.sharpe_ratio, 3),
             "Sortino": round(met.sortino_ratio, 3),
             "Win Rate": f"{met.win_rate:.1%}",
-            "Profit Factor": round(met.profit_factor, 2) if met.profit_factor != float("inf") else "∞",
+            "PF": round(met.profit_factor, 2) if met.profit_factor != float("inf") else "---",
             "Max DD": f"{met.max_drawdown:.2%}",
-            "Total Return": f"{met.total_return:.2%}",
+            "Return": f"{met.total_return:.2%}",
             "Trades": met.num_trades,
-            "Avg PnL": f"{met.avg_trade_pnl:.4%}",
-            "Weight": f"{data['weights'].get(m.name, 0):.1%}",
+            "Wt": f"{data['weights'].get(m.name, 0):.1%}",
         })
 
     perf_df = pd.DataFrame(perf_rows)
-    st.dataframe(perf_df, width="stretch", hide_index=True, height=250)
+    st.dataframe(perf_df, width="stretch", hide_index=True, height=220)
 
-    # Visual comparisons
     col_sharpe, col_wr = st.columns(2)
 
     with col_sharpe:
-        st.subheader("Sharpe Ratio by Model")
+        st.markdown("#### Sharpe Ratio")
         names = [m.name for m in data["models"]]
         sharpes = [m.metrics.sharpe_ratio for m in data["models"]]
         colors = ["#ffffff" if s > 0 else "#555555" for s in sharpes]
@@ -875,18 +904,18 @@ with tab_models:
             textposition="outside",
         )])
         fig_sharpe.update_layout(
-            height=350,
+            height=280,
             template="plotly_dark",
-            paper_bgcolor="#000000",
-            plot_bgcolor="#000000",
-            yaxis=dict(title="Sharpe Ratio", gridcolor="#1a1a1a"),
-            xaxis=dict(gridcolor="#1a1a1a"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(title="Sharpe Ratio", gridcolor="#1e1e22"),
+            xaxis=dict(gridcolor="#1e1e22"),
             margin=dict(l=60, r=20, t=20, b=80),
         )
         st.plotly_chart(fig_sharpe, use_container_width=True)
 
     with col_wr:
-        st.subheader("Win Rate & Profit Factor")
+        st.markdown("#### Win Rate & Profit Factor")
         win_rates = [m.metrics.win_rate * 100 for m in data["models"]]
         pf = [min(m.metrics.profit_factor, 5) for m in data["models"]]
 
@@ -904,20 +933,19 @@ with tab_models:
             yaxis="y2",
         ))
         fig_wr.update_layout(
-            height=350,
+            height=280,
             template="plotly_dark",
-            paper_bgcolor="#000000",
-            plot_bgcolor="#000000",
-            yaxis=dict(title="Win Rate %", gridcolor="#1a1a1a"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(title="Win Rate %", gridcolor="#1e1e22"),
             yaxis2=dict(title="Profit Factor", overlaying="y", side="right", showgrid=False),
-            xaxis=dict(gridcolor="#1a1a1a"),
+            xaxis=dict(gridcolor="#1e1e22"),
             margin=dict(l=60, r=60, t=20, b=80),
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
         )
         st.plotly_chart(fig_wr, use_container_width=True)
 
-    # Per-model equity curves
-    st.subheader("Individual Model Equity Curves")
+    st.markdown("#### Individual Equity Curves")
     fig_ind = go.Figure()
     colors_list = ["#ffffff", "#cccccc", "#aaaaaa", "#888888", "#666666", "#555555", "#444444", "#333333", "#bbbbbb"]
     for i, (name, eq) in enumerate(data["equity_curves"].items()):
@@ -928,12 +956,12 @@ with tab_models:
             line=dict(color=colors_list[i % len(colors_list)], width=2),
         ))
     fig_ind.update_layout(
-        height=400,
+        height=300,
         template="plotly_dark",
-        paper_bgcolor="#000000",
-        plot_bgcolor="#000000",
-        yaxis=dict(title="Equity ($)", gridcolor="#1a1a1a", tickprefix="$"),
-        xaxis=dict(gridcolor="#1a1a1a"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(title="Equity ($)", gridcolor="#1e1e22", tickprefix="$"),
+        xaxis=dict(gridcolor="#1e1e22"),
         margin=dict(l=60, r=20, t=20, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
         hovermode="x unified",
@@ -945,9 +973,8 @@ with tab_models:
 # TAB 3: STRATEGY CATALOG
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_catalog:
-    st.subheader("Strategy Catalog")
-    st.markdown("Browse, configure, and compare all available trading strategies.")
+if selected_page == "Strategy Catalog":
+    st.markdown("#### Strategy Catalog")
 
     for model in data["models"]:
         name = model.name
@@ -988,11 +1015,11 @@ with tab_catalog:
                     fillcolor=eq_color.replace(")", ", 0.08)").replace("rgb", "rgba") if "rgb" in eq_color else f"rgba({int(eq_color[1:3],16)},{int(eq_color[3:5],16)},{int(eq_color[5:7],16)},0.08)",
                 ))
                 fig_mini.update_layout(
-                    height=140,
+                    height=100,
                     margin=dict(l=0, r=0, t=5, b=5),
                     template="plotly_dark",
-                    paper_bgcolor="#000000",
-                    plot_bgcolor="#000000",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
                     xaxis=dict(visible=False),
                     yaxis=dict(visible=False),
                     showlegend=False,
@@ -1007,7 +1034,7 @@ with tab_catalog:
 # TAB: AI INTELLIGENCE
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_ai:
+if selected_page == "AI Intelligence":
     st.subheader("AI Market Intelligence")
     st.markdown("LLM-powered market analysis that feeds into regime detection and model weighting.")
 
@@ -1189,7 +1216,7 @@ with tab_ai:
 # TAB: COMPETITION — Head-to-Head Model Arena
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_competition:
+if selected_page == "Competition":
     st.subheader("Model Competition Arena")
     st.markdown("Head-to-head performance rankings computed from real backtest results.")
 
@@ -1272,10 +1299,10 @@ with tab_competition:
         fig_score.update_layout(
             height=max(250, 40 * len(names)),
             template="plotly_dark",
-            paper_bgcolor="#000000",
-            plot_bgcolor="#000000",
-            xaxis=dict(title="Composite Score", gridcolor="#1a1a1a"),
-            yaxis=dict(gridcolor="#1a1a1a", autorange="reversed"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(title="Composite Score", gridcolor="#1e1e22"),
+            yaxis=dict(gridcolor="#1e1e22", autorange="reversed"),
             margin=dict(l=120, r=60, t=20, b=40),
         )
         st.plotly_chart(fig_score, use_container_width=True)
@@ -1313,11 +1340,11 @@ with tab_competition:
         fig_radar.update_layout(
             height=380,
             template="plotly_dark",
-            paper_bgcolor="#000000",
+            paper_bgcolor="rgba(0,0,0,0)",
             polar=dict(
                 bgcolor="#000000",
-                radialaxis=dict(visible=True, range=[0, 1], gridcolor="#1a1a1a"),
-                angularaxis=dict(gridcolor="#1a1a1a"),
+                radialaxis=dict(visible=True, range=[0, 1], gridcolor="#1e1e22"),
+                angularaxis=dict(gridcolor="#1e1e22"),
             ),
             margin=dict(l=60, r=60, t=30, b=30),
             legend=dict(orientation="h", yanchor="bottom", y=-0.15),
@@ -1354,10 +1381,10 @@ with tab_competition:
             fig_h2h.update_layout(
                 height=350,
                 template="plotly_dark",
-                paper_bgcolor="#000000",
-                plot_bgcolor="#000000",
-                yaxis=dict(title="Equity ($)", gridcolor="#1a1a1a", tickprefix="$"),
-                xaxis=dict(gridcolor="#1a1a1a"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(title="Equity ($)", gridcolor="#1e1e22", tickprefix="$"),
+                xaxis=dict(gridcolor="#1e1e22"),
                 margin=dict(l=60, r=20, t=20, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02),
                 hovermode="x unified",
@@ -1374,14 +1401,14 @@ with tab_competition:
                 line=dict(color="#ffffff", width=1.5),
                 name=f"{model_a} vs {model_b}",
             ))
-            fig_rel.add_hline(y=0, line_dash="dash", line_color="#333333")
+            fig_rel.add_hline(y=0, line_dash="dash", line_color="#27272a")
             fig_rel.update_layout(
                 height=250,
                 template="plotly_dark",
-                paper_bgcolor="#000000",
-                plot_bgcolor="#000000",
-                yaxis=dict(title="Relative Performance (%)", gridcolor="#1a1a1a", ticksuffix="%"),
-                xaxis=dict(gridcolor="#1a1a1a"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(title="Relative Performance (%)", gridcolor="#1e1e22", ticksuffix="%"),
+                xaxis=dict(gridcolor="#1e1e22"),
                 margin=dict(l=60, r=20, t=20, b=40),
                 showlegend=False,
             )
@@ -1425,8 +1452,8 @@ with tab_competition:
 # TAB 4: CAPITAL ALLOCATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_allocation:
-    st.subheader("Dynamic Capital Allocation")
+if selected_page == "Allocation":
+    st.markdown("#### Capital Allocation")
 
     col_pie, col_bar = st.columns(2)
 
@@ -1444,7 +1471,7 @@ with tab_allocation:
         fig_pie.update_layout(
             height=400,
             template="plotly_dark",
-            paper_bgcolor="#000000",
+            paper_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=20, r=20, t=30, b=20),
             showlegend=False,
         )
@@ -1464,16 +1491,15 @@ with tab_allocation:
         fig_alloc.update_layout(
             height=400,
             template="plotly_dark",
-            paper_bgcolor="#000000",
-            plot_bgcolor="#000000",
-            yaxis=dict(title="Allocation ($)", gridcolor="#1a1a1a", tickprefix="$"),
-            xaxis=dict(gridcolor="#1a1a1a"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(title="Allocation ($)", gridcolor="#1e1e22", tickprefix="$"),
+            xaxis=dict(gridcolor="#1e1e22"),
             margin=dict(l=60, r=20, t=30, b=80),
         )
         st.plotly_chart(fig_alloc, use_container_width=True)
 
-    # Allocation scoring breakdown
-    st.subheader("Allocation Scoring Breakdown")
+    st.markdown("#### Scoring Breakdown")
     st.markdown("""
     **Scoring Formula:** `score = 0.35 × Sharpe + 0.25 × Sortino − 0.25 × |MaxDD| + 0.15 × ProfitFactor`
 
@@ -1507,7 +1533,7 @@ with tab_allocation:
 # TAB 4: RISK MANAGEMENT
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_risk:
+if selected_page == "Risk":
     st.subheader("Risk Management Dashboard")
 
     # Risk status cards
@@ -1546,12 +1572,12 @@ with tab_risk:
             gauge=dict(
                 axis=dict(range=[0, 20], ticksuffix="%"),
                 bar=dict(color="#ffffff"),
-                bgcolor="#0a0a0a",
+                bgcolor="#09090b",
                 steps=[
-                    dict(range=[0, 5], color="#111111"),
-                    dict(range=[5, 10], color="#1a1a1a"),
-                    dict(range=[10, 15], color="#222222"),
-                    dict(range=[15, 20], color="#333333"),
+                    dict(range=[0, 5], color="#111113"),
+                    dict(range=[5, 10], color="#18181b"),
+                    dict(range=[10, 15], color="#1e1e22"),
+                    dict(range=[15, 20], color="#27272a"),
                 ],
                 threshold=dict(line=dict(color="#ffffff", width=4), thickness=0.8, value=15),
             ),
@@ -1561,7 +1587,7 @@ with tab_risk:
         fig_gauge.update_layout(
             height=280,
             template="plotly_dark",
-            paper_bgcolor="#000000",
+            paper_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=20, r=20, t=40, b=20),
         )
         st.plotly_chart(fig_gauge, use_container_width=True)
@@ -1627,7 +1653,7 @@ with tab_risk:
 # TAB 5: REGIME DETECTION
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_regime:
+if selected_page == "Regime":
     st.subheader("Market Regime Analysis")
 
     # Current regime
@@ -1671,15 +1697,15 @@ with tab_regime:
         x=full_df["timestamp"], y=vol_60,
         name="60-day Vol", line=dict(color="#888888", width=2),
     ))
-    fig_vol.add_hline(y=vol_20.median(), line_dash="dash", line_color="#333333",
+    fig_vol.add_hline(y=vol_20.median(), line_dash="dash", line_color="#27272a",
                       annotation_text="Median Vol")
     fig_vol.update_layout(
         height=350,
         template="plotly_dark",
-        paper_bgcolor="#000000",
-        plot_bgcolor="#000000",
-        yaxis=dict(title="Annualized Volatility %", gridcolor="#1a1a1a", ticksuffix="%"),
-        xaxis=dict(gridcolor="#1a1a1a"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(title="Annualized Volatility %", gridcolor="#1e1e22", ticksuffix="%"),
+        xaxis=dict(gridcolor="#1e1e22"),
         margin=dict(l=60, r=20, t=20, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
     )
@@ -1690,7 +1716,7 @@ with tab_regime:
 # TAB: STRATEGY BUILDER
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_builder:
+if selected_page == "Strategy Builder":
     st.subheader("Strategy Builder")
     st.markdown("Configure a custom strategy, backtest it on real data, and compare against existing models.")
 
@@ -1855,10 +1881,10 @@ with tab_builder:
                     fig_eq.update_layout(
                         height=350,
                         template="plotly_dark",
-                        paper_bgcolor="#000000",
-                        plot_bgcolor="#000000",
-                        xaxis=dict(gridcolor="#1a1a1a"),
-                        yaxis=dict(gridcolor="#1a1a1a", tickprefix="$"),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(gridcolor="#1e1e22"),
+                        yaxis=dict(gridcolor="#1e1e22", tickprefix="$"),
                         margin=dict(l=60, r=20, t=30, b=40),
                         legend=dict(orientation="h", y=1.12),
                     )
@@ -1878,10 +1904,10 @@ with tab_builder:
                     fig_pos.update_layout(
                         height=200,
                         template="plotly_dark",
-                        paper_bgcolor="#000000",
-                        plot_bgcolor="#000000",
-                        xaxis=dict(gridcolor="#1a1a1a"),
-                        yaxis=dict(gridcolor="#1a1a1a", title="Position Size"),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(gridcolor="#1e1e22"),
+                        yaxis=dict(gridcolor="#1e1e22", title="Position Size"),
                         margin=dict(l=60, r=20, t=10, b=40),
                         showlegend=False,
                     )
@@ -1982,7 +2008,7 @@ Enters when volatility compresses below historical norms, then expands direction
 # TAB 6: TRADE LOG
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_trades:
+if selected_page == "Trades":
     st.subheader("Trade Execution Log")
 
     if data["trade_log"]:
@@ -2010,9 +2036,9 @@ with tab_trades:
             )])
             fig_tc.update_layout(
                 height=300, template="plotly_dark", paper_bgcolor="#000000",
-                plot_bgcolor="#000000",
-                yaxis=dict(title="Count", gridcolor="#1a1a1a"),
-                xaxis=dict(gridcolor="#1a1a1a"),
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(title="Count", gridcolor="#1e1e22"),
+                xaxis=dict(gridcolor="#1e1e22"),
                 margin=dict(l=60, r=20, t=20, b=80),
             )
             st.plotly_chart(fig_tc, use_container_width=True)
@@ -2039,292 +2065,291 @@ with tab_trades:
 # TAB: LIVE TRADING (Webull)
 # ═══════════════════════════════════════════════════════════════════════════
 
-if tab_live is not None:
-    with tab_live:
-        if not use_webull or _wb_client is None:
-            st.info("Switch to Webull Live mode in the sidebar to enable live trading.")
-        elif not _wb_client.is_connected:
-            st.warning("Not connected to Webull. Use the sidebar login panel to connect.")
-        else:
-            # ── Mode banner — always visible at top ─────────────────────
-            _is_paper = _wb_client.is_paper
-            _is_live = _wb_client.is_live
+if selected_page == "Live Trading":
+    if not use_webull or _wb_client is None:
+        st.info("Switch to Webull Live mode in the sidebar to enable live trading.")
+    elif not _wb_client.is_connected:
+        st.warning("Not connected to Webull. Use the sidebar login panel to connect.")
+    else:
+        # ── Mode banner — always visible at top ─────────────────────
+        _is_paper = _wb_client.is_paper
+        _is_live = _wb_client.is_live
 
-            if _is_paper:
-                st.markdown(
-                    '<div class="mode-banner-paper">'
-                    'PAPER TRADING MODE -- Simulated orders only, no real money'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-                st.subheader("Paper Trading Console")
-            else:
-                st.markdown(
-                    '<div class="mode-banner-live">'
-                    'LIVE TRADING MODE -- REAL MONEY -- All orders execute on your brokerage account'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-                st.subheader("Live Trading Console")
-
-                # Live mode requires explicit enable
-                from data.webull_client import WebullLiveClient
-                if isinstance(_wb_client, WebullLiveClient) and not _wb_client.live_enabled:
-                    st.error(
-                        "Live trading is LOCKED. You must enable it below before placing orders."
-                    )
-                    st.markdown("Type the exact confirmation phrase to unlock live order execution:")
-                    live_confirm = st.text_input(
-                        "Type: I UNDERSTAND THIS USES REAL MONEY",
-                        key="live_confirm_input",
-                    )
-                    if st.button("Enable Live Trading", key="enable_live_btn"):
-                        if _wb_client.enable_live_trading(live_confirm):
-                            st.success("Live trading enabled.")
-                            st.rerun()
-                        else:
-                            st.error("Confirmation phrase does not match. Type it exactly.")
-
-            # Connection status bar
-            trade_status = "READY" if _wb_client.is_trade_ready else "CONNECTED (view only)"
-            trade_color = "#ffffff" if _wb_client.is_trade_ready else "#888888"
-            mode_tag = f'<span style="color:{"#ffffff" if _is_paper else "#888888"}; font-weight:700">[{_wb_client.mode_label}]</span>'
+        if _is_paper:
             st.markdown(
-                f"**Status:** <span style='color:{trade_color}'>{trade_status}</span> "
-                f"| **Mode:** {mode_tag} "
-                f"| **API:** Official OpenAPI",
+                '<div class="mode-banner-paper">'
+                'PAPER TRADING MODE -- Simulated orders only, no real money'
+                '</div>',
                 unsafe_allow_html=True,
             )
-
-            # ── Live Quotes ─────────────────────────────────────────────
-            st.markdown("---")
-            st.markdown("#### Market Watchlist")
-
-            watchlist_input = st.text_input(
-                "Symbols (comma-separated)",
-                value="SPY, QQQ, AAPL, TSLA, NVDA, MSFT, AMZN, META",
-                key="watchlist_symbols",
+            st.subheader("Paper Trading Console")
+        else:
+            st.markdown(
+                '<div class="mode-banner-live">'
+                'LIVE TRADING MODE -- REAL MONEY -- All orders execute on your brokerage account'
+                '</div>',
+                unsafe_allow_html=True,
             )
-            watchlist_symbols = [s.strip().upper() for s in watchlist_input.split(",") if s.strip()]
+            st.subheader("Live Trading Console")
 
-            if st.button("Refresh Quotes", key="refresh_quotes_btn"):
-                st.cache_data.clear()
-
-            quotes_df = _wb_client.get_watchlist_quotes(watchlist_symbols)
-            if not quotes_df.empty:
-                def _color_change(val):
-                    if isinstance(val, (int, float)):
-                        color = "#ffffff" if val > 0 else "#555555" if val < 0 else "#777777"
-                        return f"color: {color}"
-                    return ""
-
-                styled = quotes_df.style.applymap(
-                    _color_change, subset=["Change", "Change %"]
-                ).format({
-                    "Price": "${:.2f}",
-                    "Change": "{:+.2f}",
-                    "Change %": "{:+.2f}%",
-                    "Volume": "{:,.0f}",
-                    "Bid": "${:.2f}",
-                    "Ask": "${:.2f}",
-                })
-                st.dataframe(styled, width="stretch", hide_index=True, height=340)
-            else:
-                st.info("No quote data available. Check connection or try again.")
-
-            # ── Account Overview ────────────────────────────────────────
-            st.markdown("---")
-            col_acct, col_positions = st.columns(2)
-
-            with col_acct:
-                acct_label = "Paper Account" if _is_paper else "Live Account"
-                st.markdown(f"#### {acct_label} Summary")
-                acct = _wb_client.get_account_summary()
-                if acct:
-                    a1, a2 = st.columns(2)
-                    a1.metric("Net Liquidation", f"${acct['net_liquidation']:,.2f}")
-                    a2.metric("Buying Power", f"${acct['buying_power']:,.2f}")
-                    a3, a4 = st.columns(2)
-                    a3.metric("Cash Balance", f"${acct['cash_balance']:,.2f}")
-                    pnl = acct['unrealized_pnl']
-                    a4.metric("Unrealized P&L", f"${pnl:,.2f}",
-                              delta=f"${pnl:+,.2f}", delta_color="normal" if pnl >= 0 else "inverse")
-                else:
-                    st.info("Account data not available")
-
-            with col_positions:
-                st.markdown("#### Current Positions")
-                positions = _wb_client.get_positions()
-                if positions:
-                    pos_df = pd.DataFrame(positions)
-                    display_cols = ["symbol", "quantity", "avg_cost", "last_price",
-                                    "market_value", "unrealized_pnl", "unrealized_pnl_pct"]
-                    pos_display = pos_df[[c for c in display_cols if c in pos_df.columns]]
-                    pos_display.columns = [c.replace("_", " ").title() for c in pos_display.columns]
-                    st.dataframe(pos_display, width="stretch", hide_index=True, height=250)
-                else:
-                    st.info("No open positions")
-
-            # ── Order Entry ──────────────────────────────────────────────
-            st.markdown("---")
-            order_heading = "Place Paper Order" if _is_paper else "Place LIVE Order (REAL MONEY)"
-            st.markdown(f"#### {order_heading}")
-
-            # Block live orders if live trading is not enabled
-            _order_blocked = False
-            if _is_live:
-                from data.webull_client import WebullLiveClient as _LiveCls
-                if isinstance(_wb_client, _LiveCls) and not _wb_client.live_enabled:
-                    st.error("Live trading is not enabled. Scroll up to enable it first.")
-                    _order_blocked = True
-
-            if not _wb_client.is_trade_ready:
-                st.warning("No account found. Check your API credentials.")
-            elif not _order_blocked:
-                col_ord1, col_ord2, col_ord3, col_ord4, col_ord5 = st.columns([1.5, 1, 1, 1, 1])
-
-                with col_ord1:
-                    order_symbol = st.text_input("Symbol", value="SPY", key="order_symbol")
-                with col_ord2:
-                    order_action = st.selectbox("Side", ["BUY", "SELL"], key="order_action")
-                with col_ord3:
-                    order_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key="order_qty")
-                with col_ord4:
-                    order_type = st.selectbox("Type", ["MKT", "LMT", "STP"], key="order_type")
-                with col_ord5:
-                    order_price = st.number_input("Price", min_value=0.0, value=0.0, step=0.01,
-                                                  key="order_price",
-                                                  disabled=(order_type == "MKT"))
-
-                col_place, col_tif = st.columns([2, 1])
-                with col_tif:
-                    order_tif = st.selectbox("Time in Force", ["DAY", "GTC"], key="order_tif")
-                with col_place:
-                    # Live mode gets an extra confirmation checkbox per order
-                    _can_submit = True
-                    if _is_live:
-                        _can_submit = st.checkbox(
-                            "I confirm this is a REAL MONEY order",
-                            value=False,
-                            key="live_order_confirm",
-                        )
-
-                    submit_label = "Submit Paper Order" if _is_paper else "Submit LIVE Order"
-                    if st.button(submit_label, type="primary", width="stretch", key="submit_order_btn"):
-                        if not _can_submit:
-                            st.error("You must check the confirmation box for live orders.")
-                        else:
-                            limit_p = order_price if order_type == "LMT" else None
-                            stop_p = order_price if order_type == "STP" else None
-                            result = _wb_client.place_order(
-                                symbol=order_symbol.upper(),
-                                side=order_action,
-                                qty=order_qty,
-                                order_type=order_type,
-                                limit_price=limit_p,
-                                stop_price=stop_p,
-                                tif=order_tif,
-                            )
-                            if result.get("success"):
-                                mode_tag_order = result.get("mode", _wb_client.mode_label)
-                                st.success(f"[{mode_tag_order}] Order placed: {order_action} {order_qty} {order_symbol.upper()} ({order_type})")
-                            else:
-                                st.error(f"Order failed: {result.get('error', 'Unknown error')}")
-
-            # ── Open Orders ─────────────────────────────────────────────
-            st.markdown("---")
-            col_open, col_hist = st.columns(2)
-
-            with col_open:
-                st.markdown("#### Open Orders")
-                open_orders = _wb_client.get_open_orders()
-                if open_orders:
-                    oo_df = pd.DataFrame(open_orders)
-                    display_cols = ["symbol", "side", "order_type", "quantity", "price", "status"]
-                    oo_display = oo_df[[c for c in display_cols if c in oo_df.columns]]
-                    st.dataframe(oo_display, width="stretch", hide_index=True, height=200)
-
-                    cancel_id = st.text_input("Order ID to cancel", key="cancel_order_id")
-                    if st.button("Cancel Order", key="cancel_order_btn"):
-                        if cancel_id:
-                            res = _wb_client.cancel_order(cancel_id)
-                            if res.get("success"):
-                                st.success("Order cancelled")
-                                st.rerun()
-                            else:
-                                st.error(res.get("error", "Cancel failed"))
-                else:
-                    st.info("No open orders")
-
-            with col_hist:
-                st.markdown("#### Order History")
-                history = _wb_client.get_order_history(count=20)
-                if history:
-                    hist_df = pd.DataFrame(history)
-                    display_cols = ["symbol", "side", "order_type", "quantity",
-                                    "filled_qty", "price", "status"]
-                    hist_display = hist_df[[c for c in display_cols if c in hist_df.columns]]
-                    st.dataframe(hist_display, width="stretch", hide_index=True, height=200)
-                else:
-                    st.info("No order history")
-
-            # ── Live Chart ──────────────────────────────────────────────
-            st.markdown("---")
-            st.markdown("#### Live Price Chart")
-            chart_symbol = st.text_input("Chart Symbol", value="SPY", key="chart_symbol")
-            chart_interval = st.selectbox("Interval", ["m1", "m5", "m15", "m30", "h1", "d1"], index=1, key="chart_interval")
-
-            bars = _wb_client.get_bars(chart_symbol.upper(), interval=chart_interval, count=200)
-            if bars is not None and not bars.empty:
-                fig_live = go.Figure()
-                if all(c in bars.columns for c in ["open", "high", "low", "close"]):
-                    x_axis = bars["timestamp"] if "timestamp" in bars.columns else bars.index
-                    fig_live.add_trace(go.Candlestick(
-                        x=x_axis,
-                        open=bars["open"],
-                        high=bars["high"],
-                        low=bars["low"],
-                        close=bars["close"],
-                        name=chart_symbol.upper(),
-                    ))
-                else:
-                    x_axis = bars["timestamp"] if "timestamp" in bars.columns else bars.index
-                    fig_live.add_trace(go.Scatter(
-                        x=x_axis, y=bars["close"],
-                        name=chart_symbol.upper(),
-                        line=dict(color="#ffffff", width=2),
-                    ))
-
-                fig_live.update_layout(
-                    height=450,
-                    template="plotly_dark",
-                    paper_bgcolor="#000000",
-                    plot_bgcolor="#000000",
-                    xaxis=dict(gridcolor="#1a1a1a", rangeslider=dict(visible=False)),
-                    yaxis=dict(gridcolor="#1a1a1a", tickprefix="$"),
-                    margin=dict(l=60, r=20, t=20, b=40),
-                    showlegend=False,
+            # Live mode requires explicit enable
+            from data.webull_client import WebullLiveClient
+            if isinstance(_wb_client, WebullLiveClient) and not _wb_client.live_enabled:
+                st.error(
+                    "Live trading is LOCKED. You must enable it below before placing orders."
                 )
-                st.plotly_chart(fig_live, key="live_chart_fig")
-            else:
-                st.info("No chart data available for this symbol/interval.")
-
-            # ── Live mode: disable button ────────────────────────────────
-            if _is_live:
-                st.markdown("---")
-                if st.button("Disable Live Trading", key="disable_live_btn"):
-                    from data.webull_client import WebullLiveClient as _LC
-                    if isinstance(_wb_client, _LC):
-                        _wb_client.disable_live_trading()
-                        st.info("Live trading disabled. Orders will be blocked.")
+                st.markdown("Type the exact confirmation phrase to unlock live order execution:")
+                live_confirm = st.text_input(
+                    "Type: I UNDERSTAND THIS USES REAL MONEY",
+                    key="live_confirm_input",
+                )
+                if st.button("Enable Live Trading", key="enable_live_btn"):
+                    if _wb_client.enable_live_trading(live_confirm):
+                        st.success("Live trading enabled.")
                         st.rerun()
+                    else:
+                        st.error("Confirmation phrase does not match. Type it exactly.")
+
+        # Connection status bar
+        trade_status = "READY" if _wb_client.is_trade_ready else "CONNECTED (view only)"
+        trade_color = "#ffffff" if _wb_client.is_trade_ready else "#888888"
+        mode_tag = f'<span style="color:{"#ffffff" if _is_paper else "#888888"}; font-weight:700">[{_wb_client.mode_label}]</span>'
+        st.markdown(
+            f"**Status:** <span style='color:{trade_color}'>{trade_status}</span> "
+            f"| **Mode:** {mode_tag} "
+            f"| **API:** Official OpenAPI",
+            unsafe_allow_html=True,
+        )
+
+        # ── Live Quotes ─────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### Market Watchlist")
+
+        watchlist_input = st.text_input(
+            "Symbols (comma-separated)",
+            value="SPY, QQQ, AAPL, TSLA, NVDA, MSFT, AMZN, META",
+            key="watchlist_symbols",
+        )
+        watchlist_symbols = [s.strip().upper() for s in watchlist_input.split(",") if s.strip()]
+
+        if st.button("Refresh Quotes", key="refresh_quotes_btn"):
+            st.cache_data.clear()
+
+        quotes_df = _wb_client.get_watchlist_quotes(watchlist_symbols)
+        if not quotes_df.empty:
+            def _color_change(val):
+                if isinstance(val, (int, float)):
+                    color = "#ffffff" if val > 0 else "#555555" if val < 0 else "#777777"
+                    return f"color: {color}"
+                return ""
+
+            styled = quotes_df.style.applymap(
+                _color_change, subset=["Change", "Change %"]
+            ).format({
+                "Price": "${:.2f}",
+                "Change": "{:+.2f}",
+                "Change %": "{:+.2f}%",
+                "Volume": "{:,.0f}",
+                "Bid": "${:.2f}",
+                "Ask": "${:.2f}",
+            })
+            st.dataframe(styled, width="stretch", hide_index=True, height=340)
+        else:
+            st.info("No quote data available. Check connection or try again.")
+
+        # ── Account Overview ────────────────────────────────────────
+        st.markdown("---")
+        col_acct, col_positions = st.columns(2)
+
+        with col_acct:
+            acct_label = "Paper Account" if _is_paper else "Live Account"
+            st.markdown(f"#### {acct_label} Summary")
+            acct = _wb_client.get_account_summary()
+            if acct:
+                a1, a2 = st.columns(2)
+                a1.metric("Net Liquidation", f"${acct['net_liquidation']:,.2f}")
+                a2.metric("Buying Power", f"${acct['buying_power']:,.2f}")
+                a3, a4 = st.columns(2)
+                a3.metric("Cash Balance", f"${acct['cash_balance']:,.2f}")
+                pnl = acct['unrealized_pnl']
+                a4.metric("Unrealized P&L", f"${pnl:,.2f}",
+                          delta=f"${pnl:+,.2f}", delta_color="normal" if pnl >= 0 else "inverse")
+            else:
+                st.info("Account data not available")
+
+        with col_positions:
+            st.markdown("#### Current Positions")
+            positions = _wb_client.get_positions()
+            if positions:
+                pos_df = pd.DataFrame(positions)
+                display_cols = ["symbol", "quantity", "avg_cost", "last_price",
+                                "market_value", "unrealized_pnl", "unrealized_pnl_pct"]
+                pos_display = pos_df[[c for c in display_cols if c in pos_df.columns]]
+                pos_display.columns = [c.replace("_", " ").title() for c in pos_display.columns]
+                st.dataframe(pos_display, width="stretch", hide_index=True, height=250)
+            else:
+                st.info("No open positions")
+
+        # ── Order Entry ──────────────────────────────────────────────
+        st.markdown("---")
+        order_heading = "Place Paper Order" if _is_paper else "Place LIVE Order (REAL MONEY)"
+        st.markdown(f"#### {order_heading}")
+
+        # Block live orders if live trading is not enabled
+        _order_blocked = False
+        if _is_live:
+            from data.webull_client import WebullLiveClient as _LiveCls
+            if isinstance(_wb_client, _LiveCls) and not _wb_client.live_enabled:
+                st.error("Live trading is not enabled. Scroll up to enable it first.")
+                _order_blocked = True
+
+        if not _wb_client.is_trade_ready:
+            st.warning("No account found. Check your API credentials.")
+        elif not _order_blocked:
+            col_ord1, col_ord2, col_ord3, col_ord4, col_ord5 = st.columns([1.5, 1, 1, 1, 1])
+
+            with col_ord1:
+                order_symbol = st.text_input("Symbol", value="SPY", key="order_symbol")
+            with col_ord2:
+                order_action = st.selectbox("Side", ["BUY", "SELL"], key="order_action")
+            with col_ord3:
+                order_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key="order_qty")
+            with col_ord4:
+                order_type = st.selectbox("Type", ["MKT", "LMT", "STP"], key="order_type")
+            with col_ord5:
+                order_price = st.number_input("Price", min_value=0.0, value=0.0, step=0.01,
+                                              key="order_price",
+                                              disabled=(order_type == "MKT"))
+
+            col_place, col_tif = st.columns([2, 1])
+            with col_tif:
+                order_tif = st.selectbox("Time in Force", ["DAY", "GTC"], key="order_tif")
+            with col_place:
+                # Live mode gets an extra confirmation checkbox per order
+                _can_submit = True
+                if _is_live:
+                    _can_submit = st.checkbox(
+                        "I confirm this is a REAL MONEY order",
+                        value=False,
+                        key="live_order_confirm",
+                    )
+
+                submit_label = "Submit Paper Order" if _is_paper else "Submit LIVE Order"
+                if st.button(submit_label, type="primary", width="stretch", key="submit_order_btn"):
+                    if not _can_submit:
+                        st.error("You must check the confirmation box for live orders.")
+                    else:
+                        limit_p = order_price if order_type == "LMT" else None
+                        stop_p = order_price if order_type == "STP" else None
+                        result = _wb_client.place_order(
+                            symbol=order_symbol.upper(),
+                            side=order_action,
+                            qty=order_qty,
+                            order_type=order_type,
+                            limit_price=limit_p,
+                            stop_price=stop_p,
+                            tif=order_tif,
+                        )
+                        if result.get("success"):
+                            mode_tag_order = result.get("mode", _wb_client.mode_label)
+                            st.success(f"[{mode_tag_order}] Order placed: {order_action} {order_qty} {order_symbol.upper()} ({order_type})")
+                        else:
+                            st.error(f"Order failed: {result.get('error', 'Unknown error')}")
+
+        # ── Open Orders ─────────────────────────────────────────────
+        st.markdown("---")
+        col_open, col_hist = st.columns(2)
+
+        with col_open:
+            st.markdown("#### Open Orders")
+            open_orders = _wb_client.get_open_orders()
+            if open_orders:
+                oo_df = pd.DataFrame(open_orders)
+                display_cols = ["symbol", "side", "order_type", "quantity", "price", "status"]
+                oo_display = oo_df[[c for c in display_cols if c in oo_df.columns]]
+                st.dataframe(oo_display, width="stretch", hide_index=True, height=200)
+
+                cancel_id = st.text_input("Order ID to cancel", key="cancel_order_id")
+                if st.button("Cancel Order", key="cancel_order_btn"):
+                    if cancel_id:
+                        res = _wb_client.cancel_order(cancel_id)
+                        if res.get("success"):
+                            st.success("Order cancelled")
+                            st.rerun()
+                        else:
+                            st.error(res.get("error", "Cancel failed"))
+            else:
+                st.info("No open orders")
+
+        with col_hist:
+            st.markdown("#### Order History")
+            history = _wb_client.get_order_history(count=20)
+            if history:
+                hist_df = pd.DataFrame(history)
+                display_cols = ["symbol", "side", "order_type", "quantity",
+                                "filled_qty", "price", "status"]
+                hist_display = hist_df[[c for c in display_cols if c in hist_df.columns]]
+                st.dataframe(hist_display, width="stretch", hide_index=True, height=200)
+            else:
+                st.info("No order history")
+
+        # ── Live Chart ──────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### Live Price Chart")
+        chart_symbol = st.text_input("Chart Symbol", value="SPY", key="chart_symbol")
+        chart_interval = st.selectbox("Interval", ["m1", "m5", "m15", "m30", "h1", "d1"], index=1, key="chart_interval")
+
+        bars = _wb_client.get_bars(chart_symbol.upper(), interval=chart_interval, count=200)
+        if bars is not None and not bars.empty:
+            fig_live = go.Figure()
+            if all(c in bars.columns for c in ["open", "high", "low", "close"]):
+                x_axis = bars["timestamp"] if "timestamp" in bars.columns else bars.index
+                fig_live.add_trace(go.Candlestick(
+                    x=x_axis,
+                    open=bars["open"],
+                    high=bars["high"],
+                    low=bars["low"],
+                    close=bars["close"],
+                    name=chart_symbol.upper(),
+                ))
+            else:
+                x_axis = bars["timestamp"] if "timestamp" in bars.columns else bars.index
+                fig_live.add_trace(go.Scatter(
+                    x=x_axis, y=bars["close"],
+                    name=chart_symbol.upper(),
+                    line=dict(color="#ffffff", width=2),
+                ))
+
+            fig_live.update_layout(
+                height=450,
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(gridcolor="#1e1e22", rangeslider=dict(visible=False)),
+                yaxis=dict(gridcolor="#1e1e22", tickprefix="$"),
+                margin=dict(l=60, r=20, t=20, b=40),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_live, key="live_chart_fig")
+        else:
+            st.info("No chart data available for this symbol/interval.")
+
+        # ── Live mode: disable button ────────────────────────────────
+        if _is_live:
+            st.markdown("---")
+            if st.button("Disable Live Trading", key="disable_live_btn"):
+                from data.webull_client import WebullLiveClient as _LC
+                if isinstance(_wb_client, _LC):
+                    _wb_client.disable_live_trading()
+                    st.info("Live trading disabled. Orders will be blocked.")
+                    st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TAB: PAPER TRADING
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_paper:
+if selected_page == "Paper Trading":
     if not _has_paper:
         st.info("Paper trading requires yfinance. Install with: pip install yfinance")
     elif not _user_id:
@@ -2421,7 +2446,7 @@ with tab_paper:
 # TAB: BROKER SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════
 
-with tab_broker:
+if selected_page == "Broker Settings":
     if _has_auth:
         render_broker_settings()
     else:
@@ -2431,12 +2456,11 @@ with tab_broker:
 # TAB: ADMIN (admin users only)
 # ═══════════════════════════════════════════════════════════════════════════
 
-if tab_admin is not None:
-    with tab_admin:
-        if _has_auth:
-            render_admin_dashboard()
-        else:
-            st.info("Admin panel requires database connection.")
+if selected_page == "Admin":
+    if _has_auth:
+        render_admin_dashboard()
+    else:
+        st.info("Admin panel requires database connection.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # FOOTER
