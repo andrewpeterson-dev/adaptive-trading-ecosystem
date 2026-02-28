@@ -2,12 +2,15 @@
 
 import React, { useState, useCallback, useEffect } from "react";
 import { Plus, Play, Save, RotateCcw, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { ConditionRow } from "./ConditionRow";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { ExplainerPanel } from "./ExplainerPanel";
+import { IndicatorChart } from "@/components/charts/IndicatorChart";
 import type {
   StrategyCondition,
   Strategy,
+  StrategyRecord,
   DiagnosticReport,
   StrategyExplanation,
   Action,
@@ -44,7 +47,13 @@ function buildLogicString(conditions: StrategyCondition[], action: Action): stri
   return `IF ${parts.join(" AND ")} THEN ${action}`;
 }
 
-export function StrategyBuilder() {
+interface StrategyBuilderProps {
+  initialStrategy?: StrategyRecord;
+  mode?: "create" | "edit";
+}
+
+export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBuilderProps) {
+  const router = useRouter();
   const [name, setName] = useState("My Strategy");
   const [description, setDescription] = useState("");
   const [action, setAction] = useState<Action>("BUY");
@@ -61,6 +70,37 @@ export function StrategyBuilder() {
   const [explanation, setExplanation] = useState<StrategyExplanation | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [indicatorPreviews, setIndicatorPreviews] = useState<
+    Record<string, { values?: number[]; components?: Record<string, number[]> }>
+  >({});
+
+  // Populate from initialStrategy for edit mode
+  useEffect(() => {
+    if (!initialStrategy) return;
+    setName(initialStrategy.name);
+    setDescription(initialStrategy.description || "");
+    setAction(initialStrategy.action as Action);
+    setStopLoss((initialStrategy.stop_loss_pct || 0.02) * 100);
+    setTakeProfit((initialStrategy.take_profit_pct || 0.05) * 100);
+    setPositionSize((initialStrategy.position_size_pct || 0.1) * 100);
+    setTimeframe(initialStrategy.timeframe || "1D");
+    if (initialStrategy.conditions?.length) {
+      setConditions(
+        initialStrategy.conditions.map((c) => ({
+          id: generateId(),
+          indicator: c.indicator,
+          operator: c.operator as Operator,
+          value: c.value,
+          compare_to: c.compare_to,
+          params: c.params || {},
+          action: c.action as Action || initialStrategy.action as Action,
+        }))
+      );
+    }
+    if (initialStrategy.diagnostics) {
+      setDiagnostics(initialStrategy.diagnostics as DiagnosticReport);
+    }
+  }, [initialStrategy]);
 
   const addCondition = useCallback(() => {
     setConditions((prev) => [...prev, createEmptyCondition()]);
@@ -86,6 +126,7 @@ export function StrategyBuilder() {
     setName("My Strategy");
     setDescription("");
     setSaveStatus("idle");
+    setIndicatorPreviews({});
   }, []);
 
   // Auto-run diagnostics when conditions change
@@ -121,7 +162,7 @@ export function StrategyBuilder() {
           setDiagnostics(await res.json());
         }
       } catch {
-        // Network error — diagnostics will show null
+        // Network error
       } finally {
         setDiagLoading(false);
       }
@@ -129,6 +170,37 @@ export function StrategyBuilder() {
 
     return () => clearTimeout(timeout);
   }, [validConditions.map((c) => `${c.indicator}:${c.operator}:${c.value}:${JSON.stringify(c.params)}`).join("|")]);
+
+  // Fetch indicator previews when conditions change
+  useEffect(() => {
+    if (validConditions.length === 0) {
+      setIndicatorPreviews({});
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      const previews: typeof indicatorPreviews = {};
+      await Promise.all(
+        validConditions.map(async (c) => {
+          try {
+            const res = await fetch("/api/strategies/compute-indicator", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ indicator: c.indicator, params: c.params }),
+            });
+            if (res.ok) {
+              previews[c.indicator] = await res.json();
+            }
+          } catch {
+            // ignore
+          }
+        })
+      );
+      setIndicatorPreviews(previews);
+    }, 800);
+
+    return () => clearTimeout(timeout);
+  }, [validConditions.map((c) => `${c.indicator}:${JSON.stringify(c.params)}`).join("|")]);
 
   const runExplainer = async () => {
     const logic = buildLogicString(conditions, action);
@@ -163,16 +235,31 @@ export function StrategyBuilder() {
         position_size_pct: positionSize / 100,
         timeframe,
       };
-      const res = await fetch("/api/strategies/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(strategy),
-      });
-      if (res.ok) {
-        setSaveStatus("saved");
-        setTimeout(() => setSaveStatus("idle"), 3000);
+
+      if (mode === "edit" && initialStrategy) {
+        const res = await fetch(`/api/strategies/${initialStrategy.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(strategy),
+        });
+        if (res.ok) {
+          setSaveStatus("saved");
+          setTimeout(() => setSaveStatus("idle"), 3000);
+        } else {
+          setSaveStatus("error");
+        }
       } else {
-        setSaveStatus("error");
+        const res = await fetch("/api/strategies/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(strategy),
+        });
+        if (res.ok) {
+          setSaveStatus("saved");
+          setTimeout(() => setSaveStatus("idle"), 3000);
+        } else {
+          setSaveStatus("error");
+        }
       }
     } catch {
       setSaveStatus("error");
@@ -181,14 +268,37 @@ export function StrategyBuilder() {
 
   const logicString = buildLogicString(conditions, action);
 
+  // Get indicator metadata for chart category colors
+  const getIndicatorCategory = (indicator: string): string => {
+    const categories: Record<string, string> = {
+      rsi: "Momentum", stochastic: "Momentum", macd: "Momentum",
+      sma: "Trend", ema: "Trend",
+      bollinger_bands: "Volatility", atr: "Volatility",
+      vwap: "Volume", obv: "Volume",
+    };
+    return categories[indicator] || "Momentum";
+  };
+
+  const getIndicatorThresholds = (indicator: string) => {
+    const thresholds: Record<string, { overbought?: number; oversold?: number }> = {
+      rsi: { overbought: 70, oversold: 30 },
+      stochastic: { overbought: 80, oversold: 20 },
+    };
+    return thresholds[indicator];
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Strategy Builder</h2>
+          <h2 className="text-xl font-semibold">
+            {mode === "edit" ? "Edit Strategy" : "Strategy Builder"}
+          </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Define entry conditions with real-time diagnostics
+            {mode === "edit"
+              ? `Editing strategy #${initialStrategy?.id}`
+              : "Define entry conditions with real-time diagnostics"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -207,6 +317,15 @@ export function StrategyBuilder() {
             <Zap className="h-3.5 w-3.5" />
             Analyze
           </button>
+          {mode === "edit" && initialStrategy && (
+            <button
+              onClick={() => router.push(`/backtest/${initialStrategy.id}`)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors"
+            >
+              <Play className="h-3.5 w-3.5" />
+              Backtest
+            </button>
+          )}
           <button
             onClick={saveStrategy}
             disabled={validConditions.length === 0 || saveStatus === "saving"}
@@ -217,7 +336,9 @@ export function StrategyBuilder() {
               ? "Saving..."
               : saveStatus === "saved"
                 ? "Saved"
-                : "Save"}
+                : mode === "edit"
+                  ? "Update Strategy"
+                  : "Save"}
           </button>
         </div>
       </div>
@@ -370,6 +491,48 @@ export function StrategyBuilder() {
               <code className="text-sm font-mono text-primary break-all">
                 {logicString}
               </code>
+            </div>
+          )}
+
+          {/* Indicator previews */}
+          {validConditions.length > 0 && Object.keys(indicatorPreviews).length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                Indicator Previews
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {validConditions.map((c) => {
+                  const preview = indicatorPreviews[c.indicator];
+                  if (!preview) return null;
+                  const category = getIndicatorCategory(c.indicator);
+                  const thresholds = getIndicatorThresholds(c.indicator);
+
+                  if (preview.components) {
+                    return (
+                      <IndicatorChart
+                        key={c.id}
+                        data={[]}
+                        label={c.indicator.toUpperCase()}
+                        category={category}
+                        thresholds={thresholds}
+                        multiLine={preview.components}
+                      />
+                    );
+                  }
+                  if (preview.values) {
+                    return (
+                      <IndicatorChart
+                        key={c.id}
+                        data={preview.values}
+                        label={c.indicator.toUpperCase()}
+                        category={category}
+                        thresholds={thresholds}
+                      />
+                    );
+                  }
+                  return null;
+                })}
+              </div>
             </div>
           )}
         </div>

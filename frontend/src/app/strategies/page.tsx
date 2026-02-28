@@ -2,26 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Cpu, Trash2, Shield, ChevronRight } from "lucide-react";
-
-interface StrategyRecord {
-  id: string;
-  name: string;
-  description: string;
-  conditions: Array<{
-    indicator: string;
-    operator: string;
-    value: number | string;
-    params: Record<string, number>;
-  }>;
-  action: string;
-  diagnostics: {
-    score: number;
-    total_issues: number;
-    has_critical: boolean;
-  };
-  created_at: string;
-}
+import { useRouter } from "next/navigation";
+import { Trash2, Shield, ChevronRight, Pencil, Play } from "lucide-react";
+import type { StrategyRecord } from "@/types/strategy";
 
 function ScoreBadge({ score }: { score: number }) {
   const color =
@@ -38,6 +21,7 @@ function ScoreBadge({ score }: { score: number }) {
 }
 
 export default function StrategiesPage() {
+  const router = useRouter();
   const [strategies, setStrategies] = useState<StrategyRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,116 +43,112 @@ export default function StrategiesPage() {
     fetchStrategies();
   }, []);
 
-  const deleteStrategy = async (id: string) => {
+  const deleteStrategy = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
     await fetch(`/api/strategies/${id}`, { method: "DELETE" });
     setStrategies((prev) => prev.filter((s) => s.id !== id));
   };
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Cpu className="h-5 w-5 text-primary" />
-            <span className="font-semibold tracking-tight">
-              Adaptive Trading Ecosystem
-            </span>
-          </div>
-          <nav className="flex items-center gap-1">
-            <Link
-              href="/"
-              className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            >
-              Builder
-            </Link>
-            <Link
-              href="/strategies"
-              className="px-3 py-1.5 rounded-md text-sm font-medium text-foreground bg-muted"
-            >
-              Strategies
-            </Link>
-          </nav>
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold">Saved Strategies</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {strategies.length} strateg{strategies.length === 1 ? "y" : "ies"} saved
+          </p>
         </div>
-      </header>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          New Strategy
+        </Link>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-semibold">Saved Strategies</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {strategies.length} strateg{strategies.length === 1 ? "y" : "ies"} saved
-            </p>
-          </div>
+      {loading ? (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          Loading strategies...
+        </div>
+      ) : strategies.length === 0 ? (
+        <div className="text-center py-12 border border-dashed rounded-lg">
+          <Shield className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+          <p className="text-muted-foreground">No strategies yet</p>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            className="text-primary text-sm mt-1 inline-block hover:underline"
           >
-            New Strategy
+            Create your first strategy
           </Link>
         </div>
-
-        {loading ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">
-            Loading strategies...
-          </div>
-        ) : strategies.length === 0 ? (
-          <div className="text-center py-12 border border-dashed rounded-lg">
-            <Shield className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-            <p className="text-muted-foreground">No strategies yet</p>
-            <Link
-              href="/"
-              className="text-primary text-sm mt-1 inline-block hover:underline"
+      ) : (
+        <div className="space-y-2">
+          {strategies.map((s) => (
+            <div
+              key={s.id}
+              onClick={() => router.push(`/edit/${s.id}`)}
+              className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:border-primary/20 transition-colors group cursor-pointer"
             >
-              Create your first strategy
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {strategies.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:border-primary/20 transition-colors group"
-              >
-                <ScoreBadge score={s.diagnostics.score} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium truncate">{s.name}</h3>
-                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                      {s.action}
-                    </span>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {s.id}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {s.conditions
-                      .map(
-                        (c) =>
-                          `${c.indicator.toUpperCase()} ${c.operator} ${c.value}`
-                      )
-                      .join(" AND ")}
-                  </p>
-                </div>
+              <ScoreBadge score={s.diagnostics?.score ?? 0} />
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  {s.diagnostics.total_issues > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {s.diagnostics.total_issues} issue
-                      {s.diagnostics.total_issues > 1 ? "s" : ""}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => deleteStrategy(s.id)}
-                    className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                  <h3 className="font-medium truncate">{s.name}</h3>
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                    {s.action}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    #{s.id}
+                  </span>
                 </div>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {s.conditions
+                    ?.map(
+                      (c) =>
+                        `${c.indicator.toUpperCase()} ${c.operator} ${c.value}`
+                    )
+                    .join(" AND ")}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
+              <div className="flex items-center gap-1.5">
+                {s.diagnostics?.total_issues > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {s.diagnostics.total_issues} issue
+                    {s.diagnostics.total_issues > 1 ? "s" : ""}
+                  </span>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/backtest/${s.id}`);
+                  }}
+                  className="p-1.5 rounded text-muted-foreground/40 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                  title="Backtest"
+                >
+                  <Play className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/edit/${s.id}`);
+                  }}
+                  className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                  title="Edit"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => deleteStrategy(s.id, e)}
+                  className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

@@ -490,7 +490,8 @@ def run_models(selected_strategies: tuple = None):
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════
 
-st.sidebar.markdown("### ATE")
+_display_name = st.session_state.get("user_display_name", "Trader")
+st.sidebar.markdown(f"### {_display_name}")
 st.sidebar.caption("Adaptive Trading Ecosystem")
 
 # Paper mode detection
@@ -626,7 +627,6 @@ st.sidebar.caption(f"v1.0.0 | {mode_label} Mode")
 st.sidebar.divider()
 
 # ── Active Models ────────────────────────────────────────────────────────
-st.sidebar.divider()
 st.sidebar.markdown("#### Active Models")
 
 if "selected_strategies" not in st.session_state:
@@ -661,16 +661,14 @@ if st.sidebar.button("Retrain", key="retrain_btn"):
 
 st.sidebar.divider()
 
-# ── Settings ────────────────────────────────────────────────────────────
-with st.sidebar.expander("Settings", expanded=False):
-    display_name = st.session_state.get("user_display_name", "Trader")
-    email = st.session_state.get("user_email", "")
-    st.caption(f"{display_name}" + (f" ({email})" if email else ""))
-    if _has_auth:
-        if st.button("Logout", key="settings_logout"):
-            logout()
-            st.rerun()
-    st.caption("Risk: 10% pos / 80% exp / 15% dd / 3% stop")
+# ── Account & Logout ────────────────────────────────────────────────────
+if _has_auth:
+    _email = st.session_state.get("user_email", "")
+    if _email:
+        st.sidebar.caption(f"Signed in as {_email}")
+    if st.sidebar.button("Logout", key="settings_logout", use_container_width=True):
+        logout()
+        st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN CONTENT
@@ -702,9 +700,27 @@ col5.metric("Status", "HALTED" if halted else "ACTIVE", delta="System OK" if not
 
 _is_admin = st.session_state.get("is_admin", False)
 
-_page_names = ["Overview", "Models", "Strategy Catalog", "AI Intelligence", "Competition", "Strategy Builder", "Allocation", "Risk", "Regime", "Trades", "Paper Trading", "Broker Settings"]
+_page_names = [
+    # ── Dashboard ──
+    "Overview",
+    # ── Trading ──
+    "Paper Trading",
+    "Trades",
+    # ── Models & Strategy ──
+    "Models",
+    "Strategy Catalog",
+    "Strategy Builder",
+    "Competition",
+    # ── Analysis ──
+    "AI Intelligence",
+    "Allocation",
+    "Risk",
+    "Regime",
+    # ── Account ──
+    "Broker Settings",
+]
 if use_webull:
-    _page_names.insert(_page_names.index("Allocation"), "Live Trading")
+    _page_names.insert(_page_names.index("Trades") + 1, "Live Trading")
 if _is_admin:
     _page_names.append("Admin")
 
@@ -712,12 +728,31 @@ if "current_page" not in st.session_state:
     st.session_state.current_page = "Overview"
 
 st.sidebar.divider()
+
+_page_icons = {
+    "Overview": "📊",
+    "Paper Trading": "💵",
+    "Trades": "📋",
+    "Live Trading": "⚡",
+    "Models": "🧠",
+    "Strategy Catalog": "📚",
+    "Strategy Builder": "🔧",
+    "Competition": "🏆",
+    "AI Intelligence": "🤖",
+    "Allocation": "⚖️",
+    "Risk": "🛡️",
+    "Regime": "🌡️",
+    "Broker Settings": "🔑",
+    "Admin": "⚙️",
+}
+
 selected_page = st.sidebar.radio(
     "Navigation",
     _page_names,
     index=_page_names.index(st.session_state.current_page) if st.session_state.current_page in _page_names else 0,
     key="nav_radio",
     label_visibility="collapsed",
+    format_func=lambda x: f"{_page_icons.get(x, '•')}  {x}",
 )
 st.session_state.current_page = selected_page
 
@@ -2329,28 +2364,31 @@ if selected_page == "Paper Trading":
     elif not _user_id:
         st.info("Please log in to use paper trading.")
     else:
-        st.subheader("Paper Trading Console")
-
         # Portfolio summary
         summary = get_portfolio_summary(_user_id)
 
         col_cash, col_positions, col_equity, col_pnl = st.columns(4)
-        col_cash.metric("Cash", f"${summary['cash']:,.2f}")
-        col_positions.metric("Positions Value", f"${summary['positions_value']:,.2f}")
-        col_equity.metric("Total Equity", f"${summary['total_equity']:,.2f}")
+        col_cash.metric("Cash", f"${summary['cash']:,.0f}")
+        col_positions.metric("Positions", f"${summary['positions_value']:,.0f}")
+        col_equity.metric("Equity", f"${summary['total_equity']:,.0f}")
         pnl_delta = f"{summary['total_pnl_pct']:+.2f}%"
-        col_pnl.metric("Total P&L", f"${summary['total_pnl']:+,.2f}", delta=pnl_delta)
+        col_pnl.metric("P&L", f"${summary['total_pnl']:+,.0f}", delta=pnl_delta)
 
-        st.markdown("---")
-
-        # Trade execution
+        # Trade execution + Watchlist side by side
         col_trade, col_watchlist = st.columns([1, 2])
 
         with col_trade:
-            st.markdown("#### Place Trade")
+            st.markdown("**Place Trade**")
             with st.form("paper_trade_form"):
                 trade_symbol = st.text_input("Symbol", value="SPY", placeholder="SPY, AAPL, BTC-USD")
                 trade_qty = st.number_input("Quantity", min_value=0.01, value=10.0, step=1.0)
+
+                # Price preview inside form
+                if trade_symbol:
+                    live_price = get_current_price(trade_symbol)
+                    if live_price > 0:
+                        st.caption(f"{trade_symbol.upper()} @ ${live_price:,.2f} — est. ${live_price * trade_qty:,.2f}")
+
                 col_buy, col_sell = st.columns(2)
                 buy_btn = col_buy.form_submit_button("Buy", use_container_width=True)
                 sell_btn = col_sell.form_submit_button("Sell", use_container_width=True)
@@ -2370,51 +2408,47 @@ if selected_page == "Paper Trading":
                         st.error(msg)
                     st.rerun()
 
-            # Current price preview
-            if trade_symbol:
-                live_price = get_current_price(trade_symbol)
-                if live_price > 0:
-                    st.markdown(f"**{trade_symbol.upper()}** current price: **${live_price:,.2f}**")
-                    st.markdown(f"Estimated cost: **${live_price * trade_qty:,.2f}**")
-
         with col_watchlist:
-            st.markdown("#### Live Watchlist")
+            wl_header, wl_refresh = st.columns([3, 1])
+            wl_header.markdown("**Live Watchlist**")
+            if wl_refresh.button("↻", key="refresh_paper_watchlist", help="Refresh prices"):
+                st.cache_data.clear()
+
             watchlist_input = st.text_input(
-                "Symbols (comma-separated)",
+                "Symbols",
                 value=", ".join(DEFAULT_WATCHLIST),
                 key="paper_watchlist_symbols",
+                label_visibility="collapsed",
             )
             symbols = [s.strip().upper() for s in watchlist_input.split(",") if s.strip()]
 
-            if st.button("Refresh", key="refresh_paper_watchlist"):
-                st.cache_data.clear()
-
             quotes_df = get_watchlist_quotes(symbols)
             if not quotes_df.empty:
-                st.dataframe(quotes_df, use_container_width=True, hide_index=True, height=400)
+                st.dataframe(quotes_df, use_container_width=True, hide_index=True, height=360)
             else:
                 st.info("No quotes available.")
 
-        # Open positions
-        st.markdown("---")
-        st.markdown("#### Open Positions")
-        if summary["positions"]:
-            pos_df = pd.DataFrame(summary["positions"])
-            pos_df = pos_df[["symbol", "quantity", "avg_entry_price", "current_price", "unrealized_pnl", "market_value"]]
-            pos_df.columns = ["Symbol", "Qty", "Avg Entry", "Current", "Unrealized P&L", "Market Value"]
-            st.dataframe(pos_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No open positions. Place a trade above.")
+        # Positions + Trade History side by side
+        col_pos, col_hist = st.columns(2)
 
-        # Trade history
-        st.markdown("---")
-        st.markdown("#### Trade History")
-        trades = get_trade_history(_user_id)
-        if trades:
-            trades_df = pd.DataFrame(trades)
-            st.dataframe(trades_df, use_container_width=True, hide_index=True, height=300)
-        else:
-            st.info("No trades yet.")
+        with col_pos:
+            st.markdown("**Open Positions**")
+            if summary["positions"]:
+                pos_df = pd.DataFrame(summary["positions"])
+                pos_df = pos_df[["symbol", "quantity", "avg_entry_price", "current_price", "unrealized_pnl", "market_value"]]
+                pos_df.columns = ["Symbol", "Qty", "Entry", "Price", "P&L", "Value"]
+                st.dataframe(pos_df, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No open positions.")
+
+        with col_hist:
+            st.markdown("**Trade History**")
+            trades = get_trade_history(_user_id)
+            if trades:
+                trades_df = pd.DataFrame(trades)
+                st.dataframe(trades_df, use_container_width=True, hide_index=True, height=300)
+            else:
+                st.caption("No trades yet.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TAB: BROKER SETTINGS

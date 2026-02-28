@@ -85,7 +85,7 @@ export function EquityCurveChart({ data, initialCapital, height = 300 }: EquityC
               borderRadius: "6px",
               fontSize: "12px",
             }}
-            formatter={(val: number) => [`$${val.toLocaleString()}`, "Equity"]}
+            formatter={(val) => [`$${Number(val ?? 0).toLocaleString()}`, "Equity"]}
           />
           {initialCapital && (
             <ReferenceLine
