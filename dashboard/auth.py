@@ -116,10 +116,13 @@ def create_user(email: str, password: str, display_name: str) -> tuple[bool, str
         if existing:
             return False, "An account with this email already exists."
 
+        # Auto-verify if SMTP is not configured
+        auto_verify = not settings.smtp_user
         user = User(
             email=email.lower(),
             password_hash=hash_password(password),
             display_name=display_name.strip(),
+            email_verified=auto_verify,
         )
         db.add(user)
         db.flush()
@@ -134,8 +137,9 @@ def create_user(email: str, password: str, display_name: str) -> tuple[bool, str
         db.add(verification)
         db.commit()
 
-        # Send verification email (non-blocking — account works without it)
-        send_verification_email(email, token)
+        # Send verification email if SMTP is configured
+        if settings.smtp_user:
+            send_verification_email(email, token)
 
         return True, user.id
     except Exception as e:
