@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: adaptive-trading-ecosystem
+    runtime: docker
+    plan: free
+    envVars:
+      - key: USE_SQLITE
+        value: "true"
+      - key: ANTHROPIC_API_KEY
+        sync: false
