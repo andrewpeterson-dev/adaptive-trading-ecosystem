@@ -2,10 +2,11 @@
 Strategy Intelligence API routes.
 Handles strategy CRUD, indicator computation, and diagnostics.
 """
+from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Any, Optional
+from typing import Any, Optional, Union
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/strategies", tags=["strategies"])
 class ConditionSchema(BaseModel):
     indicator: str
     operator: str = ">"
-    value: float | str = 0
+    value: Union[float, str] = 0
     compare_to: Optional[str] = None  # e.g., "close", "ema_200"
     params: dict[str, Any] = Field(default_factory=dict)
     action: str = "BUY"

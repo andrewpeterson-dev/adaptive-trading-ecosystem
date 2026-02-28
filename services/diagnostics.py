@@ -2,6 +2,7 @@
 Strategy diagnostic engine.
 Detects common strategy construction errors, overfitting risks, and logical issues.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum

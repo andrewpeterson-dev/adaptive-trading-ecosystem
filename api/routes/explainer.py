@@ -2,6 +2,7 @@
 Strategy explainer — structured analysis of strategy logic.
 Uses rule-based reasoning with optional LLM enhancement.
 """
+from __future__ import annotations
 
 from fastapi import APIRouter
 from pydantic import BaseModel

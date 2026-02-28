@@ -30,10 +30,18 @@ _mock_settings_obj = MagicMock()
 _mock_settings_obj.database_url_sync = "sqlite://"
 _mock_settings_obj.smtp_user = ""
 _mock_settings_obj.smtp_password = ""
+# Risk-management fields (prevent MagicMock leaking into RiskManager)
+_mock_settings_obj.max_position_size_pct = 0.10
+_mock_settings_obj.max_portfolio_exposure_pct = 0.80
+_mock_settings_obj.max_drawdown_pct = 0.15
+_mock_settings_obj.stop_loss_pct = 0.03
+_mock_settings_obj.max_trades_per_hour = 20
+_mock_settings_obj.initial_capital = 100_000.0
+_mock_settings_obj.trading_mode.value = "paper"
 
 _mock_settings_mod = MagicMock()
 _mock_settings_mod.get_settings = MagicMock(return_value=_mock_settings_obj)
-sys.modules["config.settings"] = _mock_settings_mod
+sys.modules.setdefault("config.settings", _mock_settings_mod)
 
 # Now import the auth module -- only bcrypt and re are real
 from dashboard.auth import hash_password, verify_password, is_valid_email

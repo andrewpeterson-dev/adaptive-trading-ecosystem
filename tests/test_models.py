@@ -15,9 +15,12 @@ from models.base import ModelMetrics
 
 try:
     from models.ml_model import MLModel
+    import importlib
+    importlib.import_module("xgboost")
     HAS_XGBOOST = True
 except Exception:
     HAS_XGBOOST = False
+    MLModel = None
 
 
 def _make_sample_data(n: int = 300, trend: float = 0.0005) -> pd.DataFrame:
