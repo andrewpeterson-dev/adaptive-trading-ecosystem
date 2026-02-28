@@ -44,6 +44,18 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Perf: Lightweight loading skeleton (renders before heavy computation) ──
+_loading_placeholder = st.empty()
+_loading_placeholder.markdown("""
+<div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column">
+<div style="color:#3f3f46;font-size:0.85rem;font-weight:500;letter-spacing:0.04em">LOADING</div>
+<div style="width:120px;height:2px;background:#18181b;margin-top:12px;border-radius:1px;overflow:hidden">
+<div style="width:40px;height:2px;background:#52525b;border-radius:1px;animation:slide 1.2s ease-in-out infinite"></div>
+</div>
+<style>@keyframes slide{0%{transform:translateX(-40px)}100%{transform:translateX(120px)}}</style>
+</div>
+""", unsafe_allow_html=True)
+
 # ── Auth Gate (optional — requires asyncpg/postgres) ──────────────────
 if _has_auth:
     init_session_state()
@@ -52,16 +64,28 @@ if _has_auth:
     if not st.session_state.get("email_verified"):
         st.warning("Please verify your email address. Check your inbox for a verification link.")
 
-# ── Custom CSS ───────────────────────────────────────────────────────────
+# ── SEO / Accessibility / Performance Meta ───────────────────────────────
 
-st.markdown('<meta name="viewport" content="width=device-width, initial-scale=1">', unsafe_allow_html=True)
+st.markdown("""
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Adaptive Trading Ecosystem — multi-model algorithmic trading dashboard with regime detection, capital allocation, and real-time strategy analytics.">
+""", unsafe_allow_html=True)
+
+# ── Custom CSS ───────────────────────────────────────────────────────────
 
 st.markdown("""
 <style>
     /* ═══ PRODUCTION UI — Robinhood density + Apple polish ═══ */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    * { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'Inter', sans-serif !important; }
 
-    * { font-family: -apple-system, 'Inter', BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif !important; }
+    /* ── A11y: Fix font-display for Streamlit fonts ────────── */
+    @font-face { font-display: swap !important; }
+
+    /* ── A11y: Fix MainMenu ARIA — hide broken element ─────── */
+    span#MainMenu { display: none !important; }
+
+    /* ── Perf: Reserve space for metric cards to prevent CLS ─ */
+    [data-testid="stMetric"] { min-height: 72px; }
 
     /* ── Core surfaces ───────────────────────────────────────── */
     .stApp { background-color: #09090b; }
@@ -649,6 +673,7 @@ st.sidebar.divider()
 # ── Load Models ─────────────────────────────────────────────────────────
 with st.spinner("Loading models..."):
     data = run_models(selected_tuple)
+_loading_placeholder.empty()
 
 # ── Status ──────────────────────────────────────────────────────────────
 regime = data["regime"]

@@ -286,7 +286,7 @@ def render_auth_page():
 
 def _render_login():
     """Render the login form."""
-    st.markdown("### Sign In")
+    st.markdown("## Sign In")
 
     with st.form("login_form"):
         email = st.text_input("Email")
@@ -317,7 +317,7 @@ def _render_login():
 
 def _render_signup():
     """Render the signup form."""
-    st.markdown("### Create Account")
+    st.markdown("## Create Account")
 
     with st.form("signup_form"):
         display_name = st.text_input("Display Name")
