@@ -35,10 +35,33 @@ def _init_engine():
             connect_args = {"check_same_thread": False}
         _sync_engine = create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
         _SyncSessionLocal = sessionmaker(bind=_sync_engine, expire_on_commit=False)
-        # Auto-create tables for SQLite
+        # Auto-create tables and seed admin for SQLite (cloud deploys)
         if db_url.startswith("sqlite"):
             from db.database import Base
             Base.metadata.create_all(_sync_engine)
+            _seed_admin_if_empty()
+
+
+def _seed_admin_if_empty():
+    """Create default admin user if users table is empty."""
+    session = _SyncSessionLocal()
+    try:
+        count = session.query(User).count()
+        if count == 0:
+            admin = User(
+                email="admin@example.com",
+                password_hash=bcrypt.hashpw(b"changeme123", bcrypt.gensalt(12)).decode(),
+                display_name="Admin",
+                is_active=True,
+                is_admin=True,
+                email_verified=True,
+            )
+            session.add(admin)
+            session.commit()
+    except Exception:
+        session.rollback()
+    finally:
+        session.close()
 
 
 def get_db() -> SyncSession:

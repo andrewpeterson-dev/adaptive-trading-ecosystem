@@ -320,3 +320,26 @@ class PaperTrade(Base):
     __table_args__ = (
         Index("ix_paper_trade_user", "user_id"),
     )
+
+
+class Strategy(Base):
+    __tablename__ = "strategies"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    conditions = Column(JSON, nullable=False)
+    action = Column(String(16), nullable=False, default="BUY")
+    stop_loss_pct = Column(Float, default=0.02)
+    take_profit_pct = Column(Float, default=0.05)
+    position_size_pct = Column(Float, default=0.1)
+    timeframe = Column(String(16), default="1D")
+    diagnostics = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_strategy_user", "user_id"),
+        Index("ix_strategy_name", "name"),
+    )
