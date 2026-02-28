@@ -190,13 +190,30 @@ st.markdown("""
     }
 
     /* ── Reduce Streamlit default padding/gaps ───────────────── */
-    .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
-    [data-testid="column"] { padding: 0 0.3rem; }
+    .block-container { padding-top: 1rem !important; padding-bottom: 0.5rem !important; }
+    [data-testid="stVerticalBlock"] > div { gap: 0.4rem; }
+    [data-testid="column"] { padding: 0 0.25rem; }
 
     /* ── Plotly toolbar — only show on hover ─────────────────── */
     .js-plotly-plot .modebar { opacity: 0; transition: opacity 0.2s ease; }
     .js-plotly-plot:hover .modebar { opacity: 1; }
+
+    /* ── Dataframe cells — tighter ─────────────────────────────── */
+    [data-testid="stDataFrame"] th { font-size: 0.7rem !important; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #71717a; }
+    [data-testid="stDataFrame"] td { font-size: 0.78rem !important; }
+
+    /* ── Metric delta text ─────────────────────────────────────── */
+    [data-testid="stMetricDelta"] svg { width: 12px; height: 12px; }
+
+    /* ── Multiselect tags — compact ────────────────────────────── */
+    [data-baseweb="tag"] { font-size: 0.7rem !important; padding: 2px 6px !important; }
+
+    /* ── Sidebar section spacing ───────────────────────────────── */
+    [data-testid="stSidebar"] hr { margin: 0.4rem 0 !important; }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div { gap: 0.25rem; }
+
+    /* ── Caption text — muted ──────────────────────────────────── */
+    [data-testid="stCaptionContainer"] { color: #52525b !important; font-size: 0.7rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -473,8 +490,8 @@ def run_models(selected_strategies: tuple = None):
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════
 
-st.sidebar.markdown("## Adaptive Trading Ecosystem")
-st.sidebar.divider()
+st.sidebar.markdown("### ATE")
+st.sidebar.caption("Adaptive Trading Ecosystem")
 
 # Paper mode detection
 _user_id = st.session_state.get("user_id")
@@ -609,10 +626,8 @@ st.sidebar.caption(f"v1.0.0 | {mode_label} Mode")
 st.sidebar.divider()
 
 # ── Active Models ────────────────────────────────────────────────────────
-# These strategies run as an ensemble — select which ones contribute
-# to portfolio signals and capital allocation.
-st.sidebar.markdown("### Active Models")
-st.sidebar.caption("Select which strategies run in the ensemble portfolio")
+st.sidebar.divider()
+st.sidebar.markdown("#### Active Models")
 
 if "selected_strategies" not in st.session_state:
     st.session_state.selected_strategies = set(STRATEGY_CATALOG.keys())
@@ -638,60 +653,24 @@ with st.spinner("Loading models..."):
 # ── Status ──────────────────────────────────────────────────────────────
 regime = data["regime"]
 regime_label = regime["regime"].value if hasattr(regime["regime"], "value") else str(regime["regime"])
-st.sidebar.markdown(f"**Regime:** `{regime_label}`")
-st.sidebar.markdown(f"**Confidence:** {regime['confidence']:.0%}")
-st.sidebar.markdown(f"**Vol (20d):** {regime['volatility_20d']:.2%}")
-st.sidebar.markdown(f"**Models Active:** {len(data['models'])}")
+st.sidebar.caption(f"Regime: {regime_label} ({regime['confidence']:.0%}) | Vol: {regime['volatility_20d']:.1%} | {len(data['models'])} models")
 
-st.sidebar.divider()
-
-if st.sidebar.button("Retrain All Models", width="stretch"):
+if st.sidebar.button("Retrain", key="retrain_btn"):
     st.cache_resource.clear()
     st.rerun()
 
-capital = st.sidebar.number_input("Total Capital ($)", value=100_000, step=10_000)
-
 st.sidebar.divider()
 
-# ── Settings (profile, theme, risk params) ──────────────────────────────
+# ── Settings ────────────────────────────────────────────────────────────
 with st.sidebar.expander("Settings", expanded=False):
-    # Theme toggle
-    st.markdown("**Appearance**")
-    theme_choice = st.radio(
-        "Theme",
-        ["Dark", "Light"],
-        index=0 if st.session_state.theme == "dark" else 1,
-        horizontal=True,
-        key="theme_radio",
-        label_visibility="collapsed",
-    )
-    if theme_choice.lower() != st.session_state.theme:
-        st.session_state.theme = theme_choice.lower()
-        st.rerun()
-
-    st.divider()
-
-    # Profile
-    st.markdown("**Account**")
     display_name = st.session_state.get("user_display_name", "Trader")
     email = st.session_state.get("user_email", "")
-    st.markdown(f"{display_name}")
-    if email:
-        st.caption(email)
+    st.caption(f"{display_name}" + (f" ({email})" if email else ""))
     if _has_auth:
         if st.button("Logout", key="settings_logout"):
             logout()
             st.rerun()
-
-    st.divider()
-
-    # Risk parameters
-    st.markdown("**Risk Limits**")
-    st.caption("Max Position: 10%")
-    st.caption("Max Exposure: 80%")
-    st.caption("Max Drawdown: 15%")
-    st.caption("Stop Loss: 3%")
-    st.caption("Max Trades/hr: 20")
+    st.caption("Risk: 10% pos / 80% exp / 15% dd / 3% stop")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN CONTENT
@@ -1217,8 +1196,7 @@ if selected_page == "AI Intelligence":
 # ═══════════════════════════════════════════════════════════════════════════
 
 if selected_page == "Competition":
-    st.subheader("Model Competition Arena")
-    st.markdown("Head-to-head performance rankings computed from real backtest results.")
+    st.markdown("#### Model Competition Arena")
 
     models_list = data["models"]
     equity_curves = data["equity_curves"]
@@ -1297,7 +1275,7 @@ if selected_page == "Competition":
             textposition="outside",
         )])
         fig_score.update_layout(
-            height=max(250, 40 * len(names)),
+            height=max(220, 32 * len(names)),
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -1338,7 +1316,7 @@ if selected_page == "Competition":
             ))
 
         fig_radar.update_layout(
-            height=380,
+            height=300,
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             polar=dict(
@@ -1379,7 +1357,7 @@ if selected_page == "Competition":
                 name=model_b, line=dict(color="#888888", width=2),
             ))
             fig_h2h.update_layout(
-                height=350,
+                height=280,
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -1403,7 +1381,7 @@ if selected_page == "Competition":
             ))
             fig_rel.add_hline(y=0, line_dash="dash", line_color="#27272a")
             fig_rel.update_layout(
-                height=250,
+                height=200,
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -1469,7 +1447,7 @@ if selected_page == "Allocation":
             textfont=dict(size=11),
         )])
         fig_pie.update_layout(
-            height=400,
+            height=320,
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=20, r=20, t=30, b=20),
@@ -1489,7 +1467,7 @@ if selected_page == "Allocation":
             textposition="outside",
         )])
         fig_alloc.update_layout(
-            height=400,
+            height=320,
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -1534,7 +1512,7 @@ if selected_page == "Allocation":
 # ═══════════════════════════════════════════════════════════════════════════
 
 if selected_page == "Risk":
-    st.subheader("Risk Management Dashboard")
+    st.markdown("#### Risk Management")
 
     # Risk status cards
     col_r1, col_r2, col_r3, col_r4 = st.columns(4)
@@ -1585,15 +1563,14 @@ if selected_page == "Risk":
             title=dict(text="Portfolio Drawdown", font=dict(size=14)),
         ))
         fig_gauge.update_layout(
-            height=280,
+            height=240,
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=20, r=20, t=40, b=20),
         )
         st.plotly_chart(fig_gauge, use_container_width=True)
 
-    # Model-level risk
-    st.subheader("Model-Level Risk Metrics")
+    st.markdown("#### Model-Level Risk")
     risk_rows = []
     for m in data["models"]:
         met = m.metrics
@@ -1607,8 +1584,7 @@ if selected_page == "Risk":
         })
     st.dataframe(pd.DataFrame(risk_rows), width="stretch", hide_index=True)
 
-    # Signal quality gates
-    st.subheader("Signal Quality Gates")
+    st.markdown("#### Signal Quality Gates")
     st.markdown(
         "Signals must pass these gates before execution. "
         "Weak, unproven, or low-consensus signals are rejected automatically."
@@ -1654,7 +1630,7 @@ if selected_page == "Risk":
 # ═══════════════════════════════════════════════════════════════════════════
 
 if selected_page == "Regime":
-    st.subheader("Market Regime Analysis")
+    st.markdown("#### Market Regime")
 
     # Current regime
     col_curr, col_hist = st.columns([1, 2])
@@ -1681,8 +1657,7 @@ if selected_page == "Regime":
             rh_df = pd.DataFrame(data["regime_history"])
             st.dataframe(rh_df, width="stretch", hide_index=True, height=300)
 
-    # Volatility chart
-    st.subheader("Rolling Volatility")
+    st.markdown("#### Rolling Volatility")
     full_df = data["full_df"]
     log_ret = np.log(full_df["close"] / full_df["close"].shift(1))
     vol_20 = log_ret.rolling(20).std() * np.sqrt(252) * 100
@@ -1700,7 +1675,7 @@ if selected_page == "Regime":
     fig_vol.add_hline(y=vol_20.median(), line_dash="dash", line_color="#27272a",
                       annotation_text="Median Vol")
     fig_vol.update_layout(
-        height=350,
+        height=280,
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -1717,8 +1692,7 @@ if selected_page == "Regime":
 # ═══════════════════════════════════════════════════════════════════════════
 
 if selected_page == "Strategy Builder":
-    st.subheader("Strategy Builder")
-    st.markdown("Configure a custom strategy, backtest it on real data, and compare against existing models.")
+    st.markdown("#### Strategy Builder")
 
     # ── Strategy Type Selector ──
     builder_col1, builder_col2 = st.columns([1, 2])
@@ -2009,7 +1983,7 @@ Enters when volatility compresses below historical norms, then expands direction
 # ═══════════════════════════════════════════════════════════════════════════
 
 if selected_page == "Trades":
-    st.subheader("Trade Execution Log")
+    st.markdown("#### Trade Log")
 
     if data["trade_log"]:
         tl_df = pd.DataFrame(data["trade_log"])
@@ -2466,13 +2440,9 @@ if selected_page == "Admin":
 # FOOTER
 # ═══════════════════════════════════════════════════════════════════════════
 
-st.divider()
-_footer_mode_str = _trading_mode_str if use_webull else "Demo"
-footer_mode = f"Webull {_footer_mode_str} Trading" if use_webull else "Standalone Demo Mode"
-footer_data = "Live market data via Webull" if use_webull else "Models trained on synthetic data"
 st.markdown(f"""
-<div style="text-align: center; color: #444444; font-size: 0.8rem;">
-    Adaptive Trading Ecosystem v1.0.0 &nbsp;|&nbsp; {footer_mode} &nbsp;|&nbsp;
-    {footer_data} &nbsp;|&nbsp; Refresh page to retrain
+<div style="text-align: center; color: #3f3f46; font-size: 0.7rem; padding: 1rem 0 0.5rem; border-top: 1px solid #18181b; margin-top: 1rem;">
+    ATE v1.0 &nbsp;&middot;&nbsp; {_trading_mode_str if use_webull else "Demo"} &nbsp;&middot;&nbsp;
+    {"Webull" if use_webull else "Synthetic Data"} &nbsp;&middot;&nbsp; {len(data['models'])} models
 </div>
 """, unsafe_allow_html=True)
