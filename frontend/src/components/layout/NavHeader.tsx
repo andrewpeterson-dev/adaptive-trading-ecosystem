@@ -8,7 +8,11 @@ const NAV_ITEMS = [
   { href: "/", label: "Builder" },
   { href: "/strategies", label: "Strategies" },
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/trade", label: "Trade" },
+  { href: "/watchlist", label: "Watchlist" },
   { href: "/portfolio", label: "Portfolio" },
+  { href: "/models", label: "Models" },
+  { href: "/risk", label: "Risk" },
 ];
 
 export function NavHeader() {

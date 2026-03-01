@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { NavHeader } from "@/components/layout/NavHeader";
+import { Providers } from "@/components/layout/Providers";
 
 export const metadata: Metadata = {
   title: "Strategy Intelligence | Adaptive Trading Ecosystem",
@@ -15,8 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body>
-        <NavHeader />
-        <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
+        <Providers>
+          <NavHeader />
+          <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
+        </Providers>
       </body>
     </html>
   );
