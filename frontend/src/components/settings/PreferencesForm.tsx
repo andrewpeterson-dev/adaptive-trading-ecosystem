@@ -102,7 +102,7 @@ export function PreferencesForm() {
             onChange={(e) => setSymbolInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Add symbol (e.g. TSLA)..."
-            className="flex-1 bg-input border border-border rounded-md px-3 py-1.5 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="flex-1 bg-input border border-border/50 rounded-md px-3 py-1.5 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
           <button
             onClick={addSymbol}
@@ -182,7 +182,7 @@ export function PreferencesForm() {
           onChange={(e) =>
             setPrefs((p) => ({ ...p, refresh_interval: Number(e.target.value) }))
           }
-          className="bg-input border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="bg-input border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
         >
           {REFRESH_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -202,7 +202,7 @@ export function PreferencesForm() {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
       >
         {saving ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />

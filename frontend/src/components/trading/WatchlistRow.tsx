@@ -26,10 +26,10 @@ export function WatchlistRow({ quote, onRemove, onTrade }: WatchlistRowProps) {
           )}
         </div>
       </td>
-      <td className="py-2.5 px-4 font-mono text-sm font-medium">
+      <td className="py-2.5 px-4 font-mono tabular-nums text-sm font-medium">
         ${quote.price.toFixed(2)}
       </td>
-      <td className={`py-2.5 px-4 font-mono text-sm ${changeColor}`}>
+      <td className={`py-2.5 px-4 font-mono tabular-nums text-sm ${changeColor}`}>
         <div className="flex items-center gap-1">
           {isUp ? (
             <TrendingUp className="h-3 w-3" />
@@ -40,11 +40,11 @@ export function WatchlistRow({ quote, onRemove, onTrade }: WatchlistRowProps) {
           {quote.change.toFixed(2)}
         </div>
       </td>
-      <td className={`py-2.5 px-4 font-mono text-sm ${changeColor}`}>
+      <td className={`py-2.5 px-4 font-mono tabular-nums text-sm ${changeColor}`}>
         {isUp ? "+" : ""}
         {quote.change_pct.toFixed(2)}%
       </td>
-      <td className="py-2.5 px-4 font-mono text-xs text-muted-foreground">
+      <td className="py-2.5 px-4 font-mono tabular-nums text-xs text-muted-foreground">
         {quote.volume != null
           ? quote.volume >= 1_000_000
             ? `${(quote.volume / 1_000_000).toFixed(1)}M`

@@ -38,7 +38,7 @@ export function ModelCard({ model, onRetrain }: { model: ModelDetail; onRetrain:
   };
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
+    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className={`inline-block h-2 w-2 rounded-full ${model.is_trained ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
@@ -52,44 +52,44 @@ export function ModelCard({ model, onRetrain }: { model: ModelDetail; onRetrain:
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <div>
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sharpe</div>
-          <div className={`text-sm font-mono font-medium ${metricColor(m.sharpe_ratio, 1.0, 0.0)}`}>
+          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(m.sharpe_ratio, 1.0, 0.0)}`}>
             {m.sharpe_ratio.toFixed(3)}
           </div>
         </div>
         <div>
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sortino</div>
-          <div className={`text-sm font-mono font-medium ${metricColor(m.sortino_ratio, 1.5, 0.0)}`}>
+          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(m.sortino_ratio, 1.5, 0.0)}`}>
             {m.sortino_ratio.toFixed(3)}
           </div>
         </div>
         <div>
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Win Rate</div>
-          <div className={`text-sm font-mono font-medium ${metricColor(m.win_rate, 0.55, 0.4)}`}>
+          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(m.win_rate, 0.55, 0.4)}`}>
             {(m.win_rate * 100).toFixed(1)}%
           </div>
         </div>
         <div>
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Max DD</div>
-          <div className={`text-sm font-mono font-medium ${metricColor(m.max_drawdown, 0.05, 0.15, true)}`}>
+          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(m.max_drawdown, 0.05, 0.15, true)}`}>
             {(m.max_drawdown * 100).toFixed(1)}%
           </div>
         </div>
         <div>
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Return</div>
-          <div className={`text-sm font-mono font-medium ${metricColor(m.total_return, 0.05, -0.02)}`}>
+          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(m.total_return, 0.05, -0.02)}`}>
             {(m.total_return * 100).toFixed(1)}%
           </div>
         </div>
         <div>
           <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Trades</div>
-          <div className="text-sm font-mono text-muted-foreground">{m.num_trades}</div>
+          <div className="text-sm font-mono tabular-nums text-muted-foreground">{m.num_trades}</div>
         </div>
       </div>
 
       <button
         onClick={handleRetrain}
         disabled={retraining}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
       >
         {retraining ? (
           <Loader2 className="h-3 w-3 animate-spin" />

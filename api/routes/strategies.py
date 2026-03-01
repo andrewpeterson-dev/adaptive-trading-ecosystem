@@ -484,3 +484,71 @@ async def run_backtest(req: BacktestRequest):
         "equity_curve": equity_curve,
         "trades": trades,
     }
+
+
+# ── Strategy Config Endpoints ────────────────────────────────────────────
+
+class StrategyConfigUpdate(BaseModel):
+    """Request body for updating the strategy config."""
+    name: Optional[str] = None
+    version: Optional[str] = None
+    active_strategies: Optional[list[str]] = None
+    risk_params: Optional[dict[str, Any]] = None
+    execution: Optional[dict[str, Any]] = None
+    backtest: Optional[dict[str, Any]] = None
+
+
+@router.get("/trading/strategy-config")
+async def get_strategy_config():
+    """Return the current strategy configuration."""
+    from trading.strategy_loader import StrategyLoader
+
+    loader = StrategyLoader()
+    try:
+        config = loader.load_config()
+    except FileNotFoundError:
+        raise HTTPException(404, "Strategy config file not found")
+
+    valid, errors = loader.validate_config(config)
+    return {
+        "config": config,
+        "valid": valid,
+        "errors": errors,
+    }
+
+
+@router.post("/trading/strategy-config")
+async def update_strategy_config(update: StrategyConfigUpdate):
+    """Update the strategy configuration. Merges provided fields into current config."""
+    from trading.strategy_loader import StrategyLoader
+
+    loader = StrategyLoader()
+
+    # Load current config
+    try:
+        config = loader.load_config()
+    except FileNotFoundError:
+        config = {}
+
+    # Merge updates
+    update_data = update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if isinstance(value, dict) and isinstance(config.get(key), dict):
+            config[key].update(value)
+        else:
+            config[key] = value
+
+    # Validate before saving
+    valid, errors = loader.validate_config(config)
+    if not valid:
+        raise HTTPException(400, {"message": "Invalid config", "errors": errors})
+
+    # Save
+    path = loader.save_config(config)
+    logger.info("strategy_config_updated", path=path)
+
+    return {
+        "config": config,
+        "valid": True,
+        "saved_to": path,
+    }

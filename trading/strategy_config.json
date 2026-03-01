@@ -1,0 +1,30 @@
+{
+  "name": "default",
+  "version": "1.0",
+  "active_strategies": [
+    "momentum_fast",
+    "momentum_slow",
+    "mean_reversion_tight",
+    "mean_reversion_wide",
+    "vol_squeeze",
+    "breakout_sr"
+  ],
+  "risk_params": {
+    "max_allocation_pct": 0.10,
+    "stop_loss_pct": 0.03,
+    "max_daily_drawdown_pct": 0.05,
+    "position_sizing": "equal_weight",
+    "max_positions": 20
+  },
+  "execution": {
+    "order_type": "market",
+    "time_in_force": "DAY",
+    "slippage_bps": 5
+  },
+  "backtest": {
+    "initial_capital": 100000,
+    "start_date": null,
+    "end_date": null,
+    "benchmark": "SPY"
+  }
+}

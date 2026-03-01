@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        if self.use_sqlite:
+            return "sqlite+aiosqlite:///trading_ecosystem.db"
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -61,8 +63,15 @@ class Settings(BaseSettings):
     alpaca_base_url: str = "https://paper-api.alpaca.markets"
     alpaca_data_url: str = "https://data.alpaca.markets"
 
+    # --- Alpaca Paper/Live Key Separation ---
+    paper_api_key: str = ""
+    paper_secret_key: str = ""
+    live_api_key: str = ""
+    live_secret_key: str = ""
+
     # --- Trading Mode ---
     trading_mode: TradingMode = TradingMode.PAPER
+    live_trading_enabled: bool = False
 
     # --- Risk ---
     max_position_size_pct: float = 0.10
@@ -84,6 +93,11 @@ class Settings(BaseSettings):
     # --- Logging ---
     log_level: str = "INFO"
     log_file: str = "logs/trading.log"
+    audit_log_path: str = "logs/trade-log.jsonl"
+
+    # --- News / Sentiment ---
+    alphavantage_api_key: str = ""  # SET IN .env: ALPHAVANTAGE_API_KEY=...
+    finnhub_api_key: str = ""       # SET IN .env: FINNHUB_API_KEY=...
 
     # --- LLM Intelligence ---
     anthropic_api_key: str = ""  # SET IN .env: ANTHROPIC_API_KEY=sk-ant-...
@@ -93,6 +107,11 @@ class Settings(BaseSettings):
     llm_analysis_interval_minutes: int = 15
     llm_max_retries: int = 2
     llm_temperature: float = 0.3
+
+    # --- Monitoring ---
+    webhook_url: str = ""  # Webhook URL for failure notifications
+    llm_timeout_seconds: int = 30
+    health_check_interval_seconds: int = 300
 
     # --- API ---
     api_host: str = "0.0.0.0"

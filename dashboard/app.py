@@ -541,11 +541,12 @@ if _has_auth and _has_paper and _user_id:
 elif _has_paper:
     _user_id = None
 
-# Data source toggle
+# Data source toggle — default to Webull Live if user has broker creds
+_default_source_idx = 1 if _has_broker else 0
 data_source = st.sidebar.radio(
     "Data Source",
     ["Synthetic", "Webull Live"],
-    index=0,
+    index=_default_source_idx,
     horizontal=True,
     key="data_source",
 )
@@ -589,9 +590,32 @@ if use_webull:
                 st.session_state[client_key] = WebullLiveClient()
             else:
                 st.session_state[client_key] = WebullPaperClient()
-            # Auto-restore saved credentials on first load
-            st.session_state[client_key].try_restore()
-            if st.session_state[client_key].is_connected:
+
+            # Auto-load creds from DB if user is logged in with broker creds
+            _client = st.session_state[client_key]
+            _loaded_from_db = False
+            if _has_broker and _user_id:
+                try:
+                    from db.encryption import decrypt_value
+                    _db2 = _get_db()
+                    _cred = _db2.execute(
+                        _select(_BC).where(_BC.user_id == _user_id, _BC.broker_type == "webull")
+                    ).scalar_one_or_none()
+                    _db2.close()
+                    if _cred:
+                        _client._app_key = decrypt_value(_cred.encrypted_api_key)
+                        _client._app_secret = decrypt_value(_cred.encrypted_api_secret)
+                        result = _client.connect()
+                        if result.get("success"):
+                            _loaded_from_db = True
+                except Exception:
+                    pass
+
+            # Fallback to PeteBot config / saved config
+            if not _loaded_from_db and not _client.is_connected:
+                _client.try_restore()
+
+            if _client.is_connected:
                 st.session_state.wb_connected = True
 
         _wb_client = st.session_state[client_key]
@@ -2283,6 +2307,7 @@ if selected_page == "Live Trading":
                             limit_price=limit_p,
                             stop_price=stop_p,
                             tif=order_tif,
+                            user_confirmed=True,
                         )
                         if result.get("success"):
                             mode_tag_order = result.get("mode", _wb_client.mode_label)

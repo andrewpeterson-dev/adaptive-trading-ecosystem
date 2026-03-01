@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  DollarSign,
   Loader2,
   RefreshCw,
   Unplug,
@@ -103,7 +102,7 @@ export default function TradePage() {
         </div>
         <button
           onClick={fetchAll}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
@@ -113,21 +112,21 @@ export default function TradePage() {
       {/* Account Summary Bar */}
       {account && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border/50 bg-card p-4">
             <div className="text-xs text-muted-foreground mb-1">Cash Balance</div>
-            <div className="text-lg font-mono font-bold">{formatCurrency(account.cash)}</div>
+            <div className="text-lg font-mono font-bold tabular-nums">{formatCurrency(account.cash)}</div>
           </div>
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border/50 bg-card p-4">
             <div className="text-xs text-muted-foreground mb-1">Portfolio Value</div>
-            <div className="text-lg font-mono font-bold">{formatCurrency(account.portfolio_value)}</div>
+            <div className="text-lg font-mono font-bold tabular-nums">{formatCurrency(account.portfolio_value)}</div>
           </div>
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border/50 bg-card p-4">
             <div className="text-xs text-muted-foreground mb-1">Total Equity</div>
-            <div className="text-lg font-mono font-bold">{formatCurrency(account.equity)}</div>
+            <div className="text-lg font-mono font-bold tabular-nums">{formatCurrency(account.equity)}</div>
           </div>
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border/50 bg-card p-4">
             <div className="text-xs text-muted-foreground mb-1">Day P&L</div>
-            <div className={`text-lg font-mono font-bold ${dayPnlUp ? "text-emerald-400" : "text-red-400"}`}>
+            <div className={`text-lg font-mono font-bold tabular-nums ${dayPnlUp ? "text-emerald-400" : "text-red-400"}`}>
               {dayPnlUp ? "+" : ""}${dayPnl.toFixed(2)}
             </div>
           </div>
@@ -145,12 +144,11 @@ export default function TradePage() {
         {/* Right: Positions (40%) */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            <DollarSign className="h-4 w-4" />
             Positions
             <span className="text-xs font-normal">({positions.length})</span>
           </div>
           {positions.length === 0 ? (
-            <div className="rounded-lg border bg-card py-8 text-center text-muted-foreground text-sm">
+            <div className="rounded-lg border border-border/50 bg-card py-8 text-center text-muted-foreground text-sm">
               No open positions
             </div>
           ) : (

@@ -141,7 +141,7 @@ export default function PortfolioPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Allocation Pie */}
         {pieData.length > 0 && (
-          <div className="rounded-lg border bg-card p-4">
+          <div className="rounded-lg border border-border/50 bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
               <Layers className="h-4 w-4" />
               Capital Allocation
@@ -178,7 +178,7 @@ export default function PortfolioPage() {
         )}
 
         {/* Model Performance Table */}
-        <div className={`rounded-lg border bg-card overflow-x-auto ${pieData.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
+        <div className={`rounded-lg border border-border/50 bg-card overflow-x-auto ${pieData.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="px-4 py-3 border-b flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold">Model Performance</h3>
@@ -188,7 +188,7 @@ export default function PortfolioPage() {
           ) : (
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+                <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
                   <th className="py-2 px-4">Model</th>
                   <th className="py-2 px-4">Type</th>
                   <th className="py-2 px-4">Active</th>
@@ -201,17 +201,17 @@ export default function PortfolioPage() {
               </thead>
               <tbody>
                 {models.map((m) => (
-                  <tr key={m.name} className="border-b border-border/50">
+                  <tr key={m.name} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="py-2 px-4 font-medium">{m.name}</td>
                     <td className="py-2 px-4 text-xs text-muted-foreground">{m.model_type}</td>
                     <td className="py-2 px-4">
                       <span className={`inline-block h-2 w-2 rounded-full ${m.is_active ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
                     </td>
-                    <td className="py-2 px-4 font-mono"><MetricCell value={m.sharpe_ratio} format="ratio" /></td>
-                    <td className="py-2 px-4 font-mono"><MetricCell value={m.win_rate} format="percent" /></td>
-                    <td className="py-2 px-4 font-mono"><MetricCell value={m.max_drawdown} format="percent" /></td>
-                    <td className="py-2 px-4 font-mono"><MetricCell value={m.total_return} format="percent" /></td>
-                    <td className="py-2 px-4 font-mono text-muted-foreground">{m.num_trades}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.sharpe_ratio} format="ratio" /></td>
+                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.win_rate} format="percent" /></td>
+                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.max_drawdown} format="percent" /></td>
+                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.total_return} format="percent" /></td>
+                    <td className="py-2 px-4 font-mono tabular-nums text-muted-foreground">{m.num_trades}</td>
                   </tr>
                 ))}
               </tbody>

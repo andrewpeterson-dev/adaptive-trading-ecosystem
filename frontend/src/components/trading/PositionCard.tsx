@@ -40,7 +40,7 @@ export function PositionCard({ position, onClose }: PositionCardProps) {
   };
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
+    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-mono font-semibold text-sm">{position.symbol}</span>
@@ -57,7 +57,7 @@ export function PositionCard({ position, onClose }: PositionCardProps) {
         <button
           onClick={handleClose}
           disabled={closing}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          className="text-xs text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50 rounded-md px-2 py-1 transition-colors flex items-center gap-1"
         >
           {closing ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -89,7 +89,7 @@ export function PositionCard({ position, onClose }: PositionCardProps) {
         </div>
       </div>
 
-      <div className="pt-2 border-t border-border/50 flex items-center justify-between">
+      <div className="pt-2 border-t border-border/30 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Unrealized P&L</span>
         <div className="text-right">
           <span className={`font-mono font-semibold text-sm ${pnlColor}`}>

@@ -9,7 +9,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import trading, models as models_routes, dashboard, system, strategies, explainer
+from api.routes import trading, models as models_routes, dashboard, system, strategies, explainer, news
 from config.settings import get_settings
 from db.database import init_db, close_db
 
@@ -49,13 +49,13 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"]
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(strategies.router, prefix="/api", tags=["Strategies"])
 app.include_router(explainer.router, prefix="/api", tags=["Explainer"])
+app.include_router(news.router, prefix="/api/news", tags=["News"])
 
 
 @app.get("/health")
 async def health_check():
-    settings = get_settings()
-    return {
-        "status": "healthy",
-        "mode": settings.trading_mode.value,
-        "version": "1.0.0",
-    }
+    """Comprehensive health check — used by Docker healthcheck and monitoring."""
+    from monitor.health_check import HealthChecker
+
+    checker = HealthChecker()
+    return await checker.check_all()

@@ -60,7 +60,7 @@ export default function StrategiesPage() {
         </div>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
           New Strategy
         </Link>
@@ -87,7 +87,7 @@ export default function StrategiesPage() {
             <div
               key={s.id}
               onClick={() => router.push(`/edit/${s.id}`)}
-              className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:border-primary/20 transition-colors group cursor-pointer"
+              className="flex items-center gap-4 p-4 rounded-lg border border-border/50 bg-card hover:border-primary/30 hover:bg-card/80 transition-colors group cursor-pointer"
             >
               <ScoreBadge score={s.diagnostics?.score ?? 0} />
               <div className="flex-1 min-w-0">

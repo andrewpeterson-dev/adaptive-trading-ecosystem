@@ -27,14 +27,18 @@ def _get_engine():
     if _engine is None:
         from sqlalchemy.ext.asyncio import create_async_engine
 
+        from sqlalchemy.pool import StaticPool
+
         settings = get_settings()
-        _engine = create_async_engine(
-            settings.database_url,
-            echo=False,
-            pool_size=20,
-            max_overflow=10,
-            pool_pre_ping=True,
-        )
+        kwargs = dict(echo=False)
+        if settings.use_sqlite:
+            kwargs["connect_args"] = {"check_same_thread": False}
+            kwargs["poolclass"] = StaticPool
+        else:
+            kwargs["pool_size"] = 20
+            kwargs["max_overflow"] = 10
+            kwargs["pool_pre_ping"] = True
+        _engine = create_async_engine(settings.database_url, **kwargs)
     return _engine
 
 

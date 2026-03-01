@@ -123,7 +123,7 @@ export default function WatchlistPage() {
           )}
           <button
             onClick={() => setView(view === "grid" ? "list" : "grid")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
           >
             {view === "grid" ? (
               <List className="h-3.5 w-3.5" />
@@ -134,7 +134,7 @@ export default function WatchlistPage() {
           </button>
           <button
             onClick={refresh}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -150,12 +150,12 @@ export default function WatchlistPage() {
           onChange={(e) => setAddInput(e.target.value.toUpperCase())}
           onKeyDown={handleAddKeyDown}
           placeholder="Add symbol..."
-          className="px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono w-40 focus:outline-none focus:ring-1 focus:ring-ring"
+          className="px-3 py-2 rounded-md bg-background border border-border/50 text-sm font-mono w-40 focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
         />
         <button
           onClick={addSymbol}
           disabled={!addInput.trim()}
-          className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-primary/10 text-primary text-sm hover:bg-primary/20 transition-colors disabled:opacity-30"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 border border-primary/20 transition-colors disabled:opacity-30"
         >
           <Plus className="h-3.5 w-3.5" />
           Add
@@ -188,10 +188,10 @@ export default function WatchlistPage() {
 
       {/* List View */}
       {quotes && view === "list" && (
-        <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+              <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
                 <th className="py-2 px-4">Symbol</th>
                 <th className="py-2 px-4">Price</th>
                 <th className="py-2 px-4">Change</th>

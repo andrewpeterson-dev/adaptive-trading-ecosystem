@@ -128,18 +128,32 @@ class _WebullBase:
             self._api_client = ApiClient(self._app_key, self._app_secret, region_val)
             self._api = API(self._api_client)
 
-            resp = self._api.account.get_account_list()
+            # Use get_app_subscriptions to discover accounts (v2 SDK)
+            resp = self._api.account.get_app_subscriptions()
             if resp.status_code == 200:
-                data = resp.json()
-                self._all_accounts = data if isinstance(data, list) else data.get("data", data.get("accounts", []))
+                subs = resp.json()
+                if not isinstance(subs, list):
+                    subs = subs.get("data", [])
 
-                # Classify accounts into paper vs live — STRICT separation
+                self._all_accounts = subs
                 self._paper_account_ids = []
                 self._live_account_ids = []
 
-                for acct in self._all_accounts:
-                    acct_id = str(acct.get("account_id", acct.get("accountId", "")))
-                    acct_type = str(acct.get("account_type", acct.get("accountType", ""))).lower()
+                for sub in subs:
+                    acct_id = str(sub.get("account_id", sub.get("accountId", "")))
+                    if not acct_id:
+                        continue
+
+                    # Fetch profile to determine account type
+                    try:
+                        profile_resp = self._api.account.get_account_profile(acct_id)
+                        if profile_resp.status_code == 200:
+                            profile = profile_resp.json()
+                            acct_type = str(profile.get("account_type", "")).lower()
+                        else:
+                            acct_type = ""
+                    except Exception:
+                        acct_type = ""
 
                     if "paper" in acct_type or "virtual" in acct_type or "demo" in acct_type or "simulated" in acct_type:
                         self._paper_account_ids.append(acct_id)
@@ -372,19 +386,21 @@ class _WebullBase:
         if not acct:
             return None
         try:
-            resp = self._api.account.get_account_balance(acct)
+            resp = self._api.account.get_account_balance(acct, "USD")
             if resp.status_code == 200:
                 raw = resp.json()
-                data = raw.get("data", raw) if isinstance(raw, dict) else raw
+                # Parse the v2 SDK response format
+                currency_assets = raw.get("account_currency_assets", [])
+                usd = currency_assets[0] if currency_assets else {}
                 return {
                     "account_id": acct,
                     "mode": self._MODE.value,
-                    "net_liquidation": float(data.get("net_liquidation", data.get("netLiquidation", 0))),
-                    "total_market_value": float(data.get("total_market_value", data.get("totalMarketValue", 0))),
-                    "cash_balance": float(data.get("cash_balance", data.get("cashBalance", data.get("usableCash", 0)))),
-                    "buying_power": float(data.get("buying_power", data.get("dayBuyingPower", 0))),
-                    "unrealized_pnl": float(data.get("unrealized_pnl", data.get("unrealizedProfitLoss", 0))),
-                    "realized_pnl": float(data.get("realized_pnl", data.get("realizedProfitLoss", 0))),
+                    "net_liquidation": float(usd.get("net_liquidation_value", raw.get("net_liquidation", 0))),
+                    "total_market_value": float(raw.get("total_market_value", usd.get("positions_market_value", 0))),
+                    "cash_balance": float(raw.get("total_cash_balance", usd.get("cash_balance", 0))),
+                    "buying_power": float(usd.get("cash_power", usd.get("margin_power", 0))),
+                    "unrealized_pnl": float(raw.get("unrealized_pnl", 0)),
+                    "realized_pnl": float(raw.get("realized_pnl", 0)),
                 }
         except Exception as e:
             logger.error("account_fetch_failed", error=str(e))
@@ -400,7 +416,8 @@ class _WebullBase:
             resp = self._api.account.get_account_position(acct)
             if resp.status_code == 200:
                 raw = resp.json()
-                items = raw if isinstance(raw, list) else raw.get("data", raw.get("positions", []))
+                # v2 SDK wraps positions in "holdings"
+                items = raw.get("holdings", raw if isinstance(raw, list) else raw.get("data", raw.get("positions", [])))
                 return [{
                     "symbol": pos.get("symbol", pos.get("ticker", {}).get("symbol", "???")),
                     "quantity": float(pos.get("qty", pos.get("position", 0))),
@@ -455,8 +472,12 @@ class WebullPaperClient(_WebullBase):
 
     def place_order(self, symbol: str, side: str, qty: int = 1,
                     order_type: str = "MKT", limit_price: float = None,
-                    stop_price: float = None, tif: str = "DAY") -> dict:
-        """Place order on PAPER account ONLY."""
+                    stop_price: float = None, tif: str = "DAY",
+                    user_confirmed: bool = False) -> dict:
+        """Place order on PAPER account ONLY. Requires explicit user confirmation."""
+        if not user_confirmed:
+            return {"success": False, "error": "BLOCKED: Orders require explicit user confirmation (user_confirmed=True)."}
+
         acct = self._get_allowed_account_id()
         if not acct:
             return {"success": False, "error": "No paper account found. Cannot trade."}
@@ -561,8 +582,13 @@ class WebullLiveClient(_WebullBase):
 
     def place_order(self, symbol: str, side: str, qty: int = 1,
                     order_type: str = "MKT", limit_price: float = None,
-                    stop_price: float = None, tif: str = "DAY") -> dict:
-        """Place order on LIVE account ONLY. Requires live trading to be enabled."""
+                    stop_price: float = None, tif: str = "DAY",
+                    user_confirmed: bool = False) -> dict:
+        """Place order on LIVE account ONLY. Requires live trading enabled AND explicit user confirmation."""
+
+        # GATE 0: Must be explicitly confirmed by user clicking a button
+        if not user_confirmed:
+            return {"success": False, "error": "BLOCKED: Orders require explicit user confirmation (user_confirmed=True)."}
 
         # GATE 1: Live trading must be explicitly enabled
         if not self.live_enabled:

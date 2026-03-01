@@ -59,9 +59,20 @@ class MarketAnalysis:
 
 class LLMAnalyst:
     """
+    ADVISORY ONLY -- suggestions must be validated by the deterministic engine
+    (ConfidenceModel -> EnsembleEngine -> RiskManager) before any execution.
+
     Calls an LLM API with real market data context and returns structured
     analysis. Designed to be used alongside (not replacing) the quantitative
-    regime detector.
+    regime detector. This class NEVER executes trades directly; it produces
+    a MarketAnalysis object that serves as one input to the confidence model.
+
+    Decision flow:
+        LLMAnalyst.analyze() -> MarketAnalysis (confidence 0-1)
+        -> ConfidenceModel.compute_confidence() (one of several inputs)
+        -> EnsembleEngine.aggregate_predictions()
+        -> RiskManager.validate_signal_quality()
+        -> ExecutionEngine (only if all gates pass)
     """
 
     def __init__(self):
@@ -463,6 +474,17 @@ Rules:
     def get_history(self, limit: int = 20) -> list[dict]:
         """Get analysis history as dicts."""
         return [a.to_dict() for a in self._history[-limit:]]
+
+    def get_confidence_score(self) -> float:
+        """
+        Get the latest LLM confidence on a 0-100 scale for use with ConfidenceModel.
+        Returns 0.0 if no analysis is available (ConfidenceModel handles this
+        by redistributing weight to other signal sources).
+        """
+        latest = self.get_latest()
+        if latest is None:
+            return 0.0
+        return latest.confidence * 100.0
 
     def apply_adjustments_to_weights(
         self,

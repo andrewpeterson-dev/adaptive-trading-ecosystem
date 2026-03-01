@@ -71,7 +71,7 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
 
   if (trades.length === 0) {
     return (
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border border-border/50 bg-card">
         <div className="px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">Trade History</h3>
         </div>
@@ -83,7 +83,7 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card overflow-x-auto">
+    <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
       <div className="px-4 py-3 border-b">
         <h3 className="text-sm font-semibold">
           Trade History
@@ -92,7 +92,7 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
       </div>
       <table className="w-full text-left text-sm">
         <thead>
-          <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+          <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
             <th
               className="py-2 px-4 cursor-pointer hover:text-foreground"
               onClick={() => handleSort("timestamp")}
@@ -123,7 +123,7 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
             const isUp = pnl >= 0;
             const date = t.filled_at || t.submitted_at || t.timestamp || "";
             return (
-              <tr key={t.id || `${t.symbol}-${i}`} className="border-b border-border/50">
+              <tr key={t.id || `${t.symbol}-${i}`} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                 <td className="py-2 px-4 text-xs text-muted-foreground font-mono">
                   {date ? date.slice(0, 16).replace("T", " ") : "—"}
                 </td>

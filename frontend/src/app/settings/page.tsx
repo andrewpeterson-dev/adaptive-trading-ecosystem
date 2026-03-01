@@ -86,7 +86,7 @@ function ProfileSection() {
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Your name..."
-          className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
         />
       </div>
 
@@ -98,7 +98,7 @@ function ProfileSection() {
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
         </div>
         <div className="space-y-1.5">
@@ -107,7 +107,7 @@ function ProfileSection() {
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
         </div>
       </div>
@@ -122,7 +122,7 @@ function ProfileSection() {
       <button
         onClick={handleSave}
         disabled={saving || !displayName}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
       >
         {saving ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -143,7 +143,7 @@ function BrokerRedirect() {
       </p>
       <a
         href="/settings/broker"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
       >
         <Key className="h-3.5 w-3.5" />
         Broker Settings
@@ -185,7 +185,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Tab content */}
-        <div className="flex-1 rounded-lg border bg-card p-6 min-h-[400px]">
+        <div className="flex-1 rounded-lg border border-border/50 bg-card p-6 min-h-[400px]">
           {activeTab === "profile" && <ProfileSection />}
           {activeTab === "preferences" && <PreferencesForm />}
           {activeTab === "broker" && <BrokerRedirect />}

@@ -124,7 +124,7 @@ export default function ModelsPage() {
         </div>
         <button
           onClick={fetchAll}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
@@ -136,7 +136,7 @@ export default function ModelsPage() {
         <RegimeIndicator data={regime} />
 
         {ensemble && (
-          <div className="rounded-lg border bg-card p-4 space-y-3">
+          <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
               <Brain className="h-4 w-4" />
               Ensemble Weights
@@ -152,7 +152,7 @@ export default function ModelsPage() {
                         style={{ width: `${Math.min(weight * 100, 100)}%` }}
                       />
                     </div>
-                    <span className="font-mono text-xs w-12 text-right">{(weight * 100).toFixed(1)}%</span>
+                    <span className="font-mono tabular-nums text-xs w-12 text-right">{(weight * 100).toFixed(1)}%</span>
                   </div>
                 </div>
               ))}
@@ -178,13 +178,13 @@ export default function ModelsPage() {
 
         {/* Comparison Table */}
         {models.length > 0 && (
-          <div className={`rounded-lg border bg-card overflow-x-auto ${allocation.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
+          <div className={`rounded-lg border border-border/50 bg-card overflow-x-auto ${allocation.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
             <div className="px-4 py-3 border-b">
               <h3 className="text-sm font-semibold">Model Comparison</h3>
             </div>
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+                <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
                   <th className="py-2 px-4">Model</th>
                   <th className="py-2 px-4">Type</th>
                   <th className="py-2 px-4">Trained</th>
@@ -199,19 +199,19 @@ export default function ModelsPage() {
               </thead>
               <tbody>
                 {models.map((m) => (
-                  <tr key={m.name} className="border-b border-border/50">
+                  <tr key={m.name} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="py-2 px-4 font-medium">{m.name}</td>
                     <td className="py-2 px-4 text-xs text-muted-foreground">{m.type.replace("Model", "")}</td>
                     <td className="py-2 px-4">
                       <span className={`inline-block h-2 w-2 rounded-full ${m.is_trained ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
                     </td>
-                    <td className="py-2 px-4 font-mono">{m.metrics.sharpe_ratio.toFixed(3)}</td>
-                    <td className="py-2 px-4 font-mono">{m.metrics.sortino_ratio.toFixed(3)}</td>
-                    <td className="py-2 px-4 font-mono">{(m.metrics.win_rate * 100).toFixed(1)}%</td>
-                    <td className="py-2 px-4 font-mono">{(m.metrics.max_drawdown * 100).toFixed(1)}%</td>
-                    <td className="py-2 px-4 font-mono">{(m.metrics.total_return * 100).toFixed(1)}%</td>
-                    <td className="py-2 px-4 font-mono text-muted-foreground">{m.metrics.num_trades}</td>
-                    <td className="py-2 px-4 font-mono">{m.metrics.profit_factor.toFixed(2)}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.metrics.sharpe_ratio.toFixed(3)}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.metrics.sortino_ratio.toFixed(3)}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{(m.metrics.win_rate * 100).toFixed(1)}%</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{(m.metrics.max_drawdown * 100).toFixed(1)}%</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{(m.metrics.total_return * 100).toFixed(1)}%</td>
+                    <td className="py-2 px-4 font-mono tabular-nums text-muted-foreground">{m.metrics.num_trades}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.metrics.profit_factor.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

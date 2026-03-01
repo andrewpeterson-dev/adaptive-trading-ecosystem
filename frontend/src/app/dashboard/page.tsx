@@ -2,11 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  ShieldAlert,
-  AlertTriangle,
   RefreshCw,
   Loader2,
   Unplug,
@@ -130,7 +125,7 @@ export default function DashboardPage() {
         </div>
         <button
           onClick={fetchAll}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
@@ -141,12 +136,11 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Account Summary */}
         {account && (
-          <div className="rounded-lg border bg-card p-5 space-y-4">
+          <div className="rounded-lg border border-border/50 bg-card p-5 space-y-4">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              <DollarSign className="h-4 w-4" />
               Account Summary
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 tabular-nums">
               <div>
                 <div className="text-xs text-muted-foreground">Equity</div>
                 <div className="text-xl font-mono font-bold">{formatCurrency(account.equity)}</div>
@@ -169,10 +163,9 @@ export default function DashboardPage() {
 
         {/* Risk Status */}
         {risk && (
-          <div className="rounded-lg border bg-card p-5 space-y-4">
+          <div className="rounded-lg border border-border/50 bg-card p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                <ShieldAlert className="h-4 w-4" />
                 Risk Status
               </div>
               {risk.is_halted && (
@@ -218,7 +211,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Positions Table */}
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
         <div className="px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">
             Open Positions
@@ -230,7 +223,7 @@ export default function DashboardPage() {
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+              <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
                 <th className="py-2 px-4">Symbol</th>
                 <th className="py-2 px-4">Qty</th>
                 <th className="py-2 px-4">Avg Entry</th>
@@ -243,7 +236,7 @@ export default function DashboardPage() {
               {positions.map((p) => {
                 const isUp = (p.unrealized_pnl ?? 0) >= 0;
                 return (
-                  <tr key={p.symbol} className="border-b border-border/50">
+                  <tr key={p.symbol} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="py-2 px-4 font-medium font-mono">{p.symbol}</td>
                     <td className="py-2 px-4 font-mono">{p.quantity}</td>
                     <td className="py-2 px-4 font-mono">${p.avg_entry_price?.toFixed(2)}</td>
@@ -263,7 +256,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Orders Table */}
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
         <div className="px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">
             Recent Orders
@@ -275,7 +268,7 @@ export default function DashboardPage() {
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+              <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
                 <th className="py-2 px-4">Symbol</th>
                 <th className="py-2 px-4">Direction</th>
                 <th className="py-2 px-4">Qty</th>
@@ -287,7 +280,7 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               {orders.map((o) => (
-                <tr key={o.id} className="border-b border-border/50">
+                <tr key={o.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-2 px-4 font-medium font-mono">{o.symbol}</td>
                   <td className="py-2 px-4">
                     <span className={`text-xs font-medium ${o.direction === "long" ? "text-emerald-400" : "text-red-400"}`}>

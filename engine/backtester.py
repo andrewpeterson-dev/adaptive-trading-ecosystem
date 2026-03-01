@@ -252,6 +252,171 @@ class BacktestEngine:
     def get_results_summary(self) -> list[dict]:
         return [r.to_dict() for r in self.results]
 
+    # ── Performance Metrics ───────────────────────────────────────────────
+
+    def compute_performance_metrics(self, result: BacktestResult) -> dict:
+        """
+        Compute comprehensive performance metrics from a BacktestResult.
+
+        Returns dict with:
+            sharpe_ratio, sortino_ratio, max_drawdown_pct, max_drawdown_duration_days,
+            win_rate, profit_factor, total_return_pct, annualized_return_pct,
+            calmar_ratio, num_trades, avg_trade_pnl, best_trade_pct, worst_trade_pct
+        """
+        returns = result.returns.dropna()
+        equity = result.equity_curve
+        trades = result.trades
+
+        if len(returns) < 2:
+            return self._empty_metrics(result.model_name)
+
+        # ── Basic return stats ────────────────────────────────────────
+        mean_daily = returns.mean()
+        std_daily = returns.std()
+        trading_days = 252
+
+        # Sharpe ratio (annualized)
+        sharpe = (mean_daily / std_daily) * np.sqrt(trading_days) if std_daily > 0 else 0.0
+
+        # Sortino ratio (annualized, using downside deviation)
+        downside_returns = returns[returns < 0]
+        downside_std = downside_returns.std() if len(downside_returns) > 0 else 0.0
+        sortino = (mean_daily / downside_std) * np.sqrt(trading_days) if downside_std > 0 else 0.0
+
+        # ── Drawdown analysis ─────────────────────────────────────────
+        cumulative = (1 + returns).cumprod()
+        running_max = cumulative.cummax()
+        drawdown_series = (cumulative - running_max) / running_max
+
+        max_drawdown_pct = abs(float(drawdown_series.min())) if len(drawdown_series) > 0 else 0.0
+
+        # Max drawdown duration (in trading days)
+        max_dd_duration = 0
+        current_dd_start = None
+        for i in range(len(drawdown_series)):
+            if drawdown_series.iloc[i] < 0:
+                if current_dd_start is None:
+                    current_dd_start = i
+            else:
+                if current_dd_start is not None:
+                    duration = i - current_dd_start
+                    max_dd_duration = max(max_dd_duration, duration)
+                    current_dd_start = None
+        # Handle drawdown extending to end
+        if current_dd_start is not None:
+            duration = len(drawdown_series) - current_dd_start
+            max_dd_duration = max(max_dd_duration, duration)
+
+        # ── Total and annualized return ───────────────────────────────
+        total_return_pct = float(cumulative.iloc[-1] - 1) * 100
+        n_days = len(returns)
+        n_years = n_days / trading_days
+        if n_years > 0 and cumulative.iloc[-1] > 0:
+            annualized_return_pct = (cumulative.iloc[-1] ** (1 / n_years) - 1) * 100
+        else:
+            annualized_return_pct = 0.0
+
+        # Calmar ratio (annualized return / max drawdown)
+        calmar = (annualized_return_pct / 100) / max_drawdown_pct if max_drawdown_pct > 0 else 0.0
+
+        # ── Trade-level metrics ───────────────────────────────────────
+        # Use non-zero return bars as proxy for individual trade P&Ls
+        active_returns = returns[returns != 0]
+        num_trades = len(active_returns)
+
+        if num_trades > 0:
+            wins = active_returns[active_returns > 0]
+            losses = active_returns[active_returns < 0]
+            win_rate = len(wins) / num_trades
+            gross_profit = float(wins.sum()) if len(wins) > 0 else 0.0
+            gross_loss = abs(float(losses.sum())) if len(losses) > 0 else 0.0
+            profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+            avg_trade_pnl = float(active_returns.mean()) * 100  # as pct
+            best_trade_pct = float(active_returns.max()) * 100
+            worst_trade_pct = float(active_returns.min()) * 100
+        else:
+            win_rate = 0.0
+            profit_factor = 0.0
+            avg_trade_pnl = 0.0
+            best_trade_pct = 0.0
+            worst_trade_pct = 0.0
+
+        metrics = {
+            "model_name": result.model_name,
+            "timestamp": result.timestamp.isoformat(),
+            "initial_capital": self.initial_capital,
+            "final_equity": float(equity.iloc[-1]) if len(equity) > 0 else self.initial_capital,
+            "sharpe_ratio": round(float(sharpe), 4),
+            "sortino_ratio": round(float(sortino), 4),
+            "max_drawdown_pct": round(max_drawdown_pct * 100, 4),
+            "max_drawdown_duration_days": max_dd_duration,
+            "win_rate": round(win_rate, 4),
+            "profit_factor": round(float(min(profit_factor, 9999)), 4),
+            "total_return_pct": round(total_return_pct, 4),
+            "annualized_return_pct": round(annualized_return_pct, 4),
+            "calmar_ratio": round(float(calmar), 4),
+            "num_trades": num_trades,
+            "avg_trade_pnl_pct": round(avg_trade_pnl, 4),
+            "best_trade_pct": round(best_trade_pct, 4),
+            "worst_trade_pct": round(worst_trade_pct, 4),
+            "trading_days": n_days,
+            "slippage_bps": self.slippage_bps,
+            "commission_per_share": self.commission_per_share,
+        }
+
+        logger.info("performance_metrics_computed", model=result.model_name, sharpe=metrics["sharpe_ratio"],
+                     total_return=metrics["total_return_pct"])
+        return metrics
+
+    def save_results(self, output_path: str = None) -> str:
+        """
+        Save all backtest results with full performance metrics to JSON.
+        Defaults to data/backtest-results.json.
+        """
+        path = Path(output_path) if output_path else Path("data/backtest-results.json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        all_metrics = []
+        for result in self.results:
+            metrics = self.compute_performance_metrics(result)
+            all_metrics.append(metrics)
+
+        output = {
+            "generated_at": datetime.utcnow().isoformat(),
+            "num_models": len(all_metrics),
+            "results": all_metrics,
+        }
+
+        path.write_text(json.dumps(output, indent=2, default=str))
+        logger.info("backtest_results_saved", path=str(path), num_models=len(all_metrics))
+        return str(path)
+
+    @staticmethod
+    def _empty_metrics(model_name: str) -> dict:
+        """Return a zeroed-out metrics dict for insufficient data."""
+        return {
+            "model_name": model_name,
+            "timestamp": datetime.utcnow().isoformat(),
+            "initial_capital": 0,
+            "final_equity": 0,
+            "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0,
+            "max_drawdown_pct": 0.0,
+            "max_drawdown_duration_days": 0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "total_return_pct": 0.0,
+            "annualized_return_pct": 0.0,
+            "calmar_ratio": 0.0,
+            "num_trades": 0,
+            "avg_trade_pnl_pct": 0.0,
+            "best_trade_pct": 0.0,
+            "worst_trade_pct": 0.0,
+            "trading_days": 0,
+            "slippage_bps": 0,
+            "commission_per_share": 0,
+        }
+
     # ── Checkpoint/Resume ─────────────────────────────────────────────────
 
     def run_backtest_with_checkpoints(

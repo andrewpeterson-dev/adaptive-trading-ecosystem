@@ -1,5 +1,5 @@
 """
-System administration endpoints — health, config, scheduler controls.
+System administration endpoints — health, config, monitoring, scheduler controls.
 """
 
 from fastapi import APIRouter
@@ -7,6 +7,35 @@ from fastapi import APIRouter
 from config.settings import get_settings
 
 router = APIRouter()
+
+# Shared instances — initialized on first request
+_health_checker = None
+_watchdog = None
+_scheduler = None
+
+
+def _get_health_checker():
+    global _health_checker
+    if _health_checker is None:
+        from monitor.health_check import HealthChecker
+        _health_checker = HealthChecker()
+    return _health_checker
+
+
+def _get_watchdog():
+    global _watchdog
+    if _watchdog is None:
+        from monitor.llm_watchdog import LLMWatchdog
+        _watchdog = LLMWatchdog()
+    return _watchdog
+
+
+def _get_scheduler():
+    global _scheduler
+    if _scheduler is None:
+        from monitor.scheduler import JobScheduler
+        _scheduler = JobScheduler()
+    return _scheduler
 
 
 @router.get("/config")
@@ -31,3 +60,21 @@ async def get_config():
 @router.get("/version")
 async def get_version():
     return {"version": "1.0.0", "name": "Adaptive Trading Ecosystem"}
+
+
+@router.get("/health/detailed")
+async def detailed_health_check():
+    """Comprehensive health check — database, Redis, broker, disk, memory."""
+    checker = _get_health_checker()
+    return await checker.check_all()
+
+
+@router.get("/monitor/stats")
+async def monitor_stats():
+    """Get watchdog and scheduler statistics."""
+    watchdog = _get_watchdog()
+    scheduler = _get_scheduler()
+    return {
+        "watchdog": watchdog.get_stats(),
+        "scheduler": scheduler.get_status(),
+    }

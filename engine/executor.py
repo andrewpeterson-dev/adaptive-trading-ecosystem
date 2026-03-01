@@ -15,6 +15,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 from config.settings import get_settings, TradingMode
 from models.base import Signal
 from risk.manager import RiskManager
+from services.security.audit import AuditLogger
 
 logger = structlog.get_logger(__name__)
 
@@ -34,6 +35,7 @@ class ExecutionEngine:
         settings = get_settings()
         self.mode = settings.trading_mode
         self.risk_manager = risk_manager or RiskManager()
+        self._audit = AuditLogger()
 
         # Initialize Alpaca client
         is_paper = self.mode != TradingMode.LIVE
@@ -57,11 +59,24 @@ class ExecutionEngine:
         current_exposure: float,
         order_type: OrderType = OrderType.MARKET,
         limit_price: Optional[float] = None,
+        require_confirmation: bool = False,
     ) -> Optional[dict]:
         """
         Execute a trading signal after risk validation.
         Returns order info dict or None if rejected.
+
+        For live mode, both settings.live_trading_enabled and
+        require_confirmation must be True.
         """
+        # Live mode safety gate
+        if self.mode == TradingMode.LIVE:
+            settings = get_settings()
+            if not settings.live_trading_enabled or not require_confirmation:
+                reason = "Live execution blocked: live_trading_enabled and require_confirmation both required"
+                logger.warning("live_execution_blocked", symbol=signal.symbol, reason=reason)
+                self._log_trade(signal, 0, "rejected", reason)
+                return None
+
         if signal.direction == "flat":
             return self._close_position(signal.symbol)
 
@@ -220,7 +235,7 @@ class ExecutionEngine:
     # ── Audit trail ──────────────────────────────────────────────────────
 
     def _log_trade(self, signal: Signal, quantity: float, status: str, detail: str) -> None:
-        self._trade_log.append({
+        entry = {
             "timestamp": datetime.utcnow().isoformat(),
             "symbol": signal.symbol,
             "direction": signal.direction,
@@ -230,7 +245,21 @@ class ExecutionEngine:
             "status": status,
             "detail": detail,
             "mode": self.mode.value,
-        })
+        }
+        self._trade_log.append(entry)
+
+        # Persist to audit log
+        self._audit.log_trade(
+            symbol=signal.symbol,
+            direction=signal.direction,
+            quantity=quantity,
+            model=signal.model_name,
+            signal_strength=signal.strength,
+            status=status,
+            mode=self.mode.value,
+            order_id=detail if status == "submitted" else "",
+            detail=detail,
+        )
 
     def get_trade_log(self, limit: int = 100) -> list[dict]:
         return self._trade_log[-limit:]

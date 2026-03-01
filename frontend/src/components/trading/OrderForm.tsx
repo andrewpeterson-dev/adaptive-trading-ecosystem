@@ -89,8 +89,8 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
   };
 
   return (
-    <div className="rounded-lg border bg-card p-5">
-      <h3 className="text-sm font-semibold mb-4">Place Order</h3>
+    <div className="rounded-lg border border-border/50 bg-card p-5">
+      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Place Order</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Symbol */}
         <div>
@@ -101,7 +101,7 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
             onChange={(e) => setSymbol(e.target.value.toUpperCase())}
             onBlur={handleSymbolBlur}
             placeholder="AAPL"
-            className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
         </div>
 
@@ -115,7 +115,7 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
               className={`flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-colors ${
                 direction === "long"
                   ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                  : "bg-muted text-muted-foreground border border-border hover:text-foreground"
+                  : "bg-muted text-muted-foreground border border-border/50 hover:text-foreground"
               }`}
             >
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -127,7 +127,7 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
               className={`flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-colors ${
                 direction === "short"
                   ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                  : "bg-muted text-muted-foreground border border-border hover:text-foreground"
+                  : "bg-muted text-muted-foreground border border-border/50 hover:text-foreground"
               }`}
             >
               <ArrowDownRight className="h-3.5 w-3.5" />
@@ -146,7 +146,7 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
             placeholder="10"
             min="0"
             step="1"
-            className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
         </div>
 
@@ -186,10 +186,10 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
         <button
           type="submit"
           disabled={submitting}
-          className={`w-full py-2.5 rounded-md text-sm font-medium transition-colors ${
+          className={`w-full py-2.5 rounded-md text-sm font-semibold transition-colors ${
             direction === "long"
-              ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-              : "bg-red-600 hover:bg-red-500 text-white"
+              ? "bg-emerald-500 hover:bg-emerald-400 text-white"
+              : "bg-red-500 hover:bg-red-400 text-white"
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {submitting ? (

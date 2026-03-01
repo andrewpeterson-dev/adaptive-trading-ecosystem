@@ -39,7 +39,7 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
       : 50;
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3 group">
+    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3 group">
       <div className="flex items-center justify-between">
         <div>
           <div className="font-mono font-semibold text-sm">{quote.symbol}</div>
@@ -52,7 +52,7 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
         {onRemove && (
           <button
             onClick={() => onRemove(quote.symbol)}
-            className="text-xs text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
           >
             Remove
           </button>
@@ -60,10 +60,10 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
       </div>
 
       <div className="flex items-end justify-between">
-        <span className="text-xl font-mono font-bold">
+        <span className="text-xl font-mono tabular-nums font-bold">
           ${quote.price.toFixed(2)}
         </span>
-        <div className={`flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ${changeBg} ${changeColor}`}>
+        <div className={`flex items-center gap-1 text-xs font-medium tabular-nums px-1.5 py-0.5 rounded ${changeBg} ${changeColor}`}>
           {isFlat ? (
             <Minus className="h-3 w-3" />
           ) : isUp ? (
@@ -80,7 +80,7 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
       {/* High/Low range bar */}
       {quote.high != null && quote.low != null && (
         <div>
-          <div className="flex justify-between text-[10px] text-muted-foreground mb-0.5">
+          <div className="flex justify-between text-[10px] tabular-nums text-muted-foreground mb-0.5">
             <span>${quote.low.toFixed(2)}</span>
             <span>${quote.high.toFixed(2)}</span>
           </div>
@@ -96,7 +96,7 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
       {quote.volume != null && (
         <div className="flex justify-between text-xs">
           <span className="text-muted-foreground">Volume</span>
-          <span className="font-mono">
+          <span className="font-mono tabular-nums">
             {quote.volume >= 1_000_000
               ? `${(quote.volume / 1_000_000).toFixed(1)}M`
               : quote.volume >= 1_000

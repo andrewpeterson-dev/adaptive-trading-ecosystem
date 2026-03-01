@@ -1,5 +1,8 @@
 from intelligence.regime import RegimeDetector
 from intelligence.meta import MetaLearner
+from intelligence.confidence_model import ConfidenceModel
+from intelligence.ensemble_engine import EnsembleEngine
+from intelligence.decision_pipeline import DecisionPipeline
 
 # Lazy imports for modules with heavy/optional dependencies
 def __getattr__(name):
@@ -11,4 +14,12 @@ def __getattr__(name):
         return LLMAnalyst
     raise AttributeError(f"module 'intelligence' has no attribute {name}")
 
-__all__ = ["RegimeDetector", "ModelRetrainer", "MetaLearner", "LLMAnalyst"]
+__all__ = [
+    "RegimeDetector",
+    "ModelRetrainer",
+    "MetaLearner",
+    "LLMAnalyst",
+    "ConfidenceModel",
+    "EnsembleEngine",
+    "DecisionPipeline",
+]

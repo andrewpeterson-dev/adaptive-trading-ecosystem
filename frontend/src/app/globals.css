@@ -4,24 +4,24 @@
 
 @layer base {
   :root {
-    --background: 222 47% 5%;
-    --foreground: 213 31% 91%;
-    --card: 222 47% 7%;
-    --card-foreground: 213 31% 91%;
-    --popover: 222 47% 7%;
-    --popover-foreground: 213 31% 91%;
+    --background: 220 20% 4.5%;
+    --foreground: 210 20% 93%;
+    --card: 220 18% 7%;
+    --card-foreground: 210 20% 93%;
+    --popover: 220 18% 7%;
+    --popover-foreground: 210 20% 93%;
     --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 5%;
-    --secondary: 222 47% 12%;
-    --secondary-foreground: 213 31% 91%;
-    --muted: 222 47% 14%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 222 47% 14%;
-    --accent-foreground: 213 31% 91%;
-    --destructive: 0 63% 51%;
-    --destructive-foreground: 213 31% 91%;
-    --border: 222 47% 18%;
-    --input: 222 47% 18%;
+    --primary-foreground: 220 20% 4.5%;
+    --secondary: 220 14% 11%;
+    --secondary-foreground: 210 20% 93%;
+    --muted: 220 14% 13%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 220 14% 13%;
+    --accent-foreground: 210 20% 93%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 93%;
+    --border: 220 13% 14%;
+    --input: 220 13% 14%;
     --ring: 217 91% 60%;
     --radius: 0.5rem;
   }
@@ -33,7 +33,35 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Global transitions on interactive elements */
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    @apply transition-colors duration-150;
+  }
+
+  /* Slim custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-primary/20 text-foreground;
   }
 }

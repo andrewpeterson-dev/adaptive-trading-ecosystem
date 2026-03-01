@@ -119,7 +119,7 @@ export default function RiskPage() {
         </div>
         <button
           onClick={fetchAll}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
@@ -128,7 +128,7 @@ export default function RiskPage() {
 
       {/* Risk Status Summary */}
       {risk && riskLevel && (
-        <div className="rounded-lg border bg-card p-5">
+        <div className="rounded-lg border border-border/50 bg-card p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {risk.is_halted ? (
@@ -159,7 +159,7 @@ export default function RiskPage() {
               <button
                 onClick={handleResume}
                 disabled={resuming}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500/20 border border-emerald-500/30 text-sm text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50"
               >
                 {resuming ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

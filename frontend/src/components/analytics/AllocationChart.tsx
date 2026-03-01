@@ -28,7 +28,7 @@ export function AllocationChart({ data }: { data: AllocationEntry[] }) {
   }));
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-lg border border-border/50 bg-card p-4">
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
         <Layers className="h-4 w-4" />
         Capital Allocation

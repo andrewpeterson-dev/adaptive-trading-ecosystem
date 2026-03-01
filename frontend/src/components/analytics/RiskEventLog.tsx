@@ -34,7 +34,7 @@ export function RiskEventLog({ events }: { events: RiskEvent[] }) {
   const sorted = [...filtered].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
   return (
-    <div className="rounded-lg border bg-card overflow-x-auto">
+    <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
       <div className="px-4 py-3 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ShieldAlert className="h-4 w-4 text-muted-foreground" />
@@ -66,7 +66,7 @@ export function RiskEventLog({ events }: { events: RiskEvent[] }) {
       ) : (
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+            <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
               <th className="py-2 px-4">Timestamp</th>
               <th className="py-2 px-4">Event Type</th>
               <th className="py-2 px-4">Severity</th>
@@ -77,8 +77,8 @@ export function RiskEventLog({ events }: { events: RiskEvent[] }) {
             {sorted.map((event, i) => {
               const sev = getSeverity(event.event_type);
               return (
-                <tr key={i} className="border-b border-border/50">
-                  <td className="py-2 px-4 font-mono text-xs text-muted-foreground">
+                <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-2 px-4 font-mono tabular-nums text-xs text-muted-foreground">
                     {event.timestamp.replace("T", " ").slice(0, 19)}
                   </td>
                   <td className="py-2 px-4 text-xs font-medium">{event.event_type}</td>

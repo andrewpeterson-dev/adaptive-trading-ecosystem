@@ -162,7 +162,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
             value={form.api_key}
             onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
             placeholder="Enter API key..."
-            className="w-full bg-input border border-border rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
           <button
             type="button"
@@ -183,7 +183,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
             value={form.api_secret}
             onChange={(e) => setForm((f) => ({ ...f, api_secret: e.target.value }))}
             placeholder="Enter API secret..."
-            className="w-full bg-input border border-border rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
           <button
             type="button"
@@ -203,7 +203,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
           value={form.base_url}
           onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
           placeholder="https://..."
-          className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
         />
       </div>
 
@@ -220,7 +220,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
         <button
           onClick={handleSave}
           disabled={saving || !form.api_key || !form.api_secret}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -232,7 +232,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
         <button
           onClick={handleTest}
           disabled={testing}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/50 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
         >
           {testing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

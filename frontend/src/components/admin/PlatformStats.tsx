@@ -114,7 +114,7 @@ export function PlatformStats() {
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-lg border bg-card p-4 space-y-2"
+          className="rounded-lg border border-border/50 bg-card p-4 space-y-2"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -122,7 +122,7 @@ export function PlatformStats() {
             </span>
             {stat.icon}
           </div>
-          <div className="text-2xl font-bold font-mono">{stat.value}</div>
+          <div className="text-2xl font-bold font-mono tabular-nums">{stat.value}</div>
           {stat.description && (
             <p className="text-xs text-muted-foreground">{stat.description}</p>
           )}

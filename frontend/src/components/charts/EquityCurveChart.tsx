@@ -21,7 +21,7 @@ interface EquityCurveChartProps {
 export function EquityCurveChart({ data, initialCapital, height = 300 }: EquityCurveChartProps) {
   if (!data || data.length === 0) {
     return (
-      <div className="rounded-lg border bg-card p-6 flex items-center justify-center text-muted-foreground text-sm" style={{ height }}>
+      <div className="rounded-lg border border-border/50 bg-card p-6 flex items-center justify-center text-muted-foreground text-sm" style={{ height }}>
         No equity data available
       </div>
     );
@@ -39,7 +39,7 @@ export function EquityCurveChart({ data, initialCapital, height = 300 }: EquityC
   const isPositive = totalReturn >= 0;
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-lg border border-border/50 bg-card p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Equity Curve

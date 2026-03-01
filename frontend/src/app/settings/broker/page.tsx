@@ -28,7 +28,7 @@ export default function BrokerSettingsPage() {
       <div className="flex items-center gap-3">
         <Link
           href="/settings"
-          className="p-1.5 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="p-1.5 rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -47,7 +47,7 @@ export default function BrokerSettingsPage() {
               onClick={() => setSelectedBroker(broker.id)}
               className={`text-left px-3 py-2.5 rounded-md border transition-colors ${
                 selectedBroker === broker.id
-                  ? "bg-muted border-border text-foreground"
+                  ? "bg-muted border-border/50 text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
             >
@@ -60,7 +60,7 @@ export default function BrokerSettingsPage() {
         </div>
 
         {/* Form */}
-        <div className="flex-1 rounded-lg border bg-card p-6">
+        <div className="flex-1 rounded-lg border border-border/50 bg-card p-6">
           <BrokerForm broker={selectedBroker} />
         </div>
       </div>

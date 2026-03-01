@@ -83,7 +83,7 @@ function ScoreRing({ score }: { score: number }) {
 export function DiagnosticPanel({ report, loading }: DiagnosticPanelProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border p-6 flex items-center justify-center">
+      <div className="rounded-lg border border-border/50 p-6 flex items-center justify-center">
         <div className="animate-pulse flex items-center gap-2 text-muted-foreground">
           <Shield className="h-4 w-4" />
           <span className="text-sm">Running diagnostics...</span>
@@ -94,7 +94,7 @@ export function DiagnosticPanel({ report, loading }: DiagnosticPanelProps) {
 
   if (!report) {
     return (
-      <div className="rounded-lg border border-dashed p-6 flex items-center justify-center">
+      <div className="rounded-lg border border-dashed border-border/50 p-6 flex items-center justify-center">
         <p className="text-sm text-muted-foreground">
           Add conditions to see diagnostics
         </p>
@@ -103,8 +103,8 @@ export function DiagnosticPanel({ report, loading }: DiagnosticPanelProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card">
-      <div className="flex items-center gap-4 p-4 border-b">
+    <div className="rounded-lg border border-border/50 bg-card">
+      <div className="flex items-center gap-4 p-4 border-b border-border/50">
         <ScoreRing score={report.score} />
         <div>
           <h3 className="font-semibold flex items-center gap-2">

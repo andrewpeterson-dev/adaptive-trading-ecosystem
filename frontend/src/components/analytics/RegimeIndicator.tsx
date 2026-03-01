@@ -27,7 +27,7 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
   const trendDirection = data.trend_strength >= 0 ? "Bullish" : "Bearish";
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
+    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
         <Activity className="h-4 w-4" />
         Market Regime
@@ -38,7 +38,7 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
           <Icon className={`h-4 w-4 ${config.color}`} />
           <span className={`text-sm font-bold ${config.color}`}>{config.label}</span>
         </div>
-        <span className="text-xs text-muted-foreground font-mono">
+        <span className="text-xs text-muted-foreground font-mono tabular-nums">
           {(data.confidence * 100).toFixed(0)}% confidence
         </span>
       </div>
@@ -46,7 +46,7 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <div className="text-xs text-muted-foreground mb-1">Volatility (20d)</div>
-          <div className="text-sm font-mono">{(data.volatility_20d * 100).toFixed(1)}%</div>
+          <div className="text-sm font-mono tabular-nums">{(data.volatility_20d * 100).toFixed(1)}%</div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1">
             <div
               className="h-full rounded-full bg-purple-500"
@@ -62,7 +62,7 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
             ) : (
               <TrendingDown className="h-3 w-3 text-red-400" />
             )}
-            <span className="text-sm font-mono">{(data.trend_strength * 10000).toFixed(2)}</span>
+            <span className="text-sm font-mono tabular-nums">{(data.trend_strength * 10000).toFixed(2)}</span>
           </div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1">
             <div

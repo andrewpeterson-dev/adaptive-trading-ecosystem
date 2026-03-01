@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Cpu } from "lucide-react";
+import { Activity, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Builder" },
@@ -24,32 +24,47 @@ export function NavHeader() {
   };
 
   return (
-    <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Cpu className="h-5 w-5 text-primary" />
-          <span className="font-semibold tracking-tight">
-            Adaptive Trading Ecosystem
+    <header className="border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-6 h-14 flex items-stretch">
+        {/* Brand */}
+        <Link href="/" className="flex items-center gap-2.5 shrink-0 mr-8">
+          <div className="h-7 w-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <Activity className="h-4 w-4 text-primary" />
+          </div>
+          <span className="font-semibold text-[15px] tracking-tight text-foreground">
+            Adaptive Trading
           </span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
-            Strategy Intelligence
-          </span>
-        </div>
-        <nav className="flex items-center gap-1">
+        </Link>
+
+        {/* Navigation */}
+        <nav className="flex items-stretch">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={
+              className={`relative flex items-center px-3 text-[13px] font-medium transition-colors ${
                 isActive(item.href)
-                  ? "px-3 py-1.5 rounded-md text-sm font-medium text-foreground bg-muted"
-                  : "px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-              }
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               {item.label}
+              {isActive(item.href) && (
+                <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-primary" />
+              )}
             </Link>
           ))}
         </nav>
+
+        {/* Settings */}
+        <div className="ml-auto flex items-center">
+          <Link
+            href="/settings"
+            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
     </header>
   );

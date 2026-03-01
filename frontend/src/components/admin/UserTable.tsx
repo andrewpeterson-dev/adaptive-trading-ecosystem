@@ -103,7 +103,7 @@ export function UserTable() {
   }
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
+    <div className="rounded-lg border border-border/50 bg-card overflow-hidden">
       {/* Header with search */}
       <div className="px-4 py-3 border-b flex items-center justify-between gap-4">
         <h3 className="text-sm font-semibold whitespace-nowrap">
@@ -119,7 +119,7 @@ export function UserTable() {
             placeholder="Search by email or name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-input border border-border rounded-md pl-8 pr-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full bg-input border border-border/50 rounded-md pl-8 pr-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
         </div>
       </div>
@@ -128,7 +128,7 @@ export function UserTable() {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+            <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
               <th className="py-2 px-4">Email</th>
               <th className="py-2 px-4">Display Name</th>
               <th className="py-2 px-4">Admin</th>
@@ -149,7 +149,7 @@ export function UserTable() {
               </tr>
             ) : (
               paginated.map((user) => (
-                <tr key={user.id} className="border-b border-border/50">
+                <tr key={user.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-2 px-4 font-mono text-xs">{user.email}</td>
                   <td className="py-2 px-4">{user.display_name}</td>
                   <td className="py-2 px-4">
@@ -176,7 +176,7 @@ export function UserTable() {
                     <button
                       onClick={() => toggleAdmin(user.id, user.is_admin)}
                       disabled={toggling === user.id}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
                     >
                       {toggling === user.id ? (
                         <Loader2 className="h-3 w-3 animate-spin" />

@@ -19,7 +19,7 @@ interface ExplainerPanelProps {
 export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border p-6 flex items-center justify-center">
+      <div className="rounded-lg border border-border/50 p-6 flex items-center justify-center">
         <div className="animate-pulse flex items-center gap-2 text-muted-foreground">
           <Brain className="h-4 w-4" />
           <span className="text-sm">Analyzing strategy...</span>
@@ -30,7 +30,7 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
 
   if (!explanation) {
     return (
-      <div className="rounded-lg border border-dashed p-6 flex items-center justify-center">
+      <div className="rounded-lg border border-dashed border-border/50 p-6 flex items-center justify-center">
         <p className="text-sm text-muted-foreground">
           Build a strategy to see AI analysis
         </p>
@@ -39,7 +39,7 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card space-y-0 divide-y">
+    <div className="rounded-lg border border-border/50 bg-card space-y-0 divide-y divide-border/50">
       {/* Summary */}
       <div className="p-4">
         <div className="flex items-center gap-2 mb-2">

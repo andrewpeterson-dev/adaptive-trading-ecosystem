@@ -56,7 +56,7 @@ export function ConditionRow({
   const catColor = selected ? CATEGORY_COLORS[selected.category] ?? "" : "";
 
   return (
-    <div className="group flex items-start gap-2 p-3 rounded-lg border bg-card hover:border-primary/30 transition-colors">
+    <div className="group flex items-start gap-2 p-3 rounded-lg border border-border/50 bg-card hover:border-primary/30 transition-colors">
       <div className="mt-2 text-muted-foreground/40 cursor-grab">
         <GripVertical className="h-4 w-4" />
       </div>
@@ -73,7 +73,7 @@ export function ConditionRow({
           <select
             value={condition.indicator}
             onChange={(e) => handleIndicatorChange(e.target.value)}
-            className="h-8 rounded-md border bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="h-8 rounded-md border border-border/50 bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           >
             <option value="">Select indicator...</option>
             {allIndicators.map((m) => (
@@ -104,7 +104,7 @@ export function ConditionRow({
             onChange={(e) =>
               onChange(index, { operator: e.target.value as Operator })
             }
-            className="h-8 rounded-md border bg-background px-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="h-8 rounded-md border border-border/50 bg-background px-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           >
             {OPERATORS.map((op) => (
               <option key={op.value} value={op.value}>
@@ -120,7 +120,7 @@ export function ConditionRow({
             onChange={(e) =>
               onChange(index, { value: parseFloat(e.target.value) || 0 })
             }
-            className="h-8 w-20 rounded-md border bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="h-8 w-20 rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
             step="any"
           />
         </div>
@@ -141,7 +141,7 @@ export function ConditionRow({
                   onChange={(e) =>
                     handleParamChange(key, parseFloat(e.target.value) || param.default)
                   }
-                  className="h-6 w-16 rounded border bg-muted/50 px-1.5 text-xs font-mono text-center focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  className="h-6 w-16 rounded border border-border/50 bg-muted/50 px-1.5 text-xs font-mono text-center focus:outline-none focus:ring-1 focus:ring-ring/40 focus:border-transparent"
                 />
               </div>
             ))}
@@ -152,7 +152,7 @@ export function ConditionRow({
       <button
         type="button"
         onClick={() => onRemove(index)}
-        className="mt-2 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+        className="mt-2 p-1 rounded-md text-muted-foreground/40 hover:text-red-400 hover:bg-red-400/10 transition-colors"
         aria-label="Remove condition"
       >
         <Trash2 className="h-4 w-4" />

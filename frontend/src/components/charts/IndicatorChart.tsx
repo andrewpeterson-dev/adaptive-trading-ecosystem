@@ -52,7 +52,7 @@ export function IndicatorChart({
     const colors = ["#3b82f6", "#ef4444", "#f59e0b", "#10b981"];
 
     return (
-      <div className="rounded-lg border bg-card p-3">
+      <div className="rounded-lg border border-border/50 bg-card p-3">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
           {label}
         </div>

@@ -304,7 +304,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         <div className="flex items-center gap-2">
           <button
             onClick={resetBuilder}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Reset
@@ -312,7 +312,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           <button
             onClick={runExplainer}
             disabled={validConditions.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/30 bg-primary/5 text-sm text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-primary border border-primary/20 hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Zap className="h-3.5 w-3.5" />
             Analyze
@@ -320,7 +320,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           {mode === "edit" && initialStrategy && (
             <button
               onClick={() => router.push(`/backtest/${initialStrategy.id}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-amber-400 border border-amber-400/20 hover:bg-amber-400/10 transition-colors"
             >
               <Play className="h-3.5 w-3.5" />
               Backtest
@@ -329,7 +329,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           <button
             onClick={saveStrategy}
             disabled={validConditions.length === 0 || saveStatus === "saving"}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Save className="h-3.5 w-3.5" />
             {saveStatus === "saving"
@@ -356,7 +356,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
               />
             </div>
             <div>
@@ -368,7 +368,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description..."
-                className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
               />
             </div>
           </div>
@@ -382,7 +382,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               <select
                 value={action}
                 onChange={(e) => setAction(e.target.value as Action)}
-                className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
               >
                 <option value="BUY">BUY</option>
                 <option value="SELL">SELL</option>
@@ -399,7 +399,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 min={0.1}
                 max={50}
                 step={0.5}
-                className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
               />
             </div>
             <div>
@@ -413,7 +413,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 min={0.1}
                 max={100}
                 step={0.5}
-                className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
               />
             </div>
             <div>
@@ -427,7 +427,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 min={1}
                 max={100}
                 step={1}
-                className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
               />
             </div>
             <div>
@@ -437,7 +437,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               <select
                 value={timeframe}
                 onChange={(e) => setTimeframe(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
               >
                 <option value="1m">1 min</option>
                 <option value="5m">5 min</option>
@@ -475,7 +475,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
             <button
               onClick={addCondition}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-border/50 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
               Add Condition
@@ -484,7 +484,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
           {/* Logic preview */}
           {logicString && (
-            <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">
                 Strategy Logic
               </div>
