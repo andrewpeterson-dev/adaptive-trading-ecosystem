@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Loader2, X } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import type { Position } from "@/types/trading";
 
 interface PositionCardProps {
@@ -18,9 +19,8 @@ export function PositionCard({ position, onClose }: PositionCardProps) {
   const handleClose = async () => {
     setClosing(true);
     try {
-      const res = await fetch("/api/trading/execute", {
+      await apiFetch("/api/trading/execute", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           symbol: position.symbol,
           direction: position.side === "long" ? "short" : "long",
@@ -29,9 +29,10 @@ export function PositionCard({ position, onClose }: PositionCardProps) {
           model_name: "manual",
           order_type: "market",
           limit_price: position.current_price,
+          user_confirmed: true,
         }),
       });
-      if (res.ok) onClose();
+      onClose();
     } catch {
       // silent fail — refresh will show updated state
     } finally {

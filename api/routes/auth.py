@@ -1,12 +1,14 @@
 """Authentication routes — login, register, profile, broker credentials."""
 
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import bcrypt
 import jwt
 import structlog
 from fastapi import APIRouter, HTTPException, Request
-from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -18,8 +20,19 @@ from db.models import User, BrokerCredential, BrokerType
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-_TOKEN_EXPIRY_DAYS = 7
+# Simple in-memory rate limiter for auth endpoints
+_login_attempts: dict = defaultdict(list)  # ip -> [timestamps]
+_RATE_LIMIT_WINDOW = 300  # 5 minutes
+_RATE_LIMIT_MAX = 10  # max attempts per window
 
+
+def _check_rate_limit(ip: str) -> None:
+    """Raise 429 if too many login attempts from this IP."""
+    now = time.time()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _RATE_LIMIT_WINDOW]
+    if len(_login_attempts[ip]) >= _RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again in a few minutes.")
+    _login_attempts[ip].append(now)
 
 def _hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -35,7 +48,7 @@ def _create_token(user_id: int, email: str, is_admin: bool) -> str:
         "user_id": user_id,
         "email": email,
         "is_admin": is_admin,
-        "exp": datetime.now(timezone.utc) + timedelta(days=_TOKEN_EXPIRY_DAYS),
+        "exp": datetime.now(timezone.utc) + timedelta(days=settings.jwt_expiry_days),
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
@@ -81,7 +94,10 @@ class BrokerCredentialRequest(BaseModel):
 # ── Routes ───────────────────────────────────────────────────────────────
 
 @router.post("/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
     async with get_session() as db:
         result = await db.execute(select(User).where(User.email == req.email))
         user = result.scalar_one_or_none()
@@ -98,7 +114,9 @@ async def login(req: LoginRequest):
 
 
 @router.post("/register")
-async def register(req: RegisterRequest):
+async def register(req: RegisterRequest, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
 

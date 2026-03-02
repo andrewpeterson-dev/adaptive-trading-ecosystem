@@ -11,7 +11,11 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from sqlalchemy import select
+
 from config.settings import get_settings, TradingMode
+from db.database import get_session
+from db.models import PaperPortfolio, PaperPosition
 from risk.manager import RiskManager
 
 # Webull per-user client loader (from our webull routes)
@@ -74,7 +78,42 @@ async def get_account(request: Request):
                 }
             raise HTTPException(status_code=503, detail="Could not fetch Webull account")
 
-    # Fallback to Alpaca
+    # Fallback: check for paper portfolio, then Alpaca
+    if user_id:
+        async with get_session() as session:
+            result = await session.execute(
+                select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+            )
+            portfolio = result.scalar_one_or_none()
+
+            if not portfolio:
+                # Auto-create paper portfolio for users without a broker
+                portfolio = PaperPortfolio(
+                    user_id=user_id,
+                    cash=1_000_000.0,
+                    initial_capital=1_000_000.0,
+                )
+                session.add(portfolio)
+                await session.flush()
+
+            # Sum positions value
+            pos_result = await session.execute(
+                select(PaperPosition).where(PaperPosition.portfolio_id == portfolio.id)
+            )
+            positions = pos_result.scalars().all()
+            positions_value = sum(
+                (p.current_price or p.avg_entry_price) * p.quantity for p in positions
+            )
+
+            return {
+                "equity": portfolio.cash + positions_value,
+                "cash": portfolio.cash,
+                "buying_power": portfolio.cash,
+                "portfolio_value": positions_value,
+                "broker": "paper",
+                "mode": "PAPER",
+            }
+
     try:
         return _get_executor().get_account()
     except Exception:
@@ -101,6 +140,11 @@ async def get_positions(request: Request):
                     "unrealized_pnl_pct": p.get("unrealized_pnl_pct", 0),
                 })
             return {"positions": positions}
+
+    # Fallback: paper positions for authenticated users
+    if user_id:
+        from api.routes.paper_trading import get_paper_positions
+        return await get_paper_positions(request)
 
     try:
         return _get_executor().get_positions()
@@ -238,7 +282,25 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                 detail=result.get("error", "Order failed"),
             )
 
-    # Fallback to Alpaca executor
+    # Fallback: route through paper trading for authenticated users
+    if user_id:
+        from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
+
+        side = req.direction.upper()
+        if side in ("LONG", "BUY"):
+            side = "BUY"
+        elif side in ("SHORT", "SELL", "FLAT"):
+            side = "SELL"
+
+        paper_req = PaperTradeRequest(
+            symbol=req.symbol,
+            side=side,
+            quantity=req.quantity,
+            user_confirmed=req.user_confirmed,
+        )
+        return await execute_paper_trade(request, paper_req)
+
+    # Last resort: Alpaca executor
     from models.base import Signal
     from engine.executor import OrderType
 

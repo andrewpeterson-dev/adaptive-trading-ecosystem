@@ -5,9 +5,10 @@ import { Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
 
 interface OrderFormProps {
   onOrderPlaced: () => void;
+  isPaperMode?: boolean;
 }
 
-export function OrderForm({ onOrderPlaced }: OrderFormProps) {
+export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
   const [symbol, setSymbol] = useState("");
   const [direction, setDirection] = useState<"long" | "short">("long");
   const [quantity, setQuantity] = useState("");
@@ -102,7 +103,14 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
 
   return (
     <div className="rounded-lg border border-border/50 bg-card p-5">
-      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Place Order</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Place Order</h3>
+        {isPaperMode && (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
+            Paper Mode
+          </span>
+        )}
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Symbol */}
         <div>

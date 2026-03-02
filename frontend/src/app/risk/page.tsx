@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Play,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import { RiskGauge } from "@/components/analytics/RiskGauge";
 import { RiskEventLog } from "@/components/analytics/RiskEventLog";
 import type { RiskEvent, RiskSummaryExtended, RiskGaugeConfig } from "@/types/risk";
@@ -33,20 +34,20 @@ export default function RiskPage() {
   const fetchAll = useCallback(async () => {
     try {
       const [riskRes, eventsRes] = await Promise.allSettled([
-        fetch("/api/trading/risk-summary"),
-        fetch("/api/trading/risk-events"),
+        apiFetch<RiskSummaryExtended>("/api/trading/risk-summary"),
+        apiFetch<{ events?: RiskEvent[] }>("/api/trading/risk-events"),
       ]);
 
       let hasData = false;
 
-      if (riskRes.status === "fulfilled" && riskRes.value.ok) {
-        setRisk(await riskRes.value.json());
+      if (riskRes.status === "fulfilled") {
+        setRisk(riskRes.value);
         hasData = true;
       }
 
-      if (eventsRes.status === "fulfilled" && eventsRes.value.ok) {
-        const data = await eventsRes.value.json();
-        setEvents(data.events || data || []);
+      if (eventsRes.status === "fulfilled") {
+        const data = eventsRes.value;
+        setEvents((data as any).events || (data as any) || []);
         hasData = true;
       }
 
@@ -68,8 +69,8 @@ export default function RiskPage() {
   const handleResume = async () => {
     setResuming(true);
     try {
-      const res = await fetch("/api/trading/resume-trading", { method: "POST" });
-      if (res.ok) await fetchAll();
+      const res = await apiFetch("/api/trading/resume-trading", { method: "POST" });
+      await fetchAll();
     } finally {
       setResuming(false);
     }

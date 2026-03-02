@@ -8,6 +8,7 @@ python-dotenv==1.0.0
 # Database
 sqlalchemy==2.0.25
 asyncpg==0.29.0
+aiosqlite==0.19.0
 alembic==1.13.1
 psycopg2-binary==2.9.9
 
@@ -37,8 +38,7 @@ webull-python-sdk-mdata>=0.1.18
 webull-python-sdk-trade-events-core>=0.1.18
 webull>=0.6.1
 
-# Dashboard
-streamlit==1.30.0
+# Visualization
 plotly==5.18.0
 
 # Free Market Data

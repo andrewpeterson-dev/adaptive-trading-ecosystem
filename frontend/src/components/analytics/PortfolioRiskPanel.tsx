@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { ShieldCheck, Loader2, Info } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import type { PortfolioAnalytics } from "@/types/portfolio-analytics";
 
 const RATING_COLORS: Record<string, string> = {
@@ -73,9 +74,8 @@ export function PortfolioRiskPanel() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/trading/portfolio-analytics");
-      if (!res.ok) throw new Error();
-      setData(await res.json());
+      const data = await apiFetch<PortfolioAnalytics>("/api/trading/portfolio-analytics");
+      setData(data);
       setError(false);
     } catch {
       setError(true);

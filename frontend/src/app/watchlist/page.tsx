@@ -10,6 +10,7 @@ import {
   Activity,
   X,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import { usePolling } from "@/hooks/usePolling";
 import { QuoteCard } from "@/components/trading/QuoteCard";
 import type { QuoteData } from "@/components/trading/QuoteCard";
@@ -19,44 +20,20 @@ const DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "AAPL", "TSLA", "NVDA"];
 
 async function fetchQuotes(symbols: string[]): Promise<QuoteData[]> {
   try {
-    const token = typeof window !== "undefined"
-      ? (document.cookie.match(/(?:^|; )auth_token=([^;]*)/)?.[1] || localStorage.getItem("auth_token"))
-      : null;
-
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(
-      `/api/trading/quotes?symbols=${symbols.join(",")}`,
-      { headers }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      return data.quotes || data || [];
-    }
+    const data = await apiFetch<any>(`/api/trading/quotes?symbols=${symbols.join(",")}`);
+    return data.quotes || data || [];
   } catch {
-    // endpoint unavailable
+    return [];
   }
-  return [];
 }
 
 async function fetchRegime(): Promise<string | null> {
   try {
-    const token = typeof window !== "undefined"
-      ? (document.cookie.match(/(?:^|; )auth_token=([^;]*)/)?.[1] || localStorage.getItem("auth_token"))
-      : null;
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch("/api/models/regime", { headers });
-    if (res.ok) {
-      const data = await res.json();
-      return data.regime || data.current_regime || null;
-    }
+    const data = await apiFetch<any>("/api/models/regime");
+    return data.regime || data.current_regime || null;
   } catch {
-    // silent
+    return null;
   }
-  return null;
 }
 
 export default function WatchlistPage() {

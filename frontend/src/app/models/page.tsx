@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Brain,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import { ModelCard } from "@/components/analytics/ModelCard";
 import { RegimeIndicator } from "@/components/analytics/RegimeIndicator";
 import { AllocationChart } from "@/components/analytics/AllocationChart";
@@ -25,32 +26,32 @@ export default function ModelsPage() {
   const fetchAll = useCallback(async () => {
     try {
       const [modRes, regRes, ensRes, allocRes] = await Promise.allSettled([
-        fetch("/api/models/list"),
-        fetch("/api/models/regime"),
-        fetch("/api/models/ensemble-status"),
-        fetch("/api/models/allocation"),
+        apiFetch<any>("/api/models/list"),
+        apiFetch<any>("/api/models/regime"),
+        apiFetch<any>("/api/models/ensemble-status"),
+        apiFetch<any>("/api/models/allocation"),
       ]);
 
       let hasData = false;
 
-      if (modRes.status === "fulfilled" && modRes.value.ok) {
-        const data = await modRes.value.json();
+      if (modRes.status === "fulfilled") {
+        const data = modRes.value;
         setModels(data.models || data || []);
         hasData = true;
       }
 
-      if (regRes.status === "fulfilled" && regRes.value.ok) {
-        setRegime(await regRes.value.json());
+      if (regRes.status === "fulfilled") {
+        setRegime(regRes.value);
         hasData = true;
       }
 
-      if (ensRes.status === "fulfilled" && ensRes.value.ok) {
-        setEnsemble(await ensRes.value.json());
+      if (ensRes.status === "fulfilled") {
+        setEnsemble(ensRes.value);
         hasData = true;
       }
 
-      if (allocRes.status === "fulfilled" && allocRes.value.ok) {
-        const data = await allocRes.value.json();
+      if (allocRes.status === "fulfilled") {
+        const data = allocRes.value;
         setAllocation(data.allocations || data || []);
         hasData = true;
       }
@@ -72,15 +73,11 @@ export default function ModelsPage() {
 
   const handleRetrain = async (modelName: string) => {
     try {
-      const res = await fetch("/api/models/retrain", {
+      await apiFetch("/api/models/retrain", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_name: modelName }),
       });
-      if (res.ok) {
-        // Refresh after retrain
-        await fetchAll();
-      }
+      await fetchAll();
     } catch {
       // Silently fail — user sees button reset
     }

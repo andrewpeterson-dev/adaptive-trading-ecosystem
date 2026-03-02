@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Trash2, Shield, ChevronRight, Pencil, Play } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 
 function ScoreBadge({ score }: { score: number }) {
@@ -27,11 +28,8 @@ export default function StrategiesPage() {
 
   const fetchStrategies = async () => {
     try {
-      const res = await fetch("/api/strategies/list");
-      if (res.ok) {
-        const data = await res.json();
-        setStrategies(data.strategies || []);
-      }
+      const data = await apiFetch<any>("/api/strategies/list");
+      setStrategies(data.strategies || []);
     } catch {
       // offline
     } finally {
@@ -45,7 +43,7 @@ export default function StrategiesPage() {
 
   const deleteStrategy = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    await fetch(`/api/strategies/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/strategies/${id}`, { method: "DELETE" });
     setStrategies((prev) => prev.filter((s) => s.id !== id));
   };
 

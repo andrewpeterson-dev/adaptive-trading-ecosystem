@@ -12,6 +12,7 @@ import {
   ChevronRight,
   AlertTriangle,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import type { AdminUser } from "@/types/admin";
 
 const PAGE_SIZE = 10;
@@ -26,9 +27,7 @@ export function UserTable() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/users");
-      if (!res.ok) throw new Error("Failed to fetch users");
-      const data = await res.json();
+      const data = await apiFetch<any>("/api/admin/users");
       setUsers(Array.isArray(data) ? data : data.users || []);
       setError(null);
     } catch (e: any) {
@@ -45,18 +44,15 @@ export function UserTable() {
   const toggleAdmin = async (userId: number, currentAdmin: boolean) => {
     setToggling(userId);
     try {
-      const res = await fetch(`/api/admin/users/${userId}/toggle-admin`, {
+      await apiFetch(`/api/admin/users/${userId}/toggle-admin`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_admin: !currentAdmin }),
       });
-      if (res.ok) {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === userId ? { ...u, is_admin: !currentAdmin } : u
-          )
-        );
-      }
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, is_admin: !currentAdmin } : u
+        )
+      );
     } catch {
       // Silently fail — user sees no state change
     } finally {

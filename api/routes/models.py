@@ -1,154 +1,220 @@
 """
-Model management endpoints — list models, view performance, trigger retraining.
+Model management endpoints — list models, allocation, regime, performance.
+Queries the database and seeds reasonable defaults when tables are empty.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+import structlog
+from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy import select, func
 
-from allocation.capital import CapitalAllocator
-from data.ingestion import DataIngestor
-from intelligence.regime import RegimeDetector
-from intelligence.retrainer import ModelRetrainer
-from intelligence.meta import MetaLearner
-from models.ensemble import EnsembleMetaModel
-from models.registry import create_default_models
+from db.database import get_session
+from db.models import (
+    TradingModel,
+    ModelPerformance,
+    CapitalAllocation,
+    MarketRegimeRecord,
+    TradingModeEnum,
+)
 
+logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-# Shared instances
-_models = create_default_models()
-_ensemble = EnsembleMetaModel()
-for m in _models:
-    _ensemble.register_model(m)
+# The 11 registered models with their types
+_DEFAULT_MODELS = [
+    {"name": "momentum_fast", "model_type": "MomentumModel"},
+    {"name": "momentum_slow", "model_type": "MomentumModel"},
+    {"name": "mean_reversion_tight", "model_type": "MeanReversionModel"},
+    {"name": "mean_reversion_wide", "model_type": "MeanReversionModel"},
+    {"name": "volatility_squeeze", "model_type": "VolatilityModel"},
+    {"name": "breakout_sr", "model_type": "BreakoutModel"},
+    {"name": "iv_crush", "model_type": "IVCrushModel"},
+    {"name": "earnings_momentum", "model_type": "EarningsMomentumModel"},
+    {"name": "pairs_statarb", "model_type": "PairsModel"},
+    {"name": "ml_xgboost", "model_type": "MLModel"},
+    {"name": "ml_random_forest", "model_type": "MLModel"},
+]
 
-_allocator = CapitalAllocator()
-_retrainer = ModelRetrainer()
-_regime_detector = RegimeDetector()
-_meta_learner = MetaLearner()
+STARTING_CAPITAL = 8082.72
 
 
-class RetrainRequest(BaseModel):
-    model_name: str = ""  # Empty = retrain all
-    symbols: list[str] = ["SPY"]
-    lookback_days: int = 252
-    force: bool = False
+async def _seed_models(db):
+    """Insert default trading models into the database if none exist."""
+    for m in _DEFAULT_MODELS:
+        model = TradingModel(
+            name=m["name"],
+            model_type=m["model_type"],
+            is_active=True,
+        )
+        db.add(model)
+    await db.flush()
+    logger.info("seeded_trading_models", count=len(_DEFAULT_MODELS))
 
-
-class AllocateRequest(BaseModel):
-    total_capital: float = 100000.0
+    result = await db.execute(select(TradingModel))
+    return result.scalars().all()
 
 
 @router.get("/list")
-async def list_models():
-    """List all registered models with their current status."""
-    return [
-        {
-            "name": m.name,
-            "type": m.__class__.__name__,
-            "version": m.version,
-            "is_trained": m.is_trained,
-            "metrics": m.metrics.to_dict(),
-        }
-        for m in _models
-    ]
+async def list_models(request: Request):
+    """List all trading models with their latest performance metrics."""
+    async with get_session() as db:
+        result = await db.execute(select(TradingModel).order_by(TradingModel.id))
+        models = result.scalars().all()
 
+        if not models:
+            models = await _seed_models(db)
 
-@router.get("/ensemble-status")
-async def ensemble_status():
-    """Get ensemble model status including sub-model weights."""
-    return {
-        "models": _ensemble.get_model_status(),
-        "weights": _ensemble.model_weights,
-        "regime_weights": _ensemble.regime_weights,
-    }
+        # Build response with latest performance per model
+        model_list = []
+        for m in models:
+            # Get latest performance record
+            perf_result = await db.execute(
+                select(ModelPerformance)
+                .where(ModelPerformance.model_id == m.id)
+                .order_by(ModelPerformance.timestamp.desc())
+                .limit(1)
+            )
+            perf = perf_result.scalar_one_or_none()
 
+            model_list.append({
+                "name": m.name,
+                "model_type": m.model_type,
+                "is_active": m.is_active,
+                "sharpe_ratio": perf.sharpe_ratio if perf else None,
+                "sortino_ratio": perf.sortino_ratio if perf else None,
+                "win_rate": perf.win_rate if perf else None,
+                "max_drawdown": perf.max_drawdown if perf else None,
+                "total_return": perf.total_return if perf else None,
+                "num_trades": perf.num_trades if perf else 0,
+            })
 
-@router.post("/retrain")
-async def retrain_models(req: RetrainRequest):
-    """Trigger model retraining with walk-forward validation."""
-    ingestor = DataIngestor()
-
-    try:
-        df = ingestor.fetch_and_cache(req.symbols[0], lookback_days=req.lookback_days)
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Data fetch failed: {str(e)}")
-
-    if req.model_name:
-        # Retrain specific model
-        target = next((m for m in _models if m.name == req.model_name), None)
-        if not target:
-            raise HTTPException(status_code=404, detail=f"Model not found: {req.model_name}")
-        success, metrics = _retrainer.retrain_model(target, df)
-        return {"model": req.model_name, "retrained": success, "metrics": metrics.to_dict()}
-    else:
-        # Retrain all
-        results = _retrainer.retrain_all(_models, df, force=req.force)
-        return {"results": results}
-
-
-@router.post("/allocate")
-async def allocate_capital(req: AllocateRequest):
-    """Compute and apply capital allocation across models."""
-    _allocator.total_capital = req.total_capital
-    weights = _allocator.compute_weights(_models)
-    return _allocator.get_allocation_summary()
+    return {"models": model_list}
 
 
 @router.get("/allocation")
-async def get_allocation():
-    """Get current capital allocation."""
-    return _allocator.get_allocation_summary()
+async def get_allocation(request: Request):
+    """Get current capital allocation across models."""
+    async with get_session() as db:
+        # Get the latest allocation timestamp
+        latest_ts = await db.execute(
+            select(func.max(CapitalAllocation.timestamp))
+        )
+        max_ts = latest_ts.scalar()
 
+        if max_ts:
+            # Get all allocations at the latest timestamp
+            result = await db.execute(
+                select(CapitalAllocation, TradingModel.name)
+                .join(TradingModel, CapitalAllocation.model_id == TradingModel.id)
+                .where(CapitalAllocation.timestamp == max_ts)
+                .order_by(TradingModel.name)
+            )
+            rows = result.all()
 
-@router.get("/allocation-history")
-async def get_allocation_history(limit: int = 50):
-    """Get capital allocation history."""
-    return _allocator.get_history(limit=limit)
+            allocations = [
+                {
+                    "model_name": row.name,
+                    "weight": round(row.CapitalAllocation.weight, 4),
+                    "allocated_capital": round(row.CapitalAllocation.allocated_capital, 2),
+                }
+                for row in rows
+            ]
+            return {"allocations": allocations}
+
+        # No allocation data — return equal weight across active models
+        result = await db.execute(
+            select(TradingModel).where(TradingModel.is_active == True)
+        )
+        active_models = result.scalars().all()
+
+        if not active_models:
+            # Seed models first if needed
+            active_models = await _seed_models(db)
+
+        n = len(active_models)
+        equal_weight = round(1.0 / n, 4) if n > 0 else 0.0
+        per_model_capital = round(STARTING_CAPITAL / n, 2) if n > 0 else 0.0
+
+        allocations = [
+            {
+                "model_name": m.name,
+                "weight": equal_weight,
+                "allocated_capital": per_model_capital,
+            }
+            for m in active_models
+        ]
+
+    logger.info("allocation_seed_data", reason="no allocations in db", count=len(allocations))
+    return {"allocations": allocations}
 
 
 @router.get("/regime")
-async def get_current_regime(symbol: str = "SPY"):
-    """Detect current market regime."""
-    ingestor = DataIngestor()
-    try:
-        df = ingestor.fetch_and_cache(symbol, lookback_days=120)
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Data fetch failed: {str(e)}")
+async def get_current_regime(request: Request):
+    """Get the latest detected market regime."""
+    async with get_session() as db:
+        result = await db.execute(
+            select(MarketRegimeRecord)
+            .order_by(MarketRegimeRecord.timestamp.desc())
+            .limit(1)
+        )
+        record = result.scalar_one_or_none()
 
-    regime = _regime_detector.detect(df)
-    return regime
+    if record:
+        return {
+            "regime": record.regime.value if hasattr(record.regime, "value") else str(record.regime),
+            "confidence": record.confidence,
+            "volatility_20d": record.volatility_20d,
+            "trend_strength": record.trend_strength,
+            "timestamp": record.timestamp.isoformat() if record.timestamp else None,
+        }
 
-
-@router.get("/regime-history")
-async def get_regime_history(limit: int = 50):
-    """Get regime detection history."""
-    return _regime_detector.get_regime_history(limit=limit)
-
-
-@router.get("/meta-summary")
-async def get_meta_summary():
-    """Get meta-learner summary of model effectiveness per regime."""
-    return _meta_learner.get_regime_summary()
-
-
-@router.get("/retrain-log")
-async def get_retrain_log(limit: int = 50):
-    """Get model retraining history."""
-    return _retrainer.get_retrain_log(limit=limit)
+    # No regime data — return default
+    logger.info("regime_seed_data", reason="no regime records")
+    return {
+        "regime": "sideways",
+        "confidence": 0.5,
+        "volatility_20d": None,
+        "trend_strength": None,
+        "timestamp": None,
+    }
 
 
 @router.get("/performance/{model_name}")
-async def get_model_performance(model_name: str):
-    """Get detailed performance for a specific model."""
-    model = next((m for m in _models if m.name == model_name), None)
-    if not model:
-        raise HTTPException(status_code=404, detail=f"Model not found: {model_name}")
+async def get_model_performance(model_name: str, request: Request):
+    """Get detailed performance history for a specific model."""
+    async with get_session() as db:
+        model_result = await db.execute(
+            select(TradingModel).where(TradingModel.name == model_name)
+        )
+        model = model_result.scalar_one_or_none()
+        if not model:
+            raise HTTPException(status_code=404, detail=f"Model not found: {model_name}")
+
+        perf_result = await db.execute(
+            select(ModelPerformance)
+            .where(ModelPerformance.model_id == model.id)
+            .order_by(ModelPerformance.timestamp.desc())
+            .limit(50)
+        )
+        records = perf_result.scalars().all()
+
     return {
         "name": model.name,
-        "type": model.__class__.__name__,
-        "is_trained": model.is_trained,
-        "metrics": model.metrics.to_dict(),
-        "trade_log": model.get_trade_log()[-20:],
+        "model_type": model.model_type,
+        "is_active": model.is_active,
+        "performance_history": [
+            {
+                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+                "sharpe_ratio": r.sharpe_ratio,
+                "sortino_ratio": r.sortino_ratio,
+                "win_rate": r.win_rate,
+                "profit_factor": r.profit_factor,
+                "max_drawdown": r.max_drawdown,
+                "total_return": r.total_return,
+                "num_trades": r.num_trades,
+            }
+            for r in records
+        ],
     }

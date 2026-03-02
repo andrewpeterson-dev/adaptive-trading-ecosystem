@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Newspaper, Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import type { SentimentReport } from "@/types/sentiment";
 
 const MOOD_COLORS: Record<string, string> = {
@@ -52,9 +53,8 @@ export function SentimentPanel() {
 
   const fetchReport = useCallback(async () => {
     try {
-      const res = await fetch("/api/news/sentiment/report");
-      if (!res.ok) throw new Error();
-      setReport(await res.json());
+      const data = await apiFetch<SentimentReport>("/api/news/sentiment/report");
+      setReport(data);
       setError(false);
     } catch {
       setError(true);

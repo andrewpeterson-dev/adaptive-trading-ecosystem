@@ -28,10 +28,8 @@ env
 .env
 .env.local
 
-# Frontend (excluded from API build)
-frontend/node_modules
-frontend/.next
-frontend/tsconfig.tsbuildinfo
+# Frontend (excluded from API build — has its own Dockerfile)
+frontend/
 
 # Docker
 docker-compose.yml

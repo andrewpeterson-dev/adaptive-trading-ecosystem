@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Play, Loader2, BarChart3, TrendingUp, List } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import type { StrategyRecord } from "@/types/strategy";
 import type { BacktestResult, BacktestTrade } from "@/types/backtest";
@@ -60,8 +61,8 @@ export default function BacktestPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/strategies/${id}`);
-        if (res.ok) setStrategy(await res.json());
+        const data = await apiFetch<StrategyRecord>(`/api/strategies/${id}`);
+        setStrategy(data);
       } catch {
         // ignore
       } finally {
@@ -75,9 +76,8 @@ export default function BacktestPage() {
     setRunning(true);
     setResult(null);
     try {
-      const res = await fetch("/api/strategies/backtest", {
+      const data = await apiFetch<BacktestResult>("/api/strategies/backtest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           strategy_id: parseInt(id),
           symbol,
@@ -85,10 +85,8 @@ export default function BacktestPage() {
           initial_capital: initialCapital,
         }),
       });
-      if (res.ok) {
-        setResult(await res.json());
-        setActiveTab("equity");
-      }
+      setResult(data);
+      setActiveTab("equity");
     } catch {
       // ignore
     } finally {

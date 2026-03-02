@@ -128,13 +128,17 @@ class Settings(BaseSettings):
 
     # --- Auth ---
     encryption_key: str = ""  # Fernet key for broker credential encryption
-    jwt_secret: str = "ate-dev-secret-change-in-production"  # JWT signing key
+    jwt_secret: str = ""  # JWT signing key — MUST be set in .env
+    jwt_expiry_days: int = 7
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""  # Gmail app password
-    base_url: str = "http://localhost:8501"  # Dashboard URL for email links
+    base_url: str = "http://localhost:3000"  # Frontend URL for email links
     use_sqlite: bool = True  # Use SQLite for local dev (no PostgreSQL needed)
+
+    # --- CORS ---
+    cors_origins: str = "http://localhost:3000"  # Comma-separated allowed origins
 
     # --- Autonomous Loop ---
     auto_loop_enabled: bool = False

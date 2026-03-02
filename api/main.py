@@ -15,6 +15,7 @@ from api.routes import llm_status
 from api.routes import lighthouse as lighthouse_routes
 from api.routes import auto_loop as auto_loop_routes
 from api.routes import intelligence as intelligence_routes
+from api.routes import paper_trading as paper_routes
 from api.middleware.auth import JWTAuthMiddleware
 from config.settings import get_settings
 from db.database import init_db, close_db
@@ -75,9 +76,12 @@ app = FastAPI(
 )
 
 app.add_middleware(JWTAuthMiddleware)
+
+_settings = get_settings()
+_cors_origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -97,6 +101,7 @@ app.include_router(llm_status.router, prefix="/api/system", tags=["System"])
 app.include_router(lighthouse_routes.router, prefix="/api/system", tags=["Lighthouse"])
 app.include_router(auto_loop_routes.router, prefix="/api/system", tags=["Auto-Loop"])
 app.include_router(intelligence_routes.router, prefix="/api/intelligence", tags=["Intelligence"])
+app.include_router(paper_routes.router, prefix="/api/paper", tags=["Paper Trading"])
 
 
 @app.get("/health")

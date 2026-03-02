@@ -16,6 +16,7 @@ import {
   Activity,
   Unplug,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import type { ModelInfo, AllocationEntry, EquityCurvePoint } from "@/types/portfolio";
 
@@ -39,34 +40,34 @@ export default function PortfolioPage() {
   const fetchAll = useCallback(async () => {
     try {
       const [eqRes, allocRes, modRes, regRes] = await Promise.allSettled([
-        fetch("/api/dashboard/equity-curve"),
-        fetch("/api/models/allocation"),
-        fetch("/api/models/list"),
-        fetch("/api/models/regime"),
+        apiFetch<any>("/api/dashboard/equity-curve"),
+        apiFetch<any>("/api/models/allocation"),
+        apiFetch<any>("/api/models/list"),
+        apiFetch<any>("/api/models/regime"),
       ]);
 
       let hasData = false;
 
-      if (eqRes.status === "fulfilled" && eqRes.value.ok) {
-        const data = await eqRes.value.json();
+      if (eqRes.status === "fulfilled") {
+        const data = eqRes.value;
         setEquityCurve(data.equity_curve || data || []);
         hasData = true;
       }
 
-      if (allocRes.status === "fulfilled" && allocRes.value.ok) {
-        const data = await allocRes.value.json();
+      if (allocRes.status === "fulfilled") {
+        const data = allocRes.value;
         setAllocation(data.allocations || data || []);
         hasData = true;
       }
 
-      if (modRes.status === "fulfilled" && modRes.value.ok) {
-        const data = await modRes.value.json();
+      if (modRes.status === "fulfilled") {
+        const data = modRes.value;
         setModels(data.models || data || []);
         hasData = true;
       }
 
-      if (regRes.status === "fulfilled" && regRes.value.ok) {
-        const data = await regRes.value.json();
+      if (regRes.status === "fulfilled") {
+        const data = regRes.value;
         setRegime(data.regime || data.current_regime || null);
         hasData = true;
       }

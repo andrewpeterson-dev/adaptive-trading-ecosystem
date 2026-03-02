@@ -9,6 +9,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import { apiFetch } from "@/lib/api/client";
 
 interface StatCard {
   label: string;
@@ -24,15 +25,15 @@ export function PlatformStats() {
   const fetchStats = useCallback(async () => {
     try {
       const [usersRes, modelsRes, configRes] = await Promise.allSettled([
-        fetch("/api/admin/users"),
-        fetch("/api/models/list"),
-        fetch("/api/system/config"),
+        apiFetch<any>("/api/admin/users"),
+        apiFetch<any>("/api/models/list"),
+        apiFetch<any>("/api/system/config"),
       ]);
 
       const cards: StatCard[] = [];
 
-      if (usersRes.status === "fulfilled" && usersRes.value.ok) {
-        const users = await usersRes.value.json();
+      if (usersRes.status === "fulfilled") {
+        const users = usersRes.value;
         const userList = Array.isArray(users) ? users : users.users || [];
         cards.push({
           label: "Total Users",
@@ -57,8 +58,8 @@ export function PlatformStats() {
         );
       }
 
-      if (modelsRes.status === "fulfilled" && modelsRes.value.ok) {
-        const models = await modelsRes.value.json();
+      if (modelsRes.status === "fulfilled") {
+        const models = modelsRes.value;
         const modelList = Array.isArray(models) ? models : [];
         cards.push({
           label: "Active Models",
@@ -73,8 +74,8 @@ export function PlatformStats() {
         });
       }
 
-      if (configRes.status === "fulfilled" && configRes.value.ok) {
-        const config = await configRes.value.json();
+      if (configRes.status === "fulfilled") {
+        const config = configRes.value;
         cards.push({
           label: "Trading Mode",
           value: config.trading_mode?.toUpperCase() || "--",

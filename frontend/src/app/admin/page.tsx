@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Shield, Loader2, Lock } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import { PlatformStats } from "@/components/admin/PlatformStats";
 import { UserTable } from "@/components/admin/UserTable";
 import type { SystemHealth } from "@/types/admin";
@@ -14,14 +15,14 @@ function SystemHealthIndicators() {
     async function fetchHealth() {
       try {
         const [healthRes, configRes] = await Promise.allSettled([
-          fetch("/health"),
-          fetch("/api/system/config"),
+          apiFetch<any>("/health"),
+          apiFetch<any>("/api/system/config"),
         ]);
 
         const result: SystemHealth[] = [];
 
-        if (healthRes.status === "fulfilled" && healthRes.value.ok) {
-          const data = await healthRes.value.json();
+        if (healthRes.status === "fulfilled") {
+          const data = healthRes.value;
           result.push({
             service: "API Server",
             status: data.status === "healthy" ? "healthy" : "degraded",
@@ -36,7 +37,7 @@ function SystemHealthIndicators() {
           result.push({ service: "API Server", status: "down" });
         }
 
-        if (configRes.status === "fulfilled" && configRes.value.ok) {
+        if (configRes.status === "fulfilled") {
           result.push({ service: "Config", status: "healthy" });
         } else {
           result.push({ service: "Config", status: "degraded" });
@@ -101,14 +102,8 @@ export default function AdminPage() {
   useEffect(() => {
     async function checkAdmin() {
       try {
-        const res = await fetch("/api/auth/me");
-        if (res.ok) {
-          const user = await res.json();
-          setIsAdmin(user.is_admin === true);
-        } else {
-          // If auth endpoint doesn't exist yet, allow access in dev
-          setIsAdmin(true);
-        }
+        const user = await apiFetch<any>("/api/auth/me");
+        setIsAdmin(user.is_admin === true);
       } catch {
         // Fallback: allow access when backend isn't running auth
         setIsAdmin(true);

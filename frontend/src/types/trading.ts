@@ -3,8 +3,10 @@ export interface Account {
   cash: number;
   buying_power: number;
   portfolio_value: number;
-  currency: string;
-  status: string;
+  currency?: string;
+  status?: string;
+  broker?: string;
+  mode?: string;
 }
 
 export interface Position {

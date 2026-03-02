@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { StrategyBuilder } from "@/components/strategy-builder/StrategyBuilder";
+import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 import { Loader2 } from "lucide-react";
 
@@ -16,12 +17,8 @@ export default function EditStrategyPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/strategies/${id}`);
-        if (!res.ok) {
-          setError("Strategy not found");
-          return;
-        }
-        setStrategy(await res.json());
+        const data = await apiFetch<StrategyRecord>(`/api/strategies/${id}`);
+        setStrategy(data);
       } catch {
         setError("Failed to load strategy");
       } finally {

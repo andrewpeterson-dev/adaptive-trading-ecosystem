@@ -150,7 +150,7 @@ export default function TradePage() {
                 side: t.direction === "buy" ? "buy" : "sell",
               }))}
           />
-          <OrderForm onOrderPlaced={fetchAll} />
+          <OrderForm onOrderPlaced={fetchAll} isPaperMode={account?.broker === "paper"} />
           <TradeHistory trades={trades} />
         </div>
 
