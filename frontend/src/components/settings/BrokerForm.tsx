@@ -44,13 +44,34 @@ export function BrokerForm({ broker }: BrokerFormProps) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
   const [testStatus, setTestStatus] = useState<"idle" | "connected" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [hasSavedCreds, setHasSavedCreds] = useState(false);
 
-  // Reset form when switching broker type
+  // Load existing credential status when broker changes
   useEffect(() => {
     setForm({ api_key: "", api_secret: "", base_url: DEFAULT_URLS[broker], is_paper: true });
     setSaveStatus("idle");
     setTestStatus("idle");
     setErrorMsg("");
+    setHasSavedCreds(false);
+
+    (async () => {
+      try {
+        const me = await apiFetch<{
+          brokers?: { broker_type: string; is_paper: boolean }[];
+        }>("/api/auth/me");
+        const match = me.brokers?.find((b) => b.broker_type.toLowerCase() === broker);
+        if (match) {
+          setHasSavedCreds(true);
+          setForm((f) => ({ ...f, is_paper: match.is_paper }));
+          // Auto-test connection for saved credentials
+          const endpoint = broker === "webull" ? "/api/webull/status" : "/api/trading/account";
+          const data = await apiFetch<{ connected?: boolean }>(endpoint);
+          setTestStatus(data?.connected ? "connected" : "error");
+        }
+      } catch {
+        // Not logged in or API down — ignore
+      }
+    })();
   }, [broker]);
 
   const handleSave = async () => {
@@ -163,7 +184,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
             type={showKey ? "text" : "password"}
             value={form.api_key}
             onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
-            placeholder="Enter API key..."
+            placeholder={hasSavedCreds ? "Saved — enter new key to update" : "Enter API key..."}
             className="w-full bg-input border border-border/50 rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
           <button
@@ -184,7 +205,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
             type={showSecret ? "text" : "password"}
             value={form.api_secret}
             onChange={(e) => setForm((f) => ({ ...f, api_secret: e.target.value }))}
-            placeholder="Enter API secret..."
+            placeholder={hasSavedCreds ? "Saved — enter new secret to update" : "Enter API secret..."}
             className="w-full bg-input border border-border/50 rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
           <button

@@ -160,6 +160,18 @@ class _WebullBase:
                     else:
                         self._live_account_ids.append(acct_id)
 
+                # Fallback: if auto-detection found no accounts for our mode
+                # but did find accounts overall, assign them based on mode.
+                # Webull's profile API doesn't always return identifiable type strings.
+                all_ids = [str(s.get("account_id", s.get("accountId", ""))) for s in subs if s.get("account_id") or s.get("accountId")]
+                if all_ids and not self._get_allowed_account_id():
+                    if self._MODE == TradingMode.PAPER and not self._paper_account_ids:
+                        self._paper_account_ids = all_ids
+                        logger.info("webull_fallback_assign", mode="PAPER", accounts=all_ids)
+                    elif self._MODE == TradingMode.LIVE and not self._live_account_ids:
+                        self._live_account_ids = all_ids
+                        logger.info("webull_fallback_assign", mode="LIVE", accounts=all_ids)
+
                 self._connected = True
                 self._save_config()
 

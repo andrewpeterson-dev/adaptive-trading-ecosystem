@@ -44,10 +44,13 @@ async def _get_user_webull_client(user_id: int):
         return None
 
     try:
-        from data.webull_client import WebullLiveClient
+        from data.webull_client import WebullLiveClient, WebullPaperClient
         app_key = decrypt_value(cred.encrypted_api_key)
         app_secret = decrypt_value(cred.encrypted_api_secret)
-        client = WebullLiveClient(app_key=app_key, app_secret=app_secret)
+        if cred.is_paper:
+            client = WebullPaperClient(app_key=app_key, app_secret=app_secret)
+        else:
+            client = WebullLiveClient(app_key=app_key, app_secret=app_secret)
         connect_result = client.connect()
         if connect_result.get("success"):
             _client_cache[user_id] = client
