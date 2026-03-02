@@ -7,6 +7,8 @@ import {
   Unplug,
 } from "lucide-react";
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
+import { SentimentPanel } from "@/components/analytics/SentimentPanel";
+import { PortfolioRiskPanel } from "@/components/analytics/PortfolioRiskPanel";
 
 function formatCurrency(val: number): string {
   return val.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -208,6 +210,12 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Sentiment + Portfolio Risk */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SentimentPanel />
+        <PortfolioRiskPanel />
       </div>
 
       {/* Positions Table */}

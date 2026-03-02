@@ -108,6 +108,12 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
     llm_temperature: float = 0.3
 
+    # --- Ollama (Local LLM) ---
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1:8b"
+    ollama_enabled: bool = False
+    ollama_timeout_seconds: int = 30
+
     # --- Monitoring ---
     webhook_url: str = ""  # Webhook URL for failure notifications
     llm_timeout_seconds: int = 30
@@ -122,12 +128,22 @@ class Settings(BaseSettings):
 
     # --- Auth ---
     encryption_key: str = ""  # Fernet key for broker credential encryption
+    jwt_secret: str = "ate-dev-secret-change-in-production"  # JWT signing key
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""  # Gmail app password
     base_url: str = "http://localhost:8501"  # Dashboard URL for email links
     use_sqlite: bool = True  # Use SQLite for local dev (no PostgreSQL needed)
+
+    # --- Autonomous Loop ---
+    auto_loop_enabled: bool = False
+    auto_loop_dry_run: bool = True
+    auto_loop_max_tasks_per_run: int = 1
+
+    # --- Lighthouse ---
+    frontend_url: str = "http://localhost:3000"
+    lighthouse_schedule_hours: int = 168  # weekly = 7*24
 
     @property
     def auth_database_url(self) -> str:

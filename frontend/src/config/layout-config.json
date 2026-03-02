@@ -1,0 +1,20 @@
+{
+  "dashboard": {
+    "modules": [
+      "account-summary",
+      "risk-status",
+      "sentiment",
+      "portfolio-risk",
+      "positions",
+      "orders"
+    ]
+  },
+  "trade": {
+    "modules": [
+      "chart",
+      "order-form",
+      "trade-history",
+      "positions"
+    ]
+  }
+}

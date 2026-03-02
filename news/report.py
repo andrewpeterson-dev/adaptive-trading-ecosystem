@@ -105,7 +105,7 @@ class SentimentReportGenerator:
         )
         return report
 
-    def load_latest(self) -> dict | None:
+    def load_latest(self) -> "dict | None":
         """Load the most recently saved report from disk."""
         if REPORT_PATH.exists():
             try:

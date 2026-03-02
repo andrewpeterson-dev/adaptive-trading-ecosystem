@@ -9,7 +9,9 @@ import {
 import { OrderForm } from "@/components/trading/OrderForm";
 import { PositionCard } from "@/components/trading/PositionCard";
 import { TradeHistory } from "@/components/trading/TradeHistory";
+import { TradingChart } from "@/components/charts/TradingChart";
 import type { Account, Position } from "@/types/trading";
+import type { TradeMarker } from "@/types/chart";
 
 function formatCurrency(val: number): string {
   return val.toLocaleString("en-US", {
@@ -135,8 +137,18 @@ export default function TradePage() {
 
       {/* Main Content: Order Form + History | Positions */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Order Form + Trade History (60%) */}
+        {/* Left: Chart + Order Form + Trade History (60%) */}
         <div className="lg:col-span-3 space-y-6">
+          <TradingChart
+            symbol="SPY"
+            trades={trades
+              .filter((t: any) => t.filled_at && t.filled_price)
+              .map((t: any): TradeMarker => ({
+                time: Math.floor(new Date(t.filled_at).getTime() / 1000),
+                price: t.filled_price,
+                side: t.direction === "buy" ? "buy" : "sell",
+              }))}
+          />
           <OrderForm onOrderPlaced={fetchAll} />
           <TradeHistory trades={trades} />
         </div>

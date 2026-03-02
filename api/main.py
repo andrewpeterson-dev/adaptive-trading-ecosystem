@@ -10,6 +10,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import trading, models as models_routes, dashboard, system, strategies, explainer, news
+from api.routes import auth as auth_routes, webull as webull_routes
+from api.routes import llm_status
+from api.routes import lighthouse as lighthouse_routes
+from api.routes import auto_loop as auto_loop_routes
+from api.middleware.auth import JWTAuthMiddleware
 from config.settings import get_settings
 from db.database import init_db, close_db
 
@@ -34,6 +39,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,6 +49,8 @@ app.add_middleware(
 )
 
 # Mount route modules
+app.include_router(auth_routes.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(webull_routes.router, prefix="/api/webull", tags=["Webull"])
 app.include_router(trading.router, prefix="/api/trading", tags=["Trading"])
 app.include_router(models_routes.router, prefix="/api/models", tags=["Models"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
@@ -50,6 +58,9 @@ app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(strategies.router, prefix="/api", tags=["Strategies"])
 app.include_router(explainer.router, prefix="/api", tags=["Explainer"])
 app.include_router(news.router, prefix="/api/news", tags=["News"])
+app.include_router(llm_status.router, prefix="/api/system", tags=["System"])
+app.include_router(lighthouse_routes.router, prefix="/api/system", tags=["Lighthouse"])
+app.include_router(auto_loop_routes.router, prefix="/api/system", tags=["Auto-Loop"])
 
 
 @app.get("/health")

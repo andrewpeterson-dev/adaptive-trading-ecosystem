@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 
 @st.cache_data(ttl=30)
-def get_quote(symbol: str) -> dict | None:
+def get_quote(symbol: str) -> "dict | None":
     """Get current quote for a symbol. Returns dict or None on error."""
     try:
         ticker = yf.Ticker(symbol)

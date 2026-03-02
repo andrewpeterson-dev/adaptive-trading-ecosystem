@@ -77,7 +77,7 @@ class NewsIngestion:
             time.sleep(self._min_request_interval - elapsed)
         self._last_request_time = time.time()
 
-    def _get_cached(self, key: str) -> list[dict] | None:
+    def _get_cached(self, key: str):
         """Return cached articles if still fresh, else None."""
         if key in self._cache:
             articles, fetch_time = self._cache[key]

@@ -12,6 +12,12 @@ def __getattr__(name):
     if name == "LLMAnalyst":
         from intelligence.llm_analyst import LLMAnalyst
         return LLMAnalyst
+    if name == "OllamaClient":
+        from intelligence.ollama_client import OllamaClient
+        return OllamaClient
+    if name == "LLMRouter":
+        from intelligence.llm_router import LLMRouter
+        return LLMRouter
     raise AttributeError(f"module 'intelligence' has no attribute {name}")
 
 __all__ = [
@@ -19,6 +25,8 @@ __all__ = [
     "ModelRetrainer",
     "MetaLearner",
     "LLMAnalyst",
+    "OllamaClient",
+    "LLMRouter",
     "ConfidenceModel",
     "EnsembleEngine",
     "DecisionPipeline",

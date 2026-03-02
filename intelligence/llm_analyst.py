@@ -75,11 +75,12 @@ class LLMAnalyst:
         -> ExecutionEngine (only if all gates pass)
     """
 
-    def __init__(self):
+    def __init__(self, ollama_client=None):
         self.settings = get_settings()
         self._history: list[MarketAnalysis] = []
         self._last_analysis_time: float = 0
         self._client = None
+        self._ollama_client = ollama_client
 
     def _get_client(self):
         """Lazy-init the API client."""
@@ -295,6 +296,50 @@ Rules:
         market_context = self._build_market_context(df, regime_data)
         prompt = self._build_prompt(market_context, model_performance or [])
 
+        # Try Ollama first if client provided and available
+        if self._ollama_client is not None and self.settings.ollama_enabled:
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        available = pool.submit(
+                            asyncio.run, self._ollama_client.is_available()
+                        ).result()
+                else:
+                    available = asyncio.run(self._ollama_client.is_available())
+
+                if available:
+                    if loop.is_running():
+                        with concurrent.futures.ThreadPoolExecutor() as pool:
+                            raw_response = pool.submit(
+                                asyncio.run,
+                                self._ollama_client.generate(prompt=prompt),
+                            ).result()
+                    else:
+                        raw_response = asyncio.run(
+                            self._ollama_client.generate(prompt=prompt)
+                        )
+
+                    model_name = f"ollama/{self.settings.ollama_model}"
+                    analysis = self._parse_response(
+                        raw_response, regime_data, model_name, start_ms
+                    )
+                    self._history.append(analysis)
+                    self._last_analysis_time = time.time()
+                    logger.info(
+                        "llm_analysis_complete",
+                        backend="ollama",
+                        regime=analysis.regime_assessment,
+                        confidence=analysis.confidence,
+                        latency_ms=analysis.latency_ms,
+                    )
+                    return analysis
+            except Exception as e:
+                logger.warning("ollama_analysis_failed_falling_back", error=str(e))
+
+        # Cloud LLM path (existing behavior)
         client = self._get_client()
         provider = self.settings.llm_provider.lower()
         model = self.settings.llm_model
