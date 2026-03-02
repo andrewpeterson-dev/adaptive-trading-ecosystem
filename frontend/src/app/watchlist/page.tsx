@@ -18,42 +18,37 @@ import { WatchlistRow } from "@/components/trading/WatchlistRow";
 const DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "AAPL", "TSLA", "NVDA"];
 
 async function fetchQuotes(symbols: string[]): Promise<QuoteData[]> {
-  // Try the backend quote endpoint first; fall back to stub data
   try {
+    const token = typeof window !== "undefined"
+      ? (document.cookie.match(/(?:^|; )auth_token=([^;]*)/)?.[1] || localStorage.getItem("auth_token"))
+      : null;
+
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch(
-      `/api/trading/quotes?symbols=${symbols.join(",")}`
+      `/api/trading/quotes?symbols=${symbols.join(",")}`,
+      { headers }
     );
     if (res.ok) {
       const data = await res.json();
       return data.quotes || data || [];
     }
   } catch {
-    // endpoint may not exist yet
+    // endpoint unavailable
   }
-
-  // Generate reasonable stub data so the UI is usable without a live backend
-  return symbols.map((sym) => {
-    const base = {
-      SPY: 520.34, QQQ: 445.12, IWM: 210.89, AAPL: 178.62,
-      TSLA: 245.50, NVDA: 890.15,
-    }[sym] ?? 100 + Math.random() * 200;
-
-    const change = (Math.random() - 0.48) * base * 0.03;
-    return {
-      symbol: sym,
-      price: base,
-      change: parseFloat(change.toFixed(2)),
-      change_pct: parseFloat(((change / base) * 100).toFixed(2)),
-      volume: Math.floor(Math.random() * 50_000_000),
-      high: parseFloat((base + Math.abs(change) * 1.5).toFixed(2)),
-      low: parseFloat((base - Math.abs(change) * 1.2).toFixed(2)),
-    };
-  });
+  return [];
 }
 
 async function fetchRegime(): Promise<string | null> {
   try {
-    const res = await fetch("/api/models/regime");
+    const token = typeof window !== "undefined"
+      ? (document.cookie.match(/(?:^|; )auth_token=([^;]*)/)?.[1] || localStorage.getItem("auth_token"))
+      : null;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch("/api/models/regime", { headers });
     if (res.ok) {
       const data = await res.json();
       return data.regime || data.current_regime || null;

@@ -12,6 +12,7 @@ import { TradeHistory } from "@/components/trading/TradeHistory";
 import { TradingChart } from "@/components/charts/TradingChart";
 import type { Account, Position } from "@/types/trading";
 import type { TradeMarker } from "@/types/chart";
+import { apiFetch } from "@/lib/api/client";
 
 function formatCurrency(val: number): string {
   return val.toLocaleString("en-US", {
@@ -31,26 +32,26 @@ export default function TradePage() {
   const fetchAll = useCallback(async () => {
     try {
       const [accRes, posRes, tradeRes] = await Promise.allSettled([
-        fetch("/api/trading/account"),
-        fetch("/api/trading/positions"),
-        fetch("/api/trading/trade-log?limit=100"),
+        apiFetch<Account>("/api/trading/account"),
+        apiFetch<{ positions: Position[] }>("/api/trading/positions"),
+        apiFetch<any>("/api/trading/trade-log?limit=100"),
       ]);
 
       let hasData = false;
 
-      if (accRes.status === "fulfilled" && accRes.value.ok) {
-        setAccount(await accRes.value.json());
+      if (accRes.status === "fulfilled") {
+        setAccount(accRes.value);
         hasData = true;
       }
 
-      if (posRes.status === "fulfilled" && posRes.value.ok) {
-        const data = await posRes.value.json();
-        setPositions(data.positions || data || []);
+      if (posRes.status === "fulfilled") {
+        const data = posRes.value;
+        setPositions(data.positions || []);
         hasData = true;
       }
 
-      if (tradeRes.status === "fulfilled" && tradeRes.value.ok) {
-        const data = await tradeRes.value.json();
+      if (tradeRes.status === "fulfilled") {
+        const data = tradeRes.value;
         setTrades(data.trades || data || []);
         hasData = true;
       }

@@ -17,6 +17,15 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const getAuthHeaders = useCallback((): Record<string, string> => {
+    const token = typeof window !== "undefined"
+      ? (document.cookie.match(/(?:^|; )auth_token=([^;]*)/)?.[1] || localStorage.getItem("auth_token"))
+      : null;
+    const h: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) h["Authorization"] = `Bearer ${token}`;
+    return h;
+  }, []);
+
   const fetchPrice = useCallback(async (sym: string) => {
     if (!sym || sym.length < 1) {
       setPrice(null);
@@ -24,7 +33,9 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
     }
     setFetchingPrice(true);
     try {
-      const res = await fetch(`/api/trading/quote?symbol=${sym.toUpperCase()}`);
+      const res = await fetch(`/api/trading/quote?symbol=${sym.toUpperCase()}`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setPrice(data.price ?? data.last_price ?? data.close ?? null);
@@ -36,7 +47,7 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
     } finally {
       setFetchingPrice(false);
     }
-  }, []);
+  }, [getAuthHeaders]);
 
   const handleSymbolBlur = () => {
     if (symbol.trim()) fetchPrice(symbol.trim());
@@ -59,7 +70,7 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
     try {
       const res = await fetch("/api/trading/execute", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           symbol: sym,
           direction,
@@ -68,6 +79,7 @@ export function OrderForm({ onOrderPlaced }: OrderFormProps) {
           model_name: "manual",
           order_type: "market",
           limit_price: price,
+          user_confirmed: true,
         }),
       });
 

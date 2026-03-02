@@ -1,8 +1,13 @@
-# Streamlit Cloud deployment requirements
-# Only includes packages needed for the dashboard
+# Adaptive Trading Ecosystem — Python requirements
+# FastAPI backend + Webull integration
 
-# Dashboard
-streamlit==1.30.0
+# API
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-jose[cryptography]>=3.3.0
+PyJWT>=2.8.0
+
+# Charts/Visualization
 plotly==5.18.0
 
 # Database

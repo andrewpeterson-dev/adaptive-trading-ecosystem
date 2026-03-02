@@ -7,6 +7,7 @@ import {
   Unplug,
 } from "lucide-react";
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
+import { apiFetch } from "@/lib/api/client";
 import { SentimentPanel } from "@/components/analytics/SentimentPanel";
 import { PortfolioRiskPanel } from "@/components/analytics/PortfolioRiskPanel";
 
@@ -52,32 +53,32 @@ export default function DashboardPage() {
   const fetchAll = useCallback(async () => {
     try {
       const [accRes, posRes, ordRes, riskRes] = await Promise.allSettled([
-        fetch("/api/trading/account"),
-        fetch("/api/trading/positions"),
-        fetch("/api/trading/orders"),
-        fetch("/api/trading/risk-summary"),
+        apiFetch<Account>("/api/trading/account"),
+        apiFetch<{ positions: Position[] }>("/api/trading/positions"),
+        apiFetch<{ orders: Order[] }>("/api/trading/orders"),
+        apiFetch<RiskSummary>("/api/trading/risk-summary"),
       ]);
 
-      if (accRes.status === "fulfilled" && accRes.value.ok) {
-        setAccount(await accRes.value.json());
+      if (accRes.status === "fulfilled") {
+        setAccount(accRes.value);
         setError(false);
       } else {
         setError(true);
       }
 
-      if (posRes.status === "fulfilled" && posRes.value.ok) {
-        const data = await posRes.value.json();
-        setPositions(data.positions || data || []);
+      if (posRes.status === "fulfilled") {
+        const data = posRes.value;
+        setPositions(data.positions || []);
       }
 
-      if (ordRes.status === "fulfilled" && ordRes.value.ok) {
-        const data = await ordRes.value.json();
-        const list = data.orders || data || [];
+      if (ordRes.status === "fulfilled") {
+        const data = ordRes.value;
+        const list = data.orders || [];
         setOrders(list.slice(0, 20));
       }
 
-      if (riskRes.status === "fulfilled" && riskRes.value.ok) {
-        setRisk(await riskRes.value.json());
+      if (riskRes.status === "fulfilled") {
+        setRisk(riskRes.value);
       }
 
       setLastRefresh(new Date());

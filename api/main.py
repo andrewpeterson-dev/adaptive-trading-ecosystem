@@ -14,6 +14,7 @@ from api.routes import auth as auth_routes, webull as webull_routes
 from api.routes import llm_status
 from api.routes import lighthouse as lighthouse_routes
 from api.routes import auto_loop as auto_loop_routes
+from api.routes import intelligence as intelligence_routes
 from api.middleware.auth import JWTAuthMiddleware
 from config.settings import get_settings
 from db.database import init_db, close_db
@@ -21,10 +22,44 @@ from db.database import init_db, close_db
 logger = structlog.get_logger(__name__)
 
 
+def _validate_env(settings) -> None:
+    """Validate environment variables at startup. Warns on missing optional vars."""
+    critical = {
+        "jwt_secret": settings.jwt_secret,
+        "encryption_key": settings.encryption_key,
+    }
+    for name, value in critical.items():
+        if not value or value in ("ate-dev-secret-change-in-production", ""):
+            logger.warning("env_var_default_or_missing", var=name,
+                           hint=f"Set {name.upper()} in .env for production")
+
+    optional = {
+        "alpaca_api_key": settings.alpaca_api_key,
+        "anthropic_api_key": settings.anthropic_api_key,
+        "finnhub_api_key": settings.finnhub_api_key,
+        "alphavantage_api_key": settings.alphavantage_api_key,
+        "smtp_user": settings.smtp_user,
+    }
+    configured = [k for k, v in optional.items() if v]
+    missing = [k for k, v in optional.items() if not v]
+    if configured:
+        logger.info("configured_services", services=configured)
+    if missing:
+        logger.info("unconfigured_services", services=missing,
+                     hint="These features will be unavailable")
+
+    logger.info("trading_config",
+                mode=settings.trading_mode.value,
+                live_enabled=settings.live_trading_enabled,
+                use_sqlite=settings.use_sqlite,
+                auto_loop=settings.auto_loop_enabled)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
     settings = get_settings()
+    _validate_env(settings)
     logger.info("starting_trading_ecosystem", mode=settings.trading_mode.value)
     await init_db()
     yield
@@ -61,6 +96,7 @@ app.include_router(news.router, prefix="/api/news", tags=["News"])
 app.include_router(llm_status.router, prefix="/api/system", tags=["System"])
 app.include_router(lighthouse_routes.router, prefix="/api/system", tags=["Lighthouse"])
 app.include_router(auto_loop_routes.router, prefix="/api/system", tags=["Auto-Loop"])
+app.include_router(intelligence_routes.router, prefix="/api/intelligence", tags=["Intelligence"])
 
 
 @app.get("/health")

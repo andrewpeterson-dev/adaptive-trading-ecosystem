@@ -60,6 +60,7 @@ export function NavHeader() {
         <div className="ml-auto flex items-center">
           <Link
             href="/settings"
+            aria-label="Settings"
             className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             <Settings className="h-4 w-4" />

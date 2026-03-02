@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist
+build
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+
+# Frontend (excluded from API build)
+frontend/node_modules
+frontend/.next
+frontend/tsconfig.tsbuildinfo
+
+# Docker
+docker-compose.yml
+docker-compose.*.yml
+
+# Logs & artifacts
+logs/
+artifacts/
+*.log
+
+# Misc
+.DS_Store
+*.db
+.streamlit
+.playwright-mcp
+.serena
+.codex_session_resume.txt
