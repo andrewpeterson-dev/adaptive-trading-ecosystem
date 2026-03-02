@@ -47,40 +47,46 @@ def lighthouse_raw_output():
     }
 
 
+def _make_mock_proc(stdout: bytes, stderr: bytes, returncode: int):
+    """Create a mock subprocess that asyncio.wait_for can handle."""
+    mock_proc = MagicMock()
+    mock_proc.returncode = returncode
+    mock_proc.communicate = AsyncMock(return_value=(stdout, stderr))
+    mock_proc.kill = MagicMock()
+    return mock_proc
+
+
 class TestRunAudit:
     async def test_successful_audit(self, auditor, lighthouse_raw_output):
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(
-            return_value=(json.dumps(lighthouse_raw_output).encode(), b"")
-        )
-        mock_proc.returncode = 0
+        stdout = json.dumps(lighthouse_raw_output).encode()
+        mock_proc = _make_mock_proc(stdout, b"", 0)
+        mock_create = AsyncMock(return_value=mock_proc)
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            with patch("asyncio.wait_for", new_callable=lambda: AsyncMock) as mock_wait:
-                mock_wait.return_value = (json.dumps(lighthouse_raw_output).encode(), b"")
-                mock_proc.communicate = mock_wait
-                result = await auditor.run_audit("http://localhost:3000")
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await auditor.run_audit("http://localhost:3000")
 
         assert "scores" in result
         assert result["scores"]["performance"] == 92.0
         assert result["scores"]["seo"] == 100.0
         assert result["url"] == "http://localhost:3000"
+        assert len(result["audits_summary"]) == 2  # FCP and speed-index (score < 1.0)
 
     async def test_lighthouse_not_installed(self, auditor):
-        with patch(
-            "asyncio.create_subprocess_exec",
-            side_effect=FileNotFoundError("npx not found"),
-        ):
+        mock_create = AsyncMock(side_effect=FileNotFoundError("npx not found"))
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
             result = await auditor.run_audit("http://localhost:3000")
 
         assert "error" in result
         assert "not found" in result["error"].lower()
 
     async def test_lighthouse_timeout(self, auditor):
-        mock_proc = AsyncMock()
+        mock_proc = MagicMock()
         mock_proc.kill = MagicMock()
+        mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_create = AsyncMock(return_value=mock_proc)
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+        with patch("asyncio.create_subprocess_exec", mock_create):
             with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
                 result = await auditor.run_audit("http://localhost:3000")
 
@@ -88,17 +94,24 @@ class TestRunAudit:
         assert "timed out" in result["error"].lower()
 
     async def test_nonzero_exit(self, auditor):
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(return_value=(b"", b"Error occurred"))
-        mock_proc.returncode = 1
+        mock_proc = _make_mock_proc(b"", b"Chrome error", 1)
+        mock_create = AsyncMock(return_value=mock_proc)
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            with patch("asyncio.wait_for", new_callable=lambda: AsyncMock) as mock_wait:
-                mock_wait.return_value = (b"", b"Error occurred")
-                mock_proc.communicate = mock_wait
-                result = await auditor.run_audit("http://localhost:3000")
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await auditor.run_audit("http://localhost:3000")
 
         assert "error" in result
+        assert "code 1" in result["error"]
+
+    async def test_bad_json_output(self, auditor):
+        mock_proc = _make_mock_proc(b"not json at all", b"", 0)
+        mock_create = AsyncMock(return_value=mock_proc)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await auditor.run_audit("http://localhost:3000")
+
+        assert "error" in result
+        assert "parse" in result["error"].lower()
 
 
 class TestSaveReport:
@@ -110,12 +123,10 @@ class TestSaveReport:
         }
         await auditor.save_report(report)
 
-        # Check JSON report
         assert auditor.report_path.exists()
         saved = json.loads(auditor.report_path.read_text())
         assert saved["scores"]["performance"] == 90.0
 
-        # Check JSONL history
         assert auditor.history_path.exists()
         lines = auditor.history_path.read_text().strip().split("\n")
         assert len(lines) == 1

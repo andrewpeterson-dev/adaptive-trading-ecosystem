@@ -126,8 +126,8 @@ class TestDecisionPipelineRejectionEnsemble:
 
 class TestDecisionPipelineRejectionRisk:
     def test_rejected_by_risk_manager(self, signal, good_metrics, unanimous_predictions):
-        risk = RiskManager()
-        risk._halt_trading("test halt")
+        risk = MagicMock(spec=RiskManager)
+        risk.validate_signal_quality.return_value = (False, "Risk limit exceeded")
         pipeline = DecisionPipeline(risk_manager=risk)
         decision = pipeline.evaluate(
             signal=signal,
@@ -138,6 +138,7 @@ class TestDecisionPipelineRejectionRisk:
         )
         assert decision["approved"] is False
         assert decision["rejection_stage"] == "risk"
+        assert "Risk limit" in decision["rejection_reason"]
 
 
 class TestDecisionPipelineMissingLLM:

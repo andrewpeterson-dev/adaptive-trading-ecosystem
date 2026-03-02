@@ -138,14 +138,25 @@ class TestDryRunMode:
 
 
 class TestLoopControl:
-    async def test_stop_flag(self, loop, tmp_queue):
+    async def test_stop_flag(self, tmp_queue):
+        """Stop() mid-loop should halt after the current task completes."""
         tmp_queue.add_task("T1", "d", "test", [])
         tmp_queue.add_task("T2", "d", "test", [])
         tmp_queue.add_task("T3", "d", "test", [])
 
-        loop.stop()
+        loop = AutonomousLoop(queue=tmp_queue, dry_run=True)
+
+        # Patch execute_one to set the stop flag after the first task
+        orig_execute = loop.execute_one
+
+        async def execute_and_stop():
+            result = await orig_execute()
+            loop.stop()
+            return result
+
+        loop.execute_one = execute_and_stop
         results = await loop.run_loop(max_tasks=3)
-        assert len(results) == 0
+        assert len(results) == 1
 
     async def test_no_pending_returns_none(self, loop):
         result = await loop.execute_one()
