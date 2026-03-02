@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Eye,
   EyeOff,
@@ -10,6 +10,7 @@ import {
   Plug,
   Save,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 
 type BrokerType = "alpaca" | "webull";
 
@@ -44,14 +45,21 @@ export function BrokerForm({ broker }: BrokerFormProps) {
   const [testStatus, setTestStatus] = useState<"idle" | "connected" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Reset form when switching broker type
+  useEffect(() => {
+    setForm({ api_key: "", api_secret: "", base_url: DEFAULT_URLS[broker], is_paper: true });
+    setSaveStatus("idle");
+    setTestStatus("idle");
+    setErrorMsg("");
+  }, [broker]);
+
   const handleSave = async () => {
     setSaving(true);
     setSaveStatus("idle");
     setErrorMsg("");
     try {
-      const res = await fetch("/api/auth/broker-credentials", {
+      await apiFetch("/api/auth/broker-credentials", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           broker_type: broker,
           api_key: form.api_key,
@@ -60,18 +68,11 @@ export function BrokerForm({ broker }: BrokerFormProps) {
           is_paper: form.is_paper,
         }),
       });
-      if (res.ok) {
-        setSaveStatus("success");
-        // Clear sensitive fields after save
-        setForm((f) => ({ ...f, api_key: "", api_secret: "" }));
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setSaveStatus("error");
-        setErrorMsg(data.detail || "Failed to save credentials");
-      }
-    } catch {
+      setSaveStatus("success");
+      setForm((f) => ({ ...f, api_key: "", api_secret: "" }));
+    } catch (err) {
       setSaveStatus("error");
-      setErrorMsg("Network error — backend may be unreachable");
+      setErrorMsg(err instanceof Error ? err.message : "Failed to save credentials");
     } finally {
       setSaving(false);
     }
@@ -82,16 +83,17 @@ export function BrokerForm({ broker }: BrokerFormProps) {
     setTestStatus("idle");
     setErrorMsg("");
     try {
-      const res = await fetch("/api/trading/account");
-      if (res.ok) {
+      const endpoint = broker === "webull" ? "/api/webull/status" : "/api/trading/account";
+      const data = await apiFetch<{ connected?: boolean }>(endpoint);
+      if (data?.connected) {
         setTestStatus("connected");
       } else {
         setTestStatus("error");
-        setErrorMsg("Connection failed — check credentials");
+        setErrorMsg("Credentials saved but broker returned not connected — verify API key and secret");
       }
-    } catch {
+    } catch (err) {
       setTestStatus("error");
-      setErrorMsg("Cannot reach trading API");
+      setErrorMsg(err instanceof Error ? err.message : "Cannot reach trading API");
     } finally {
       setTesting(false);
     }
@@ -195,17 +197,19 @@ export function BrokerForm({ broker }: BrokerFormProps) {
         </div>
       </div>
 
-      {/* Base URL */}
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Base URL</label>
-        <input
-          type="text"
-          value={form.base_url}
-          onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
-          placeholder="https://..."
-          className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
-        />
-      </div>
+      {/* Base URL — only for Alpaca (Webull SDK manages its own endpoints) */}
+      {broker === "alpaca" && (
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Base URL</label>
+          <input
+            type="text"
+            value={form.base_url}
+            onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
+            placeholder="https://..."
+            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+          />
+        </div>
+      )}
 
       {/* Feedback */}
       {saveStatus === "success" && (
