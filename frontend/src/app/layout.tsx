@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { NavHeader } from "@/components/layout/NavHeader";
@@ -9,10 +9,20 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "Adaptive Trading Ecosystem",
+  title: "AI Trading",
   description:
     "Build, analyze, and optimize trading strategies with AI-powered diagnostics",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -25,7 +35,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <NavHeader />
-          <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</main>
         </Providers>
       </body>
     </html>

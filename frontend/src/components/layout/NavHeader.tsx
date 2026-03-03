@@ -1,8 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Settings } from "lucide-react";
+import { Settings, Menu, X } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Builder" },
@@ -17,6 +19,12 @@ const NAV_ITEMS = [
 
 export function NavHeader() {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Auto-close menu on route change
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -25,19 +33,24 @@ export function NavHeader() {
 
   return (
     <header className="border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-stretch">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center">
         {/* Brand */}
-        <Link href="/" className="flex items-center gap-2.5 shrink-0 mr-8">
-          <div className="h-7 w-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center">
-            <Activity className="h-4 w-4 text-primary" />
-          </div>
+        <Link href="/" className="flex items-center gap-2 shrink-0 mr-8">
+          <Image
+            src="/logo.png"
+            alt="AI Trading"
+            width={32}
+            height={32}
+            className="h-8 w-8 object-contain"
+            priority
+          />
           <span className="font-semibold text-[15px] tracking-tight text-foreground">
-            Adaptive Trading
+            AI Trading
           </span>
         </Link>
 
-        {/* Navigation */}
-        <nav className="flex items-stretch">
+        {/* Desktop Navigation */}
+        <nav className="hidden lg:flex items-stretch h-14">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
@@ -56,8 +69,8 @@ export function NavHeader() {
           ))}
         </nav>
 
-        {/* Settings */}
-        <div className="ml-auto flex items-center">
+        {/* Settings + Hamburger */}
+        <div className="ml-auto flex items-center gap-1">
           <Link
             href="/settings"
             aria-label="Settings"
@@ -65,8 +78,36 @@ export function NavHeader() {
           >
             <Settings className="h-4 w-4" />
           </Link>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            className="lg:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile Dropdown */}
+      {menuOpen && (
+        <nav className="lg:hidden border-t border-border/50 bg-background/95 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 py-2">
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`block py-3 px-3 rounded-md text-sm font-medium transition-colors ${
+                  isActive(item.href)
+                    ? "text-foreground bg-muted/50"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
     </header>
   );
 }

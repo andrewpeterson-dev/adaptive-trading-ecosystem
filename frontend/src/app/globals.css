@@ -34,6 +34,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-tap-highlight-color: transparent;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Global transitions on interactive elements */

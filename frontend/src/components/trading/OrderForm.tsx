@@ -121,6 +121,7 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
             onChange={(e) => setSymbol(e.target.value.toUpperCase())}
             onBlur={handleSymbolBlur}
             placeholder="AAPL"
+            autoCapitalize="characters"
             className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
         </div>
@@ -166,6 +167,7 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
             placeholder="10"
             min="0"
             step="1"
+            inputMode="decimal"
             className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
           />
         </div>

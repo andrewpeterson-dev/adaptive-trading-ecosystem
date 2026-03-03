@@ -2,18 +2,14 @@ FROM python:3.11-slim AS api
 
 WORKDIR /app
 
-# System dependencies + TA-Lib C library (required by ta-lib Python package)
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl wget \
-    && wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
-    && tar -xzf ta-lib-0.4.0-src.tar.gz \
-    && cd ta-lib/ && ./configure --prefix=/usr && make && make install \
-    && cd .. && rm -rf ta-lib ta-lib-0.4.0-src.tar.gz \
+    build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies
-COPY requirements-full.txt .
-RUN pip install --no-cache-dir -r requirements-full.txt
+COPY requirements-docker.txt .
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # Application code
 COPY . .
