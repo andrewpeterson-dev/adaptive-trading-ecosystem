@@ -120,7 +120,7 @@ export function PortfolioRiskPanel() {
                 RATING_COLORS[data.risk_rating] || RATING_COLORS.moderate
               }`}
             >
-              {data.risk_rating.charAt(0).toUpperCase() + data.risk_rating.slice(1)} Risk
+              {(data.risk_rating || "moderate").charAt(0).toUpperCase() + (data.risk_rating || "moderate").slice(1)} Risk
             </span>
             <span className="text-[10px] text-muted-foreground">
               {data.positions_analyzed} positions
@@ -131,22 +131,22 @@ export function PortfolioRiskPanel() {
           <div className="grid grid-cols-2 gap-3">
             <MetricCell
               label="VaR 95%"
-              value={`${(data.var_95 * 100).toFixed(2)}%`}
+              value={`${((data.var_95 ?? 0) * 100).toFixed(2)}%`}
               tooltip="Value at Risk: 95% confidence that daily losses will not exceed this amount"
             />
             <MetricCell
               label="VaR 99%"
-              value={`${(data.var_99 * 100).toFixed(2)}%`}
+              value={`${((data.var_99 ?? 0) * 100).toFixed(2)}%`}
               tooltip="Value at Risk: 99% confidence that daily losses will not exceed this amount"
             />
             <MetricCell
               label="Beta"
-              value={data.beta.toFixed(2)}
+              value={(data.beta ?? 0).toFixed(2)}
               tooltip="Portfolio sensitivity to market movements. 1.0 = moves with market"
             />
             <MetricCell
               label="Concentration"
-              value={data.concentration_hhi.toFixed(3)}
+              value={(data.concentration_hhi ?? 0).toFixed(3)}
               tooltip="Herfindahl-Hirschman Index. Lower = more diversified. >0.25 = concentrated"
             />
           </div>
@@ -162,7 +162,7 @@ export function PortfolioRiskPanel() {
               </div>
             </div>
             <div className="text-lg font-mono tabular-nums font-bold text-red-400">
-              {(data.expected_shortfall * 100).toFixed(2)}%
+              {((data.expected_shortfall ?? 0) * 100).toFixed(2)}%
             </div>
           </div>
 
@@ -171,13 +171,13 @@ export function PortfolioRiskPanel() {
             <div className="flex justify-between text-[10px] mb-1">
               <span className="text-muted-foreground uppercase tracking-wider">Volatility</span>
               <span className="font-mono tabular-nums">
-                {(data.volatility * 100).toFixed(1)}%
+                {((data.volatility ?? 0) * 100).toFixed(1)}%
               </span>
             </div>
             <div className="h-2 rounded-full bg-muted overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${volBarColor(data.volatility)}`}
-                style={{ width: `${Math.min(data.volatility * 200, 100)}%` }}
+                className={`h-full rounded-full transition-all ${volBarColor(data.volatility ?? 0)}`}
+                style={{ width: `${Math.min((data.volatility ?? 0) * 200, 100)}%` }}
               />
             </div>
             <div className="flex justify-between text-[9px] text-muted-foreground/50 mt-0.5">
