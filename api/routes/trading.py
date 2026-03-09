@@ -364,10 +364,10 @@ async def get_risk_summary(request: Request):
             return {
                 "is_halted": False,
                 "current_drawdown_pct": 0.0,
-                "max_drawdown_limit": settings.max_drawdown_pct,
+                "max_drawdown_limit_pct": settings.max_drawdown_pct,
                 "current_exposure_pct": 0.0,
                 "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
-                "trades_last_hour": 0,
+                "trades_this_hour": 0,
                 "max_trades_per_hour": settings.max_trades_per_hour,
                 "equity": equity,
             }

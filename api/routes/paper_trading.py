@@ -32,9 +32,11 @@ router = APIRouter()
 
 class PaperTradeRequest(BaseModel):
     symbol: str
-    side: str  # "BUY" or "SELL"
+    side: Optional[str] = None      # "BUY" or "SELL"
+    direction: Optional[str] = None  # alias for side (frontend uses this name)
     quantity: float
-    user_confirmed: bool = False
+    price: Optional[float] = None   # ignored — server fetches live price
+    user_confirmed: bool = True     # default true; UI submit is the gate
 
 
 class ResetRequest(BaseModel):
@@ -134,18 +136,11 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
     """Execute a paper trade (BUY or SELL)."""
     user_id = _require_user(request)
 
-    # Safety gate
-    if not req.user_confirmed:
-        return {
-            "executed": False,
-            "blocked": True,
-            "reason": "Trade requires user_confirmed=true",
-        }
-
     symbol = req.symbol.strip().upper()
-    side = req.side.strip().upper()
+    raw_side = (req.side or req.direction or "").strip().upper()
     qty = req.quantity
 
+    side = raw_side
     if side not in ("BUY", "SELL"):
         raise HTTPException(status_code=400, detail="side must be BUY or SELL")
     if qty <= 0:
@@ -224,12 +219,17 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
             )
             session.add(trade)
 
+            await session.flush()
+            await session.refresh(trade)
             return {
                 "executed": True,
-                "side": "BUY",
+                "id": trade.id,
                 "symbol": symbol,
+                "direction": "BUY",
                 "quantity": qty,
                 "price": current_price,
+                "timestamp": trade.entry_time.isoformat() if trade.entry_time else datetime.utcnow().isoformat(),
+                "pnl": None,
                 "cost": cost,
                 "remaining_cash": portfolio.cash,
             }
@@ -284,14 +284,18 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
             )
             session.add(trade)
 
+            await session.flush()
+            await session.refresh(trade)
             return {
                 "executed": True,
-                "side": "SELL",
+                "id": trade.id,
                 "symbol": symbol,
+                "direction": "SELL",
                 "quantity": qty,
                 "price": current_price,
-                "proceeds": proceeds,
+                "timestamp": trade.entry_time.isoformat() if trade.entry_time else datetime.utcnow().isoformat(),
                 "pnl": pnl,
+                "proceeds": proceeds,
                 "remaining_cash": portfolio.cash,
             }
 

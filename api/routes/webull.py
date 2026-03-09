@@ -54,7 +54,14 @@ async def _get_user_webull_client(user_id: int):
         connect_result = client.connect()
         if connect_result.get("success"):
             _client_cache[user_id] = client
-            logger.info("webull_client_cached", user_id=user_id)
+            account_id = client._get_allowed_account_id()
+            if not account_id:
+                logger.warning("webull_connected_no_account_id", user_id=user_id,
+                               paper_accounts=len(client._paper_account_ids),
+                               live_accounts=len(client._live_account_ids),
+                               mode=connect_result.get("mode"))
+            else:
+                logger.info("webull_client_cached", user_id=user_id, account_id=account_id)
             return client
         else:
             logger.warning("webull_connect_failed", user_id=user_id, error=connect_result.get("error"))
@@ -81,14 +88,20 @@ class PlaceOrderRequest(BaseModel):
 
 @router.get("/status")
 async def webull_status(request: Request):
-    """Check if user has a connected Webull account."""
+    """Check if user has a connected Webull account with accessible data."""
     client = await _get_user_webull_client(request.state.user_id)
     if not client:
         return {"connected": False}
+    account_id = client._get_allowed_account_id()
+    if not account_id:
+        return {"connected": False, "error": "Broker authenticated but no account found — check that your API key has account access."}
+    summary = client.get_account_summary()
+    if not summary:
+        return {"connected": False, "error": "Connected but could not fetch account data — API key may lack account permissions."}
     return {
         "connected": True,
         "mode": client.mode_label,
-        "account_id": client._get_allowed_account_id(),
+        "account_id": account_id,
     }
 
 

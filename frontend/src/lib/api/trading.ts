@@ -80,14 +80,20 @@ export function getPaperTrades(): Promise<PaperTrade[]> {
   return apiFetch<PaperTrade[]>("/api/paper/history");
 }
 
+export interface PaperTradeResult extends PaperTrade {
+  executed: boolean;
+  cost?: number;
+  proceeds?: number;
+  remaining_cash?: number;
+}
+
 export function executePaperTrade(
   symbol: string,
   direction: string,
-  quantity: number,
-  price: number
-): Promise<PaperTrade> {
-  return apiFetch<PaperTrade>("/api/paper/trade", {
+  quantity: number
+): Promise<PaperTradeResult> {
+  return apiFetch<PaperTradeResult>("/api/paper/trade", {
     method: "POST",
-    body: JSON.stringify({ symbol, direction, quantity, price }),
+    body: JSON.stringify({ symbol, side: direction, quantity, user_confirmed: true }),
   });
 }
