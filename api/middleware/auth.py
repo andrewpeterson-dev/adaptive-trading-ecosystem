@@ -17,7 +17,7 @@ _PUBLIC_PATHS = frozenset({
     "/redoc",
 })
 
-_PUBLIC_PREFIXES = ("/api/auth/verify", "/ws/")  # WebSocket auth handled in endpoint
+_PUBLIC_PREFIXES = ("/api/auth/verify", "/ws/", "/api/ai/stream")  # WebSocket auth handled in endpoint
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):

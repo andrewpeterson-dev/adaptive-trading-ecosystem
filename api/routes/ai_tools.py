@@ -1,0 +1,92 @@
+"""AI Copilot tool endpoints -- trade proposals and confirmations."""
+from __future__ import annotations
+
+from typing import Optional
+
+import structlog
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel
+
+logger = structlog.get_logger(__name__)
+router = APIRouter()
+
+
+class ConfirmTradeRequest(BaseModel):
+    proposalId: str
+
+
+class ExecuteTradeRequest(BaseModel):
+    proposalId: str
+    confirmationToken: str
+
+
+@router.post("/confirm-trade")
+async def confirm_trade(request: Request, body: ConfirmTradeRequest):
+    """Confirm a trade proposal and get a confirmation token."""
+    from services.ai_core.proposals.confirmation_service import ConfirmationService
+
+    user_id = request.state.user_id
+    service = ConfirmationService()
+
+    try:
+        result = await service.confirm_proposal(body.proposalId, user_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.post("/execute-trade")
+async def execute_trade(request: Request, body: ExecuteTradeRequest):
+    """Execute a confirmed trade."""
+    from services.ai_core.proposals.confirmation_service import ConfirmationService
+
+    user_id = request.state.user_id
+    service = ConfirmationService()
+
+    try:
+        result = await service.execute_confirmed(
+            body.proposalId, body.confirmationToken, user_id
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.get("/proposals")
+async def list_proposals(
+    request: Request, status: Optional[str] = None, limit: int = 20
+):
+    """List trade proposals for the current user."""
+    from db.database import get_session
+    from db.copilot_models import CopilotTradeProposal
+    from sqlalchemy import select
+
+    user_id = request.state.user_id
+
+    async with get_session() as session:
+        stmt = select(CopilotTradeProposal).where(
+            CopilotTradeProposal.user_id == user_id
+        )
+        if status:
+            stmt = stmt.where(CopilotTradeProposal.status == status)
+        stmt = stmt.order_by(CopilotTradeProposal.created_at.desc()).limit(limit)
+        result = await session.execute(stmt)
+        proposals = result.scalars().all()
+
+    return [
+        {
+            "id": p.id,
+            "threadId": p.thread_id,
+            "proposalJson": p.proposal_json,
+            "riskJson": p.risk_json,
+            "explanationMd": p.explanation_md,
+            "status": p.status.value if p.status else None,
+            "expiresAt": p.expires_at.isoformat() if p.expires_at else None,
+            "createdAt": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in proposals
+    ]
