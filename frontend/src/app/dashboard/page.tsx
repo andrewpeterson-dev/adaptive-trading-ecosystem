@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
+import { useTradingMode } from "@/hooks/useTradingMode";
 import { SentimentPanel } from "@/components/analytics/SentimentPanel";
 import { PortfolioRiskPanel } from "@/components/analytics/PortfolioRiskPanel";
 
@@ -49,14 +50,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const { mode } = useTradingMode();
 
   const fetchAll = useCallback(async () => {
+    setLoading(true);
     try {
+      const q = `?mode=${mode}`;
       const [accRes, posRes, ordRes, riskRes] = await Promise.allSettled([
-        apiFetch<Account>("/api/trading/account"),
-        apiFetch<{ positions: Position[] }>("/api/trading/positions"),
-        apiFetch<{ orders: Order[] }>("/api/trading/orders"),
-        apiFetch<RiskSummary>("/api/trading/risk-summary"),
+        apiFetch<Account>(`/api/trading/account${q}`),
+        apiFetch<{ positions: Position[] }>(`/api/trading/positions${q}`),
+        apiFetch<{ orders: Order[] }>(`/api/trading/orders${q}`),
+        apiFetch<RiskSummary>(`/api/trading/risk-summary${q}`),
       ]);
 
       if (accRes.status === "fulfilled") {
@@ -87,7 +91,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     fetchAll();
@@ -119,7 +123,18 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Trading Dashboard</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Trading Dashboard</h2>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                mode === "live"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  : "bg-muted text-muted-foreground border border-border/50"
+              }`}
+            >
+              {mode === "live" ? "Live" : "Paper"}
+            </span>
+          </div>
           {lastRefresh && (
             <p className="text-xs text-muted-foreground mt-0.5">
               Last updated {lastRefresh.toLocaleTimeString()}

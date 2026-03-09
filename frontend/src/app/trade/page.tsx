@@ -13,6 +13,7 @@ import { TradingChart } from "@/components/charts/TradingChart";
 import type { Account, Position } from "@/types/trading";
 import type { TradeMarker } from "@/types/chart";
 import { apiFetch } from "@/lib/api/client";
+import { useTradingMode } from "@/hooks/useTradingMode";
 
 function formatCurrency(val: number): string {
   return val.toLocaleString("en-US", {
@@ -28,13 +29,16 @@ export default function TradePage() {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const { mode } = useTradingMode();
 
   const fetchAll = useCallback(async () => {
+    setLoading(true);
     try {
+      const q = `?mode=${mode}`;
       const [accRes, posRes, tradeRes] = await Promise.allSettled([
-        apiFetch<Account>("/api/trading/account"),
-        apiFetch<{ positions: Position[] }>("/api/trading/positions"),
-        apiFetch<any>("/api/trading/trade-log?limit=100"),
+        apiFetch<Account>(`/api/trading/account${q}`),
+        apiFetch<{ positions: Position[] }>(`/api/trading/positions${q}`),
+        apiFetch<any>(`/api/trading/trade-log?limit=100&mode=${mode}`),
       ]);
 
       let hasData = false;
@@ -62,7 +66,7 @@ export default function TradePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     fetchAll();
@@ -98,7 +102,14 @@ export default function TradePage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Paper Trading</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">{mode === "live" ? "Live" : "Paper"} Trading</h2>
+            {mode === "live" && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                Real Money
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             Execute trades and manage positions
           </p>
@@ -150,7 +161,7 @@ export default function TradePage() {
                 side: t.direction === "buy" ? "buy" : "sell",
               }))}
           />
-          <OrderForm onOrderPlaced={fetchAll} isPaperMode={account?.broker === "paper"} />
+          <OrderForm onOrderPlaced={fetchAll} isPaperMode={mode === "paper"} />
           <TradeHistory trades={trades} />
         </div>
 

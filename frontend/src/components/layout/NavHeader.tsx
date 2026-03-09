@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Settings, Menu, X } from "lucide-react";
+import { useTradingMode } from "@/hooks/useTradingMode";
 
 const NAV_ITEMS = [
   { href: "/", label: "Builder" },
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
 export function NavHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { mode, setMode } = useTradingMode();
 
   // Auto-close menu on route change
   useEffect(() => {
@@ -70,7 +72,26 @@ export function NavHeader() {
         </nav>
 
         {/* Settings + Hamburger */}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-2">
+          {/* Paper / Live toggle */}
+          <button
+            onClick={() => setMode(mode === "paper" ? "live" : "paper")}
+            aria-label={`Switch to ${mode === "paper" ? "live" : "paper"} trading`}
+            title={`Currently: ${mode === "paper" ? "Paper" : "Live"} trading — click to switch`}
+            className={`relative flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide border transition-all duration-200 ${
+              mode === "live"
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25"
+                : "bg-muted/60 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                mode === "live" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/50"
+              }`}
+            />
+            {mode === "paper" ? "Paper" : "Live"}
+          </button>
+
           <Link
             href="/settings"
             aria-label="Settings"

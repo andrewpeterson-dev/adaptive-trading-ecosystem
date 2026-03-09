@@ -17,6 +17,7 @@ import {
   Unplug,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { useTradingMode } from "@/hooks/useTradingMode";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import type { ModelInfo, AllocationEntry, EquityCurvePoint } from "@/types/portfolio";
 
@@ -36,11 +37,13 @@ export default function PortfolioPage() {
   const [regime, setRegime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const { mode } = useTradingMode();
 
   const fetchAll = useCallback(async () => {
     try {
+      const q = `?mode=${mode}`;
       const [eqRes, allocRes, modRes, regRes] = await Promise.allSettled([
-        apiFetch<any>("/api/dashboard/equity-curve"),
+        apiFetch<any>(`/api/dashboard/equity-curve${q}`),
         apiFetch<any>("/api/models/allocation"),
         apiFetch<any>("/api/models/list"),
         apiFetch<any>("/api/models/regime"),
@@ -78,7 +81,7 @@ export default function PortfolioPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     fetchAll();
@@ -115,7 +118,18 @@ export default function PortfolioPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Portfolio</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Portfolio</h2>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                mode === "live"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  : "bg-muted text-muted-foreground border border-border/50"
+              }`}
+            >
+              {mode === "live" ? "Live" : "Paper"}
+            </span>
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             {models.length} model{models.length !== 1 ? "s" : ""} deployed
           </p>

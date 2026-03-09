@@ -10,6 +10,7 @@ import {
   Play,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { useTradingMode } from "@/hooks/useTradingMode";
 import { RiskGauge } from "@/components/analytics/RiskGauge";
 import { RiskEventLog } from "@/components/analytics/RiskEventLog";
 import type { RiskEvent, RiskSummaryExtended, RiskGaugeConfig } from "@/types/risk";
@@ -30,12 +31,14 @@ export default function RiskPage() {
   const [error, setError] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [resuming, setResuming] = useState(false);
+  const { mode } = useTradingMode();
 
   const fetchAll = useCallback(async () => {
     try {
+      const q = `?mode=${mode}`;
       const [riskRes, eventsRes] = await Promise.allSettled([
-        apiFetch<RiskSummaryExtended>("/api/trading/risk-summary"),
-        apiFetch<{ events?: RiskEvent[] }>("/api/trading/risk-events"),
+        apiFetch<RiskSummaryExtended>(`/api/trading/risk-summary${q}`),
+        apiFetch<{ events?: RiskEvent[] }>(`/api/trading/risk-events${q}`),
       ]);
 
       let hasData = false;
@@ -58,7 +61,7 @@ export default function RiskPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     fetchAll();
