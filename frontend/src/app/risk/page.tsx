@@ -153,7 +153,7 @@ export default function RiskPage() {
                   <p className="text-xs text-red-400 mt-0.5">{risk.halt_reason}</p>
                 )}
                 <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                  <span>Peak Equity: ${risk.peak_equity.toLocaleString()}</span>
+                  <span>Peak Equity: ${(risk.peak_equity ?? 0).toLocaleString()}</span>
                   <span>{risk.open_positions} open position{risk.open_positions !== 1 ? "s" : ""}</span>
                   <span>{risk.recent_risk_events} event{risk.recent_risk_events !== 1 ? "s" : ""}</span>
                 </div>
