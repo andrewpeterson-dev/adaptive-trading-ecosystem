@@ -1,142 +1,98 @@
 # Adaptive Trading Ecosystem
 
-A modular, scalable AI trading platform where multiple models train, compete, adapt, and allocate capital dynamically. Integrates backtesting, paper trading, and live trading in one unified system.
+An AI-powered trading platform with a Next.js web dashboard, FastAPI backend, real-time market data, strategy builder, backtesting, and Webull/Alpaca broker integration.
 
-## Architecture
+## Stack
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    ORCHESTRATOR                               │
-│  data → regime → retrain → signals → risk → execute → learn │
-└──────────┬───────────┬──────────┬────────────┬───────────────┘
-           │           │          │            │
-    ┌──────▼──┐  ┌─────▼────┐ ┌──▼───┐  ┌─────▼─────┐
-    │  DATA   │  │  MODELS  │ │ RISK │  │ EXECUTION │
-    │ Layer   │  │  Layer   │ │ Mgmt │  │  Engine   │
-    └─────────┘  └──────────┘ └──────┘  └───────────┘
-         │            │           │           │
-    ┌────▼────┐  ┌────▼────┐ ┌───▼───┐  ┌───▼────┐
-    │ Alpaca  │  │Ensemble │ │Capital│  │ Alpaca │
-    │  Data   │  │  Meta   │ │Alloc  │  │ Trade  │
-    └─────────┘  └─────────┘ └───────┘  └────────┘
-```
+| Layer | Tech |
+|-------|------|
+| Frontend | Next.js 14 (App Router, TypeScript) |
+| Backend | FastAPI (Python, async SQLAlchemy) |
+| Database | SQLite (dev) / PostgreSQL (Docker) |
+| Cache / Streaming | Redis |
+| Brokers | Webull OpenAPI v2, Alpaca |
+| Market Data | yFinance, Alpaca, Finnhub (fallback chain) |
 
-## Models
+## Features
 
-| Model | Type | Strategy |
-|-------|------|----------|
-| `momentum_fast` | MomentumModel | Fast MA crossover (5/20) |
-| `momentum_slow` | MomentumModel | Slow MA crossover (20/100) |
-| `mean_reversion_tight` | MeanReversionModel | Z-score reversion (15-bar, 2σ) |
-| `mean_reversion_wide` | MeanReversionModel | Z-score reversion (30-bar, 2.5σ) |
-| `volatility_squeeze` | VolatilityModel | Bollinger squeeze breakout |
-| `ml_xgboost` | MLModel | XGBoost return classification |
-| `ml_random_forest` | MLModel | Random Forest return classification |
-| `ensemble_meta` | EnsembleMetaModel | Performance-weighted signal aggregation |
+- **Strategy Builder** — build multi-condition trading strategies with 20+ technical indicators
+- **Backtesting** — replay strategies against historical OHLCV data
+- **Paper & Live Trading** — execute via Webull or Alpaca with confirmation gate
+- **Real-time Prices** — WebSocket price streaming with Redis pub/sub
+- **Risk Management** — portfolio exposure, drawdown limits, position sizing
+- **Market Sentiment** — AI-powered news sentiment aggregated per ticker
+- **API Connections** — manage multiple broker and market data keys per user
 
 ## Quick Start
 
-### 1. Environment Setup
+### Local Development
 
 ```bash
+# 1. Clone and configure
 cp .env.example .env
-# Edit .env with your Alpaca API keys and database credentials
+# Edit .env with your broker API keys
+
+# 2. Backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+uvicorn api.main:app --reload --port 8000
+
+# 3. Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-### 2. Docker (Recommended)
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+### Docker
 
 ```bash
 docker-compose up -d
-```
-
-This starts PostgreSQL, Redis, the API server, and the Streamlit dashboard.
-
-- API: http://localhost:8000
-- Dashboard: http://localhost:8501
-- API Docs: http://localhost:8000/docs
-
-### 3. Local Development
-
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Initialize database
-python scripts/init_db.py
-
-# Start API server
-uvicorn api.main:app --reload
-
-# Start dashboard (separate terminal)
-streamlit run dashboard/app.py
-
-# Run backtest
-python scripts/run_backtest.py
-
-# Run orchestrator
-python orchestrator.py
-```
-
-### 4. Run Tests
-
-```bash
-pytest
 ```
 
 ## Project Structure
 
 ```
 adaptive-trading-ecosystem/
-├── config/             # Settings and env management
-├── db/                 # Database models and connection
-├── data/               # Data ingestion, streaming, features
-├── models/             # Trading model implementations
-│   ├── base.py         # Abstract ModelBase class
-│   ├── momentum.py     # Trend-following
-│   ├── mean_reversion.py
-│   ├── volatility.py   # Squeeze breakout
-│   ├── ml_model.py     # XGBoost / RandomForest
-│   ├── ensemble.py     # Meta-model aggregator
-│   └── registry.py     # Model discovery
-├── engine/             # Backtesting and execution
-├── risk/               # Risk management
-├── allocation/         # Dynamic capital allocation
-├── intelligence/       # Regime detection, retraining, meta-learning
 ├── api/                # FastAPI backend
-├── dashboard/          # Streamlit frontend
-├── scripts/            # CLI utilities
-├── tests/              # Test suite
-├── orchestrator.py     # Main trading loop
-└── docker-compose.yml  # Full deployment
+│   ├── main.py         # App entry, all routers registered
+│   ├── routes/         # auth, trading, webull, market, ws, strategies
+│   └── middleware/     # JWT auth
+├── config/             # Pydantic settings + .env
+├── db/                 # SQLAlchemy models, migrations, encryption
+├── data/               # MarketDataService (yFinance/Alpaca/Finnhub)
+├── frontend/           # Next.js app (the ONLY frontend)
+│   └── src/
+│       ├── app/        # Pages (dashboard, strategies, backtest, settings)
+│       ├── components/ # Strategy builder, analytics, settings panels
+│       ├── hooks/      # useAuth, usePriceStream, useTradingMode
+│       └── lib/        # API client, indicator registry
+├── risk/               # Risk calculation utilities
+├── scripts/            # DB init, seed scripts
+└── docker-compose.yml
 ```
-
-## Adding a New Model
-
-1. Create a new file in `models/` that extends `ModelBase`
-2. Implement `train()`, `predict()`, and `evaluate()`
-3. Register it in `models/registry.py`
-4. It will automatically be picked up by the ensemble and capital allocator
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/trading/execute` | Execute a trading signal |
-| GET | `/api/trading/account` | Account info |
+| POST | `/api/auth/login` | Login, returns JWT |
+| GET | `/api/auth/me` | Current user profile |
+| GET | `/api/trading/account` | Broker account info |
 | GET | `/api/trading/positions` | Open positions |
-| GET | `/api/trading/risk-summary` | Risk status |
-| GET | `/api/models/list` | All models + metrics |
-| POST | `/api/models/retrain` | Trigger retraining |
-| POST | `/api/models/allocate` | Recompute allocation |
-| GET | `/api/models/regime` | Current market regime |
-| GET | `/api/models/ensemble-status` | Ensemble weights |
+| GET | `/api/trading/risk-summary` | Portfolio risk |
+| GET | `/api/market/quote/{symbol}` | Live quote |
+| GET | `/api/market/bars/{symbol}` | OHLCV bars |
+| POST | `/api/market/batch-quotes` | Batch quotes (up to 50) |
+| WS | `/ws/market?token=<jwt>` | Real-time price stream |
+| GET | `/api/strategies/list` | Saved strategies |
+| POST | `/api/strategies/analyze` | Analyze strategy |
+| POST | `/api/backtest/run` | Run backtest |
+| GET | `/api/news/sentiment/report` | Market sentiment |
 
-## Risk Controls
+## Auth
 
-- Max position size: 10% of equity
-- Max portfolio exposure: 80%
-- Max drawdown shutdown: 15%
-- Per-position stop loss: 3%
-- Trade frequency limit: 20/hour
-- All configurable via `.env`
+JWT-based (7-day expiry). Token stored in `localStorage` + cookie. All API calls include `Authorization: Bearer <token>`. Broker credentials (app key/secret) are Fernet-encrypted at rest.

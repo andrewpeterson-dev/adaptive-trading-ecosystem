@@ -40,6 +40,10 @@ docker-compose.override.yml
 node_modules/
 .next/
 package-lock.json
+frontend/tsconfig.tsbuildinfo
+
+# Runtime data
+risk/portfolio-risk.json
 
 # OS
 .DS_Store
