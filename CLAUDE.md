@@ -25,6 +25,19 @@
 | `db/encryption.py` | Fernet encryption for broker API keys |
 | `data/webull_client.py` | Webull SDK wrapper (paper + live clients) |
 | `frontend/` | Next.js app (the ONLY frontend) |
+| `db/copilot_models.py` | 18 copilot SQLAlchemy models (conversations, memory, documents, proposals, audit) |
+| `services/ai_core/chat_controller.py` | Main AI orchestration — context → route → prompt → model → tools → stream |
+| `services/ai_core/model_router.py` | Deterministic LLM routing (gpt-5.4, gpt-4.1, claude-sonnet-4-6, Perplexity) |
+| `services/ai_core/tools/` | 35 copilot tools across 6 categories (portfolio, risk, market, trading, analytics, research) |
+| `services/ai_core/safety_guard.py` | Output sanitization, PII redaction, feature flag enforcement |
+| `services/ai_core/proposals/` | Trade proposal + confirmation flow with SHA-256 tokens |
+| `services/ai_core/memory/` | Memory service (short-term, operational, semantic/pgvector) |
+| `services/ai_core/documents/` | Document ingestion pipeline (upload → parse → chunk → embed) |
+| `api/routes/ai_chat.py` | REST + WebSocket API for copilot chat |
+| `api/routes/ai_tools.py` | Trade confirmation/execution endpoints |
+| `api/routes/documents.py` | Document upload, ingestion, search endpoints |
+| `frontend/src/components/copilot/` | Copilot UI widget (13 React components) |
+| `services/workers/` | Celery workers for document ingestion, backtests, analytics |
 
 ## Running
 ```bash
@@ -48,3 +61,11 @@ cd ~/adaptive-trading-ecosystem/frontend && npm run dev
 - Balance requires currency arg: `get_account_balance(acct, "USD")`
 - Positions response uses `"holdings"` key
 - App key/secret stored encrypted in DB, decrypted per-request
+
+## AI Copilot
+- **LLM is copilot, not trader** — AI analyzes, explains, drafts. Never owns execution authority.
+- Model routing: gpt-5.4 (primary), gpt-4.1 (simple), claude-sonnet-4-6 (fallback/research), Perplexity (search)
+- Trade safety: draft → risk check → user confirm → token validate → re-check → execute → audit
+- Feature flags control progressive rollout (FEATURE_COPILOT_ENABLED, etc.)
+- Workers: `celery -A services.workers.celery_app worker -Q documents` / `-Q backtests`
+- Frontend widget: floating bubble → 420px slide-out panel with 5 tabs (Chat, Strategy, Portfolio, Bots, Research)
