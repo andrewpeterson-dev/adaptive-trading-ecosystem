@@ -61,6 +61,67 @@ services:
       retries: 3
       start_period: 15s
 
+  # MinIO S3-compatible storage (dev only)
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Celery worker for document ingestion
+  worker-doc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      USE_SQLITE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    entrypoint: ["celery", "-A", "services.workers.celery_app", "worker", "--loglevel=info", "-Q", "documents"]
+
+  # Celery worker for backtests
+  worker-backtest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      USE_SQLITE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./artifacts:/app/artifacts
+    restart: unless-stopped
+    entrypoint: ["celery", "-A", "services.workers.celery_app", "worker", "--loglevel=info", "-Q", "backtests,default"]
+
   # Next.js frontend
   frontend:
     build:
@@ -84,3 +145,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
