@@ -15,12 +15,12 @@ from sqlalchemy.pool import StaticPool
 
 from db.database import Base
 from db.models import User  # noqa: F401
-from db.copilot_models import (
-    CopilotTradeProposal,
-    CopilotTradeConfirmation,
-    CopilotPortfolioSnapshot,
-    CopilotPosition,
-    CopilotAuditLog,
+from db.cerberus_models import (
+    CerberusTradeProposal,
+    CerberusTradeConfirmation,
+    CerberusPortfolioSnapshot,
+    CerberusPosition,
+    CerberusAuditLog,
     ProposalStatus,
 )
 
@@ -115,7 +115,7 @@ class TestProposalCreation:
         uid = await _seed_user(session)
 
         # Seed a portfolio snapshot so risk checks have equity data
-        snap = CopilotPortfolioSnapshot(
+        snap = CerberusPortfolioSnapshot(
             id=str(uuid.uuid4()),
             user_id=uid,
             brokerage_account_id=str(uuid.uuid4()),
@@ -128,7 +128,7 @@ class TestProposalCreation:
         # Create proposal directly in DB (simulating what the service does)
         proposal_id = str(uuid.uuid4())
         expires_at = datetime.utcnow() + timedelta(minutes=5)
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=proposal_id,
             user_id=uid,
             proposal_json={"symbol": "AAPL", "side": "buy", "quantity": 10, "order_type": "market"},
@@ -147,7 +147,7 @@ class TestProposalCreation:
     async def test_proposal_expires_at_is_set(self, session: AsyncSession):
         uid = await _seed_user(session)
         expires_at = datetime.utcnow() + timedelta(minutes=5)
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=str(uuid.uuid4()),
             user_id=uid,
             proposal_json={"symbol": "SPY", "side": "sell", "quantity": 5},
@@ -169,7 +169,7 @@ class TestConfirmationFlow:
     @pytest.mark.asyncio
     async def test_confirmation_record_created(self, session: AsyncSession):
         uid = await _seed_user(session)
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=str(uuid.uuid4()),
             user_id=uid,
             proposal_json={"symbol": "AAPL", "side": "buy", "quantity": 10},
@@ -180,7 +180,7 @@ class TestConfirmationFlow:
         await session.flush()
 
         token, token_hash = ConfirmationService._generate_token()
-        confirmation = CopilotTradeConfirmation(
+        confirmation = CerberusTradeConfirmation(
             id=str(uuid.uuid4()),
             proposal_id=proposal.id,
             user_id=uid,
@@ -197,7 +197,7 @@ class TestConfirmationFlow:
     async def test_expired_proposal_cannot_confirm(self, session: AsyncSession):
         uid = await _seed_user(session)
         # Create an already-expired proposal
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=str(uuid.uuid4()),
             user_id=uid,
             proposal_json={"symbol": "AAPL", "side": "buy", "quantity": 10},
@@ -212,7 +212,7 @@ class TestConfirmationFlow:
     @pytest.mark.asyncio
     async def test_confirmation_status_transitions(self, session: AsyncSession):
         uid = await _seed_user(session)
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=str(uuid.uuid4()),
             user_id=uid,
             proposal_json={"symbol": "TSLA", "side": "buy", "quantity": 5},
@@ -243,11 +243,11 @@ class TestExecutionFlow:
         uid = await _seed_user(session)
         proposal_id = str(uuid.uuid4())
 
-        audit = CopilotAuditLog(
+        audit = CerberusAuditLog(
             id=str(uuid.uuid4()),
             user_id=uid,
             action_type="trade_executed",
-            resource_type="copilot_trade_proposals",
+            resource_type="cerberus_trade_proposals",
             resource_id=proposal_id,
             payload_json={"proposal": {"symbol": "AAPL"}, "execution": {"status": "submitted"}},
         )
@@ -260,7 +260,7 @@ class TestExecutionFlow:
     @pytest.mark.asyncio
     async def test_proposal_rejected_status(self, session: AsyncSession):
         uid = await _seed_user(session)
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=str(uuid.uuid4()),
             user_id=uid,
             proposal_json={"symbol": "GME", "side": "buy", "quantity": 1000},
@@ -276,7 +276,7 @@ class TestExecutionFlow:
     @pytest.mark.asyncio
     async def test_proposal_failed_status(self, session: AsyncSession):
         uid = await _seed_user(session)
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=str(uuid.uuid4()),
             user_id=uid,
             proposal_json={"symbol": "AMC", "side": "sell", "quantity": 50},

@@ -1,4 +1,4 @@
-"""Research tools for the AI Copilot."""
+"""Research tools for the Cerberus."""
 from __future__ import annotations
 
 import structlog
@@ -20,17 +20,17 @@ async def _search_documents(user_id: int, query: str, limit: int = 10) -> dict:
     a simple case-insensitive LIKE query on chunk content.
     """
     from db.database import get_session
-    from db.copilot_models import CopilotDocumentChunk
+    from db.cerberus_models import CerberusDocumentChunk
     from sqlalchemy import select
 
     async with get_session() as session:
         stmt = (
-            select(CopilotDocumentChunk)
+            select(CerberusDocumentChunk)
             .where(
-                CopilotDocumentChunk.user_id == user_id,
-                CopilotDocumentChunk.content.ilike(f"%{query}%"),
+                CerberusDocumentChunk.user_id == user_id,
+                CerberusDocumentChunk.content.ilike(f"%{query}%"),
             )
-            .order_by(CopilotDocumentChunk.created_at.desc())
+            .order_by(CerberusDocumentChunk.created_at.desc())
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -57,23 +57,23 @@ async def _search_documents(user_id: int, query: str, limit: int = 10) -> dict:
 async def _get_document_excerpt(user_id: int, chunk_ids: list[str] = None, document_id: str = None) -> dict:
     """Get specific document chunks by ID or document."""
     from db.database import get_session
-    from db.copilot_models import CopilotDocumentChunk
+    from db.cerberus_models import CerberusDocumentChunk
     from sqlalchemy import select
 
     async with get_session() as session:
         if chunk_ids:
-            stmt = select(CopilotDocumentChunk).where(
-                CopilotDocumentChunk.user_id == user_id,
-                CopilotDocumentChunk.id.in_(chunk_ids),
+            stmt = select(CerberusDocumentChunk).where(
+                CerberusDocumentChunk.user_id == user_id,
+                CerberusDocumentChunk.id.in_(chunk_ids),
             )
         elif document_id:
             stmt = (
-                select(CopilotDocumentChunk)
+                select(CerberusDocumentChunk)
                 .where(
-                    CopilotDocumentChunk.user_id == user_id,
-                    CopilotDocumentChunk.document_id == document_id,
+                    CerberusDocumentChunk.user_id == user_id,
+                    CerberusDocumentChunk.document_id == document_id,
                 )
-                .order_by(CopilotDocumentChunk.chunk_index.asc())
+                .order_by(CerberusDocumentChunk.chunk_index.asc())
             )
         else:
             return {"error": "Provide either chunk_ids or document_id"}

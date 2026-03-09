@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useCopilotStore } from '@/stores/copilot-store';
-import { confirmTrade, executeTrade } from '@/lib/copilot-api';
+import { useCerberusStore } from '@/stores/cerberus-store';
+import { confirmTrade, executeTrade } from '@/lib/cerberus-api';
 
 export function ConfirmationModal() {
-  const { pendingProposal, setPendingProposal } = useCopilotStore();
+  const { pendingProposal, setPendingProposal } = useCerberusStore();
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

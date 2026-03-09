@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { sendChatMessage } from '@/lib/copilot-api';
-import { uploadDocument, finalizeDocument } from '@/lib/copilot-api';
-import { useCopilotStore } from '@/stores/copilot-store';
+import { sendChatMessage } from '@/lib/cerberus-api';
+import { uploadDocument, finalizeDocument } from '@/lib/cerberus-api';
+import { useCerberusStore } from '@/stores/cerberus-store';
 import { useUIContextStore } from '@/stores/ui-context-store';
 import { MessageList } from './MessageList';
 
@@ -12,7 +12,7 @@ export function ResearchPanel() {
   const [isResearching, setIsResearching] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { messages, addMessage, activeThreadId, setActiveThread, isStreaming, streamingContent } = useCopilotStore();
+  const { messages, addMessage, activeThreadId, setActiveThread, isStreaming, streamingContent } = useCerberusStore();
   const { pageContext } = useUIContextStore();
 
   const handleResearch = async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import type { TradeSignal } from '@/types/copilot';
+import type { TradeSignal } from '@/types/cerberus';
 
 interface TradeSignalCardProps {
   signal: TradeSignal;

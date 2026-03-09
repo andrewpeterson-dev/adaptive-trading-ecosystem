@@ -1,4 +1,4 @@
-"""Market data tools for the AI Copilot."""
+"""Market data tools for the Cerberus."""
 from __future__ import annotations
 
 import structlog

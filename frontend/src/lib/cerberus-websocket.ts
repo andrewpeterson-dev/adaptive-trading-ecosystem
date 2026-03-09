@@ -1,7 +1,7 @@
-import { useCopilotStore } from '@/stores/copilot-store';
-import type { StreamEvent, AssistantMessage } from '@/types/copilot';
+import { useCerberusStore } from '@/stores/cerberus-store';
+import type { StreamEvent, AssistantMessage } from '@/types/cerberus';
 
-export class CopilotWebSocket {
+export class CerberusWebSocket {
   private ws: WebSocket | null = null;
   private threadId: string;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -18,7 +18,7 @@ export class CopilotWebSocket {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('[CopilotWS] Connected', this.threadId);
+      console.log('[CerberusWS] Connected', this.threadId);
     };
 
     this.ws.onmessage = (event) => {
@@ -26,17 +26,17 @@ export class CopilotWebSocket {
         const data: StreamEvent = JSON.parse(event.data);
         this.handleEvent(data);
       } catch (e) {
-        console.error('[CopilotWS] Parse error', e);
+        console.error('[CerberusWS] Parse error', e);
       }
     };
 
     this.ws.onclose = () => {
-      console.log('[CopilotWS] Disconnected');
+      console.log('[CerberusWS] Disconnected');
       this.reconnectTimeout = setTimeout(() => this.connect(), 3000);
     };
 
     this.ws.onerror = (error) => {
-      console.error('[CopilotWS] Error', error);
+      console.error('[CerberusWS] Error', error);
     };
   }
 
@@ -53,7 +53,7 @@ export class CopilotWebSocket {
   }
 
   private handleEvent(event: StreamEvent): void {
-    const store = useCopilotStore.getState();
+    const store = useCerberusStore.getState();
 
     switch (event.type) {
       case 'assistant.delta':
@@ -108,7 +108,7 @@ export class CopilotWebSocket {
 
       case 'error':
         store.setStreaming(false);
-        console.error('[CopilotWS] Error event', event.data);
+        console.error('[CerberusWS] Error event', event.data);
         break;
 
       case 'done':

@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useCopilotStore } from '@/stores/copilot-store';
+import { useCerberusStore } from '@/stores/cerberus-store';
 import { useUIContextStore } from '@/stores/ui-context-store';
-import { sendChatMessage } from '@/lib/copilot-api';
+import { sendChatMessage } from '@/lib/cerberus-api';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 
@@ -12,7 +12,7 @@ export function ChatPanel() {
     messages, activeThreadId, isStreaming, streamingContent,
     mode, setActiveThread, addMessage, setStreaming,
     clearStreamContent,
-  } = useCopilotStore();
+  } = useCerberusStore();
   const { pageContext } = useUIContextStore();
 
   const handleSend = useCallback(async (text: string) => {

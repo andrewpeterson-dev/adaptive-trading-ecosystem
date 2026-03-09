@@ -98,12 +98,12 @@
   }
 }
 
-/* Copilot highlight animation */
-.copilot-highlight {
-  animation: copilot-glow 2.5s ease-in-out;
+/* Cerberus highlight animation */
+.cerberus-highlight {
+  animation: cerberus-glow 2.5s ease-in-out;
 }
 
-@keyframes copilot-glow {
+@keyframes cerberus-glow {
   0%, 100% { box-shadow: none; }
   50% { box-shadow: 0 0 0 3px hsl(var(--primary) / 0.3), 0 0 12px hsl(var(--primary) / 0.15); }
 }

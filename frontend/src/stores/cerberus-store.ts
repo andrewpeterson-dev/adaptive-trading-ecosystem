@@ -6,14 +6,14 @@ import type {
   TradeProposal,
   ToolCallEvent,
   AssistantMessage,
-} from '@/types/copilot';
+} from '@/types/cerberus';
 
-type CopilotTab = 'chat' | 'strategy' | 'portfolio' | 'bots' | 'research';
+type CerberusTab = 'chat' | 'strategy' | 'portfolio' | 'bots' | 'research';
 
-interface CopilotState {
+interface CerberusState {
   // Panel state
   isOpen: boolean;
-  activeTab: CopilotTab;
+  activeTab: CerberusTab;
 
   // Conversation
   threads: ConversationThread[];
@@ -32,10 +32,10 @@ interface CopilotState {
   pendingProposal: TradeProposal | null;
 
   // Actions
-  openCopilot: () => void;
-  closeCopilot: () => void;
-  toggleCopilot: () => void;
-  setActiveTab: (tab: CopilotTab) => void;
+  openCerberus: () => void;
+  closeCerberus: () => void;
+  toggleCerberus: () => void;
+  setActiveTab: (tab: CerberusTab) => void;
   setMode: (mode: ConversationMode) => void;
 
   // Thread management
@@ -59,7 +59,7 @@ interface CopilotState {
   setPendingProposal: (proposal: TradeProposal | null) => void;
 }
 
-export const useCopilotStore = create<CopilotState>((set) => ({
+export const useCerberusStore = create<CerberusState>((set) => ({
   // Initial state
   isOpen: false,
   activeTab: 'chat',
@@ -73,9 +73,9 @@ export const useCopilotStore = create<CopilotState>((set) => ({
   pendingProposal: null,
 
   // Panel actions
-  openCopilot: () => set({ isOpen: true }),
-  closeCopilot: () => set({ isOpen: false }),
-  toggleCopilot: () => set((state) => ({ isOpen: !state.isOpen })),
+  openCerberus: () => set({ isOpen: true }),
+  closeCerberus: () => set({ isOpen: false }),
+  toggleCerberus: () => set((state) => ({ isOpen: !state.isOpen })),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setMode: (mode) => set({ mode }),
 

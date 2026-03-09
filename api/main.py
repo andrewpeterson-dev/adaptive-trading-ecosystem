@@ -111,8 +111,8 @@ app.include_router(admin_routes.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(api_connections_routes.router, prefix="/api/v2", tags=["api-connections"])
 app.include_router(market_routes.router, prefix="/api/market", tags=["Market Data"])
 app.include_router(ws_routes.router, prefix="/ws", tags=["WebSocket"])
-app.include_router(ai_chat.router, prefix="/api/ai", tags=["AI Copilot"])
-app.include_router(ai_tools.router, prefix="/api/ai/tools", tags=["AI Tools"])
+app.include_router(ai_chat.router, prefix="/api/ai", tags=["Cerberus"])
+app.include_router(ai_tools.router, prefix="/api/ai/tools", tags=["Cerberus Tools"])
 app.include_router(documents_routes.router, prefix="/api/documents", tags=["Documents"])
 
 

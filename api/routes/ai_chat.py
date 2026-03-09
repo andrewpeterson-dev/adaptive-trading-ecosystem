@@ -1,4 +1,4 @@
-"""AI Copilot chat API routes."""
+"""Cerberus chat API routes."""
 from __future__ import annotations
 
 import json
@@ -41,7 +41,7 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat")
 async def chat(request: Request, body: ChatRequest):
-    """Initiate a copilot chat turn. Returns thread ID and stream channel."""
+    """Initiate a Cerberus chat turn. Returns thread ID and stream channel."""
     user_id = request.state.user_id
     controller = _get_controller()
 
@@ -66,7 +66,7 @@ async def chat(request: Request, body: ChatRequest):
 
 @router.websocket("/stream/{thread_id}")
 async def stream(websocket: WebSocket, thread_id: str):
-    """WebSocket endpoint for streaming copilot responses."""
+    """WebSocket endpoint for streaming Cerberus responses."""
     await websocket.accept()
 
     try:
@@ -114,15 +114,15 @@ async def stream(websocket: WebSocket, thread_id: str):
 async def list_threads(request: Request, limit: int = 20):
     """List conversation threads for the current user."""
     from db.database import get_session
-    from db.copilot_models import CopilotConversationThread
+    from db.cerberus_models import CerberusConversationThread
     from sqlalchemy import select
 
     user_id = request.state.user_id
     async with get_session() as session:
         stmt = (
-            select(CopilotConversationThread)
-            .where(CopilotConversationThread.user_id == user_id)
-            .order_by(CopilotConversationThread.updated_at.desc())
+            select(CerberusConversationThread)
+            .where(CerberusConversationThread.user_id == user_id)
+            .order_by(CerberusConversationThread.updated_at.desc())
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -146,18 +146,18 @@ async def list_threads(request: Request, limit: int = 20):
 async def get_thread_messages(request: Request, thread_id: str, limit: int = 50):
     """Get messages for a conversation thread."""
     from db.database import get_session
-    from db.copilot_models import CopilotConversationMessage
+    from db.cerberus_models import CerberusConversationMessage
     from sqlalchemy import select
 
     user_id = request.state.user_id
     async with get_session() as session:
         stmt = (
-            select(CopilotConversationMessage)
+            select(CerberusConversationMessage)
             .where(
-                CopilotConversationMessage.thread_id == thread_id,
-                CopilotConversationMessage.user_id == user_id,
+                CerberusConversationMessage.thread_id == thread_id,
+                CerberusConversationMessage.user_id == user_id,
             )
-            .order_by(CopilotConversationMessage.created_at.asc())
+            .order_by(CerberusConversationMessage.created_at.asc())
             .limit(limit)
         )
         result = await session.execute(stmt)

@@ -1,4 +1,4 @@
-"""AI Copilot tool system."""
+"""Cerberus tool system."""
 
 from .base import ToolDefinition, ToolCategory, ToolSideEffect, ToolInput, ToolOutput
 from .registry import ToolRegistry, get_registry

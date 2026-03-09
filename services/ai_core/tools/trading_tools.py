@@ -1,4 +1,4 @@
-"""Trading tools for the AI Copilot.
+"""Trading tools for the Cerberus.
 
 All write operations create records but do NOT execute trades directly.
 Live trade execution requires explicit user confirmation via the proposal flow.
@@ -28,26 +28,26 @@ async def _create_bot(
 ) -> dict:
     """Create a new bot in draft status."""
     from db.database import get_session
-    from db.copilot_models import CopilotBot, CopilotBotVersion, BotStatus
+    from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
 
     bot_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
 
     async with get_session() as session:
-        bot = CopilotBot(
+        bot = CerberusBot(
             id=bot_id,
             user_id=user_id,
             name=name,
             status=BotStatus.DRAFT,
             current_version_id=version_id,
         )
-        version = CopilotBotVersion(
+        version = CerberusBotVersion(
             id=version_id,
             bot_id=bot_id,
             version_number=1,
             config_json=config or {"strategy_name": strategy_name},
             diff_summary="Initial version",
-            created_by="copilot",
+            created_by="cerberus",
         )
         session.add(bot)
         session.add(version)
@@ -69,32 +69,32 @@ async def _modify_bot(
 ) -> dict:
     """Modify bot config by creating a new version."""
     from db.database import get_session
-    from db.copilot_models import CopilotBot, CopilotBotVersion
+    from db.cerberus_models import CerberusBot, CerberusBotVersion
     from sqlalchemy import select, func
 
     async with get_session() as session:
         # Verify ownership
-        stmt = select(CopilotBot).where(CopilotBot.id == bot_id, CopilotBot.user_id == user_id)
+        stmt = select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
         result = await session.execute(stmt)
         bot = result.scalar_one_or_none()
         if not bot:
             return {"error": "Bot not found or not owned by user", "bot_id": bot_id}
 
         # Get next version number
-        ver_stmt = select(func.max(CopilotBotVersion.version_number)).where(
-            CopilotBotVersion.bot_id == bot_id
+        ver_stmt = select(func.max(CerberusBotVersion.version_number)).where(
+            CerberusBotVersion.bot_id == bot_id
         )
         ver_result = await session.execute(ver_stmt)
         max_ver = ver_result.scalar() or 0
 
         version_id = str(uuid.uuid4())
-        version = CopilotBotVersion(
+        version = CerberusBotVersion(
             id=version_id,
             bot_id=bot_id,
             version_number=max_ver + 1,
             config_json=config or {},
-            diff_summary=diff_summary or "Updated via copilot",
-            created_by="copilot",
+            diff_summary=diff_summary or "Updated via Cerberus",
+            created_by="cerberus",
         )
         session.add(version)
         bot.current_version_id = version_id
@@ -103,7 +103,7 @@ async def _modify_bot(
         "bot_id": bot_id,
         "version_id": version_id,
         "version_number": max_ver + 1,
-        "diff_summary": diff_summary or "Updated via copilot",
+        "diff_summary": diff_summary or "Updated via Cerberus",
     }
 
 
@@ -125,11 +125,11 @@ async def _resume_bot(user_id: int, bot_id: str) -> dict:
 async def _set_bot_status(user_id: int, bot_id: str, new_status: str) -> dict:
     """Set bot status (internal helper)."""
     from db.database import get_session
-    from db.copilot_models import CopilotBot, BotStatus
+    from db.cerberus_models import CerberusBot, BotStatus
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotBot).where(CopilotBot.id == bot_id, CopilotBot.user_id == user_id)
+        stmt = select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
         result = await session.execute(stmt)
         bot = result.scalar_one_or_none()
         if not bot:
@@ -154,12 +154,12 @@ async def _backtest_strategy(
 ) -> dict:
     """Enqueue a backtest run."""
     from db.database import get_session
-    from db.copilot_models import CopilotBacktest
+    from db.cerberus_models import CerberusBacktest
 
     backtest_id = str(uuid.uuid4())
 
     async with get_session() as session:
-        bt = CopilotBacktest(
+        bt = CerberusBacktest(
             id=backtest_id,
             user_id=user_id,
             bot_id=bot_id,
@@ -190,7 +190,7 @@ async def _create_trade_proposal(
 ) -> dict:
     """Create a trade proposal (draft). Does NOT execute."""
     from db.database import get_session
-    from db.copilot_models import CopilotTradeProposal, ProposalStatus
+    from db.cerberus_models import CerberusTradeProposal, ProposalStatus
 
     proposal_id = str(uuid.uuid4())
     proposal_json = {
@@ -202,7 +202,7 @@ async def _create_trade_proposal(
     }
 
     async with get_session() as session:
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=proposal_id,
             user_id=user_id,
             thread_id=thread_id,

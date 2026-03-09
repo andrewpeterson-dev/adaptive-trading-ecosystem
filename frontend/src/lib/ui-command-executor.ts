@@ -1,5 +1,5 @@
 import { validateUICommand, type UICommand } from '@/types/ui-commands';
-import { useCopilotStore } from '@/stores/copilot-store';
+import { useCerberusStore } from '@/stores/cerberus-store';
 import { useUIContextStore } from '@/stores/ui-context-store';
 
 export function executeUICommands(commands: UICommand[]): void {
@@ -13,11 +13,11 @@ export function executeUICommands(commands: UICommand[]): void {
 }
 
 function executeCommand(cmd: UICommand): void {
-  const copilot = useCopilotStore.getState();
+  const cerberus = useCerberusStore.getState();
 
   switch (cmd.action) {
     case 'open_panel':
-      copilot.openCopilot();
+      cerberus.openCerberus();
       if (cmd.panel) {
         const tabMap: Record<string, 'chat' | 'strategy' | 'portfolio' | 'bots' | 'research'> = {
           chat: 'chat', strategy_builder: 'strategy', strategy: 'strategy',
@@ -25,12 +25,12 @@ function executeCommand(cmd: UICommand): void {
           bot_control: 'bots', bots: 'bots', research: 'research',
         };
         const tab = tabMap[cmd.panel];
-        if (tab) copilot.setActiveTab(tab);
+        if (tab) cerberus.setActiveTab(tab);
       }
       break;
 
     case 'switch_tab':
-      if (cmd.tab) copilot.setActiveTab(cmd.tab as any);
+      if (cmd.tab) cerberus.setActiveTab(cmd.tab as any);
       break;
 
     case 'navigate':
@@ -54,8 +54,8 @@ function executeCommand(cmd: UICommand): void {
       if (cmd.componentId) {
         const el = document.querySelector(`[data-component-id="${cmd.componentId}"]`);
         if (el) {
-          el.classList.add('copilot-highlight');
-          setTimeout(() => el.classList.remove('copilot-highlight'), cmd.durationMs || 2500);
+          el.classList.add('cerberus-highlight');
+          setTimeout(() => el.classList.remove('cerberus-highlight'), cmd.durationMs || 2500);
         }
       }
       break;
@@ -63,7 +63,7 @@ function executeCommand(cmd: UICommand): void {
     case 'open_confirmation_modal':
       if (cmd.proposalId) {
         // Trigger proposal display
-        copilot.openCopilot();
+        cerberus.openCerberus();
       }
       break;
 

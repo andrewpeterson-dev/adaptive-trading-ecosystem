@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { PageContext } from '@/types/copilot';
+import type { PageContext } from '@/types/cerberus';
 
 interface UIContextState {
   pageContext: PageContext;

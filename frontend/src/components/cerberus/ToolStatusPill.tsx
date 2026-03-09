@@ -1,6 +1,6 @@
 'use client';
 
-import type { ToolCallEvent } from '@/types/copilot';
+import type { ToolCallEvent } from '@/types/cerberus';
 
 interface ToolStatusPillProps {
   toolCall: ToolCallEvent;

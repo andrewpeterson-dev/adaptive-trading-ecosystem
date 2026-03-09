@@ -1,7 +1,7 @@
 """
-SQLAlchemy ORM models for the AI Copilot subsystem.
+SQLAlchemy ORM models for the Cerberus subsystem.
 
-All tables are prefixed with ``copilot_`` to avoid conflicts with the core
+All tables are prefixed with ``cerberus_`` to avoid conflicts with the core
 trading models.  Primary keys use UUID strings (String(36)) instead of
 auto-incrementing integers so that IDs can be generated client-side and
 remain globally unique across services.
@@ -96,9 +96,9 @@ class ToolSideEffect(str, enum.Enum):
 
 # ── Models ───────────────────────────────────────────────────────────────────
 
-class CopilotBrokerageAccount(Base):
+class CerberusBrokerageAccount(Base):
     """Provider connections — links a user to a brokerage provider."""
-    __tablename__ = "copilot_brokerage_accounts"
+    __tablename__ = "cerberus_brokerage_accounts"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -111,24 +111,24 @@ class CopilotBrokerageAccount(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    portfolio_snapshots = relationship("CopilotPortfolioSnapshot", back_populates="brokerage_account")
-    positions = relationship("CopilotPosition", back_populates="brokerage_account")
-    orders = relationship("CopilotOrder", back_populates="brokerage_account")
-    trades = relationship("CopilotTrade", back_populates="brokerage_account")
+    portfolio_snapshots = relationship("CerberusPortfolioSnapshot", back_populates="brokerage_account")
+    positions = relationship("CerberusPosition", back_populates="brokerage_account")
+    orders = relationship("CerberusOrder", back_populates="brokerage_account")
+    trades = relationship("CerberusTrade", back_populates="brokerage_account")
 
     __table_args__ = (
-        Index("ix_copilot_brkacct_user", "user_id"),
-        Index("ix_copilot_brkacct_provider", "provider"),
+        Index("ix_cerberus_brkacct_user", "user_id"),
+        Index("ix_cerberus_brkacct_provider", "provider"),
     )
 
 
-class CopilotPortfolioSnapshot(Base):
+class CerberusPortfolioSnapshot(Base):
     """Point-in-time portfolio snapshots."""
-    __tablename__ = "copilot_portfolio_snapshots"
+    __tablename__ = "cerberus_portfolio_snapshots"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=False)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=False)
     snapshot_ts = Column(DateTime, nullable=False, default=datetime.utcnow)
     cash = Column(Float, nullable=True)
     equity = Column(Float, nullable=True)
@@ -138,21 +138,21 @@ class CopilotPortfolioSnapshot(Base):
     total_pnl = Column(Float, nullable=True)
     payload_json = Column(JSON, default=dict)
 
-    brokerage_account = relationship("CopilotBrokerageAccount", back_populates="portfolio_snapshots")
+    brokerage_account = relationship("CerberusBrokerageAccount", back_populates="portfolio_snapshots")
 
     __table_args__ = (
-        Index("ix_copilot_snap_user", "user_id"),
-        Index("ix_copilot_snap_acct_ts", "brokerage_account_id", "snapshot_ts"),
+        Index("ix_cerberus_snap_user", "user_id"),
+        Index("ix_cerberus_snap_acct_ts", "brokerage_account_id", "snapshot_ts"),
     )
 
 
-class CopilotPosition(Base):
+class CerberusPosition(Base):
     """Current positions."""
-    __tablename__ = "copilot_positions"
+    __tablename__ = "cerberus_positions"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=False)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=False)
     symbol = Column(String(32), nullable=False)
     asset_type = Column(String(32), nullable=True)
     quantity = Column(Float, nullable=False)
@@ -165,21 +165,21 @@ class CopilotPosition(Base):
     metadata_json = Column(JSON, default=dict)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    brokerage_account = relationship("CopilotBrokerageAccount", back_populates="positions")
+    brokerage_account = relationship("CerberusBrokerageAccount", back_populates="positions")
 
     __table_args__ = (
-        Index("ix_copilot_pos_user", "user_id"),
-        Index("ix_copilot_pos_acct_symbol", "brokerage_account_id", "symbol"),
+        Index("ix_cerberus_pos_user", "user_id"),
+        Index("ix_cerberus_pos_acct_symbol", "brokerage_account_id", "symbol"),
     )
 
 
-class CopilotOrder(Base):
+class CerberusOrder(Base):
     """Order records."""
-    __tablename__ = "copilot_orders"
+    __tablename__ = "cerberus_orders"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=False)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=False)
     broker_order_id = Column(String(128), nullable=True)
     symbol = Column(String(32), nullable=False)
     asset_type = Column(String(32), nullable=True)
@@ -194,22 +194,22 @@ class CopilotOrder(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    brokerage_account = relationship("CopilotBrokerageAccount", back_populates="orders")
+    brokerage_account = relationship("CerberusBrokerageAccount", back_populates="orders")
 
     __table_args__ = (
-        Index("ix_copilot_ord_user", "user_id"),
-        Index("ix_copilot_ord_acct", "brokerage_account_id"),
-        Index("ix_copilot_ord_symbol_status", "symbol", "status"),
+        Index("ix_cerberus_ord_user", "user_id"),
+        Index("ix_cerberus_ord_acct", "brokerage_account_id"),
+        Index("ix_cerberus_ord_symbol_status", "symbol", "status"),
     )
 
 
-class CopilotTrade(Base):
+class CerberusTrade(Base):
     """Trade records — completed trade lifecycle."""
-    __tablename__ = "copilot_trades"
+    __tablename__ = "cerberus_trades"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=True)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=True)
     symbol = Column(String(32), nullable=False)
     asset_type = Column(String(32), nullable=True)
     side = Column(String(16), nullable=False)
@@ -227,19 +227,19 @@ class CopilotTrade(Base):
     payload_json = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    brokerage_account = relationship("CopilotBrokerageAccount", back_populates="trades")
+    brokerage_account = relationship("CerberusBrokerageAccount", back_populates="trades")
 
     __table_args__ = (
-        Index("ix_copilot_trd_user", "user_id"),
-        Index("ix_copilot_trd_symbol", "symbol"),
-        Index("ix_copilot_trd_strategy", "strategy_tag"),
-        Index("ix_copilot_trd_bot", "bot_id"),
+        Index("ix_cerberus_trd_user", "user_id"),
+        Index("ix_cerberus_trd_symbol", "symbol"),
+        Index("ix_cerberus_trd_strategy", "strategy_tag"),
+        Index("ix_cerberus_trd_bot", "bot_id"),
     )
 
 
-class CopilotBot(Base):
+class CerberusBot(Base):
     """Bot definitions."""
-    __tablename__ = "copilot_bots"
+    __tablename__ = "cerberus_bots"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -253,23 +253,23 @@ class CopilotBot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    versions = relationship("CopilotBotVersion", back_populates="bot", order_by="CopilotBotVersion.version_number")
+    versions = relationship("CerberusBotVersion", back_populates="bot", order_by="CerberusBotVersion.version_number")
 
     __table_args__ = (
-        Index("ix_copilot_bot_user", "user_id"),
+        Index("ix_cerberus_bot_user", "user_id"),
         CheckConstraint(
             "status IN ('draft','running','paused','stopped','error')",
-            name="ck_copilot_bot_status",
+            name="ck_cerberus_bot_status",
         ),
     )
 
 
-class CopilotBotVersion(Base):
+class CerberusBotVersion(Base):
     """Bot version history."""
-    __tablename__ = "copilot_bot_versions"
+    __tablename__ = "cerberus_bot_versions"
 
     id = Column(String(36), primary_key=True, default=_uuid)
-    bot_id = Column(String(36), ForeignKey("copilot_bots.id"), nullable=False)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
     version_number = Column(Integer, nullable=False)
     config_json = Column(JSON, default=dict)
     diff_summary = Column(Text, nullable=True)
@@ -278,17 +278,17 @@ class CopilotBotVersion(Base):
     backtest_id = Column(String(36), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    bot = relationship("CopilotBot", back_populates="versions")
+    bot = relationship("CerberusBot", back_populates="versions")
 
     __table_args__ = (
-        Index("ix_copilot_botver_bot", "bot_id"),
-        Index("ix_copilot_botver_bot_num", "bot_id", "version_number", unique=True),
+        Index("ix_cerberus_botver_bot", "bot_id"),
+        Index("ix_cerberus_botver_bot_num", "bot_id", "version_number", unique=True),
     )
 
 
-class CopilotBacktest(Base):
+class CerberusBacktest(Base):
     """Backtest records."""
-    __tablename__ = "copilot_backtests"
+    __tablename__ = "cerberus_backtests"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -305,14 +305,14 @@ class CopilotBacktest(Base):
     completed_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
-        Index("ix_copilot_bt_user", "user_id"),
-        Index("ix_copilot_bt_bot", "bot_id"),
+        Index("ix_cerberus_bt_user", "user_id"),
+        Index("ix_cerberus_bt_bot", "bot_id"),
     )
 
 
-class CopilotConversationThread(Base):
+class CerberusConversationThread(Base):
     """Chat threads."""
-    __tablename__ = "copilot_conversation_threads"
+    __tablename__ = "cerberus_conversation_threads"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -325,23 +325,23 @@ class CopilotConversationThread(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     messages = relationship(
-        "CopilotConversationMessage",
+        "CerberusConversationMessage",
         back_populates="thread",
-        order_by="CopilotConversationMessage.created_at",
+        order_by="CerberusConversationMessage.created_at",
     )
 
     __table_args__ = (
-        Index("ix_copilot_thread_user", "user_id"),
-        Index("ix_copilot_thread_updated", "updated_at"),
+        Index("ix_cerberus_thread_user", "user_id"),
+        Index("ix_cerberus_thread_updated", "updated_at"),
     )
 
 
-class CopilotConversationMessage(Base):
+class CerberusConversationMessage(Base):
     """Chat messages."""
-    __tablename__ = "copilot_conversation_messages"
+    __tablename__ = "cerberus_conversation_messages"
 
     id = Column(String(36), primary_key=True, default=_uuid)
-    thread_id = Column(String(36), ForeignKey("copilot_conversation_threads.id"), nullable=False)
+    thread_id = Column(String(36), ForeignKey("cerberus_conversation_threads.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(_enum(MessageRole), nullable=False)
     content_md = Column(Text, nullable=True)
@@ -352,18 +352,18 @@ class CopilotConversationMessage(Base):
     tool_calls_json = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    thread = relationship("CopilotConversationThread", back_populates="messages")
+    thread = relationship("CerberusConversationThread", back_populates="messages")
 
     __table_args__ = (
-        Index("ix_copilot_msg_thread", "thread_id"),
-        Index("ix_copilot_msg_user", "user_id"),
-        Index("ix_copilot_msg_thread_ts", "thread_id", "created_at"),
+        Index("ix_cerberus_msg_thread", "thread_id"),
+        Index("ix_cerberus_msg_user", "user_id"),
+        Index("ix_cerberus_msg_thread_ts", "thread_id", "created_at"),
     )
 
 
-class CopilotMemoryItem(Base):
+class CerberusMemoryItem(Base):
     """Semantic memory items."""
-    __tablename__ = "copilot_memory_items"
+    __tablename__ = "cerberus_memory_items"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -376,15 +376,15 @@ class CopilotMemoryItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_mem_user", "user_id"),
-        Index("ix_copilot_mem_kind", "kind"),
-        Index("ix_copilot_mem_source", "source_table", "source_id"),
+        Index("ix_cerberus_mem_user", "user_id"),
+        Index("ix_cerberus_mem_kind", "kind"),
+        Index("ix_cerberus_mem_source", "source_table", "source_id"),
     )
 
 
-class CopilotDocumentFile(Base):
+class CerberusDocumentFile(Base):
     """Uploaded documents."""
-    __tablename__ = "copilot_document_files"
+    __tablename__ = "cerberus_document_files"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -401,24 +401,24 @@ class CopilotDocumentFile(Base):
     indexed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    chunks = relationship("CopilotDocumentChunk", back_populates="document", cascade="all, delete-orphan")
+    chunks = relationship("CerberusDocumentChunk", back_populates="document", cascade="all, delete-orphan")
 
     __table_args__ = (
-        Index("ix_copilot_docfile_user", "user_id"),
-        Index("ix_copilot_docfile_status", "status"),
+        Index("ix_cerberus_docfile_user", "user_id"),
+        Index("ix_cerberus_docfile_status", "status"),
         CheckConstraint(
             "status IN ('pending','processing','indexed','failed')",
-            name="ck_copilot_docfile_status",
+            name="ck_cerberus_docfile_status",
         ),
     )
 
 
-class CopilotDocumentChunk(Base):
+class CerberusDocumentChunk(Base):
     """Document chunks for vector search."""
-    __tablename__ = "copilot_document_chunks"
+    __tablename__ = "cerberus_document_chunks"
 
     id = Column(String(36), primary_key=True, default=_uuid)
-    document_id = Column(String(36), ForeignKey("copilot_document_files.id"), nullable=False)
+    document_id = Column(String(36), ForeignKey("cerberus_document_files.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     page_number = Column(Integer, nullable=True)
@@ -428,18 +428,18 @@ class CopilotDocumentChunk(Base):
     embedding_json = Column(Text, nullable=True)  # TEXT for SQLite compatibility
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    document = relationship("CopilotDocumentFile", back_populates="chunks")
+    document = relationship("CerberusDocumentFile", back_populates="chunks")
 
     __table_args__ = (
-        Index("ix_copilot_chunk_doc", "document_id"),
-        Index("ix_copilot_chunk_user", "user_id"),
-        Index("ix_copilot_chunk_doc_idx", "document_id", "chunk_index"),
+        Index("ix_cerberus_chunk_doc", "document_id"),
+        Index("ix_cerberus_chunk_user", "user_id"),
+        Index("ix_cerberus_chunk_doc_idx", "document_id", "chunk_index"),
     )
 
 
-class CopilotUIContextEvent(Base):
+class CerberusUIContextEvent(Base):
     """UI page context events — tracks what the user is looking at."""
-    __tablename__ = "copilot_ui_context_events"
+    __tablename__ = "cerberus_ui_context_events"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -455,18 +455,18 @@ class CopilotUIContextEvent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_uictx_user", "user_id"),
-        Index("ix_copilot_uictx_thread", "thread_id"),
+        Index("ix_cerberus_uictx_user", "user_id"),
+        Index("ix_cerberus_uictx_thread", "thread_id"),
     )
 
 
-class CopilotTradeProposal(Base):
+class CerberusTradeProposal(Base):
     """Trade proposals generated by the AI."""
-    __tablename__ = "copilot_trade_proposals"
+    __tablename__ = "cerberus_trade_proposals"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    thread_id = Column(String(36), ForeignKey("copilot_conversation_threads.id"), nullable=True)
+    thread_id = Column(String(36), ForeignKey("cerberus_conversation_threads.id"), nullable=True)
     proposal_json = Column(JSON, default=dict)
     risk_json = Column(JSON, default=dict)
     explanation_md = Column(Text, nullable=True)
@@ -479,25 +479,25 @@ class CopilotTradeProposal(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    confirmations = relationship("CopilotTradeConfirmation", back_populates="proposal")
+    confirmations = relationship("CerberusTradeConfirmation", back_populates="proposal")
 
     __table_args__ = (
-        Index("ix_copilot_proposal_user", "user_id"),
-        Index("ix_copilot_proposal_thread", "thread_id"),
-        Index("ix_copilot_proposal_status", "status"),
+        Index("ix_cerberus_proposal_user", "user_id"),
+        Index("ix_cerberus_proposal_thread", "thread_id"),
+        Index("ix_cerberus_proposal_status", "status"),
         CheckConstraint(
             "status IN ('pending','confirmed','rejected','expired','executed','failed')",
-            name="ck_copilot_proposal_status",
+            name="ck_cerberus_proposal_status",
         ),
     )
 
 
-class CopilotTradeConfirmation(Base):
+class CerberusTradeConfirmation(Base):
     """Confirmation tokens for trade proposals."""
-    __tablename__ = "copilot_trade_confirmations"
+    __tablename__ = "cerberus_trade_confirmations"
 
     id = Column(String(36), primary_key=True, default=_uuid)
-    proposal_id = Column(String(36), ForeignKey("copilot_trade_proposals.id"), nullable=False)
+    proposal_id = Column(String(36), ForeignKey("cerberus_trade_proposals.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     confirmation_token_hash = Column(String(256), nullable=False)
     confirmed_at = Column(DateTime, nullable=True)
@@ -505,17 +505,17 @@ class CopilotTradeConfirmation(Base):
     status = Column(String(32), nullable=False, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    proposal = relationship("CopilotTradeProposal", back_populates="confirmations")
+    proposal = relationship("CerberusTradeProposal", back_populates="confirmations")
 
     __table_args__ = (
-        Index("ix_copilot_confirm_proposal", "proposal_id"),
-        Index("ix_copilot_confirm_user", "user_id"),
+        Index("ix_cerberus_confirm_proposal", "proposal_id"),
+        Index("ix_cerberus_confirm_user", "user_id"),
     )
 
 
-class CopilotAIToolCall(Base):
+class CerberusAIToolCall(Base):
     """Tool call logs — audit every tool invocation."""
-    __tablename__ = "copilot_ai_tool_calls"
+    __tablename__ = "cerberus_ai_tool_calls"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     thread_id = Column(String(36), nullable=True)
@@ -531,15 +531,15 @@ class CopilotAIToolCall(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_toolcall_thread", "thread_id"),
-        Index("ix_copilot_toolcall_user", "user_id"),
-        Index("ix_copilot_toolcall_name", "tool_name"),
+        Index("ix_cerberus_toolcall_thread", "thread_id"),
+        Index("ix_cerberus_toolcall_user", "user_id"),
+        Index("ix_cerberus_toolcall_name", "tool_name"),
     )
 
 
-class CopilotAuditLog(Base):
+class CerberusAuditLog(Base):
     """Audit trail — tracks all significant user/system actions."""
-    __tablename__ = "copilot_audit_log"
+    __tablename__ = "cerberus_audit_log"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -553,8 +553,8 @@ class CopilotAuditLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_audit_user", "user_id"),
-        Index("ix_copilot_audit_action", "action_type"),
-        Index("ix_copilot_audit_resource", "resource_type", "resource_id"),
-        Index("ix_copilot_audit_trace", "trace_id"),
+        Index("ix_cerberus_audit_user", "user_id"),
+        Index("ix_cerberus_audit_action", "action_type"),
+        Index("ix_cerberus_audit_resource", "resource_type", "resource_id"),
+        Index("ix_cerberus_audit_trace", "trace_id"),
     )

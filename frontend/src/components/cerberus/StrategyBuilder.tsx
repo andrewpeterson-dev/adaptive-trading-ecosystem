@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useCopilotStore } from '@/stores/copilot-store';
-import { sendChatMessage } from '@/lib/copilot-api';
+import { useCerberusStore } from '@/stores/cerberus-store';
+import { sendChatMessage } from '@/lib/cerberus-api';
 import { useUIContextStore } from '@/stores/ui-context-store';
 
 export function StrategyBuilder() {
   const [strategyPrompt, setStrategyPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const { addMessage, activeThreadId, setActiveThread } = useCopilotStore();
+  const { addMessage, activeThreadId, setActiveThread } = useCerberusStore();
   const { pageContext } = useUIContextStore();
 
   const handleGenerate = async () => {

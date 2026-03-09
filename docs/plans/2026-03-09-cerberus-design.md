@@ -1,16 +1,16 @@
-# AI Copilot Design Document
+# Cerberus Design Document
 
 **Date**: 2026-03-09
 **Status**: Approved (user-provided spec)
-**Scope**: Embedded AI trading copilot for the adaptive-trading-ecosystem platform
+**Scope**: Embedded Cerberus AI trading assistant for the adaptive-trading-ecosystem platform
 
 ## Summary
 
-Add an embedded AI Copilot to the existing trading platform. The copilot provides Bloomberg Terminal-style AI assistance: portfolio analysis, strategy building, bot management, document research, and safe trade proposals — all through a floating chat widget integrated into the existing Next.js frontend backed by a FastAPI AI core service.
+Add an embedded Cerberus AI assistant to the existing trading platform. Cerberus provides Bloomberg Terminal-style AI assistance: portfolio analysis, strategy building, bot management, document research, and safe trade proposals — all through a floating chat widget integrated into the existing Next.js frontend backed by a FastAPI AI core service.
 
 ## Key Architectural Decisions
 
-1. **LLM is copilot, not trader** — AI analyzes, explains, drafts, orchestrates. Never owns execution authority.
+1. **LLM is assistant, not trader** — AI analyzes, explains, drafts, orchestrates. Never owns execution authority.
 2. **Model routing**: gpt-5.4 (primary), gpt-4.1 (simple), claude-sonnet-4-6 (fallback/research), Perplexity (external search)
 3. **Trade safety**: Draft-first → risk check → user confirm → token validate → re-check → execute → audit
 4. **Existing stack preserved**: FastAPI backend, Next.js frontend, SQLAlchemy models, JWT auth, broker adapters
@@ -35,7 +35,7 @@ Add an embedded AI Copilot to the existing trading platform. The copilot provide
 - Trade proposal/confirmation flow
 - Trade analytics service + materialized views
 - UI command system (allowlisted semantic commands)
-- Frontend copilot widget (floating bubble → slide-out panel with 5 tabs)
+- Frontend Cerberus widget (floating bubble → slide-out panel with 5 tabs)
 - Shared TypeScript types for API payloads and UI commands
 - WebSocket streaming for assistant responses
 - Feature flags for progressive rollout
@@ -88,7 +88,7 @@ adaptive-trading-ecosystem/
 │   ├── ai_tools.py
 │   └── documents.py
 ├── frontend/src/
-│   ├── components/copilot/
+│   ├── components/cerberus/
 │   │   ├── AIWidget.tsx
 │   │   ├── ChatPanel.tsx
 │   │   ├── MessageList.tsx
@@ -103,15 +103,15 @@ adaptive-trading-ecosystem/
 │   │   ├── ConfirmationModal.tsx
 │   │   └── ToolStatusPill.tsx
 │   ├── stores/
-│   │   ├── copilot-store.ts
+│   │   ├── cerberus-store.ts
 │   │   ├── ui-context-store.ts
 │   │   └── portfolio-store.ts
 │   ├── lib/
-│   │   ├── copilot-api.ts
-│   │   ├── copilot-websocket.ts
+│   │   ├── cerberus-api.ts
+│   │   ├── cerberus-websocket.ts
 │   │   └── ui-command-executor.ts
 │   └── types/
-│       ├── copilot.ts
+│       ├── cerberus.ts
 │       └── ui-commands.ts
 └── packages/
     └── shared-types/

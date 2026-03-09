@@ -8,7 +8,7 @@ from config.settings import get_settings
 settings = get_settings()
 
 app = Celery(
-    "copilot_workers",
+    "cerberus_workers",
     broker=settings.effective_celery_broker_url,
     backend=settings.effective_celery_broker_url,
 )

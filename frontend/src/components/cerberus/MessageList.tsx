@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
-import type { ConversationMessageItem } from '@/types/copilot';
+import type { ConversationMessageItem } from '@/types/cerberus';
 import { CitationList } from './CitationList';
 
 interface MessageListProps {
@@ -22,7 +22,7 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
       <div className="flex-1 flex items-center justify-center text-center px-6">
         <div className="text-muted-foreground">
           <p className="text-sm font-medium">No messages yet</p>
-          <p className="text-xs mt-1">Start a conversation with the AI copilot.</p>
+          <p className="text-xs mt-1">Start a conversation with Cerberus.</p>
         </div>
       </div>
     );

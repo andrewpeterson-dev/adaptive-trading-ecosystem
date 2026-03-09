@@ -26,12 +26,12 @@ class MemoryRetrieval:
             return {}
 
         keys = {
-            "portfolio": f"copilot:user:{user_id}:portfolio",
-            "positions": f"copilot:user:{user_id}:positions",
-            "risk": f"copilot:user:{user_id}:risk",
-            "active_bots": f"copilot:user:{user_id}:active_bots",
-            "ui_context": f"copilot:user:{user_id}:ui_context",
-            "market_context": f"copilot:user:{user_id}:market_context",
+            "portfolio": f"cerberus:user:{user_id}:portfolio",
+            "positions": f"cerberus:user:{user_id}:positions",
+            "risk": f"cerberus:user:{user_id}:risk",
+            "active_bots": f"cerberus:user:{user_id}:active_bots",
+            "ui_context": f"cerberus:user:{user_id}:ui_context",
+            "market_context": f"cerberus:user:{user_id}:market_context",
         }
 
         context = {}
@@ -50,17 +50,17 @@ class MemoryRetrieval:
         self, thread_id: str, user_id: int, limit: int = 20,
     ) -> list[dict]:
         """Fetch recent messages from the conversation thread."""
-        from db.copilot_models import CopilotConversationMessage
+        from db.cerberus_models import CerberusConversationMessage
         from sqlalchemy import select
 
         async with get_session() as session:
             stmt = (
-                select(CopilotConversationMessage)
+                select(CerberusConversationMessage)
                 .where(
-                    CopilotConversationMessage.thread_id == thread_id,
-                    CopilotConversationMessage.user_id == user_id,
+                    CerberusConversationMessage.thread_id == thread_id,
+                    CerberusConversationMessage.user_id == user_id,
                 )
-                .order_by(CopilotConversationMessage.created_at.desc())
+                .order_by(CerberusConversationMessage.created_at.desc())
                 .limit(limit)
             )
             result = await session.execute(stmt)
@@ -76,17 +76,17 @@ class MemoryRetrieval:
 
     async def get_thread_summary(self, thread_id: str) -> Optional[str]:
         """Get the latest thread summary from memory items."""
-        from db.copilot_models import CopilotMemoryItem
+        from db.cerberus_models import CerberusMemoryItem
         from sqlalchemy import select
 
         async with get_session() as session:
             stmt = (
-                select(CopilotMemoryItem)
+                select(CerberusMemoryItem)
                 .where(
-                    CopilotMemoryItem.thread_id == thread_id,
-                    CopilotMemoryItem.memory_type == "thread_summary",
+                    CerberusMemoryItem.thread_id == thread_id,
+                    CerberusMemoryItem.memory_type == "thread_summary",
                 )
-                .order_by(CopilotMemoryItem.created_at.desc())
+                .order_by(CerberusMemoryItem.created_at.desc())
                 .limit(1)
             )
             result = await session.execute(stmt)
@@ -101,7 +101,7 @@ class MemoryRetrieval:
 
         Falls back to text-based search if pgvector is not available.
         """
-        from db.copilot_models import CopilotMemoryItem
+        from db.cerberus_models import CerberusMemoryItem
         from sqlalchemy import select, text
 
         async with get_session() as session:
@@ -110,7 +110,7 @@ class MemoryRetrieval:
                 stmt = text("""
                     SELECT id, content_text, memory_type, metadata_json,
                            1 - (embedding <=> :embedding) AS similarity
-                    FROM copilot_memory_items
+                    FROM cerberus_memory_items
                     WHERE user_id = :user_id
                       AND embedding IS NOT NULL
                     ORDER BY embedding <=> :embedding

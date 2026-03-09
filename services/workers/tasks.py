@@ -1,4 +1,4 @@
-"""Celery task definitions for the AI Copilot background workers."""
+"""Celery task definitions for the Cerberus background workers."""
 from __future__ import annotations
 
 import asyncio
@@ -38,14 +38,14 @@ def run_backtest(self, backtest_id: str, user_id: int):
     logger.info("task_run_backtest", backtest_id=backtest_id, user_id=user_id)
     try:
         from db.database import get_session
-        from db.copilot_models import CopilotBacktest
+        from db.cerberus_models import CerberusBacktest
         from sqlalchemy import select
         from datetime import datetime
 
         async def _run():
             async with get_session() as session:
                 result = await session.execute(
-                    select(CopilotBacktest).where(CopilotBacktest.id == backtest_id)
+                    select(CerberusBacktest).where(CerberusBacktest.id == backtest_id)
                 )
                 bt = result.scalar_one_or_none()
                 if not bt:

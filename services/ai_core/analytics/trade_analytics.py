@@ -1,4 +1,4 @@
-"""Trade analytics service — aggregate queries on copilot_trades."""
+"""Trade analytics service — aggregate queries on cerberus_trades."""
 from __future__ import annotations
 
 from datetime import datetime, date
@@ -13,7 +13,7 @@ logger = structlog.get_logger(__name__)
 
 
 class TradeAnalyticsService:
-    """Provides async analytics queries on copilot_trades, scoped by user_id."""
+    """Provides async analytics queries on cerberus_trades, scoped by user_id."""
 
     async def get_best_trade(
         self,
@@ -22,18 +22,18 @@ class TradeAnalyticsService:
         strategy_tag: Optional[str] = None,
     ) -> dict:
         """Return the single trade with the highest return_pct."""
-        from db.copilot_models import CopilotTrade
+        from db.cerberus_models import CerberusTrade
 
         async with get_session() as session:
             stmt = (
-                select(CopilotTrade)
-                .where(CopilotTrade.user_id == user_id)
+                select(CerberusTrade)
+                .where(CerberusTrade.user_id == user_id)
             )
             if symbol:
-                stmt = stmt.where(CopilotTrade.symbol == symbol)
+                stmt = stmt.where(CerberusTrade.symbol == symbol)
             if strategy_tag:
-                stmt = stmt.where(CopilotTrade.strategy_tag == strategy_tag)
-            stmt = stmt.order_by(desc(CopilotTrade.return_pct)).limit(1)
+                stmt = stmt.where(CerberusTrade.strategy_tag == strategy_tag)
+            stmt = stmt.order_by(desc(CerberusTrade.return_pct)).limit(1)
 
             result = await session.execute(stmt)
             trade = result.scalar_one_or_none()
@@ -49,13 +49,13 @@ class TradeAnalyticsService:
         limit: int = 5,
     ) -> list[dict]:
         """Return the N trades with the lowest return_pct."""
-        from db.copilot_models import CopilotTrade
+        from db.cerberus_models import CerberusTrade
 
         async with get_session() as session:
             stmt = (
-                select(CopilotTrade)
-                .where(CopilotTrade.user_id == user_id)
-                .order_by(asc(CopilotTrade.return_pct))
+                select(CerberusTrade)
+                .where(CerberusTrade.user_id == user_id)
+                .order_by(asc(CerberusTrade.return_pct))
                 .limit(limit)
             )
             result = await session.execute(stmt)
@@ -70,20 +70,20 @@ class TradeAnalyticsService:
         end_date: Optional[date] = None,
     ) -> dict:
         """Return total traded volume (SUM of quantity * entry_price)."""
-        from db.copilot_models import CopilotTrade
+        from db.cerberus_models import CerberusTrade
 
         async with get_session() as session:
-            volume_expr = func.sum(CopilotTrade.quantity * CopilotTrade.entry_price)
+            volume_expr = func.sum(CerberusTrade.quantity * CerberusTrade.entry_price)
             count_expr = func.count()
 
             stmt = (
                 select(volume_expr.label("total_volume"), count_expr.label("trade_count"))
-                .where(CopilotTrade.user_id == user_id)
+                .where(CerberusTrade.user_id == user_id)
             )
             if start_date:
-                stmt = stmt.where(CopilotTrade.entry_ts >= datetime.combine(start_date, datetime.min.time()))
+                stmt = stmt.where(CerberusTrade.entry_ts >= datetime.combine(start_date, datetime.min.time()))
             if end_date:
-                stmt = stmt.where(CopilotTrade.entry_ts <= datetime.combine(end_date, datetime.max.time()))
+                stmt = stmt.where(CerberusTrade.entry_ts <= datetime.combine(end_date, datetime.max.time()))
 
             result = await session.execute(stmt)
             row = result.one()
@@ -101,27 +101,27 @@ class TradeAnalyticsService:
         strategy_tag: Optional[str] = None,
     ) -> list[dict]:
         """Return performance grouped by strategy_tag."""
-        from db.copilot_models import CopilotTrade
+        from db.cerberus_models import CerberusTrade
 
         async with get_session() as session:
             stmt = (
                 select(
-                    CopilotTrade.strategy_tag,
+                    CerberusTrade.strategy_tag,
                     func.count().label("trade_count"),
-                    func.avg(CopilotTrade.return_pct).label("avg_return_pct"),
-                    func.sum(CopilotTrade.net_pnl).label("total_net_pnl"),
+                    func.avg(CerberusTrade.return_pct).label("avg_return_pct"),
+                    func.sum(CerberusTrade.net_pnl).label("total_net_pnl"),
                     func.sum(
                         case(
-                            (CopilotTrade.return_pct > 0, 1),
+                            (CerberusTrade.return_pct > 0, 1),
                             else_=0,
                         )
                     ).label("win_count"),
                 )
-                .where(CopilotTrade.user_id == user_id)
-                .group_by(CopilotTrade.strategy_tag)
+                .where(CerberusTrade.user_id == user_id)
+                .group_by(CerberusTrade.strategy_tag)
             )
             if strategy_tag:
-                stmt = stmt.where(CopilotTrade.strategy_tag == strategy_tag)
+                stmt = stmt.where(CerberusTrade.strategy_tag == strategy_tag)
 
             result = await session.execute(stmt)
             rows = result.all()
@@ -143,28 +143,28 @@ class TradeAnalyticsService:
         symbol: Optional[str] = None,
     ) -> list[dict]:
         """Return performance grouped by symbol."""
-        from db.copilot_models import CopilotTrade
+        from db.cerberus_models import CerberusTrade
 
         async with get_session() as session:
             stmt = (
                 select(
-                    CopilotTrade.symbol,
+                    CerberusTrade.symbol,
                     func.count().label("trade_count"),
-                    func.avg(CopilotTrade.return_pct).label("avg_return_pct"),
-                    func.sum(CopilotTrade.net_pnl).label("total_net_pnl"),
-                    func.sum(CopilotTrade.quantity * CopilotTrade.entry_price).label("total_volume"),
+                    func.avg(CerberusTrade.return_pct).label("avg_return_pct"),
+                    func.sum(CerberusTrade.net_pnl).label("total_net_pnl"),
+                    func.sum(CerberusTrade.quantity * CerberusTrade.entry_price).label("total_volume"),
                     func.sum(
                         case(
-                            (CopilotTrade.return_pct > 0, 1),
+                            (CerberusTrade.return_pct > 0, 1),
                             else_=0,
                         )
                     ).label("win_count"),
                 )
-                .where(CopilotTrade.user_id == user_id)
-                .group_by(CopilotTrade.symbol)
+                .where(CerberusTrade.user_id == user_id)
+                .group_by(CerberusTrade.symbol)
             )
             if symbol:
-                stmt = stmt.where(CopilotTrade.symbol == symbol)
+                stmt = stmt.where(CerberusTrade.symbol == symbol)
 
             result = await session.execute(stmt)
             rows = result.all()
@@ -183,16 +183,16 @@ class TradeAnalyticsService:
 
     async def get_hold_time_stats(self, user_id: int) -> dict:
         """Return average hold time statistics (exit_ts - entry_ts)."""
-        from db.copilot_models import CopilotTrade
+        from db.cerberus_models import CerberusTrade
 
         async with get_session() as session:
             # Fetch all trades with both entry and exit timestamps
             stmt = (
-                select(CopilotTrade.entry_ts, CopilotTrade.exit_ts)
+                select(CerberusTrade.entry_ts, CerberusTrade.exit_ts)
                 .where(
-                    CopilotTrade.user_id == user_id,
-                    CopilotTrade.entry_ts.isnot(None),
-                    CopilotTrade.exit_ts.isnot(None),
+                    CerberusTrade.user_id == user_id,
+                    CerberusTrade.entry_ts.isnot(None),
+                    CerberusTrade.exit_ts.isnot(None),
                 )
             )
             result = await session.execute(stmt)
@@ -222,24 +222,24 @@ class TradeAnalyticsService:
 
     async def get_bot_performance(self, bot_id: str) -> dict:
         """Return performance stats for a specific bot."""
-        from db.copilot_models import CopilotTrade
+        from db.cerberus_models import CerberusTrade
 
         async with get_session() as session:
             stmt = (
                 select(
                     func.count().label("trade_count"),
-                    func.avg(CopilotTrade.return_pct).label("avg_return_pct"),
-                    func.sum(CopilotTrade.net_pnl).label("total_net_pnl"),
-                    func.sum(CopilotTrade.gross_pnl).label("total_gross_pnl"),
-                    func.sum(CopilotTrade.quantity * CopilotTrade.entry_price).label("total_volume"),
+                    func.avg(CerberusTrade.return_pct).label("avg_return_pct"),
+                    func.sum(CerberusTrade.net_pnl).label("total_net_pnl"),
+                    func.sum(CerberusTrade.gross_pnl).label("total_gross_pnl"),
+                    func.sum(CerberusTrade.quantity * CerberusTrade.entry_price).label("total_volume"),
                     func.sum(
                         case(
-                            (CopilotTrade.return_pct > 0, 1),
+                            (CerberusTrade.return_pct > 0, 1),
                             else_=0,
                         )
                     ).label("win_count"),
                 )
-                .where(CopilotTrade.bot_id == bot_id)
+                .where(CerberusTrade.bot_id == bot_id)
             )
             result = await session.execute(stmt)
             row = result.one()
@@ -261,7 +261,7 @@ class TradeAnalyticsService:
 # ---------------------------------------------------------------------------
 
 def _trade_to_dict(trade) -> dict:
-    """Convert a CopilotTrade ORM instance to a plain dict."""
+    """Convert a CerberusTrade ORM instance to a plain dict."""
     return {
         "id": trade.id,
         "symbol": trade.symbol,
@@ -299,7 +299,7 @@ MATERIALIZED_VIEW_SQL: dict[str, str] = {
             SUM(CASE WHEN return_pct > 0 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) AS win_rate,
             MIN(entry_ts) AS first_trade,
             MAX(entry_ts) AS last_trade
-        FROM copilot_trades
+        FROM cerberus_trades
         GROUP BY user_id, symbol;
     """,
     "mv_trade_stats_by_strategy": """
@@ -314,7 +314,7 @@ MATERIALIZED_VIEW_SQL: dict[str, str] = {
             SUM(CASE WHEN return_pct > 0 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) AS win_rate,
             MIN(entry_ts) AS first_trade,
             MAX(entry_ts) AS last_trade
-        FROM copilot_trades
+        FROM cerberus_trades
         GROUP BY user_id, strategy_tag;
     """,
     "mv_trade_stats_by_day": """
@@ -326,7 +326,7 @@ MATERIALIZED_VIEW_SQL: dict[str, str] = {
             AVG(return_pct) AS avg_return_pct,
             SUM(net_pnl) AS total_net_pnl,
             SUM(quantity * entry_price) AS total_volume
-        FROM copilot_trades
+        FROM cerberus_trades
         WHERE entry_ts IS NOT NULL
         GROUP BY user_id, DATE(entry_ts);
     """,
@@ -342,7 +342,7 @@ MATERIALIZED_VIEW_SQL: dict[str, str] = {
             SUM(CASE WHEN return_pct > 0 THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) AS win_rate,
             MIN(entry_ts) AS first_trade,
             MAX(entry_ts) AS last_trade
-        FROM copilot_trades
+        FROM cerberus_trades
         WHERE bot_id IS NOT NULL
         GROUP BY bot_id;
     """,

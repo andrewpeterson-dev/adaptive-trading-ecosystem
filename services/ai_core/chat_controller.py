@@ -1,4 +1,4 @@
-"""Chat controller — main orchestration for AI Copilot turns."""
+"""Cerberus chat controller — main orchestration."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ import structlog
 
 from config.settings import get_settings
 from db.database import get_session
-from db.copilot_models import (
-    CopilotConversationThread,
-    CopilotConversationMessage,
-    CopilotAIToolCall,
-    CopilotUIContextEvent,
+from db.cerberus_models import (
+    CerberusConversationThread,
+    CerberusConversationMessage,
+    CerberusAIToolCall,
+    CerberusUIContextEvent,
 )
 from services.ai_core.context_assembler import ContextAssembler
 from services.ai_core.model_router import ModelRouter
@@ -60,7 +60,7 @@ class ChatTurnResult:
 
 
 class ChatController:
-    """Orchestrates a complete AI Copilot chat turn."""
+    """Orchestrates a complete Cerberus chat turn."""
 
     def __init__(self, redis_client=None):
         self._router = ModelRouter()
@@ -87,7 +87,7 @@ class ChatController:
 
         # 1. Validate input
         message = self._safety.validate_message_input(message)
-        self._safety.check_feature_enabled("copilot")
+        self._safety.check_feature_enabled("cerberus")
         self._safety.check_rate_limit(user_id)
 
         # 2. Get or create thread
@@ -256,7 +256,7 @@ class ChatController:
         """Handle a streaming chat turn. Yields event dicts for WebSocket."""
         # Validate
         message = self._safety.validate_message_input(message)
-        self._safety.check_feature_enabled("copilot")
+        self._safety.check_feature_enabled("cerberus")
 
         thread_id = await self._ensure_thread(user_id, thread_id, mode)
         turn_id = str(uuid.uuid4())
@@ -368,7 +368,7 @@ class ChatController:
             return thread_id
         new_id = str(uuid.uuid4())
         async with get_session() as session:
-            thread = CopilotConversationThread(
+            thread = CerberusConversationThread(
                 id=new_id, user_id=user_id, mode=mode,
             )
             session.add(thread)
@@ -388,7 +388,7 @@ class ChatController:
     ) -> str:
         msg_id = str(uuid.uuid4())
         async with get_session() as session:
-            msg = CopilotConversationMessage(
+            msg = CerberusConversationMessage(
                 id=msg_id,
                 thread_id=thread_id,
                 user_id=user_id,
@@ -407,7 +407,7 @@ class ChatController:
         self, user_id: int, thread_id: str, page_context: dict,
     ) -> None:
         async with get_session() as session:
-            event = CopilotUIContextEvent(
+            event = CerberusUIContextEvent(
                 user_id=user_id,
                 thread_id=thread_id,
                 current_page=page_context.get("currentPage"),
@@ -432,7 +432,7 @@ class ChatController:
         provider_request_id: str = "",
     ) -> None:
         async with get_session() as session:
-            tc = CopilotAIToolCall(
+            tc = CerberusAIToolCall(
                 thread_id=thread_id,
                 user_id=user_id,
                 tool_name=tool_name,

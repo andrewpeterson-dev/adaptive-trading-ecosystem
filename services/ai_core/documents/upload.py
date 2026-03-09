@@ -36,13 +36,13 @@ class DocumentUploadService:
         In production, returns a presigned S3 URL.
         In dev (no S3 configured), returns a local file path.
         """
-        from db.copilot_models import CopilotDocumentFile
+        from db.cerberus_models import CerberusDocumentFile
 
         doc_id = str(uuid.uuid4())
         ext = Path(filename).suffix
         storage_key = f"documents/{user_id}/{doc_id}{ext}"
 
-        doc = CopilotDocumentFile(
+        doc = CerberusDocumentFile(
             id=doc_id,
             user_id=user_id,
             original_filename=filename,
@@ -78,12 +78,12 @@ class DocumentUploadService:
 
     async def finalize_upload(self, document_id: str, user_id: int) -> dict:
         """Mark a document as processing and trigger ingestion."""
-        from db.copilot_models import CopilotDocumentFile, DocumentStatus
+        from db.cerberus_models import CerberusDocumentFile, DocumentStatus
 
         async with get_session() as session:
-            stmt = select(CopilotDocumentFile).where(
-                CopilotDocumentFile.id == document_id,
-                CopilotDocumentFile.user_id == user_id,
+            stmt = select(CerberusDocumentFile).where(
+                CerberusDocumentFile.id == document_id,
+                CerberusDocumentFile.user_id == user_id,
             )
             result = await session.execute(stmt)
             doc = result.scalar_one_or_none()

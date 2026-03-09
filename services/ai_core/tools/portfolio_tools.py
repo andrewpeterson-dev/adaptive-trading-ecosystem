@@ -1,4 +1,4 @@
-"""Portfolio tools for the AI Copilot."""
+"""Portfolio tools for the Cerberus."""
 from __future__ import annotations
 
 import structlog
@@ -16,17 +16,17 @@ logger = structlog.get_logger(__name__)
 async def _get_portfolio(user_id: int, account_id: str = None) -> dict:
     """Get portfolio summary (cash, equity, buying power, P&L)."""
     from db.database import get_session
-    from db.copilot_models import CopilotPortfolioSnapshot
+    from db.cerberus_models import CerberusPortfolioSnapshot
     from sqlalchemy import select
 
     async with get_session() as session:
         stmt = (
-            select(CopilotPortfolioSnapshot)
-            .where(CopilotPortfolioSnapshot.user_id == user_id)
+            select(CerberusPortfolioSnapshot)
+            .where(CerberusPortfolioSnapshot.user_id == user_id)
         )
         if account_id:
-            stmt = stmt.where(CopilotPortfolioSnapshot.brokerage_account_id == account_id)
-        stmt = stmt.order_by(CopilotPortfolioSnapshot.snapshot_ts.desc()).limit(1)
+            stmt = stmt.where(CerberusPortfolioSnapshot.brokerage_account_id == account_id)
+        stmt = stmt.order_by(CerberusPortfolioSnapshot.snapshot_ts.desc()).limit(1)
 
         result = await session.execute(stmt)
         snapshot = result.scalar_one_or_none()
@@ -46,13 +46,13 @@ async def _get_portfolio(user_id: int, account_id: str = None) -> dict:
 async def _get_positions(user_id: int, account_id: str = None) -> dict:
     """Get open positions."""
     from db.database import get_session
-    from db.copilot_models import CopilotPosition
+    from db.cerberus_models import CerberusPosition
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotPosition).where(CopilotPosition.user_id == user_id)
+        stmt = select(CerberusPosition).where(CerberusPosition.user_id == user_id)
         if account_id:
-            stmt = stmt.where(CopilotPosition.brokerage_account_id == account_id)
+            stmt = stmt.where(CerberusPosition.brokerage_account_id == account_id)
 
         result = await session.execute(stmt)
         positions = result.scalars().all()
@@ -77,16 +77,16 @@ async def _get_positions(user_id: int, account_id: str = None) -> dict:
 async def _get_orders(user_id: int, account_id: str = None, status: str = None, limit: int = 20) -> dict:
     """Get recent orders."""
     from db.database import get_session
-    from db.copilot_models import CopilotOrder
+    from db.cerberus_models import CerberusOrder
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotOrder).where(CopilotOrder.user_id == user_id)
+        stmt = select(CerberusOrder).where(CerberusOrder.user_id == user_id)
         if account_id:
-            stmt = stmt.where(CopilotOrder.brokerage_account_id == account_id)
+            stmt = stmt.where(CerberusOrder.brokerage_account_id == account_id)
         if status:
-            stmt = stmt.where(CopilotOrder.status == status)
-        stmt = stmt.order_by(CopilotOrder.created_at.desc()).limit(limit)
+            stmt = stmt.where(CerberusOrder.status == status)
+        stmt = stmt.order_by(CerberusOrder.created_at.desc()).limit(limit)
 
         result = await session.execute(stmt)
         orders = result.scalars().all()
@@ -120,20 +120,20 @@ async def _get_trade_history(
     """Get trade history with optional filters."""
     from datetime import datetime
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotTrade).where(CopilotTrade.user_id == user_id)
+        stmt = select(CerberusTrade).where(CerberusTrade.user_id == user_id)
         if symbol:
-            stmt = stmt.where(CopilotTrade.symbol == symbol.upper())
+            stmt = stmt.where(CerberusTrade.symbol == symbol.upper())
         if strategy_tag:
-            stmt = stmt.where(CopilotTrade.strategy_tag == strategy_tag)
+            stmt = stmt.where(CerberusTrade.strategy_tag == strategy_tag)
         if start_date:
-            stmt = stmt.where(CopilotTrade.entry_ts >= datetime.fromisoformat(start_date))
+            stmt = stmt.where(CerberusTrade.entry_ts >= datetime.fromisoformat(start_date))
         if end_date:
-            stmt = stmt.where(CopilotTrade.entry_ts <= datetime.fromisoformat(end_date))
-        stmt = stmt.order_by(CopilotTrade.created_at.desc()).limit(limit)
+            stmt = stmt.where(CerberusTrade.entry_ts <= datetime.fromisoformat(end_date))
+        stmt = stmt.order_by(CerberusTrade.created_at.desc()).limit(limit)
 
         result = await session.execute(stmt)
         trades = result.scalars().all()

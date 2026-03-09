@@ -1,4 +1,4 @@
-"""Context assembler — gathers context from multiple sources for the AI Copilot."""
+"""Context assembler — gathers context from multiple sources for Cerberus."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ logger = structlog.get_logger(__name__)
 
 @dataclass
 class AssembledContext:
-    """Full context assembled for an AI copilot turn."""
+    """Full context assembled for a Cerberus turn."""
     system_context: dict = field(default_factory=dict)
     user_context: dict = field(default_factory=dict)
     page_context: dict = field(default_factory=dict)
@@ -36,7 +36,7 @@ class AssembledContext:
 
 
 class ContextAssembler:
-    """Assembles full context for a copilot turn from multiple sources."""
+    """Assembles full context for a Cerberus turn from multiple sources."""
 
     def __init__(self, redis_client=None):
         self._redis = redis_client
@@ -50,7 +50,7 @@ class ContextAssembler:
         selected_account_id: Optional[str] = None,
         attachment_ids: Optional[list[str]] = None,
     ) -> AssembledContext:
-        """Assemble full context for a copilot turn."""
+        """Assemble full context for a Cerberus turn."""
         from config.settings import get_settings
         settings = get_settings()
 
@@ -59,7 +59,7 @@ class ContextAssembler:
         # 1. System context
         ctx.system_context = {
             "feature_flags": {
-                "copilot_enabled": settings.feature_copilot_enabled,
+                "cerberus_enabled": settings.feature_cerberus_enabled,
                 "research_mode": settings.feature_research_mode_enabled,
                 "bot_mutations": settings.feature_bot_mutations_enabled,
                 "paper_trade_proposals": settings.feature_paper_trade_proposals_enabled,
@@ -147,13 +147,13 @@ class ContextAssembler:
         if not context.get("portfolio_snapshot"):
             try:
                 from db.database import get_session
-                from db.copilot_models import CopilotPortfolioSnapshot
+                from db.cerberus_models import CerberusPortfolioSnapshot
                 from sqlalchemy import select
 
                 async with get_session() as session:
-                    stmt = select(CopilotPortfolioSnapshot).where(
-                        CopilotPortfolioSnapshot.user_id == user_id
-                    ).order_by(CopilotPortfolioSnapshot.snapshot_ts.desc()).limit(1)
+                    stmt = select(CerberusPortfolioSnapshot).where(
+                        CerberusPortfolioSnapshot.user_id == user_id
+                    ).order_by(CerberusPortfolioSnapshot.snapshot_ts.desc()).limit(1)
                     result = await session.execute(stmt)
                     snap = result.scalar_one_or_none()
                     if snap:
@@ -171,24 +171,24 @@ class ContextAssembler:
         """Get recent conversation messages and thread summary."""
         try:
             from db.database import get_session
-            from db.copilot_models import CopilotConversationThread, CopilotConversationMessage
+            from db.cerberus_models import CerberusConversationThread, CerberusConversationMessage
             from sqlalchemy import select
 
             async with get_session() as session:
                 # Thread summary
                 thread_result = await session.execute(
-                    select(CopilotConversationThread).where(
-                        CopilotConversationThread.id == thread_id,
-                        CopilotConversationThread.user_id == user_id,
+                    select(CerberusConversationThread).where(
+                        CerberusConversationThread.id == thread_id,
+                        CerberusConversationThread.user_id == user_id,
                     )
                 )
                 thread = thread_result.scalar_one_or_none()
 
                 # Recent messages (last 20)
                 msgs_result = await session.execute(
-                    select(CopilotConversationMessage).where(
-                        CopilotConversationMessage.thread_id == thread_id,
-                    ).order_by(CopilotConversationMessage.created_at.desc()).limit(20)
+                    select(CerberusConversationMessage).where(
+                        CerberusConversationMessage.thread_id == thread_id,
+                    ).order_by(CerberusConversationMessage.created_at.desc()).limit(20)
                 )
                 messages = msgs_result.scalars().all()
 
@@ -213,13 +213,13 @@ class ContextAssembler:
         """Get relevant semantic memory items."""
         try:
             from db.database import get_session
-            from db.copilot_models import CopilotMemoryItem
+            from db.cerberus_models import CerberusMemoryItem
             from sqlalchemy import select
 
             async with get_session() as session:
-                stmt = select(CopilotMemoryItem).where(
-                    CopilotMemoryItem.user_id == user_id,
-                ).order_by(CopilotMemoryItem.created_at.desc()).limit(10)
+                stmt = select(CerberusMemoryItem).where(
+                    CerberusMemoryItem.user_id == user_id,
+                ).order_by(CerberusMemoryItem.created_at.desc()).limit(10)
                 result = await session.execute(stmt)
                 items = result.scalars().all()
 
@@ -237,13 +237,13 @@ class ContextAssembler:
         """Get document metadata for attached documents."""
         try:
             from db.database import get_session
-            from db.copilot_models import CopilotDocumentFile
+            from db.cerberus_models import CerberusDocumentFile
             from sqlalchemy import select
 
             async with get_session() as session:
-                stmt = select(CopilotDocumentFile).where(
-                    CopilotDocumentFile.id.in_(doc_ids),
-                    CopilotDocumentFile.user_id == user_id,
+                stmt = select(CerberusDocumentFile).where(
+                    CerberusDocumentFile.id.in_(doc_ids),
+                    CerberusDocumentFile.user_id == user_id,
                 )
                 result = await session.execute(stmt)
                 docs = result.scalars().all()

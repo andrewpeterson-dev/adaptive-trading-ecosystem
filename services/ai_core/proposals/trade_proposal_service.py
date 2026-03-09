@@ -39,7 +39,7 @@ class TradeProposalService:
           - order_type: 'market' | 'limit'
           - limit_price: float (if order_type == 'limit')
         """
-        from db.copilot_models import CopilotTradeProposal, ProposalStatus
+        from db.cerberus_models import CerberusTradeProposal, ProposalStatus
 
         # Run risk checks
         risk_result = await self._run_risk_checks(user_id, proposal_data)
@@ -58,7 +58,7 @@ class TradeProposalService:
         proposal_id = str(uuid.uuid4())
         expires_at = datetime.utcnow() + timedelta(minutes=_PROPOSAL_TTL_MINUTES)
 
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=proposal_id,
             user_id=user_id,
             thread_id=thread_id,
@@ -90,12 +90,12 @@ class TradeProposalService:
 
     async def get_proposal(self, proposal_id: str, user_id: int) -> dict:
         """Retrieve a proposal by ID, scoped to user."""
-        from db.copilot_models import CopilotTradeProposal
+        from db.cerberus_models import CerberusTradeProposal
 
         async with get_session() as session:
-            stmt = select(CopilotTradeProposal).where(
-                CopilotTradeProposal.id == proposal_id,
-                CopilotTradeProposal.user_id == user_id,
+            stmt = select(CerberusTradeProposal).where(
+                CerberusTradeProposal.id == proposal_id,
+                CerberusTradeProposal.user_id == user_id,
             )
             result = await session.execute(stmt)
             proposal = result.scalar_one_or_none()
@@ -115,12 +115,12 @@ class TradeProposalService:
 
     async def cancel_proposal(self, proposal_id: str, user_id: int) -> dict:
         """Cancel a pending proposal."""
-        from db.copilot_models import CopilotTradeProposal, ProposalStatus
+        from db.cerberus_models import CerberusTradeProposal, ProposalStatus
 
         async with get_session() as session:
-            stmt = select(CopilotTradeProposal).where(
-                CopilotTradeProposal.id == proposal_id,
-                CopilotTradeProposal.user_id == user_id,
+            stmt = select(CerberusTradeProposal).where(
+                CerberusTradeProposal.id == proposal_id,
+                CerberusTradeProposal.user_id == user_id,
             )
             result = await session.execute(stmt)
             proposal = result.scalar_one_or_none()
@@ -139,16 +139,16 @@ class TradeProposalService:
 
     async def expire_stale_proposals(self) -> int:
         """Expire all proposals older than the TTL. Returns count of expired."""
-        from db.copilot_models import CopilotTradeProposal, ProposalStatus
+        from db.cerberus_models import CerberusTradeProposal, ProposalStatus
 
         now = datetime.utcnow()
 
         async with get_session() as session:
             stmt = (
-                update(CopilotTradeProposal)
+                update(CerberusTradeProposal)
                 .where(
-                    CopilotTradeProposal.status == ProposalStatus.PENDING,
-                    CopilotTradeProposal.expires_at < now,
+                    CerberusTradeProposal.status == ProposalStatus.PENDING,
+                    CerberusTradeProposal.expires_at < now,
                 )
                 .values(status=ProposalStatus.EXPIRED)
             )
@@ -168,7 +168,7 @@ class TradeProposalService:
           3. Drawdown vs max allowed
           4. Proposal not expired (handled at confirmation time)
         """
-        from db.copilot_models import CopilotPosition, CopilotPortfolioSnapshot
+        from db.cerberus_models import CerberusPosition, CerberusPortfolioSnapshot
         from sqlalchemy import func
 
         warnings: list[str] = []
@@ -182,9 +182,9 @@ class TradeProposalService:
         async with get_session() as session:
             # Get total portfolio equity
             snap_stmt = (
-                select(CopilotPortfolioSnapshot)
-                .where(CopilotPortfolioSnapshot.user_id == user_id)
-                .order_by(CopilotPortfolioSnapshot.snapshot_ts.desc())
+                select(CerberusPortfolioSnapshot)
+                .where(CerberusPortfolioSnapshot.user_id == user_id)
+                .order_by(CerberusPortfolioSnapshot.snapshot_ts.desc())
                 .limit(1)
             )
             snap_result = await session.execute(snap_stmt)
@@ -208,8 +208,8 @@ class TradeProposalService:
                     )
 
             # 2. Exposure check
-            pos_stmt = select(func.sum(func.abs(CopilotPosition.market_value))).where(
-                CopilotPosition.user_id == user_id,
+            pos_stmt = select(func.sum(func.abs(CerberusPosition.market_value))).where(
+                CerberusPosition.user_id == user_id,
             )
             pos_result = await session.execute(pos_stmt)
             total_exposure = float(pos_result.scalar() or 0) + notional
@@ -229,8 +229,8 @@ class TradeProposalService:
                     )
 
             # 3. Drawdown check (simplified: compare current equity to peak)
-            peak_stmt = select(func.max(CopilotPortfolioSnapshot.equity)).where(
-                CopilotPortfolioSnapshot.user_id == user_id,
+            peak_stmt = select(func.max(CerberusPortfolioSnapshot.equity)).where(
+                CerberusPortfolioSnapshot.user_id == user_id,
             )
             peak_result = await session.execute(peak_stmt)
             peak_equity = float(peak_result.scalar() or 0)

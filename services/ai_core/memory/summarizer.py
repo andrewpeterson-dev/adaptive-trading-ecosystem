@@ -12,7 +12,7 @@ logger = structlog.get_logger(__name__)
 
 # System prompt for the summarization LLM call
 _SUMMARY_SYSTEM_PROMPT = (
-    "You are a concise summarizer for a trading copilot. "
+    "You are a concise summarizer for Cerberus, a trading assistant. "
     "Summarize the conversation so far, focusing on: "
     "1) key decisions or trades discussed, "
     "2) user preferences revealed, "
@@ -39,14 +39,14 @@ class ThreadSummarizer:
 
         Returns the generated summary text.
         """
-        from db.copilot_models import CopilotConversationMessage
+        from db.cerberus_models import CerberusConversationMessage
 
         # Fetch recent messages
         async with get_session() as session:
             stmt = (
-                select(CopilotConversationMessage)
-                .where(CopilotConversationMessage.thread_id == thread_id)
-                .order_by(CopilotConversationMessage.created_at.desc())
+                select(CerberusConversationMessage)
+                .where(CerberusConversationMessage.thread_id == thread_id)
+                .order_by(CerberusConversationMessage.created_at.desc())
                 .limit(max_messages)
             )
             result = await session.execute(stmt)

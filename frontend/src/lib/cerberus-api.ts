@@ -2,7 +2,7 @@ import { apiFetch } from './api/client';
 import type {
   ChatRequest, ChatResponse, ConversationThread,
   ConversationMessageItem, DocumentFile, TradeProposal,
-} from '@/types/copilot';
+} from '@/types/cerberus';
 
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse & { message: any }> {
   return apiFetch('/api/ai/chat', {

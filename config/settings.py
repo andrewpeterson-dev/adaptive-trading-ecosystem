@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     ollama_enabled: bool = False
     ollama_timeout_seconds: int = 30
 
-    # --- AI Copilot ---
+    # --- Cerberus ---
     openai_primary_model: str = "gpt-5.4"
     openai_low_latency_model: str = "gpt-4.1"
     openai_embedding_model: str = "text-embedding-3-large"
@@ -136,7 +136,7 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = ""  # For MinIO in dev
 
     # --- Feature Flags ---
-    feature_copilot_enabled: bool = True
+    feature_cerberus_enabled: bool = True
     feature_research_mode_enabled: bool = True
     feature_bot_mutations_enabled: bool = False
     feature_paper_trade_proposals_enabled: bool = False

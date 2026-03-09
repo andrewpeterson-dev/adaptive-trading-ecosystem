@@ -1,6 +1,6 @@
 'use client';
 
-import type { Citation } from '@/types/copilot';
+import type { Citation } from '@/types/cerberus';
 
 interface CitationListProps {
   citations: Citation[];

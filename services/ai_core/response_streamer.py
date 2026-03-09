@@ -1,4 +1,4 @@
-"""Response streamer — emits typed WebSocket events for copilot streaming."""
+"""Response streamer — emits typed WebSocket events for Cerberus streaming."""
 
 from __future__ import annotations
 

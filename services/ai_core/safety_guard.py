@@ -20,7 +20,7 @@ class SafetyViolation(Exception):
 
 
 class SafetyGuard:
-    """Enforces safety rules for the AI Copilot."""
+    """Enforces safety rules for Cerberus."""
 
     # Patterns that should never appear in model outputs sent to the browser
     DANGEROUS_OUTPUT_PATTERNS = [
@@ -47,7 +47,7 @@ class SafetyGuard:
     def check_feature_enabled(self, feature: str) -> None:
         """Verify a feature flag is enabled."""
         flag_map = {
-            "copilot": self._settings.feature_copilot_enabled,
+            "cerberus": self._settings.feature_cerberus_enabled,
             "research": self._settings.feature_research_mode_enabled,
             "bot_mutations": self._settings.feature_bot_mutations_enabled,
             "paper_trade_proposals": self._settings.feature_paper_trade_proposals_enabled,

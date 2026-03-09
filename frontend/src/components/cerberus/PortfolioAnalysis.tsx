@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { sendChatMessage } from '@/lib/copilot-api';
-import { useCopilotStore } from '@/stores/copilot-store';
+import { sendChatMessage } from '@/lib/cerberus-api';
+import { useCerberusStore } from '@/stores/cerberus-store';
 import { useUIContextStore } from '@/stores/ui-context-store';
 
 export function PortfolioAnalysis() {
   const [isLoading, setIsLoading] = useState(false);
-  const { addMessage, activeThreadId, setActiveThread } = useCopilotStore();
+  const { addMessage, activeThreadId, setActiveThread } = useCerberusStore();
   const { pageContext } = useUIContextStore();
 
   const quickActions = [

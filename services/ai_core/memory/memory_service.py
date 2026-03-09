@@ -1,4 +1,4 @@
-"""Memory service — stores and retrieves semantic memory items for the copilot."""
+"""Memory service — stores and retrieves semantic memory items for the cerberus."""
 from __future__ import annotations
 
 import uuid
@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 
 
 class MemoryService:
-    """Manages copilot memory items (facts, summaries, preferences, etc.)."""
+    """Manages cerberus memory items (facts, summaries, preferences, etc.)."""
 
     async def store_memory(
         self,
@@ -25,11 +25,11 @@ class MemoryService:
         source_id: Optional[str] = None,
         metadata: Optional[dict] = None,
     ) -> dict:
-        """Store a new memory item in copilot_memory_items."""
-        from db.copilot_models import CopilotMemoryItem
+        """Store a new memory item in cerberus_memory_items."""
+        from db.cerberus_models import CerberusMemoryItem
 
         item_id = str(uuid.uuid4())
-        item = CopilotMemoryItem(
+        item = CerberusMemoryItem(
             id=item_id,
             user_id=user_id,
             kind=kind,
@@ -63,16 +63,16 @@ class MemoryService:
         limit: int = 10,
     ) -> list[dict]:
         """Get recent memory items, optionally filtered by kind."""
-        from db.copilot_models import CopilotMemoryItem
+        from db.cerberus_models import CerberusMemoryItem
 
         async with get_session() as session:
             stmt = (
-                select(CopilotMemoryItem)
-                .where(CopilotMemoryItem.user_id == user_id)
+                select(CerberusMemoryItem)
+                .where(CerberusMemoryItem.user_id == user_id)
             )
             if kind:
-                stmt = stmt.where(CopilotMemoryItem.kind == kind)
-            stmt = stmt.order_by(desc(CopilotMemoryItem.created_at)).limit(limit)
+                stmt = stmt.where(CerberusMemoryItem.kind == kind)
+            stmt = stmt.order_by(desc(CerberusMemoryItem.created_at)).limit(limit)
 
             result = await session.execute(stmt)
             items = result.scalars().all()
@@ -101,17 +101,17 @@ class MemoryService:
         Currently uses SQL LIKE as a placeholder.  Will be replaced with
         pgvector cosine similarity once embeddings are populated.
         """
-        from db.copilot_models import CopilotMemoryItem
+        from db.cerberus_models import CerberusMemoryItem
 
         pattern = f"%{query}%"
         async with get_session() as session:
             stmt = (
-                select(CopilotMemoryItem)
+                select(CerberusMemoryItem)
                 .where(
-                    CopilotMemoryItem.user_id == user_id,
-                    CopilotMemoryItem.content.ilike(pattern),
+                    CerberusMemoryItem.user_id == user_id,
+                    CerberusMemoryItem.content.ilike(pattern),
                 )
-                .order_by(desc(CopilotMemoryItem.created_at))
+                .order_by(desc(CerberusMemoryItem.created_at))
                 .limit(top_k)
             )
             result = await session.execute(stmt)
@@ -141,23 +141,23 @@ class MemoryService:
             user_id=user_id,
             kind="thread_summary",
             content=summary,
-            source_table="copilot_conversation_threads",
+            source_table="cerberus_conversation_threads",
             source_id=thread_id,
             metadata={"thread_id": thread_id},
         )
 
     async def should_summarize(self, thread_id: str) -> bool:
         """Return True if the thread has 20+ messages since last summary."""
-        from db.copilot_models import CopilotConversationMessage, CopilotMemoryItem
+        from db.cerberus_models import CerberusConversationMessage, CerberusMemoryItem
 
         async with get_session() as session:
             # Find the latest summary timestamp for this thread
             summary_stmt = (
-                select(func.max(CopilotMemoryItem.created_at))
+                select(func.max(CerberusMemoryItem.created_at))
                 .where(
-                    CopilotMemoryItem.kind == "thread_summary",
-                    CopilotMemoryItem.source_table == "copilot_conversation_threads",
-                    CopilotMemoryItem.source_id == thread_id,
+                    CerberusMemoryItem.kind == "thread_summary",
+                    CerberusMemoryItem.source_table == "cerberus_conversation_threads",
+                    CerberusMemoryItem.source_id == thread_id,
                 )
             )
             summary_result = await session.execute(summary_stmt)
@@ -166,12 +166,12 @@ class MemoryService:
             # Count messages since last summary
             msg_stmt = (
                 select(func.count())
-                .select_from(CopilotConversationMessage)
-                .where(CopilotConversationMessage.thread_id == thread_id)
+                .select_from(CerberusConversationMessage)
+                .where(CerberusConversationMessage.thread_id == thread_id)
             )
             if last_summary_at:
                 msg_stmt = msg_stmt.where(
-                    CopilotConversationMessage.created_at > last_summary_at,
+                    CerberusConversationMessage.created_at > last_summary_at,
                 )
             msg_result = await session.execute(msg_stmt)
             count = msg_result.scalar() or 0

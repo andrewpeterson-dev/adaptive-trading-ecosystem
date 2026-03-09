@@ -82,5 +82,5 @@ async def close_db():
         await _engine.dispose()
 
 
-# Import copilot models so Base.metadata includes them for Alembic
-import db.copilot_models  # noqa: F401
+# Import cerberus models so Base.metadata includes them for Alembic
+import db.cerberus_models  # noqa: F401

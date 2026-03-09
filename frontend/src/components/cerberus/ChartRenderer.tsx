@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChartSpec } from '@/types/copilot';
+import type { ChartSpec } from '@/types/cerberus';
 
 interface ChartRendererProps {
   spec: ChartSpec;

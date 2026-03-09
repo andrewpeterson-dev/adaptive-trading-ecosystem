@@ -63,10 +63,10 @@ adaptive-trading-ecosystem/
 │   └── middleware/     # JWT auth
 ├── config/             # Pydantic settings + .env
 ├── db/                 # SQLAlchemy models, migrations, encryption
-│   └── copilot_models.py  # 18 copilot-specific models
+│   └── cerberus_models.py  # 18 cerberus-specific models
 ├── data/               # MarketDataService (yFinance/Alpaca/Finnhub)
 ├── services/
-│   ├── ai_core/        # AI Copilot engine
+│   ├── ai_core/        # Cerberus AI engine
 │   │   ├── chat_controller.py  # Main orchestration pipeline
 │   │   ├── model_router.py     # LLM selection logic
 │   │   ├── safety_guard.py     # Output sanitization + feature flags
@@ -79,7 +79,7 @@ adaptive-trading-ecosystem/
 │   └── src/
 │       ├── app/        # Pages (dashboard, strategies, backtest, settings)
 │       ├── components/ # Strategy builder, analytics, settings panels
-│       │   └── copilot/  # 13 copilot UI components (widget, chat, tabs)
+│       │   └── cerberus/  # 13 Cerberus UI components (widget, chat, tabs)
 │       ├── hooks/      # useAuth, usePriceStream, useTradingMode
 │       └── lib/        # API client, indicator registry
 ├── risk/               # Risk calculation utilities
@@ -104,16 +104,16 @@ adaptive-trading-ecosystem/
 | POST | `/api/strategies/analyze` | Analyze strategy |
 | POST | `/api/backtest/run` | Run backtest |
 | GET | `/api/news/sentiment/report` | Market sentiment |
-| POST | `/api/ai/chat` | Send message to copilot (SSE streaming response) |
-| WS | `/ws/ai/chat?token=<jwt>` | WebSocket copilot chat |
+| POST | `/api/ai/chat` | Send message to Cerberus (SSE streaming response) |
+| WS | `/ws/ai/chat?token=<jwt>` | WebSocket Cerberus chat |
 | GET | `/api/ai/conversations` | List user's conversations |
 | POST | `/api/ai/tools/confirm/{token}` | Confirm a trade proposal |
 | POST | `/api/ai/documents/upload` | Upload document for RAG ingestion |
 | GET | `/api/ai/documents/search` | Semantic search across documents |
 
-## AI Copilot
+## Cerberus AI
 
-An AI-powered assistant embedded in the trading dashboard. The copilot can analyze portfolios, explain risk, draft trade proposals, run backtests, and answer research questions — but **never executes trades autonomously**. Every trade requires explicit user confirmation.
+An AI-powered assistant embedded in the trading dashboard. Cerberus can analyze portfolios, explain risk, draft trade proposals, run backtests, and answer research questions — but **never executes trades autonomously**. Every trade requires explicit user confirmation.
 
 ### Architecture
 
@@ -159,7 +159,7 @@ User message
 6. Order is placed via broker API
 7. Full audit trail logged (proposal → confirmation → execution → fill)
 
-### Copilot Environment Variables
+### Cerberus Environment Variables
 
 Add these to your `.env` file:
 
@@ -176,16 +176,16 @@ AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 
 # Feature Flags
-FEATURE_COPILOT_ENABLED=true       # Master switch for copilot subsystem
-FEATURE_COPILOT_TOOLS=true         # Enable tool execution (portfolio, risk, etc.)
-FEATURE_COPILOT_TRADING=false      # Enable trade proposal/confirmation flow
-FEATURE_COPILOT_DOCUMENTS=false    # Enable document upload and RAG search
-FEATURE_COPILOT_MEMORY=true        # Enable persistent memory across sessions
+FEATURE_CERBERUS_ENABLED=true       # Master switch for Cerberus subsystem
+FEATURE_CERBERUS_TOOLS=true         # Enable tool execution (portfolio, risk, etc.)
+FEATURE_CERBERUS_TRADING=false      # Enable trade proposal/confirmation flow
+FEATURE_CERBERUS_DOCUMENTS=false    # Enable document upload and RAG search
+FEATURE_CERBERUS_MEMORY=true        # Enable persistent memory across sessions
 ```
 
 ### Running Workers
 
-Copilot uses Celery workers for background tasks (document ingestion, backtests, analytics):
+Cerberus uses Celery workers for background tasks (document ingestion, backtests, analytics):
 
 ```bash
 # Document ingestion worker
@@ -204,13 +204,13 @@ Requires Redis as the broker (`CELERY_BROKER_URL` in `.env`, defaults to `redis:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `FEATURE_COPILOT_ENABLED` | `true` | Master switch — disables all copilot routes and the frontend widget |
-| `FEATURE_COPILOT_TOOLS` | `true` | Allows the LLM to call portfolio, risk, market, and analytics tools |
-| `FEATURE_COPILOT_TRADING` | `false` | Enables trade proposal drafting and confirmation flow |
-| `FEATURE_COPILOT_DOCUMENTS` | `false` | Enables document upload, parsing, chunking, and RAG search |
-| `FEATURE_COPILOT_MEMORY` | `true` | Enables persistent memory (operational + semantic layers) across sessions |
+| `FEATURE_CERBERUS_ENABLED` | `true` | Master switch — disables all Cerberus routes and the frontend widget |
+| `FEATURE_CERBERUS_TOOLS` | `true` | Allows the LLM to call portfolio, risk, market, and analytics tools |
+| `FEATURE_CERBERUS_TRADING` | `false` | Enables trade proposal drafting and confirmation flow |
+| `FEATURE_CERBERUS_DOCUMENTS` | `false` | Enables document upload, parsing, chunking, and RAG search |
+| `FEATURE_CERBERUS_MEMORY` | `true` | Enables persistent memory (operational + semantic layers) across sessions |
 
-Flags are checked at the route level (`SafetyGuard`) and in the frontend (widget visibility). Progressive rollout: enable `TOOLS` first, then `MEMORY`, then `DOCUMENTS`, then `TRADING` last.
+Flags are checked at the route level (`SafetyGuard`) and in the frontend (widget visibility). Progressive rollout: enable `CERBERUS_TOOLS` first, then `CERBERUS_MEMORY`, then `CERBERUS_DOCUMENTS`, then `CERBERUS_TRADING` last.
 
 ## Auth
 

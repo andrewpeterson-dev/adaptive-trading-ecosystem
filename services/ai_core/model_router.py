@@ -1,4 +1,4 @@
-"""Deterministic model router for the AI Copilot."""
+"""Deterministic model router for the Cerberus."""
 
 from __future__ import annotations
 

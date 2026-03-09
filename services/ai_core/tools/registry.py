@@ -1,4 +1,4 @@
-"""Singleton tool registry for AI Copilot tools."""
+"""Singleton tool registry for Cerberus tools."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ logger = structlog.get_logger(__name__)
 
 
 class ToolRegistry:
-    """Registry of all available copilot tools. Singleton pattern."""
+    """Registry of all available Cerberus tools. Singleton pattern."""
 
     _instance: "ToolRegistry | None" = None
     _tools: dict[str, ToolDefinition]

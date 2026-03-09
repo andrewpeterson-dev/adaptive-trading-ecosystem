@@ -1,4 +1,4 @@
-"""Tests for copilot SQLAlchemy ORM models (db/copilot_models.py)."""
+"""Tests for Cerberus SQLAlchemy ORM models (db/cerberus_models.py)."""
 from __future__ import annotations
 
 import uuid
@@ -14,7 +14,7 @@ from db.database import Base
 # Import the User model so the FK targets resolve during create_all
 from db.models import User  # noqa: F401
 
-from db.copilot_models import (
+from db.cerberus_models import (
     AccountMode,
     BotStatus,
     ConversationMode,
@@ -22,24 +22,24 @@ from db.copilot_models import (
     MessageRole,
     ProposalStatus,
     ToolSideEffect,
-    CopilotBrokerageAccount,
-    CopilotPortfolioSnapshot,
-    CopilotPosition,
-    CopilotOrder,
-    CopilotTrade,
-    CopilotBot,
-    CopilotBotVersion,
-    CopilotBacktest,
-    CopilotConversationThread,
-    CopilotConversationMessage,
-    CopilotMemoryItem,
-    CopilotDocumentFile,
-    CopilotDocumentChunk,
-    CopilotUIContextEvent,
-    CopilotTradeProposal,
-    CopilotTradeConfirmation,
-    CopilotAIToolCall,
-    CopilotAuditLog,
+    CerberusBrokerageAccount,
+    CerberusPortfolioSnapshot,
+    CerberusPosition,
+    CerberusOrder,
+    CerberusTrade,
+    CerberusBot,
+    CerberusBotVersion,
+    CerberusBacktest,
+    CerberusConversationThread,
+    CerberusConversationMessage,
+    CerberusMemoryItem,
+    CerberusDocumentFile,
+    CerberusDocumentChunk,
+    CerberusUIContextEvent,
+    CerberusTradeProposal,
+    CerberusTradeConfirmation,
+    CerberusAIToolCall,
+    CerberusAuditLog,
 )
 
 # ---------------------------------------------------------------------------
@@ -123,12 +123,12 @@ class TestEnums:
 
 class TestModelInstantiation:
     def test_brokerage_account_uuid(self):
-        obj = CopilotBrokerageAccount(user_id=1, provider="alpaca")
+        obj = CerberusBrokerageAccount(user_id=1, provider="alpaca")
         # _uuid default should have been called
         assert obj.provider == "alpaca"
 
     def test_portfolio_snapshot_fields(self):
-        obj = CopilotPortfolioSnapshot(
+        obj = CerberusPortfolioSnapshot(
             user_id=1,
             brokerage_account_id="fake-acct",
             cash=10000.0,
@@ -138,7 +138,7 @@ class TestModelInstantiation:
         assert obj.equity == 50000.0
 
     def test_position_fields(self):
-        obj = CopilotPosition(
+        obj = CerberusPosition(
             user_id=1,
             brokerage_account_id="fake",
             symbol="AAPL",
@@ -148,7 +148,7 @@ class TestModelInstantiation:
         assert obj.quantity == 100
 
     def test_order_defaults(self):
-        obj = CopilotOrder(
+        obj = CerberusOrder(
             user_id=1,
             brokerage_account_id="fake",
             symbol="TSLA",
@@ -159,7 +159,7 @@ class TestModelInstantiation:
         assert obj.side == "buy"
 
     def test_trade_fields(self):
-        obj = CopilotTrade(
+        obj = CerberusTrade(
             user_id=1,
             symbol="SPY",
             side="sell",
@@ -169,25 +169,25 @@ class TestModelInstantiation:
         assert obj.gross_pnl == 200.0
 
     def test_bot_default_status(self):
-        obj = CopilotBot(user_id=1, name="TestBot")
+        obj = CerberusBot(user_id=1, name="TestBot")
         # The column default is BotStatus.DRAFT
         assert obj.name == "TestBot"
 
     def test_bot_version_fields(self):
-        obj = CopilotBotVersion(bot_id="fake", version_number=1)
+        obj = CerberusBotVersion(bot_id="fake", version_number=1)
         assert obj.version_number == 1
 
     def test_backtest_fields(self):
-        obj = CopilotBacktest(user_id=1, strategy_name="momentum")
+        obj = CerberusBacktest(user_id=1, strategy_name="momentum")
         assert obj.strategy_name == "momentum"
 
     def test_conversation_thread_default_mode(self):
-        obj = CopilotConversationThread(user_id=1)
+        obj = CerberusConversationThread(user_id=1)
         # mode default is ConversationMode.CHAT
         assert obj.user_id == 1
 
     def test_conversation_message_fields(self):
-        obj = CopilotConversationMessage(
+        obj = CerberusConversationMessage(
             thread_id="fake",
             user_id=1,
             role=MessageRole.USER,
@@ -197,11 +197,11 @@ class TestModelInstantiation:
         assert obj.role == MessageRole.USER
 
     def test_memory_item_fields(self):
-        obj = CopilotMemoryItem(user_id=1, kind="preference", content="likes growth stocks")
+        obj = CerberusMemoryItem(user_id=1, kind="preference", content="likes growth stocks")
         assert obj.kind == "preference"
 
     def test_document_file_fields(self):
-        obj = CopilotDocumentFile(
+        obj = CerberusDocumentFile(
             user_id=1,
             original_filename="report.pdf",
             storage_key="s3://bucket/key",
@@ -209,7 +209,7 @@ class TestModelInstantiation:
         assert obj.original_filename == "report.pdf"
 
     def test_document_chunk_fields(self):
-        obj = CopilotDocumentChunk(
+        obj = CerberusDocumentChunk(
             document_id="fake",
             user_id=1,
             chunk_index=0,
@@ -218,11 +218,11 @@ class TestModelInstantiation:
         assert obj.chunk_index == 0
 
     def test_ui_context_event_fields(self):
-        obj = CopilotUIContextEvent(user_id=1, current_page="/dashboard")
+        obj = CerberusUIContextEvent(user_id=1, current_page="/dashboard")
         assert obj.current_page == "/dashboard"
 
     def test_trade_proposal_fields(self):
-        obj = CopilotTradeProposal(
+        obj = CerberusTradeProposal(
             user_id=1,
             proposal_json={"symbol": "AAPL"},
             status=ProposalStatus.PENDING,
@@ -230,7 +230,7 @@ class TestModelInstantiation:
         assert obj.status == ProposalStatus.PENDING
 
     def test_trade_confirmation_fields(self):
-        obj = CopilotTradeConfirmation(
+        obj = CerberusTradeConfirmation(
             proposal_id="fake",
             user_id=1,
             confirmation_token_hash="abc123",
@@ -238,11 +238,11 @@ class TestModelInstantiation:
         assert obj.confirmation_token_hash == "abc123"
 
     def test_ai_tool_call_fields(self):
-        obj = CopilotAIToolCall(user_id=1, tool_name="getPortfolio")
+        obj = CerberusAIToolCall(user_id=1, tool_name="getPortfolio")
         assert obj.tool_name == "getPortfolio"
 
     def test_audit_log_fields(self):
-        obj = CopilotAuditLog(user_id=1, action_type="trade_executed")
+        obj = CerberusAuditLog(user_id=1, action_type="trade_executed")
         assert obj.action_type == "trade_executed"
 
 
@@ -254,7 +254,7 @@ class TestModelPersistence:
     @pytest.mark.asyncio
     async def test_brokerage_account_round_trip(self, session: AsyncSession):
         uid = await _seed_user(session)
-        acct = CopilotBrokerageAccount(
+        acct = CerberusBrokerageAccount(
             id=str(uuid.uuid4()),
             user_id=uid,
             provider="webull",
@@ -268,7 +268,7 @@ class TestModelPersistence:
     @pytest.mark.asyncio
     async def test_conversation_thread_message_relationship(self, session: AsyncSession):
         uid = await _seed_user(session)
-        thread = CopilotConversationThread(
+        thread = CerberusConversationThread(
             id=str(uuid.uuid4()),
             user_id=uid,
             title="Test Thread",
@@ -277,7 +277,7 @@ class TestModelPersistence:
         session.add(thread)
         await session.flush()
 
-        msg = CopilotConversationMessage(
+        msg = CerberusConversationMessage(
             id=str(uuid.uuid4()),
             thread_id=thread.id,
             user_id=uid,
@@ -292,7 +292,7 @@ class TestModelPersistence:
     @pytest.mark.asyncio
     async def test_trade_proposal_confirmation_relationship(self, session: AsyncSession):
         uid = await _seed_user(session)
-        proposal = CopilotTradeProposal(
+        proposal = CerberusTradeProposal(
             id=str(uuid.uuid4()),
             user_id=uid,
             proposal_json={"symbol": "AAPL", "side": "buy", "quantity": 10},
@@ -301,7 +301,7 @@ class TestModelPersistence:
         session.add(proposal)
         await session.flush()
 
-        confirmation = CopilotTradeConfirmation(
+        confirmation = CerberusTradeConfirmation(
             id=str(uuid.uuid4()),
             proposal_id=proposal.id,
             user_id=uid,
@@ -315,7 +315,7 @@ class TestModelPersistence:
     @pytest.mark.asyncio
     async def test_document_file_chunk_cascade(self, session: AsyncSession):
         uid = await _seed_user(session)
-        doc = CopilotDocumentFile(
+        doc = CerberusDocumentFile(
             id=str(uuid.uuid4()),
             user_id=uid,
             original_filename="test.pdf",
@@ -325,7 +325,7 @@ class TestModelPersistence:
         session.add(doc)
         await session.flush()
 
-        chunk = CopilotDocumentChunk(
+        chunk = CerberusDocumentChunk(
             id=str(uuid.uuid4()),
             document_id=doc.id,
             user_id=uid,
@@ -340,7 +340,7 @@ class TestModelPersistence:
     @pytest.mark.asyncio
     async def test_bot_version_relationship(self, session: AsyncSession):
         uid = await _seed_user(session)
-        bot = CopilotBot(
+        bot = CerberusBot(
             id=str(uuid.uuid4()),
             user_id=uid,
             name="MomentumBot",
@@ -349,7 +349,7 @@ class TestModelPersistence:
         session.add(bot)
         await session.flush()
 
-        ver = CopilotBotVersion(
+        ver = CerberusBotVersion(
             id=str(uuid.uuid4()),
             bot_id=bot.id,
             version_number=1,

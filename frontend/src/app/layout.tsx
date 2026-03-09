@@ -3,8 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { NavHeader } from "@/components/layout/NavHeader";
 import { Providers } from "@/components/layout/Providers";
-import { AIWidget } from "@/components/copilot/AIWidget";
-import { ConfirmationModal } from "@/components/copilot/ConfirmationModal";
+import { AIWidget } from "@/components/cerberus/AIWidget";
+import { ConfirmationModal } from "@/components/cerberus/ConfirmationModal";
 
 const inter = Inter({
   subsets: ["latin"],

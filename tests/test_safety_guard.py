@@ -14,7 +14,7 @@ from services.ai_core.safety_guard import SafetyGuard, SafetyViolation
 
 def _mock_settings(**overrides):
     defaults = dict(
-        feature_copilot_enabled=True,
+        feature_cerberus_enabled=True,
         feature_research_mode_enabled=True,
         feature_bot_mutations_enabled=False,
         feature_paper_trade_proposals_enabled=True,
@@ -166,14 +166,14 @@ class TestPIIRedaction:
 # ---------------------------------------------------------------------------
 
 class TestFeatureFlags:
-    def test_copilot_enabled_passes(self):
-        guard = _make_guard(feature_copilot_enabled=True)
-        guard.check_feature_enabled("copilot")  # Should not raise
+    def test_cerberus_enabled_passes(self):
+        guard = _make_guard(feature_cerberus_enabled=True)
+        guard.check_feature_enabled("cerberus")  # Should not raise
 
-    def test_copilot_disabled_raises(self):
-        guard = _make_guard(feature_copilot_enabled=False)
+    def test_cerberus_disabled_raises(self):
+        guard = _make_guard(feature_cerberus_enabled=False)
         with pytest.raises(SafetyViolation) as exc_info:
-            guard.check_feature_enabled("copilot")
+            guard.check_feature_enabled("cerberus")
         assert exc_info.value.violation_type == "feature_disabled"
 
     def test_research_enabled(self):

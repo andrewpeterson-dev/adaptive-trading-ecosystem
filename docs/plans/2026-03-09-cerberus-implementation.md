@@ -1,10 +1,10 @@
-# AI Copilot Implementation Plan
+# Cerberus Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add an embedded AI Copilot to the adaptive-trading-ecosystem platform — Bloomberg Terminal-style AI assistant with portfolio analysis, strategy building, bot management, document research, and safe trade proposals.
+**Goal:** Add an embedded Cerberus to the adaptive-trading-ecosystem platform — Bloomberg Terminal-style AI assistant with portfolio analysis, strategy building, bot management, document research, and safe trade proposals.
 
-**Architecture:** New copilot subsystem layered alongside existing FastAPI backend + Next.js frontend. AI Core orchestration service handles model routing (gpt-5.4 primary, gpt-4.1 simple, claude-sonnet-4-6 fallback), typed tool system, memory (Redis + pgvector), document ingestion, and trade proposal safety flow. Frontend floating widget with 5 tabs communicates via REST + WebSocket streaming.
+**Architecture:** New cerberus subsystem layered alongside existing FastAPI backend + Next.js frontend. AI Core orchestration service handles model routing (gpt-5.4 primary, gpt-4.1 simple, claude-sonnet-4-6 fallback), typed tool system, memory (Redis + pgvector), document ingestion, and trade proposal safety flow. Frontend floating widget with 5 tabs communicates via REST + WebSocket streaming.
 
 **Tech Stack:** FastAPI, SQLAlchemy 2.x + Alembic, Redis, PostgreSQL + pgvector, OpenAI Responses API, Anthropic native API, Perplexity Search API, Celery, Next.js 14, React 18, TypeScript, Zustand, TailwindCSS, zod, lightweight-charts, Framer Motion
 
@@ -12,26 +12,26 @@
 - Backend: FastAPI at `api/main.py`, SQLAlchemy models at `db/models.py`, async sessions at `db/database.py`
 - Frontend: Next.js 14 at `frontend/src/`, React Context hooks at `frontend/src/hooks/`, types at `frontend/src/types/`
 - Auth: JWT middleware at `api/middleware/auth.py`, token in cookies + localStorage
-- Existing models use Integer PKs — new copilot tables use UUID PKs (separate subsystem, no conflict)
-- State management: existing uses React Context; copilot adds Zustand for copilot-specific stores
+- Existing models use Integer PKs — new cerberus tables use UUID PKs (separate subsystem, no conflict)
+- State management: existing uses React Context; cerberus adds Zustand for cerberus-specific stores
 - Project root: `/Users/andrewpeterson/adaptive-trading-ecosystem/`
 
 ---
 
 ## Phase 1: Foundation — Database Models, Settings, Shared Types
 
-### Task 1: Add copilot settings to config
+### Task 1: Add cerberus settings to config
 
 **Files:**
 - Modify: `config/settings.py`
 - Modify: `.env.example`
 
-**Step 1: Add copilot settings to Settings class**
+**Step 1: Add cerberus settings to Settings class**
 
 Add these fields to the `Settings` class in `config/settings.py` after the existing LLM settings block (~line 112):
 
 ```python
-    # --- AI Copilot ---
+    # --- Cerberus ---
     openai_primary_model: str = "gpt-5.4"
     openai_low_latency_model: str = "gpt-4.1"
     openai_embedding_model: str = "text-embedding-3-large"
@@ -50,7 +50,7 @@ Add these fields to the `Settings` class in `config/settings.py` after the exist
     s3_endpoint_url: str = ""  # For MinIO in dev
 
     # --- Feature Flags ---
-    feature_copilot_enabled: bool = True
+    feature_cerberus_enabled: bool = True
     feature_research_mode_enabled: bool = True
     feature_bot_mutations_enabled: bool = False
     feature_paper_trade_proposals_enabled: bool = False
@@ -71,7 +71,7 @@ Add these fields to the `Settings` class in `config/settings.py` after the exist
 Append to `.env.example`:
 
 ```env
-# --- AI Copilot ---
+# --- Cerberus ---
 OPENAI_API_KEY=
 OPENAI_PRIMARY_MODEL=gpt-5.4
 OPENAI_LOW_LATENCY_MODEL=gpt-4.1
@@ -82,14 +82,14 @@ PERPLEXITY_API_KEY=
 BROKER_KMS_KEY_ID=
 
 # --- S3 (MinIO for dev) ---
-S3_BUCKET=trading-copilot
+S3_BUCKET=trading-cerberus
 S3_REGION=us-east-1
 S3_ACCESS_KEY=
 S3_SECRET_KEY=
 S3_ENDPOINT_URL=http://localhost:9000
 
 # --- Feature Flags ---
-FEATURE_COPILOT_ENABLED=true
+FEATURE_CERBERUS_ENABLED=true
 FEATURE_RESEARCH_MODE_ENABLED=true
 FEATURE_BOT_MUTATIONS_ENABLED=false
 FEATURE_PAPER_TRADE_PROPOSALS_ENABLED=false
@@ -101,7 +101,7 @@ FEATURE_EXPERIMENTAL_RL_ENABLED=false
 **Step 3: Run to verify settings load**
 
 ```bash
-cd ~/adaptive-trading-ecosystem && python3 -c "from config.settings import get_settings; s = get_settings(); print(s.openai_primary_model, s.feature_copilot_enabled)"
+cd ~/adaptive-trading-ecosystem && python3 -c "from config.settings import get_settings; s = get_settings(); print(s.openai_primary_model, s.feature_cerberus_enabled)"
 ```
 
 Expected: `gpt-5.4 True`
@@ -110,24 +110,24 @@ Expected: `gpt-5.4 True`
 
 ```bash
 git add config/settings.py .env.example
-git commit -m "feat(copilot): add AI copilot settings, feature flags, S3 config"
+git commit -m "feat(cerberus): add AI cerberus settings, feature flags, S3 config"
 ```
 
 ---
 
-### Task 2: Add copilot database models
+### Task 2: Add cerberus database models
 
 **Files:**
-- Create: `db/copilot_models.py`
+- Create: `db/cerberus_models.py`
 - Modify: `db/database.py` (import new models so Alembic sees them)
 
-**Step 1: Create copilot models file**
+**Step 1: Create cerberus models file**
 
-Create `db/copilot_models.py` with all copilot-specific tables. These use UUID PKs and are separate from existing Integer-PK models.
+Create `db/cerberus_models.py` with all cerberus-specific tables. These use UUID PKs and are separate from existing Integer-PK models.
 
 ```python
 """
-SQLAlchemy models for the AI Copilot subsystem.
+SQLAlchemy models for the Cerberus subsystem.
 Uses UUID primary keys — separate from legacy Integer-PK trading models.
 """
 
@@ -227,7 +227,7 @@ class ToolSideEffect(str, enum.Enum):
 # ── Brokerage Accounts (spec-aligned, extends existing) ─────────────────────
 
 class BrokerageAccount(Base):
-    __tablename__ = "copilot_brokerage_accounts"
+    __tablename__ = "cerberus_brokerage_accounts"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -242,18 +242,18 @@ class BrokerageAccount(Base):
 
     __table_args__ = (
         CheckConstraint("account_mode IN ('paper', 'live')", name="ck_brokerage_account_mode"),
-        Index("ix_copilot_brok_user", "user_id"),
+        Index("ix_cerberus_brok_user", "user_id"),
     )
 
 
-# ── Portfolio & Positions (copilot-specific snapshots) ───────────────────────
+# ── Portfolio & Positions (cerberus-specific snapshots) ───────────────────────
 
-class CopilotPortfolioSnapshot(Base):
-    __tablename__ = "copilot_portfolio_snapshots"
+class CerberusPortfolioSnapshot(Base):
+    __tablename__ = "cerberus_portfolio_snapshots"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=True)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=True)
     snapshot_ts = Column(DateTime, default=datetime.utcnow)
     cash = Column(Numeric, nullable=True)
     equity = Column(Numeric, nullable=True)
@@ -264,12 +264,12 @@ class CopilotPortfolioSnapshot(Base):
     payload_json = Column(JSON, default=dict)
 
 
-class CopilotPosition(Base):
-    __tablename__ = "copilot_positions"
+class CerberusPosition(Base):
+    __tablename__ = "cerberus_positions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=True)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=True)
     symbol = Column(String(32), nullable=False)
     asset_type = Column(String(32), nullable=True)
     quantity = Column(Numeric, nullable=False)
@@ -283,18 +283,18 @@ class CopilotPosition(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_pos_user_symbol", "user_id", "symbol"),
+        Index("ix_cerberus_pos_user_symbol", "user_id", "symbol"),
     )
 
 
-# ── Orders & Trades (copilot-tracked) ───────────────────────────────────────
+# ── Orders & Trades (cerberus-tracked) ───────────────────────────────────────
 
-class CopilotOrder(Base):
-    __tablename__ = "copilot_orders"
+class CerberusOrder(Base):
+    __tablename__ = "cerberus_orders"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=True)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=True)
     broker_order_id = Column(String(128), nullable=True)
     symbol = Column(String(32), nullable=False)
     asset_type = Column(String(32), nullable=True)
@@ -310,16 +310,16 @@ class CopilotOrder(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_orders_user_created", "user_id", "created_at"),
+        Index("ix_cerberus_orders_user_created", "user_id", "created_at"),
     )
 
 
-class CopilotTrade(Base):
-    __tablename__ = "copilot_trades"
+class CerberusTrade(Base):
+    __tablename__ = "cerberus_trades"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brokerage_account_id = Column(String(36), ForeignKey("copilot_brokerage_accounts.id"), nullable=True)
+    brokerage_account_id = Column(String(36), ForeignKey("cerberus_brokerage_accounts.id"), nullable=True)
     symbol = Column(String(32), nullable=False)
     asset_type = Column(String(32), nullable=True)
     side = Column(String(16), nullable=False)
@@ -338,14 +338,14 @@ class CopilotTrade(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_trades_user_symbol_entry", "user_id", "symbol", "entry_ts"),
+        Index("ix_cerberus_trades_user_symbol_entry", "user_id", "symbol", "entry_ts"),
     )
 
 
 # ── Bots & Versions ─────────────────────────────────────────────────────────
 
-class CopilotBot(Base):
-    __tablename__ = "copilot_bots"
+class CerberusBot(Base):
+    __tablename__ = "cerberus_bots"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -355,21 +355,21 @@ class CopilotBot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    versions = relationship("CopilotBotVersion", back_populates="bot")
+    versions = relationship("CerberusBotVersion", back_populates="bot")
 
     __table_args__ = (
         CheckConstraint(
             "status IN ('draft', 'active', 'paused', 'stopped', 'archived')",
-            name="ck_copilot_bot_status"
+            name="ck_cerberus_bot_status"
         ),
     )
 
 
-class CopilotBotVersion(Base):
-    __tablename__ = "copilot_bot_versions"
+class CerberusBotVersion(Base):
+    __tablename__ = "cerberus_bot_versions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    bot_id = Column(String(36), ForeignKey("copilot_bots.id"), nullable=False)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
     version_number = Column(Integer, nullable=False)
     config_json = Column(JSON, nullable=False)
     diff_summary = Column(Text, nullable=True)
@@ -378,13 +378,13 @@ class CopilotBotVersion(Base):
     backtest_id = Column(String(36), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    bot = relationship("CopilotBot", back_populates="versions")
+    bot = relationship("CerberusBot", back_populates="versions")
 
 
 # ── Backtests ────────────────────────────────────────────────────────────────
 
-class CopilotBacktest(Base):
-    __tablename__ = "copilot_backtests"
+class CerberusBacktest(Base):
+    __tablename__ = "cerberus_backtests"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -404,7 +404,7 @@ class CopilotBacktest(Base):
 # ── Conversations & Messages ─────────────────────────────────────────────────
 
 class ConversationThread(Base):
-    __tablename__ = "copilot_conversation_threads"
+    __tablename__ = "cerberus_conversation_threads"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -419,15 +419,15 @@ class ConversationThread(Base):
     messages = relationship("ConversationMessage", back_populates="thread", order_by="ConversationMessage.created_at")
 
     __table_args__ = (
-        Index("ix_copilot_thread_user", "user_id"),
+        Index("ix_cerberus_thread_user", "user_id"),
     )
 
 
 class ConversationMessage(Base):
-    __tablename__ = "copilot_conversation_messages"
+    __tablename__ = "cerberus_conversation_messages"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    thread_id = Column(String(36), ForeignKey("copilot_conversation_threads.id"), nullable=False)
+    thread_id = Column(String(36), ForeignKey("cerberus_conversation_threads.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(String(16), nullable=False)  # system / user / assistant / tool
     content_md = Column(Text, nullable=True)
@@ -441,14 +441,14 @@ class ConversationMessage(Base):
     thread = relationship("ConversationThread", back_populates="messages")
 
     __table_args__ = (
-        Index("ix_copilot_msg_thread_created", "thread_id", "created_at"),
+        Index("ix_cerberus_msg_thread_created", "thread_id", "created_at"),
     )
 
 
 # ── Memory ───────────────────────────────────────────────────────────────────
 
 class MemoryItem(Base):
-    __tablename__ = "copilot_memory_items"
+    __tablename__ = "cerberus_memory_items"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -463,14 +463,14 @@ class MemoryItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_memory_user_kind", "user_id", "kind"),
+        Index("ix_cerberus_memory_user_kind", "user_id", "kind"),
     )
 
 
 # ── Documents ────────────────────────────────────────────────────────────────
 
 class DocumentFile(Base):
-    __tablename__ = "copilot_document_files"
+    __tablename__ = "cerberus_document_files"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -488,17 +488,17 @@ class DocumentFile(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN ('uploaded', 'processing', 'indexed', 'failed')",
-            name="ck_copilot_doc_status"
+            name="ck_cerberus_doc_status"
         ),
-        Index("ix_copilot_doc_user", "user_id"),
+        Index("ix_cerberus_doc_user", "user_id"),
     )
 
 
 class DocumentChunk(Base):
-    __tablename__ = "copilot_document_chunks"
+    __tablename__ = "cerberus_document_chunks"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    document_id = Column(String(36), ForeignKey("copilot_document_files.id"), nullable=False)
+    document_id = Column(String(36), ForeignKey("cerberus_document_files.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     page_number = Column(Integer, nullable=True)
@@ -511,15 +511,15 @@ class DocumentChunk(Base):
     document = relationship("DocumentFile", back_populates="chunks")
 
     __table_args__ = (
-        Index("ix_copilot_chunk_doc", "document_id"),
-        Index("ix_copilot_chunk_user", "user_id"),
+        Index("ix_cerberus_chunk_doc", "document_id"),
+        Index("ix_cerberus_chunk_user", "user_id"),
     )
 
 
 # ── UI Context ───────────────────────────────────────────────────────────────
 
 class UIContextEvent(Base):
-    __tablename__ = "copilot_ui_context_events"
+    __tablename__ = "cerberus_ui_context_events"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -538,11 +538,11 @@ class UIContextEvent(Base):
 # ── Trade Proposals & Confirmations ──────────────────────────────────────────
 
 class TradeProposal(Base):
-    __tablename__ = "copilot_trade_proposals"
+    __tablename__ = "cerberus_trade_proposals"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    thread_id = Column(String(36), ForeignKey("copilot_conversation_threads.id"), nullable=False)
+    thread_id = Column(String(36), ForeignKey("cerberus_conversation_threads.id"), nullable=False)
     proposal_json = Column(JSON, nullable=False)
     risk_json = Column(JSON, default=dict)
     explanation_md = Column(Text, nullable=True)
@@ -556,17 +556,17 @@ class TradeProposal(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN ('draft', 'awaiting_confirmation', 'confirmed', 'expired', 'cancelled', 'executed', 'rejected')",
-            name="ck_copilot_proposal_status"
+            name="ck_cerberus_proposal_status"
         ),
-        Index("ix_copilot_proposal_user_thread", "user_id", "thread_id"),
+        Index("ix_cerberus_proposal_user_thread", "user_id", "thread_id"),
     )
 
 
 class TradeConfirmation(Base):
-    __tablename__ = "copilot_trade_confirmations"
+    __tablename__ = "cerberus_trade_confirmations"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    proposal_id = Column(String(36), ForeignKey("copilot_trade_proposals.id"), nullable=False)
+    proposal_id = Column(String(36), ForeignKey("cerberus_trade_proposals.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     confirmation_token_hash = Column(String(128), nullable=True)
     confirmed_at = Column(DateTime, nullable=True)
@@ -580,7 +580,7 @@ class TradeConfirmation(Base):
 # ── Tool Calls & Audit ───────────────────────────────────────────────────────
 
 class AIToolCall(Base):
-    __tablename__ = "copilot_ai_tool_calls"
+    __tablename__ = "cerberus_ai_tool_calls"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     thread_id = Column(String(36), nullable=True)
@@ -596,13 +596,13 @@ class AIToolCall(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_tool_call_thread", "thread_id"),
-        Index("ix_copilot_tool_call_user", "user_id"),
+        Index("ix_cerberus_tool_call_thread", "thread_id"),
+        Index("ix_cerberus_tool_call_user", "user_id"),
     )
 
 
 class AuditLog(Base):
-    __tablename__ = "copilot_audit_log"
+    __tablename__ = "cerberus_audit_log"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -616,18 +616,18 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        Index("ix_copilot_audit_user_action", "user_id", "action_type"),
-        Index("ix_copilot_audit_created", "created_at"),
+        Index("ix_cerberus_audit_user_action", "user_id", "action_type"),
+        Index("ix_cerberus_audit_created", "created_at"),
     )
 ```
 
-**Step 2: Import copilot models in database.py**
+**Step 2: Import cerberus models in database.py**
 
 Add to `db/database.py` after `init_db` function so Alembic discovers the new tables:
 
 ```python
-# Import copilot models so Base.metadata includes them
-import db.copilot_models  # noqa: F401
+# Import cerberus models so Base.metadata includes them
+import db.cerberus_models  # noqa: F401
 ```
 
 **Step 3: Verify models load**
@@ -635,19 +635,19 @@ import db.copilot_models  # noqa: F401
 ```bash
 cd ~/adaptive-trading-ecosystem && python3 -c "
 from db.database import Base
-import db.copilot_models
-tables = [t for t in Base.metadata.tables if t.startswith('copilot_')]
-print(f'{len(tables)} copilot tables:', sorted(tables))
+import db.cerberus_models
+tables = [t for t in Base.metadata.tables if t.startswith('cerberus_')]
+print(f'{len(tables)} cerberus tables:', sorted(tables))
 "
 ```
 
-Expected: `15 copilot tables: ['copilot_ai_tool_calls', 'copilot_audit_log', ...]`
+Expected: `15 cerberus tables: ['cerberus_ai_tool_calls', 'cerberus_audit_log', ...]`
 
 **Step 4: Commit**
 
 ```bash
-git add db/copilot_models.py db/database.py
-git commit -m "feat(copilot): add 15 copilot database models with UUID PKs"
+git add db/cerberus_models.py db/database.py
+git commit -m "feat(cerberus): add 15 cerberus database models with UUID PKs"
 ```
 
 ---
@@ -655,15 +655,15 @@ git commit -m "feat(copilot): add 15 copilot database models with UUID PKs"
 ### Task 3: Create shared TypeScript types
 
 **Files:**
-- Create: `frontend/src/types/copilot.ts`
+- Create: `frontend/src/types/cerberus.ts`
 - Create: `frontend/src/types/ui-commands.ts`
 
-**Step 1: Create copilot types**
+**Step 1: Create cerberus types**
 
-Create `frontend/src/types/copilot.ts`:
+Create `frontend/src/types/cerberus.ts`:
 
 ```typescript
-// ── Copilot API Types ───────────────────────────────────────────────────────
+// ── Cerberus API Types ───────────────────────────────────────────────────────
 
 export type ConversationMode = "chat" | "strategy" | "portfolio" | "bot_control" | "research";
 export type MessageRole = "system" | "user" | "assistant" | "tool";
@@ -957,8 +957,8 @@ export function validateUICommand(cmd: UICommand): boolean {
 **Step 3: Commit**
 
 ```bash
-git add frontend/src/types/copilot.ts frontend/src/types/ui-commands.ts
-git commit -m "feat(copilot): add shared TypeScript types for copilot API and UI commands"
+git add frontend/src/types/cerberus.ts frontend/src/types/ui-commands.ts
+git commit -m "feat(cerberus): add shared TypeScript types for cerberus API and UI commands"
 ```
 
 ---
@@ -1204,7 +1204,7 @@ Create materialized view SQL for:
 
 ## Phase 5: API Layer
 
-### Task 15: Create copilot API routes
+### Task 15: Create cerberus API routes
 
 **Files:**
 - Create: `api/routes/ai_chat.py`
@@ -1227,14 +1227,14 @@ Endpoints:
 Register in `api/main.py`:
 ```python
 from api.routes import ai_chat, ai_tools, documents as documents_routes
-app.include_router(ai_chat.router, prefix="/api/ai", tags=["AI Copilot"])
+app.include_router(ai_chat.router, prefix="/api/ai", tags=["Cerberus"])
 app.include_router(ai_tools.router, prefix="/api/ai/tools", tags=["AI Tools"])
 app.include_router(documents_routes.router, prefix="/api/documents", tags=["Documents"])
 ```
 
 ---
 
-## Phase 6: Frontend Copilot Widget
+## Phase 6: Frontend Cerberus Widget
 
 ### Task 16: Install frontend dependencies
 
@@ -1249,15 +1249,15 @@ npm install zustand framer-motion zod react-markdown remark-gfm rehype-highlight
 
 ---
 
-### Task 17: Create copilot stores
+### Task 17: Create cerberus stores
 
 **Files:**
-- Create: `frontend/src/stores/copilot-store.ts`
+- Create: `frontend/src/stores/cerberus-store.ts`
 - Create: `frontend/src/stores/ui-context-store.ts`
 
-`useCopilotStore` (Zustand):
+`useCerberusStore` (Zustand):
 - threads, activeThread, messages, isOpen, activeTab, isStreaming, toolCalls, proposals
-- actions: openCopilot, closeCopilot, setActiveTab, sendMessage, setStreamingState
+- actions: openCerberus, closeCerberus, setActiveTab, sendMessage, setStreamingState
 
 `useUIContextStore` (Zustand):
 - pageContext (current page, route, visible components, focused component, selected symbol/account/bot)
@@ -1265,14 +1265,14 @@ npm install zustand framer-motion zod react-markdown remark-gfm rehype-highlight
 
 ---
 
-### Task 18: Create copilot API client and WebSocket handler
+### Task 18: Create cerberus API client and WebSocket handler
 
 **Files:**
-- Create: `frontend/src/lib/copilot-api.ts`
-- Create: `frontend/src/lib/copilot-websocket.ts`
+- Create: `frontend/src/lib/cerberus-api.ts`
+- Create: `frontend/src/lib/cerberus-websocket.ts`
 - Create: `frontend/src/lib/ui-command-executor.ts`
 
-API client wraps `apiFetch` for copilot endpoints.
+API client wraps `apiFetch` for cerberus endpoints.
 WebSocket handler connects to `/api/ai/stream/{threadId}`, processes stream events, updates Zustand store.
 UI command executor validates commands via zod, dispatches to safe UI methods.
 
@@ -1281,10 +1281,10 @@ UI command executor validates commands via zod, dispatches to safe UI methods.
 ### Task 19: Create AIWidget and ChatPanel components
 
 **Files:**
-- Create: `frontend/src/components/copilot/AIWidget.tsx`
-- Create: `frontend/src/components/copilot/ChatPanel.tsx`
-- Create: `frontend/src/components/copilot/MessageList.tsx`
-- Create: `frontend/src/components/copilot/MessageInput.tsx`
+- Create: `frontend/src/components/cerberus/AIWidget.tsx`
+- Create: `frontend/src/components/cerberus/ChatPanel.tsx`
+- Create: `frontend/src/components/cerberus/MessageList.tsx`
+- Create: `frontend/src/components/cerberus/MessageInput.tsx`
 
 AIWidget: Floating 56x56 bubble, bottom-right, glassmorphism, draggable, expands to 420px slide-out panel. Tabs: Chat, Strategy Builder, Portfolio Analysis, Bot Control, Research.
 
@@ -1299,12 +1299,12 @@ MessageInput: Textarea with send button, attachment support, mode selector.
 ### Task 20: Create specialized panel components
 
 **Files:**
-- Create: `frontend/src/components/copilot/StrategyBuilder.tsx`
-- Create: `frontend/src/components/copilot/PortfolioAnalysis.tsx`
-- Create: `frontend/src/components/copilot/BotControlPanel.tsx`
-- Create: `frontend/src/components/copilot/ResearchPanel.tsx`
+- Create: `frontend/src/components/cerberus/StrategyBuilder.tsx`
+- Create: `frontend/src/components/cerberus/PortfolioAnalysis.tsx`
+- Create: `frontend/src/components/cerberus/BotControlPanel.tsx`
+- Create: `frontend/src/components/cerberus/ResearchPanel.tsx`
 
-Each panel is a tab within the copilot widget:
+Each panel is a tab within the cerberus widget:
 - StrategyBuilder: Visual strategy configuration, AI-assisted generation, backtest trigger
 - PortfolioAnalysis: Risk metrics, allocation chart, exposure breakdown
 - BotControlPanel: Bot list, status controls, performance charts
@@ -1315,11 +1315,11 @@ Each panel is a tab within the copilot widget:
 ### Task 21: Create trade and chart rendering components
 
 **Files:**
-- Create: `frontend/src/components/copilot/TradeSignalCard.tsx`
-- Create: `frontend/src/components/copilot/ChartRenderer.tsx`
-- Create: `frontend/src/components/copilot/CitationList.tsx`
-- Create: `frontend/src/components/copilot/ConfirmationModal.tsx`
-- Create: `frontend/src/components/copilot/ToolStatusPill.tsx`
+- Create: `frontend/src/components/cerberus/TradeSignalCard.tsx`
+- Create: `frontend/src/components/cerberus/ChartRenderer.tsx`
+- Create: `frontend/src/components/cerberus/CitationList.tsx`
+- Create: `frontend/src/components/cerberus/ConfirmationModal.tsx`
+- Create: `frontend/src/components/cerberus/ToolStatusPill.tsx`
 
 TradeSignalCard: Renders structured trade signals with symbol, action, confidence, thesis, risks, entry/exit.
 ChartRenderer: Renders ChartSpec using lightweight-charts (candlestick, line) or Recharts (bar, allocation).
@@ -1329,7 +1329,7 @@ ToolStatusPill: Shows tool execution status (pending → running → completed/f
 
 ---
 
-### Task 22: Integrate copilot widget into layout
+### Task 22: Integrate cerberus widget into layout
 
 **Files:**
 - Modify: `frontend/src/app/layout.tsx`
@@ -1394,7 +1394,7 @@ tiktoken>=0.7.0
 ### Task 26: Create tests
 
 **Files:**
-- Create: `tests/test_copilot_models.py`
+- Create: `tests/test_cerberus_models.py`
 - Create: `tests/test_model_router.py`
 - Create: `tests/test_tool_registry.py`
 - Create: `tests/test_safety_guard.py`
@@ -1420,22 +1420,22 @@ Test categories:
 - Modify: `CLAUDE.md`
 
 Add sections for:
-- AI Copilot architecture overview
-- Setup instructions for copilot (env vars, S3, pgvector)
+- Cerberus architecture overview
+- Setup instructions for cerberus (env vars, S3, pgvector)
 - Running workers
 - Feature flag descriptions
 - API endpoint documentation
 
 ---
 
-### Task 28: Create Alembic migration for copilot tables
+### Task 28: Create Alembic migration for cerberus tables
 
 **Files:**
 - Create new Alembic migration
 
 ```bash
 cd ~/adaptive-trading-ecosystem
-alembic revision --autogenerate -m "add copilot tables"
+alembic revision --autogenerate -m "add cerberus tables"
 ```
 
 Review and commit the generated migration.

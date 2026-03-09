@@ -1,4 +1,4 @@
-"""AI Copilot tool endpoints -- trade proposals and confirmations."""
+"""Cerberus tool endpoints -- trade proposals and confirmations."""
 from __future__ import annotations
 
 from typing import Optional
@@ -62,18 +62,18 @@ async def list_proposals(
 ):
     """List trade proposals for the current user."""
     from db.database import get_session
-    from db.copilot_models import CopilotTradeProposal
+    from db.cerberus_models import CerberusTradeProposal
     from sqlalchemy import select
 
     user_id = request.state.user_id
 
     async with get_session() as session:
-        stmt = select(CopilotTradeProposal).where(
-            CopilotTradeProposal.user_id == user_id
+        stmt = select(CerberusTradeProposal).where(
+            CerberusTradeProposal.user_id == user_id
         )
         if status:
-            stmt = stmt.where(CopilotTradeProposal.status == status)
-        stmt = stmt.order_by(CopilotTradeProposal.created_at.desc()).limit(limit)
+            stmt = stmt.where(CerberusTradeProposal.status == status)
+        stmt = stmt.order_by(CerberusTradeProposal.created_at.desc()).limit(limit)
         result = await session.execute(stmt)
         proposals = result.scalars().all()
 

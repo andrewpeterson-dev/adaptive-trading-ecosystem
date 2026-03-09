@@ -15,9 +15,9 @@ from sqlalchemy.pool import StaticPool
 
 from db.database import Base
 from db.models import User  # noqa: F401
-from db.copilot_models import (
-    CopilotConversationThread,
-    CopilotConversationMessage,
+from db.cerberus_models import (
+    CerberusConversationThread,
+    CerberusConversationMessage,
     ConversationMode,
     MessageRole,
 )
@@ -63,7 +63,7 @@ async def _seed_user(session: AsyncSession) -> int:
 
 async def _seed_thread(session: AsyncSession, user_id: int) -> str:
     thread_id = str(uuid.uuid4())
-    thread = CopilotConversationThread(
+    thread = CerberusConversationThread(
         id=thread_id,
         user_id=user_id,
         title="Test Thread",
@@ -76,7 +76,7 @@ async def _seed_thread(session: AsyncSession, user_id: int) -> str:
 
 async def _seed_messages(session: AsyncSession, thread_id: str, user_id: int, count: int = 3):
     for i in range(count):
-        msg = CopilotConversationMessage(
+        msg = CerberusConversationMessage(
             id=str(uuid.uuid4()),
             thread_id=thread_id,
             user_id=user_id,

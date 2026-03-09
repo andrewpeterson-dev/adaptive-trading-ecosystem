@@ -36,18 +36,18 @@ class DocumentIngestionService:
           5. Store chunks in the database
           6. Update document status to 'indexed' or 'failed'
         """
-        from db.copilot_models import (
-            CopilotDocumentFile,
-            CopilotDocumentChunk,
+        from db.cerberus_models import (
+            CerberusDocumentFile,
+            CerberusDocumentChunk,
             DocumentStatus,
         )
 
         try:
             # 1. Fetch the document record
             async with get_session() as session:
-                stmt = select(CopilotDocumentFile).where(
-                    CopilotDocumentFile.id == document_id,
-                    CopilotDocumentFile.user_id == user_id,
+                stmt = select(CerberusDocumentFile).where(
+                    CerberusDocumentFile.id == document_id,
+                    CerberusDocumentFile.user_id == user_id,
                 )
                 result = await session.execute(stmt)
                 doc = result.scalar_one_or_none()
@@ -93,7 +93,7 @@ class DocumentIngestionService:
             # 6. Store chunks
             async with get_session() as session:
                 for chunk_data, embedding in zip(chunks, embeddings):
-                    chunk_record = CopilotDocumentChunk(
+                    chunk_record = CerberusDocumentChunk(
                         id=str(uuid.uuid4()),
                         document_id=document_id,
                         user_id=user_id,
@@ -111,8 +111,8 @@ class DocumentIngestionService:
 
             # 7. Update document status
             async with get_session() as session:
-                stmt = select(CopilotDocumentFile).where(
-                    CopilotDocumentFile.id == document_id,
+                stmt = select(CerberusDocumentFile).where(
+                    CerberusDocumentFile.id == document_id,
                 )
                 result = await session.execute(stmt)
                 doc = result.scalar_one()
@@ -134,11 +134,11 @@ class DocumentIngestionService:
             logger.exception("ingestion_failed", document_id=document_id)
             # Mark document as failed
             try:
-                from db.copilot_models import CopilotDocumentFile, DocumentStatus
+                from db.cerberus_models import CerberusDocumentFile, DocumentStatus
 
                 async with get_session() as session:
-                    stmt = select(CopilotDocumentFile).where(
-                        CopilotDocumentFile.id == document_id,
+                    stmt = select(CerberusDocumentFile).where(
+                        CerberusDocumentFile.id == document_id,
                     )
                     result = await session.execute(stmt)
                     doc = result.scalar_one_or_none()

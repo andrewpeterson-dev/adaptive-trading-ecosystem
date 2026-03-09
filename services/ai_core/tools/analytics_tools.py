@@ -1,4 +1,4 @@
-"""Analytics tools for the AI Copilot."""
+"""Analytics tools for the Cerberus."""
 from __future__ import annotations
 
 import structlog
@@ -16,14 +16,14 @@ logger = structlog.get_logger(__name__)
 async def _get_best_trade(user_id: int, limit: int = 1) -> dict:
     """Get best trade(s) by return_pct."""
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select
 
     async with get_session() as session:
         stmt = (
-            select(CopilotTrade)
-            .where(CopilotTrade.user_id == user_id, CopilotTrade.return_pct.isnot(None))
-            .order_by(CopilotTrade.return_pct.desc())
+            select(CerberusTrade)
+            .where(CerberusTrade.user_id == user_id, CerberusTrade.return_pct.isnot(None))
+            .order_by(CerberusTrade.return_pct.desc())
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -40,14 +40,14 @@ async def _get_best_trade(user_id: int, limit: int = 1) -> dict:
 async def _get_worst_trades(user_id: int, limit: int = 5) -> dict:
     """Get worst trades by return_pct."""
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select
 
     async with get_session() as session:
         stmt = (
-            select(CopilotTrade)
-            .where(CopilotTrade.user_id == user_id, CopilotTrade.return_pct.isnot(None))
-            .order_by(CopilotTrade.return_pct.asc())
+            select(CerberusTrade)
+            .where(CerberusTrade.user_id == user_id, CerberusTrade.return_pct.isnot(None))
+            .order_by(CerberusTrade.return_pct.asc())
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -64,20 +64,20 @@ async def _get_worst_trades(user_id: int, limit: int = 5) -> dict:
 async def _get_total_trading_volume(user_id: int, days: int = None) -> dict:
     """Sum of trade volumes."""
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select, func
 
     async with get_session() as session:
         stmt = select(
-            func.count(CopilotTrade.id).label("trade_count"),
-            func.sum(CopilotTrade.quantity).label("total_quantity"),
-            func.sum(CopilotTrade.quantity * CopilotTrade.entry_price).label("total_notional"),
-        ).where(CopilotTrade.user_id == user_id)
+            func.count(CerberusTrade.id).label("trade_count"),
+            func.sum(CerberusTrade.quantity).label("total_quantity"),
+            func.sum(CerberusTrade.quantity * CerberusTrade.entry_price).label("total_notional"),
+        ).where(CerberusTrade.user_id == user_id)
 
         if days:
             from datetime import datetime, timedelta
             cutoff = datetime.utcnow() - timedelta(days=days)
-            stmt = stmt.where(CopilotTrade.entry_ts >= cutoff)
+            stmt = stmt.where(CerberusTrade.entry_ts >= cutoff)
 
         result = await session.execute(stmt)
         row = result.one()
@@ -93,22 +93,22 @@ async def _get_total_trading_volume(user_id: int, days: int = None) -> dict:
 async def _get_strategy_performance(user_id: int) -> dict:
     """Performance grouped by strategy_tag."""
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select, func
 
     async with get_session() as session:
         stmt = (
             select(
-                CopilotTrade.strategy_tag,
-                func.count(CopilotTrade.id).label("trades"),
-                func.sum(CopilotTrade.net_pnl).label("total_pnl"),
-                func.avg(CopilotTrade.return_pct).label("avg_return_pct"),
+                CerberusTrade.strategy_tag,
+                func.count(CerberusTrade.id).label("trades"),
+                func.sum(CerberusTrade.net_pnl).label("total_pnl"),
+                func.avg(CerberusTrade.return_pct).label("avg_return_pct"),
                 func.sum(
-                    func.cast(CopilotTrade.net_pnl > 0, Integer)
+                    func.cast(CerberusTrade.net_pnl > 0, Integer)
                 ).label("wins"),
             )
-            .where(CopilotTrade.user_id == user_id)
-            .group_by(CopilotTrade.strategy_tag)
+            .where(CerberusTrade.user_id == user_id)
+            .group_by(CerberusTrade.strategy_tag)
         )
         result = await session.execute(stmt)
         rows = result.all()
@@ -134,20 +134,20 @@ async def _get_strategy_performance(user_id: int) -> dict:
 async def _get_symbol_performance(user_id: int, limit: int = 20) -> dict:
     """Performance grouped by symbol."""
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select, func
 
     async with get_session() as session:
         stmt = (
             select(
-                CopilotTrade.symbol,
-                func.count(CopilotTrade.id).label("trades"),
-                func.sum(CopilotTrade.net_pnl).label("total_pnl"),
-                func.avg(CopilotTrade.return_pct).label("avg_return_pct"),
+                CerberusTrade.symbol,
+                func.count(CerberusTrade.id).label("trades"),
+                func.sum(CerberusTrade.net_pnl).label("total_pnl"),
+                func.avg(CerberusTrade.return_pct).label("avg_return_pct"),
             )
-            .where(CopilotTrade.user_id == user_id)
-            .group_by(CopilotTrade.symbol)
-            .order_by(func.sum(CopilotTrade.net_pnl).desc())
+            .where(CerberusTrade.user_id == user_id)
+            .group_by(CerberusTrade.symbol)
+            .order_by(func.sum(CerberusTrade.net_pnl).desc())
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -172,16 +172,16 @@ async def _get_symbol_performance(user_id: int, limit: int = 20) -> dict:
 async def _get_hold_time_stats(user_id: int) -> dict:
     """Average hold time statistics."""
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select
 
     async with get_session() as session:
         stmt = (
-            select(CopilotTrade)
+            select(CerberusTrade)
             .where(
-                CopilotTrade.user_id == user_id,
-                CopilotTrade.entry_ts.isnot(None),
-                CopilotTrade.exit_ts.isnot(None),
+                CerberusTrade.user_id == user_id,
+                CerberusTrade.entry_ts.isnot(None),
+                CerberusTrade.exit_ts.isnot(None),
             )
         )
         result = await session.execute(stmt)
@@ -208,25 +208,25 @@ async def _get_hold_time_stats(user_id: int) -> dict:
 async def _get_bot_performance(user_id: int, bot_id: str = None) -> dict:
     """Bot performance metrics."""
     from db.database import get_session
-    from db.copilot_models import CopilotTrade
+    from db.cerberus_models import CerberusTrade
     from sqlalchemy import select, func
 
     async with get_session() as session:
         stmt = (
             select(
-                CopilotTrade.bot_id,
-                func.count(CopilotTrade.id).label("trades"),
-                func.sum(CopilotTrade.net_pnl).label("total_pnl"),
-                func.avg(CopilotTrade.return_pct).label("avg_return_pct"),
+                CerberusTrade.bot_id,
+                func.count(CerberusTrade.id).label("trades"),
+                func.sum(CerberusTrade.net_pnl).label("total_pnl"),
+                func.avg(CerberusTrade.return_pct).label("avg_return_pct"),
             )
             .where(
-                CopilotTrade.user_id == user_id,
-                CopilotTrade.bot_id.isnot(None),
+                CerberusTrade.user_id == user_id,
+                CerberusTrade.bot_id.isnot(None),
             )
         )
         if bot_id:
-            stmt = stmt.where(CopilotTrade.bot_id == bot_id)
-        stmt = stmt.group_by(CopilotTrade.bot_id)
+            stmt = stmt.where(CerberusTrade.bot_id == bot_id)
+        stmt = stmt.group_by(CerberusTrade.bot_id)
 
         result = await session.execute(stmt)
         rows = result.all()

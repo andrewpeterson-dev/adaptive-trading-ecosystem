@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useCopilotStore } from '@/stores/copilot-store';
+import { useCerberusStore } from '@/stores/cerberus-store';
 import { ChatPanel } from './ChatPanel';
 import { StrategyBuilder } from './StrategyBuilder';
 import { PortfolioAnalysis } from './PortfolioAnalysis';
@@ -18,14 +18,14 @@ const TABS = [
 ];
 
 export function AIWidget() {
-  const { isOpen, activeTab, setActiveTab, openCopilot, closeCopilot } = useCopilotStore();
+  const { isOpen, activeTab, setActiveTab, openCerberus, closeCerberus } = useCerberusStore();
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
 
   // Load saved position
   useEffect(() => {
-    const saved = localStorage.getItem('copilot_position');
+    const saved = localStorage.getItem('cerberus_position');
     if (saved) {
       try { setPosition(JSON.parse(saved)); } catch { /* ignore */ }
     }
@@ -34,7 +34,7 @@ export function AIWidget() {
   // Save position on change
   useEffect(() => {
     if (position.x !== 0 || position.y !== 0) {
-      localStorage.setItem('copilot_position', JSON.stringify(position));
+      localStorage.setItem('cerberus_position', JSON.stringify(position));
     }
   }, [position]);
 
@@ -58,7 +58,7 @@ export function AIWidget() {
                 y: prev.y + info.offset.y,
               }));
             }}
-            onClick={() => { if (!isDragging) openCopilot(); }}
+            onClick={() => { if (!isDragging) openCerberus(); }}
             className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full cursor-pointer
                        bg-primary/90 backdrop-blur-md shadow-lg shadow-primary/25
                        flex items-center justify-center
@@ -90,9 +90,9 @@ export function AIWidget() {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <h2 className="text-sm font-semibold text-foreground">AI Copilot</h2>
+              <h2 className="text-sm font-semibold text-foreground">Cerberus</h2>
               <button
-                onClick={closeCopilot}
+                onClick={closeCerberus}
                 className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

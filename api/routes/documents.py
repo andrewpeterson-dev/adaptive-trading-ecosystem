@@ -52,15 +52,15 @@ async def finalize_upload(request: Request, document_id: str):
 async def document_status(request: Request, document_id: str):
     """Check document ingestion status."""
     from db.database import get_session
-    from db.copilot_models import CopilotDocumentFile
+    from db.cerberus_models import CerberusDocumentFile
     from sqlalchemy import select
 
     user_id = request.state.user_id
     async with get_session() as session:
         result = await session.execute(
-            select(CopilotDocumentFile).where(
-                CopilotDocumentFile.id == document_id,
-                CopilotDocumentFile.user_id == user_id,
+            select(CerberusDocumentFile).where(
+                CerberusDocumentFile.id == document_id,
+                CerberusDocumentFile.user_id == user_id,
             )
         )
         doc = result.scalar_one_or_none()
@@ -80,19 +80,19 @@ async def document_status(request: Request, document_id: str):
 async def search_documents(request: Request, body: SearchRequest):
     """Search document chunks by text similarity."""
     from db.database import get_session
-    from db.copilot_models import CopilotDocumentChunk
+    from db.cerberus_models import CerberusDocumentChunk
     from sqlalchemy import select
 
     user_id = request.state.user_id
 
     async with get_session() as session:
-        stmt = select(CopilotDocumentChunk).where(
-            CopilotDocumentChunk.user_id == user_id,
-            CopilotDocumentChunk.content.ilike(f"%{body.query}%"),
+        stmt = select(CerberusDocumentChunk).where(
+            CerberusDocumentChunk.user_id == user_id,
+            CerberusDocumentChunk.content.ilike(f"%{body.query}%"),
         )
         if body.documentIds:
             stmt = stmt.where(
-                CopilotDocumentChunk.document_id.in_(body.documentIds)
+                CerberusDocumentChunk.document_id.in_(body.documentIds)
             )
         stmt = stmt.limit(body.topK)
         result = await session.execute(stmt)

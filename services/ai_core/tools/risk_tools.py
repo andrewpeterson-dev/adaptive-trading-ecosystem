@@ -1,4 +1,4 @@
-"""Risk analysis tools for the AI Copilot."""
+"""Risk analysis tools for the Cerberus."""
 from __future__ import annotations
 
 import structlog
@@ -21,11 +21,11 @@ async def _calculate_var(
 ) -> dict:
     """Calculate Value at Risk for the current portfolio."""
     from db.database import get_session
-    from db.copilot_models import CopilotPosition
+    from db.cerberus_models import CerberusPosition
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotPosition).where(CopilotPosition.user_id == user_id)
+        stmt = select(CerberusPosition).where(CerberusPosition.user_id == user_id)
         result = await session.execute(stmt)
         positions = result.scalars().all()
 
@@ -58,19 +58,19 @@ async def _calculate_drawdown(user_id: int, days: int = 30) -> dict:
     """Calculate max drawdown over a period using portfolio snapshots."""
     from datetime import datetime, timedelta
     from db.database import get_session
-    from db.copilot_models import CopilotPortfolioSnapshot
+    from db.cerberus_models import CerberusPortfolioSnapshot
     from sqlalchemy import select
 
     cutoff = datetime.utcnow() - timedelta(days=days)
 
     async with get_session() as session:
         stmt = (
-            select(CopilotPortfolioSnapshot)
+            select(CerberusPortfolioSnapshot)
             .where(
-                CopilotPortfolioSnapshot.user_id == user_id,
-                CopilotPortfolioSnapshot.snapshot_ts >= cutoff,
+                CerberusPortfolioSnapshot.user_id == user_id,
+                CerberusPortfolioSnapshot.snapshot_ts >= cutoff,
             )
-            .order_by(CopilotPortfolioSnapshot.snapshot_ts.asc())
+            .order_by(CerberusPortfolioSnapshot.snapshot_ts.asc())
         )
         result = await session.execute(stmt)
         snapshots = result.scalars().all()
@@ -105,11 +105,11 @@ async def _calculate_drawdown(user_id: int, days: int = 30) -> dict:
 async def _portfolio_exposure(user_id: int) -> dict:
     """Get exposure breakdown by asset type and sector."""
     from db.database import get_session
-    from db.copilot_models import CopilotPosition
+    from db.cerberus_models import CerberusPosition
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotPosition).where(CopilotPosition.user_id == user_id)
+        stmt = select(CerberusPosition).where(CerberusPosition.user_id == user_id)
         result = await session.execute(stmt)
         positions = result.scalars().all()
 
@@ -139,11 +139,11 @@ async def _portfolio_exposure(user_id: int) -> dict:
 async def _concentration_risk(user_id: int) -> dict:
     """Get concentration metrics (HHI, top holdings weight)."""
     from db.database import get_session
-    from db.copilot_models import CopilotPosition
+    from db.cerberus_models import CerberusPosition
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotPosition).where(CopilotPosition.user_id == user_id)
+        stmt = select(CerberusPosition).where(CerberusPosition.user_id == user_id)
         result = await session.execute(stmt)
         positions = result.scalars().all()
 
@@ -173,13 +173,13 @@ async def _concentration_risk(user_id: int) -> dict:
 async def _options_greek_exposure(user_id: int) -> dict:
     """Get aggregate Greeks exposure across all options positions."""
     from db.database import get_session
-    from db.copilot_models import CopilotPosition
+    from db.cerberus_models import CerberusPosition
     from sqlalchemy import select
 
     async with get_session() as session:
-        stmt = select(CopilotPosition).where(
-            CopilotPosition.user_id == user_id,
-            CopilotPosition.asset_type.in_(["option", "call", "put"]),
+        stmt = select(CerberusPosition).where(
+            CerberusPosition.user_id == user_id,
+            CerberusPosition.asset_type.in_(["option", "call", "put"]),
         )
         result = await session.execute(stmt)
         positions = result.scalars().all()

@@ -24,17 +24,17 @@ class ConfirmationService:
         Returns the token (plaintext) that must be passed to ``execute_confirmed``
         to actually place the order.
         """
-        from db.copilot_models import (
-            CopilotTradeProposal,
-            CopilotTradeConfirmation,
+        from db.cerberus_models import (
+            CerberusTradeProposal,
+            CerberusTradeConfirmation,
             ProposalStatus,
         )
         from services.ai_core.proposals.trade_proposal_service import TradeProposalService
 
         async with get_session() as session:
-            stmt = select(CopilotTradeProposal).where(
-                CopilotTradeProposal.id == proposal_id,
-                CopilotTradeProposal.user_id == user_id,
+            stmt = select(CerberusTradeProposal).where(
+                CerberusTradeProposal.id == proposal_id,
+                CerberusTradeProposal.user_id == user_id,
             )
             result = await session.execute(stmt)
             proposal = result.scalar_one_or_none()
@@ -58,8 +58,8 @@ class ConfirmationService:
         if risk_result.get("blocked"):
             # Update proposal status to rejected
             async with get_session() as session:
-                stmt = select(CopilotTradeProposal).where(
-                    CopilotTradeProposal.id == proposal_id,
+                stmt = select(CerberusTradeProposal).where(
+                    CerberusTradeProposal.id == proposal_id,
                 )
                 result = await session.execute(stmt)
                 p = result.scalar_one()
@@ -80,7 +80,7 @@ class ConfirmationService:
         # Generate confirmation token
         token, token_hash = self._generate_token()
 
-        confirmation = CopilotTradeConfirmation(
+        confirmation = CerberusTradeConfirmation(
             id=str(uuid.uuid4()),
             proposal_id=proposal_id,
             user_id=user_id,
@@ -90,8 +90,8 @@ class ConfirmationService:
 
         async with get_session() as session:
             # Update proposal status
-            stmt = select(CopilotTradeProposal).where(
-                CopilotTradeProposal.id == proposal_id,
+            stmt = select(CerberusTradeProposal).where(
+                CerberusTradeProposal.id == proposal_id,
             )
             result = await session.execute(stmt)
             p = result.scalar_one()
@@ -123,23 +123,23 @@ class ConfirmationService:
           3. Store audit log entry
           4. Update confirmation and proposal status
         """
-        from db.copilot_models import (
-            CopilotTradeProposal,
-            CopilotTradeConfirmation,
-            CopilotAuditLog,
+        from db.cerberus_models import (
+            CerberusTradeProposal,
+            CerberusTradeConfirmation,
+            CerberusAuditLog,
             ProposalStatus,
         )
 
         # Fetch confirmation record
         async with get_session() as session:
             stmt = (
-                select(CopilotTradeConfirmation)
+                select(CerberusTradeConfirmation)
                 .where(
-                    CopilotTradeConfirmation.proposal_id == proposal_id,
-                    CopilotTradeConfirmation.user_id == user_id,
-                    CopilotTradeConfirmation.status == "pending",
+                    CerberusTradeConfirmation.proposal_id == proposal_id,
+                    CerberusTradeConfirmation.user_id == user_id,
+                    CerberusTradeConfirmation.status == "pending",
                 )
-                .order_by(CopilotTradeConfirmation.created_at.desc())
+                .order_by(CerberusTradeConfirmation.created_at.desc())
                 .limit(1)
             )
             result = await session.execute(stmt)
@@ -153,9 +153,9 @@ class ConfirmationService:
                 raise ValueError("Invalid confirmation token")
 
             # Fetch proposal
-            prop_stmt = select(CopilotTradeProposal).where(
-                CopilotTradeProposal.id == proposal_id,
-                CopilotTradeProposal.user_id == user_id,
+            prop_stmt = select(CerberusTradeProposal).where(
+                CerberusTradeProposal.id == proposal_id,
+                CerberusTradeProposal.user_id == user_id,
             )
             prop_result = await session.execute(prop_stmt)
             proposal = prop_result.scalar_one_or_none()
@@ -175,15 +175,15 @@ class ConfirmationService:
         except Exception as exc:
             # Mark as failed
             async with get_session() as session:
-                stmt = select(CopilotTradeProposal).where(
-                    CopilotTradeProposal.id == proposal_id,
+                stmt = select(CerberusTradeProposal).where(
+                    CerberusTradeProposal.id == proposal_id,
                 )
                 result = await session.execute(stmt)
                 p = result.scalar_one()
                 p.status = ProposalStatus.FAILED
 
-                conf_stmt = select(CopilotTradeConfirmation).where(
-                    CopilotTradeConfirmation.id == confirmation.id,
+                conf_stmt = select(CerberusTradeConfirmation).where(
+                    CerberusTradeConfirmation.id == confirmation.id,
                 )
                 conf_result = await session.execute(conf_stmt)
                 c = conf_result.scalar_one()
@@ -195,15 +195,15 @@ class ConfirmationService:
         # Update statuses
         now = datetime.utcnow()
         async with get_session() as session:
-            stmt = select(CopilotTradeProposal).where(
-                CopilotTradeProposal.id == proposal_id,
+            stmt = select(CerberusTradeProposal).where(
+                CerberusTradeProposal.id == proposal_id,
             )
             result = await session.execute(stmt)
             p = result.scalar_one()
             p.status = ProposalStatus.EXECUTED
 
-            conf_stmt = select(CopilotTradeConfirmation).where(
-                CopilotTradeConfirmation.id == confirmation.id,
+            conf_stmt = select(CerberusTradeConfirmation).where(
+                CerberusTradeConfirmation.id == confirmation.id,
             )
             conf_result = await session.execute(conf_stmt)
             c = conf_result.scalar_one()
@@ -212,11 +212,11 @@ class ConfirmationService:
             c.executed_at = now
 
             # Audit log
-            audit = CopilotAuditLog(
+            audit = CerberusAuditLog(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
                 action_type="trade_executed",
-                resource_type="copilot_trade_proposals",
+                resource_type="cerberus_trade_proposals",
                 resource_id=proposal_id,
                 payload_json={
                     "proposal": proposal.proposal_json,

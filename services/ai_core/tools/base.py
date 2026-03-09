@@ -1,4 +1,4 @@
-"""Base tool definitions and contracts for the AI Copilot tool system."""
+"""Base tool definitions and contracts for the Cerberus tool system."""
 
 from __future__ import annotations
 

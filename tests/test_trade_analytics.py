@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from db.database import Base
 from db.models import User  # noqa: F401
-from db.copilot_models import CopilotTrade, CopilotBrokerageAccount, AccountMode
+from db.cerberus_models import CerberusTrade, CerberusBrokerageAccount, AccountMode
 
 from services.ai_core.analytics.trade_analytics import TradeAnalyticsService
 
@@ -56,35 +56,35 @@ async def _seed_user(session: AsyncSession) -> int:
     return user.id
 
 
-async def _seed_trades(session: AsyncSession, user_id: int) -> list[CopilotTrade]:
+async def _seed_trades(session: AsyncSession, user_id: int) -> list[CerberusTrade]:
     """Seed 5 trades for testing analytics queries."""
     now = datetime.utcnow()
     trades = [
-        CopilotTrade(
+        CerberusTrade(
             id=str(uuid.uuid4()), user_id=user_id, symbol="AAPL", side="buy",
             quantity=100, entry_price=150.0, exit_price=160.0, entry_ts=now - timedelta(days=5),
             exit_ts=now - timedelta(days=4), gross_pnl=1000.0, net_pnl=990.0,
             return_pct=0.0667, strategy_tag="momentum", bot_id="bot-1",
         ),
-        CopilotTrade(
+        CerberusTrade(
             id=str(uuid.uuid4()), user_id=user_id, symbol="AAPL", side="sell",
             quantity=50, entry_price=162.0, exit_price=155.0, entry_ts=now - timedelta(days=3),
             exit_ts=now - timedelta(days=2), gross_pnl=-350.0, net_pnl=-360.0,
             return_pct=-0.0432, strategy_tag="momentum", bot_id="bot-1",
         ),
-        CopilotTrade(
+        CerberusTrade(
             id=str(uuid.uuid4()), user_id=user_id, symbol="TSLA", side="buy",
             quantity=20, entry_price=200.0, exit_price=220.0, entry_ts=now - timedelta(days=10),
             exit_ts=now - timedelta(days=7), gross_pnl=400.0, net_pnl=390.0,
             return_pct=0.1, strategy_tag="breakout", bot_id="bot-2",
         ),
-        CopilotTrade(
+        CerberusTrade(
             id=str(uuid.uuid4()), user_id=user_id, symbol="SPY", side="buy",
             quantity=200, entry_price=450.0, exit_price=455.0, entry_ts=now - timedelta(days=2),
             exit_ts=now - timedelta(days=1), gross_pnl=1000.0, net_pnl=980.0,
             return_pct=0.0111, strategy_tag="momentum",
         ),
-        CopilotTrade(
+        CerberusTrade(
             id=str(uuid.uuid4()), user_id=user_id, symbol="MSFT", side="buy",
             quantity=30, entry_price=380.0, exit_price=370.0, entry_ts=now - timedelta(days=1),
             exit_ts=now, gross_pnl=-300.0, net_pnl=-310.0,

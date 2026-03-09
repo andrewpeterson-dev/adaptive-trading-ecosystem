@@ -1,4 +1,4 @@
-"""Register all copilot tools in the global registry."""
+"""Register all Cerberus tools in the global registry."""
 from __future__ import annotations
 
 import structlog
