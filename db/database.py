@@ -72,6 +72,9 @@ async def get_session():
 async def init_db():
     async with _get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Seed static reference data (idempotent — skips existing rows)
+    from scripts.seed_providers import seed as _seed_providers
+    await _seed_providers()
 
 
 async def close_db():

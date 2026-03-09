@@ -353,3 +353,68 @@ class Strategy(Base):
         Index("ix_strategy_user", "user_id"),
         Index("ix_strategy_name", "name"),
     )
+
+
+# ── API Connection Management ─────────────────────────────────────────────────
+
+class ApiProviderType(str, enum.Enum):
+    BROKERAGE = "brokerage"
+    MARKET_DATA = "market_data"
+    OPTIONS_DATA = "options_data"
+    NEWS = "news"
+    FUNDAMENTALS = "fundamentals"
+    MACRO = "macro"
+    CRYPTO_BROKER = "crypto_broker"
+
+
+class ApiProvider(Base):
+    __tablename__ = "api_providers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slug = Column(String(64), unique=True, nullable=False)
+    name = Column(String(128), nullable=False)
+    api_type = Column(_enum(ApiProviderType), nullable=False)
+    supports_trading = Column(Boolean, default=False)
+    supports_paper = Column(Boolean, default=False)
+    supports_market_data = Column(Boolean, default=False)
+    supports_options = Column(Boolean, default=False)
+    supports_crypto = Column(Boolean, default=False)
+    requires_secret = Column(Boolean, default=True)
+    credential_fields = Column(JSON, nullable=False)
+    docs_url = Column(String(512), nullable=True)
+    is_available = Column(Boolean, default=True)
+
+
+class UserApiConnection(Base):
+    __tablename__ = "user_api_connections"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    provider_id = Column(Integer, ForeignKey("api_providers.id"), nullable=False)
+    encrypted_credentials = Column(Text, nullable=False)
+    status = Column(String(32), default="disconnected")
+    error_message = Column(String(512), nullable=True)
+    is_paper = Column(Boolean, default=True)
+    nickname = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_tested_at = Column(DateTime, nullable=True)
+
+    provider = relationship("ApiProvider")
+
+    __table_args__ = (
+        Index("ix_user_api_conn_user", "user_id"),
+        Index("ix_user_api_conn_provider", "provider_id"),
+    )
+
+
+class UserApiSettings(Base):
+    __tablename__ = "user_api_settings"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    active_equity_broker_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
+    active_crypto_broker_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
+    primary_market_data_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
+    fallback_market_data_ids = Column(JSON, default=list)
+    primary_options_data_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

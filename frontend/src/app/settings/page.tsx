@@ -14,8 +14,10 @@ import {
   RefreshCw,
   Trash2,
   Plus,
+  Plug,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { apiFetch } from "@/lib/api/client";
 import { PreferencesForm } from "@/components/settings/PreferencesForm";
 
@@ -362,6 +364,7 @@ function BrokerSection() {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const pathname = usePathname();
 
   return (
     <div className="space-y-6">
@@ -390,6 +393,18 @@ export default function SettingsPage() {
               </button>
             );
           })}
+          {/* API Connections navigates to its own page */}
+          <Link
+            href="/settings/api-connections"
+            className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left transition-colors ${
+              pathname.startsWith("/settings/api-connections")
+                ? "bg-muted text-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            }`}
+          >
+            <Plug className="h-4 w-4" />
+            API Connections
+          </Link>
         </div>
 
         {/* Tab content */}

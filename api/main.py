@@ -12,11 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes import trading, models as models_routes, dashboard, system, strategies, explainer, news
 from api.routes import auth as auth_routes, webull as webull_routes
 from api.routes import admin as admin_routes
+from api.routes import api_connections as api_connections_routes
 from api.routes import llm_status
 from api.routes import lighthouse as lighthouse_routes
 from api.routes import auto_loop as auto_loop_routes
 from api.routes import intelligence as intelligence_routes
 from api.routes import paper_trading as paper_routes
+from api.routes import market as market_routes
+from api.routes import ws as ws_routes
 from api.middleware.auth import JWTAuthMiddleware
 from config.settings import get_settings
 from db.database import init_db, close_db
@@ -104,6 +107,9 @@ app.include_router(auto_loop_routes.router, prefix="/api/system", tags=["Auto-Lo
 app.include_router(intelligence_routes.router, prefix="/api/intelligence", tags=["Intelligence"])
 app.include_router(paper_routes.router, prefix="/api/paper", tags=["Paper Trading"])
 app.include_router(admin_routes.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(api_connections_routes.router, prefix="/api/v2", tags=["api-connections"])
+app.include_router(market_routes.router, prefix="/api/market", tags=["Market Data"])
+app.include_router(ws_routes.router, prefix="/ws", tags=["WebSocket"])
 
 
 @app.get("/health")
