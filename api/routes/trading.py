@@ -374,8 +374,23 @@ async def get_risk_summary(request: Request):
     try:
         account = _get_executor().get_account()
         return _risk_manager.get_risk_summary(account["equity"])
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        settings = get_settings()
+        return {
+            "is_halted": False,
+            "halt_reason": None,
+            "current_drawdown_pct": 0.0,
+            "max_drawdown_limit": settings.max_drawdown_pct,
+            "max_drawdown_limit_pct": settings.max_drawdown_pct,
+            "current_exposure_pct": 0.0,
+            "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
+            "trades_last_hour": 0,
+            "trades_this_hour": 0,
+            "max_trades_per_hour": settings.max_trades_per_hour,
+            "peak_equity": 0,
+            "open_positions": 0,
+            "recent_risk_events": 0,
+        }
 
 
 @router.get("/trade-log")

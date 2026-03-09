@@ -59,5 +59,11 @@ async def get_sentiment_report():
     """Get the latest saved sentiment report."""
     report = _report_gen.load_latest()
     if report is None:
-        raise HTTPException(status_code=404, detail="No sentiment report available. Run /sentiment first.")
+        return {
+            "overall": "neutral",
+            "score": 0.0,
+            "symbols": {},
+            "summary": "No sentiment data yet.",
+            "timestamp": None,
+        }
     return report

@@ -7,6 +7,7 @@ import {
   Loader2,
   Unplug,
   Settings,
+  TrendingUp,
 } from "lucide-react";
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
