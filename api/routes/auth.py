@@ -117,8 +117,8 @@ async def login(req: LoginRequest, request: Request):
 async def register(req: RegisterRequest, request: Request):
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(client_ip)
-    if len(req.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     async with get_session() as db:
         existing = await db.execute(select(User).where(User.email == req.email))
@@ -181,8 +181,8 @@ async def update_profile(req: ProfileUpdateRequest, request: Request):
         if req.display_name:
             user.display_name = req.display_name
         if req.password:
-            if len(req.password) < 6:
-                raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+            if len(req.password) < 8:
+                raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
             user.password_hash = _hash_password(req.password)
 
         return {"success": True, "user": _user_dict(user)}
@@ -226,6 +226,12 @@ async def save_broker_credentials(req: BrokerCredentialRequest, request: Request
         return {"success": True, "broker_type": req.broker_type}
 
 
+@router.delete("/logout")
+async def logout(request: Request):
+    """Logout endpoint — stateless JWT, just signals the client to clear the token."""
+    return {"success": True, "message": "Logged out"}
+
+
 @router.delete("/broker-credentials/{cred_id}")
 async def delete_broker_credentials(cred_id: int, request: Request):
     user_id = request.state.user_id
@@ -242,3 +248,5 @@ async def delete_broker_credentials(cred_id: int, request: Request):
 
         await db.delete(cred)
         return {"success": True}
+
+

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, Menu, X } from "lucide-react";
+import { Settings, Menu, X, LogOut, TrendingUp } from "lucide-react";
 import { useTradingMode } from "@/hooks/useTradingMode";
+import { logout, getCurrentUser } from "@/lib/api/auth";
 
 const NAV_ITEMS = [
   { href: "/", label: "Builder" },
@@ -22,8 +22,14 @@ export function NavHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const { mode, setMode } = useTradingMode();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  // Auto-close menu on route change
+  useEffect(() => {
+    getCurrentUser()
+      .then((u) => setUserEmail(u.email))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
@@ -34,30 +40,25 @@ export function NavHeader() {
   };
 
   return (
-    <header className="border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center">
+    <header className="border-b border-border/40 bg-background/90 backdrop-blur-md sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[52px] flex items-center">
         {/* Brand */}
-        <Link href="/" className="flex items-center gap-2 shrink-0 mr-8">
-          <Image
-            src="/logo.png"
-            alt="AI Trading"
-            width={32}
-            height={32}
-            className="h-8 w-8 object-contain"
-            priority
-          />
-          <span className="font-semibold text-[15px] tracking-tight text-foreground">
-            AI Trading
+        <Link href="/" className="flex items-center gap-2 shrink-0 mr-8 group">
+          <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/10 border border-primary/20 group-hover:bg-primary/15 transition-colors">
+            <TrendingUp className="h-4 w-4 text-primary" />
+          </div>
+          <span className="font-semibold text-[14px] tracking-tight text-foreground">
+            Adaptive Trading
           </span>
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-stretch h-14">
+        <nav className="hidden lg:flex items-stretch h-[52px]">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`relative flex items-center px-3 text-[13px] font-medium transition-colors ${
+              className={`relative flex items-center px-3 text-[12px] font-medium tracking-wide transition-colors ${
                 isActive(item.href)
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -71,38 +72,52 @@ export function NavHeader() {
           ))}
         </nav>
 
-        {/* Settings + Hamburger */}
-        <div className="ml-auto flex items-center gap-2">
+        {/* Right controls */}
+        <div className="ml-auto flex items-center gap-1.5">
           {/* Paper / Live toggle */}
           <button
             onClick={() => setMode(mode === "paper" ? "live" : "paper")}
             aria-label={`Switch to ${mode === "paper" ? "live" : "paper"} trading`}
             title={`Currently: ${mode === "paper" ? "Paper" : "Live"} trading — click to switch`}
-            className={`relative flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide border transition-all duration-200 ${
+            className={`relative flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border transition-all duration-200 ${
               mode === "live"
-                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
                 : "bg-muted/60 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                mode === "live" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/50"
+                mode === "live" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/40"
               }`}
             />
             {mode === "paper" ? "Paper" : "Live"}
           </button>
 
+          {userEmail && (
+            <span className="hidden xl:block text-[10px] text-muted-foreground font-mono max-w-[140px] truncate px-1.5">
+              {userEmail}
+            </span>
+          )}
+
           <Link
             href="/settings"
             aria-label="Settings"
-            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             <Settings className="h-4 w-4" />
           </Link>
           <button
+            onClick={logout}
+            aria-label="Log out"
+            title="Log out"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+          <button
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
-            className="lg:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            className="lg:hidden p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -111,15 +126,15 @@ export function NavHeader() {
 
       {/* Mobile Dropdown */}
       {menuOpen && (
-        <nav className="lg:hidden border-t border-border/50 bg-background/95 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 py-2">
+        <nav className="lg:hidden border-t border-border/40 bg-background/95 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 py-2 space-y-0.5">
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block py-3 px-3 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center py-2.5 px-3 rounded-lg text-sm font-medium transition-colors ${
                   isActive(item.href)
-                    ? "text-foreground bg-muted/50"
+                    ? "text-foreground bg-muted/60"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                 }`}
               >

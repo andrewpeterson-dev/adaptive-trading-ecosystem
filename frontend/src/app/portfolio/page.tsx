@@ -24,8 +24,15 @@ import type { ModelInfo, AllocationEntry, EquityCurvePoint } from "@/types/portf
 const PIE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
 function MetricCell({ value, format }: { value: number | null; format?: string }) {
-  if (value === null || value === undefined) return <span className="text-muted-foreground">—</span>;
-  if (format === "percent") return <span>{(value * 100).toFixed(1)}%</span>;
+  if (value === null || value === undefined) return <span className="text-muted-foreground/50">—</span>;
+  if (format === "percent") {
+    const isPositive = value >= 0;
+    return (
+      <span className={format === "percent" && (value > 0) ? "text-emerald-400" : format === "percent" && value < 0 ? "text-red-400" : ""}>
+        {(value * 100).toFixed(1)}%
+      </span>
+    );
+  }
   if (format === "ratio") return <span>{value.toFixed(3)}</span>;
   return <span>{value}</span>;
 }
@@ -89,20 +96,24 @@ export default function PortfolioPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error && !models.length && !equityCurve.length) {
     return (
-      <div className="text-center py-20 space-y-3">
-        <Unplug className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-        <h2 className="text-lg font-semibold">No Portfolio Data</h2>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Train models and connect a broker to view portfolio analytics, equity curves, and allocation breakdowns.
-        </p>
+      <div className="text-center py-32 space-y-4">
+        <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/50 border border-border/50 mx-auto">
+          <Unplug className="h-6 w-6 text-muted-foreground/60" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold">No portfolio data</h2>
+          <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+            Train models and connect a broker to view portfolio analytics, equity curves, and allocation breakdowns.
+          </p>
+        </div>
       </div>
     );
   }
@@ -116,31 +127,32 @@ export default function PortfolioPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold">Portfolio</h2>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-lg font-semibold tracking-tight">Portfolio</h1>
             <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest border ${
                 mode === "live"
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                  : "bg-muted text-muted-foreground border border-border/50"
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+                  : "bg-muted text-muted-foreground border-border/50"
               }`}
             >
               {mode === "live" ? "Live" : "Paper"}
             </span>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">
             {models.length} model{models.length !== 1 ? "s" : ""} deployed
           </p>
         </div>
         {regime && (
           <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Regime:
+            <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Regime
             </span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
               {regimeLabel}
             </span>
           </div>
@@ -149,88 +161,124 @@ export default function PortfolioPage() {
 
       {/* Equity Curve */}
       {equityCurve.length > 0 && (
-        <EquityCurveChart data={equityCurve} height={300} />
+        <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-border/50">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+              <TrendingUp className="h-3.5 w-3.5" />
+              Equity Curve
+            </div>
+          </div>
+          <div className="p-4">
+            <EquityCurveChart data={equityCurve} height={280} />
+          </div>
+        </div>
       )}
 
       {/* Allocation + Model Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Allocation Pie */}
         {pieData.length > 0 && (
-          <div className="rounded-lg border border-border/50 bg-card p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-              <Layers className="h-4 w-4" />
-              Capital Allocation
+          <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border/50">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                <Layers className="h-3.5 w-3.5" />
+                Capital Allocation
+              </div>
             </div>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  label={({ name, value }) => `${name} ${value.toFixed(0)}%`}
-                >
-                  {pieData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "6px",
-                    fontSize: "12px",
-                  }}
-                  formatter={(val) => [`${Number(val ?? 0).toFixed(1)}%`, "Weight"]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="p-4">
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={90}
+                    paddingAngle={2}
+                    label={({ name, value }) => `${name} ${value.toFixed(0)}%`}
+                    labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 0.5 }}
+                  >
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                      fontSize: "11px",
+                      color: "hsl(var(--foreground))",
+                    }}
+                    formatter={(val) => [`${Number(val ?? 0).toFixed(1)}%`, "Weight"]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
 
         {/* Model Performance Table */}
-        <div className={`rounded-lg border border-border/50 bg-card overflow-x-auto ${pieData.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
-          <div className="px-4 py-3 border-b flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Model Performance</h3>
+        <div className={`rounded-xl border border-border/50 bg-card overflow-hidden ${pieData.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
+          <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
+            <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              Model Performance
+            </div>
           </div>
           {models.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">No models trained yet</div>
+            <div className="py-12 flex flex-col items-center gap-3 text-center px-4">
+              <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-muted/50 border border-border/50">
+                <TrendingUp className="h-4 w-4 text-muted-foreground/50" />
+              </div>
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">No models trained yet</div>
+                <div className="text-xs text-muted-foreground/60 mt-0.5">Train a model to see performance metrics</div>
+              </div>
+            </div>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
-                  <th className="py-2 px-4">Model</th>
-                  <th className="py-2 px-4">Type</th>
-                  <th className="py-2 px-4">Active</th>
-                  <th className="py-2 px-4">Sharpe</th>
-                  <th className="py-2 px-4">Win Rate</th>
-                  <th className="py-2 px-4">Max DD</th>
-                  <th className="py-2 px-4">Return</th>
-                  <th className="py-2 px-4">Trades</th>
-                </tr>
-              </thead>
-              <tbody>
-                {models.map((m) => (
-                  <tr key={m.name} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="py-2 px-4 font-medium">{m.name}</td>
-                    <td className="py-2 px-4 text-xs text-muted-foreground">{m.model_type}</td>
-                    <td className="py-2 px-4">
-                      <span className={`inline-block h-2 w-2 rounded-full ${m.is_active ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
-                    </td>
-                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.sharpe_ratio} format="ratio" /></td>
-                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.win_rate} format="percent" /></td>
-                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.max_drawdown} format="percent" /></td>
-                    <td className="py-2 px-4 font-mono tabular-nums"><MetricCell value={m.total_return} format="percent" /></td>
-                    <td className="py-2 px-4 font-mono tabular-nums text-muted-foreground">{m.num_trades}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground uppercase tracking-widest">
+                    <th className="py-2.5 px-4 font-semibold">Model</th>
+                    <th className="py-2.5 px-4 font-semibold">Type</th>
+                    <th className="py-2.5 px-4 font-semibold">Active</th>
+                    <th className="py-2.5 px-4 font-semibold">Sharpe</th>
+                    <th className="py-2.5 px-4 font-semibold">Win Rate</th>
+                    <th className="py-2.5 px-4 font-semibold">Max DD</th>
+                    <th className="py-2.5 px-4 font-semibold">Return</th>
+                    <th className="py-2.5 px-4 font-semibold">Trades</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {models.map((m, i) => (
+                    <tr
+                      key={m.name}
+                      className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${
+                        i % 2 === 1 ? "bg-muted/5" : ""
+                      }`}
+                    >
+                      <td className="py-2.5 px-4 font-medium text-sm">{m.name}</td>
+                      <td className="py-2.5 px-4 text-xs text-muted-foreground uppercase tracking-wide">{m.model_type}</td>
+                      <td className="py-2.5 px-4">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium ${m.is_active ? "text-emerald-400" : "text-muted-foreground/50"}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${m.is_active ? "bg-emerald-400" : "bg-muted-foreground/30"}`} />
+                          {m.is_active ? "On" : "Off"}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums"><MetricCell value={m.sharpe_ratio} format="ratio" /></td>
+                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums"><MetricCell value={m.win_rate} format="percent" /></td>
+                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums"><MetricCell value={m.max_drawdown} format="percent" /></td>
+                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums"><MetricCell value={m.total_return} format="percent" /></td>
+                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums text-muted-foreground">{m.num_trades}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

@@ -91,7 +91,7 @@ export function explainStrategy(
     action: string;
   }>
 ): Promise<StrategyExplanation> {
-  return apiFetch<StrategyExplanation>("/api/explain", {
+  return apiFetch<StrategyExplanation>("/api/explain/strategy", {
     method: "POST",
     body: JSON.stringify({ conditions }),
   });

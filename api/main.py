@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import trading, models as models_routes, dashboard, system, strategies, explainer, news
 from api.routes import auth as auth_routes, webull as webull_routes
+from api.routes import admin as admin_routes
 from api.routes import llm_status
 from api.routes import lighthouse as lighthouse_routes
 from api.routes import auto_loop as auto_loop_routes
@@ -102,6 +103,7 @@ app.include_router(lighthouse_routes.router, prefix="/api/system", tags=["Lighth
 app.include_router(auto_loop_routes.router, prefix="/api/system", tags=["Auto-Loop"])
 app.include_router(intelligence_routes.router, prefix="/api/intelligence", tags=["Intelligence"])
 app.include_router(paper_routes.router, prefix="/api/paper", tags=["Paper Trading"])
+app.include_router(admin_routes.router, prefix="/api/admin", tags=["Admin"])
 
 
 @app.get("/health")

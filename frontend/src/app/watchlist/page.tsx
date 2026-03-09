@@ -8,7 +8,6 @@ import {
   List,
   Plus,
   Activity,
-  X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { usePolling } from "@/hooks/usePolling";
@@ -49,7 +48,6 @@ export default function WatchlistPage() {
     interval: 60000,
   });
 
-  // Fetch regime once
   React.useEffect(() => {
     fetchRegime().then(setRegime);
   }, []);
@@ -71,31 +69,30 @@ export default function WatchlistPage() {
   };
 
   const regimeLabel =
-    regime?.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) ||
-    null;
+    regime?.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || null;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Watchlist</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <h1 className="text-lg font-semibold tracking-tight">Watchlist</h1>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">
             {symbols.length} symbol{symbols.length !== 1 ? "s" : ""} tracked
           </p>
         </div>
         <div className="flex items-center gap-2">
           {regimeLabel && (
-            <div className="flex items-center gap-1.5 mr-3">
-              <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+            <div className="flex items-center gap-1.5 mr-1">
+              <Activity className="h-3 w-3 text-muted-foreground" />
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
                 {regimeLabel}
               </span>
             </div>
           )}
           <button
             onClick={() => setView(view === "grid" ? "list" : "grid")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
           >
             {view === "grid" ? (
               <List className="h-3.5 w-3.5" />
@@ -106,7 +103,7 @@ export default function WatchlistPage() {
           </button>
           <button
             onClick={refresh}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -121,13 +118,13 @@ export default function WatchlistPage() {
           value={addInput}
           onChange={(e) => setAddInput(e.target.value.toUpperCase())}
           onKeyDown={handleAddKeyDown}
-          placeholder="Add symbol..."
-          className="px-3 py-2 rounded-md bg-background border border-border/50 text-sm font-mono w-40 focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+          placeholder="Add ticker…"
+          className="px-3 py-2 rounded-lg bg-card border border-border/60 text-sm font-mono w-36 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all placeholder:text-muted-foreground/50"
         />
         <button
           onClick={addSymbol}
           disabled={!addInput.trim()}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 border border-primary/20 transition-colors disabled:opacity-30"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 border border-primary/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <Plus className="h-3.5 w-3.5" />
           Add
@@ -135,7 +132,7 @@ export default function WatchlistPage() {
         {symbols.length > DEFAULT_SYMBOLS.length && (
           <button
             onClick={() => setSymbols(DEFAULT_SYMBOLS)}
-            className="text-xs text-muted-foreground hover:text-foreground ml-2"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
           >
             Reset to defaults
           </button>
@@ -144,8 +141,8 @@ export default function WatchlistPage() {
 
       {/* Loading */}
       {loading && !quotes && (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       )}
 
@@ -160,39 +157,45 @@ export default function WatchlistPage() {
 
       {/* List View */}
       {quotes && view === "list" && (
-        <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="py-2 px-4">Symbol</th>
-                <th className="py-2 px-4">Price</th>
-                <th className="py-2 px-4">Change</th>
-                <th className="py-2 px-4">%</th>
-                <th className="py-2 px-4">Volume</th>
-                <th className="py-2 px-4"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {quotes.map((q) => (
-                <WatchlistRow
-                  key={q.symbol}
-                  quote={q}
-                  onRemove={removeSymbol}
-                />
-              ))}
-            </tbody>
-          </table>
+        <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground uppercase tracking-widest">
+                  <th className="py-2.5 px-4 font-semibold">Symbol</th>
+                  <th className="py-2.5 px-4 font-semibold">Price</th>
+                  <th className="py-2.5 px-4 font-semibold">Change</th>
+                  <th className="py-2.5 px-4 font-semibold">%</th>
+                  <th className="py-2.5 px-4 font-semibold">Volume</th>
+                  <th className="py-2.5 px-4 font-semibold"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {quotes.map((q, i) => (
+                  <WatchlistRow
+                    key={q.symbol}
+                    quote={q}
+                    onRemove={removeSymbol}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* Empty */}
       {symbols.length === 0 && (
-        <div className="text-center py-20 space-y-3">
-          <Activity className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-          <h2 className="text-lg font-semibold">Watchlist Empty</h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Add symbols above to start tracking market data.
-          </p>
+        <div className="text-center py-24 space-y-4">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/50 border border-border/50 mx-auto">
+            <Activity className="h-5 w-5 text-muted-foreground/50" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">Watchlist empty</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Add symbols above to start tracking market data.
+            </p>
+          </div>
         </div>
       )}
     </div>

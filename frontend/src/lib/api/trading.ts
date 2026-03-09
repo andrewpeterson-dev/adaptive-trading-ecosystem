@@ -69,15 +69,15 @@ export function executeTrade(
 }
 
 export function getPaperPortfolio(): Promise<PaperPortfolio> {
-  return apiFetch<PaperPortfolio>("/api/trading/paper/portfolio");
+  return apiFetch<PaperPortfolio>("/api/paper/portfolio");
 }
 
 export function getPaperPositions(): Promise<PaperPosition[]> {
-  return apiFetch<PaperPosition[]>("/api/trading/paper/positions");
+  return apiFetch<PaperPosition[]>("/api/paper/positions");
 }
 
 export function getPaperTrades(): Promise<PaperTrade[]> {
-  return apiFetch<PaperTrade[]>("/api/trading/paper/trades");
+  return apiFetch<PaperTrade[]>("/api/paper/history");
 }
 
 export function executePaperTrade(
@@ -86,7 +86,7 @@ export function executePaperTrade(
   quantity: number,
   price: number
 ): Promise<PaperTrade> {
-  return apiFetch<PaperTrade>("/api/trading/paper/execute", {
+  return apiFetch<PaperTrade>("/api/paper/trade", {
     method: "POST",
     body: JSON.stringify({ symbol, direction, quantity, price }),
   });

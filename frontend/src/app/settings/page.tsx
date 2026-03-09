@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Settings, User, Sliders, Key, Loader2, Save } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 import { PreferencesForm } from "@/components/settings/PreferencesForm";
 
 const TABS = [
@@ -19,16 +20,9 @@ function ProfileSection() {
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
-  const [loaded, setLoaded] = useState(false);
-
-  // Fetch profile on first render
-  if (!loaded) {
-    setLoaded(true);
-    fetch("/api/auth/me")
-      .then((res) => {
-        if (res.ok) return res.json();
-        return null;
-      })
+  // Fetch profile on mount
+  useEffect(() => {
+    apiFetch<{ display_name?: string; email?: string }>("/api/auth/me")
       .then((data) => {
         if (data) {
           setDisplayName(data.display_name || "");
@@ -36,7 +30,7 @@ function ProfileSection() {
         }
       })
       .catch(() => {});
-  }
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -47,18 +41,13 @@ function ProfileSection() {
         body.current_password = currentPassword;
         body.new_password = newPassword;
       }
-      const res = await fetch("/api/auth/profile", {
+      await apiFetch("/api/auth/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        setSaveStatus("success");
-        setCurrentPassword("");
-        setNewPassword("");
-      } else {
-        setSaveStatus("error");
-      }
+      setSaveStatus("success");
+      setCurrentPassword("");
+      setNewPassword("");
     } catch {
       setSaveStatus("error");
     } finally {

@@ -25,10 +25,9 @@ export default function ModelsPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [modRes, regRes, ensRes, allocRes] = await Promise.allSettled([
+      const [modRes, regRes, allocRes] = await Promise.allSettled([
         apiFetch<any>("/api/models/list"),
         apiFetch<any>("/api/models/regime"),
-        apiFetch<any>("/api/models/ensemble-status"),
         apiFetch<any>("/api/models/allocation"),
       ]);
 
@@ -36,17 +35,19 @@ export default function ModelsPage() {
 
       if (modRes.status === "fulfilled") {
         const data = modRes.value;
-        setModels(data.models || data || []);
+        const list: ModelDetail[] = data.models || data || [];
+        setModels(list);
+        // Derive ensemble status from the model list — /api/models/ensemble-status does not exist
+        const activeModels = list.filter((m) => m.is_active);
+        const equalWeight = activeModels.length > 0 ? 1 / activeModels.length : 0;
+        const weights: Record<string, number> = {};
+        for (const m of activeModels) weights[m.name] = equalWeight;
+        setEnsemble({ ensemble_active: activeModels.length > 0, model_count: activeModels.length, weights, last_updated: null });
         hasData = true;
       }
 
       if (regRes.status === "fulfilled") {
         setRegime(regRes.value);
-        hasData = true;
-      }
-
-      if (ensRes.status === "fulfilled") {
-        setEnsemble(ensRes.value);
         hasData = true;
       }
 
@@ -71,16 +72,10 @@ export default function ModelsPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  const handleRetrain = async (modelName: string) => {
-    try {
-      await apiFetch("/api/models/retrain", {
-        method: "POST",
-        body: JSON.stringify({ model_name: modelName }),
-      });
-      await fetchAll();
-    } catch {
-      // Silently fail — user sees button reset
-    }
+  // Retrain is not available — /api/models/retrain does not exist.
+  // The ModelCard button is disabled and shows "Not Available" via the prop below.
+  const handleRetrain = async (_modelName: string) => {
+    // no-op: feature not available
   };
 
   if (loading) {
@@ -103,7 +98,7 @@ export default function ModelsPage() {
     );
   }
 
-  const ensembleWeightCount = ensemble ? Object.keys(ensemble.weights).length : 0;
+  const ensembleWeightCount = ensemble ? Object.keys(ensemble.weights ?? {}).length : 0;
 
   return (
     <div className="space-y-6">
@@ -139,7 +134,7 @@ export default function ModelsPage() {
               Ensemble Weights
             </div>
             <div className="space-y-2">
-              {Object.entries(ensemble.weights).map(([name, weight]) => (
+              {Object.entries(ensemble.weights ?? {}).map(([name, weight]) => (
                 <div key={name} className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{name}</span>
                   <div className="flex items-center gap-2">
@@ -198,17 +193,17 @@ export default function ModelsPage() {
                 {models.map((m) => (
                   <tr key={m.name} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="py-2 px-4 font-medium">{m.name}</td>
-                    <td className="py-2 px-4 text-xs text-muted-foreground">{m.type.replace("Model", "")}</td>
+                    <td className="py-2 px-4 text-xs text-muted-foreground">{m.model_type.replace("Model", "")}</td>
                     <td className="py-2 px-4">
-                      <span className={`inline-block h-2 w-2 rounded-full ${m.is_trained ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
+                      <span className={`inline-block h-2 w-2 rounded-full ${m.is_active ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
                     </td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.metrics.sharpe_ratio.toFixed(3)}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.metrics.sortino_ratio.toFixed(3)}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{(m.metrics.win_rate * 100).toFixed(1)}%</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{(m.metrics.max_drawdown * 100).toFixed(1)}%</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{(m.metrics.total_return * 100).toFixed(1)}%</td>
-                    <td className="py-2 px-4 font-mono tabular-nums text-muted-foreground">{m.metrics.num_trades}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.metrics.profit_factor.toFixed(2)}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.sharpe_ratio != null ? m.sharpe_ratio.toFixed(3) : "—"}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.sortino_ratio != null ? m.sortino_ratio.toFixed(3) : "—"}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.win_rate != null ? `${(m.win_rate * 100).toFixed(1)}%` : "—"}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.max_drawdown != null ? `${(m.max_drawdown * 100).toFixed(1)}%` : "—"}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">{m.total_return != null ? `${(m.total_return * 100).toFixed(1)}%` : "—"}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums text-muted-foreground">{m.num_trades}</td>
+                    <td className="py-2 px-4 font-mono tabular-nums">—</td>
                   </tr>
                 ))}
               </tbody>

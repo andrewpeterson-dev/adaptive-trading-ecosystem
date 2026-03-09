@@ -1,6 +1,8 @@
 import { apiFetch } from "./client";
 import type { User, LoginResponse } from "@/types/auth";
 
+export type RegisterResponse = { token: string; user: User };
+
 export async function login(
   email: string,
   password: string
@@ -23,20 +25,27 @@ export async function register(
   email: string,
   password: string,
   display_name: string
-): Promise<{ user: User }> {
-  return apiFetch<{ user: User }>("/api/auth/register", {
+): Promise<RegisterResponse> {
+  const data = await apiFetch<RegisterResponse>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({ email, password, display_name }),
   });
+
+  // Store token same as login
+  if (data.token) {
+    localStorage.setItem("auth_token", data.token);
+    document.cookie = `auth_token=${encodeURIComponent(data.token)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+  }
+
+  return data;
 }
 
+// verifyEmail is not available — route /api/auth/verify-email does not exist.
+// If email verification UI is needed, show a "not available" state instead of calling this.
 export async function verifyEmail(
-  token: string
+  _token: string
 ): Promise<{ success: boolean }> {
-  return apiFetch<{ success: boolean }>("/api/auth/verify-email", {
-    method: "POST",
-    body: JSON.stringify({ token }),
-  });
+  return Promise.resolve({ success: false });
 }
 
 export async function getCurrentUser(): Promise<User> {

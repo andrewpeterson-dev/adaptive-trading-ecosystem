@@ -1,19 +1,13 @@
 export interface ModelDetail {
   name: string;
-  type: string;
-  version: string;
-  is_trained: boolean;
-  metrics: {
-    sharpe_ratio: number;
-    sortino_ratio: number;
-    win_rate: number;
-    profit_factor: number;
-    max_drawdown: number;
-    total_return: number;
-    num_trades: number;
-    avg_trade_pnl: number;
-    last_updated: string;
-  };
+  model_type: string;
+  is_active: boolean;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  win_rate: number | null;
+  max_drawdown: number | null;
+  total_return: number | null;
+  num_trades: number;
 }
 
 export interface RegimeData {
@@ -25,7 +19,8 @@ export interface RegimeData {
 }
 
 export interface EnsembleStatus {
-  models: Record<string, unknown>;
+  ensemble_active: boolean;
+  model_count: number;
   weights: Record<string, number>;
-  regime_weights: Record<string, Record<string, number>>;
+  last_updated: string | null;
 }

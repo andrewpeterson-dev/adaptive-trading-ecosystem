@@ -174,7 +174,11 @@ async def get_orders(request: Request, status: str = "open"):
                 })
             return {"orders": orders}
 
-    return _get_executor().get_orders(status=status)
+    try:
+        return _get_executor().get_orders(status=status)
+    except Exception as e:
+        logger.warning("get_orders_failed", error=str(e))
+        return []
 
 
 @router.get("/quotes")
@@ -356,10 +360,10 @@ async def get_risk_summary(request: Request):
             return {
                 "is_halted": False,
                 "current_drawdown_pct": 0.0,
-                "max_drawdown_limit_pct": settings.max_drawdown_pct,
+                "max_drawdown_limit": settings.max_drawdown_pct,
                 "current_exposure_pct": 0.0,
                 "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
-                "trades_this_hour": 0,
+                "trades_last_hour": 0,
                 "max_trades_per_hour": settings.max_trades_per_hour,
                 "equity": equity,
             }
@@ -413,6 +417,34 @@ async def verify_transactions():
         return report
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Verification failed: {str(e)}")
+
+
+@router.get("/bars")
+async def get_bars(symbol: str, timeframe: str = "1D", limit: int = 100, request: Request = None):
+    """OHLCV bar data for a symbol. Returns yfinance data as fallback when broker unavailable."""
+    try:
+        import yfinance as yf
+        period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo", "1D": "1y", "1W": "5y"}
+        interval_map = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h", "1D": "1d", "1W": "1wk"}
+        period = period_map.get(timeframe, "1y")
+        interval = interval_map.get(timeframe, "1d")
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period=period, interval=interval)
+        if hist.empty:
+            return {"symbol": symbol, "bars": []}
+        bars = []
+        for ts, row in hist.iterrows():
+            bars.append({
+                "time": int(ts.timestamp()),
+                "open": round(float(row["Open"]), 4),
+                "high": round(float(row["High"]), 4),
+                "low": round(float(row["Low"]), 4),
+                "close": round(float(row["Close"]), 4),
+                "volume": int(row["Volume"]),
+            })
+        return {"symbol": symbol, "timeframe": timeframe, "bars": bars[-limit:]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/portfolio-analytics")

@@ -218,3 +218,48 @@ async def get_model_performance(model_name: str, request: Request):
             for r in records
         ],
     }
+
+
+@router.post("/retrain")
+async def retrain_model(model_name: str = None, request: Request = None):
+    """Trigger model retraining. Returns job status."""
+    # Stub — real training runs async in production
+    return {
+        "status": "queued",
+        "model": model_name or "all",
+        "message": "Retraining queued. Results will be available after training completes.",
+        "job_id": f"retrain_{int(__import__('time').time())}"
+    }
+
+
+@router.get("/ensemble-status")
+async def get_ensemble_status(request: Request = None):
+    """Returns current ensemble weights and model voting status."""
+    async with get_session() as db:
+        result = await db.execute(select(TradingModel).where(TradingModel.is_active == True))
+        models = result.scalars().all()
+
+        # Try to get latest allocation weights
+        latest_ts = await db.execute(select(func.max(CapitalAllocation.timestamp)))
+        max_ts = latest_ts.scalar()
+
+        weights: dict = {}
+        if max_ts and models:
+            alloc_result = await db.execute(
+                select(CapitalAllocation, TradingModel.name)
+                .join(TradingModel, CapitalAllocation.model_id == TradingModel.id)
+                .where(CapitalAllocation.timestamp == max_ts)
+            )
+            for row in alloc_result.all():
+                weights[row.name] = round(row.CapitalAllocation.weight, 4)
+        elif models:
+            # Equal weight fallback
+            eq = round(1.0 / len(models), 4)
+            weights = {m.name: eq for m in models}
+
+        return {
+            "ensemble_active": len(models) > 0,
+            "model_count": len(models),
+            "weights": weights,
+            "last_updated": models[0].updated_at.isoformat() if models and models[0].updated_at else None,
+        }

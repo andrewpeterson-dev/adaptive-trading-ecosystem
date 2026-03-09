@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Save, Loader2, X } from "lucide-react";
 
 interface Preferences {
@@ -19,18 +19,34 @@ const REFRESH_OPTIONS = [
   { value: 300, label: "5 minutes" },
 ];
 
+const PREFS_KEY = "trading_preferences";
+
+const DEFAULT_PREFS: Preferences = {
+  default_symbols: ["SPY", "QQQ", "AAPL"],
+  notify_risk_alerts: true,
+  notify_trade_executions: true,
+  notify_model_retraining: false,
+  trading_mode: "paper",
+  refresh_interval: 60,
+};
+
 export function PreferencesForm() {
-  const [prefs, setPrefs] = useState<Preferences>({
-    default_symbols: ["SPY", "QQQ", "AAPL"],
-    notify_risk_alerts: true,
-    notify_trade_executions: true,
-    notify_model_retraining: false,
-    trading_mode: "paper",
-    refresh_interval: 60,
-  });
+  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [symbolInput, setSymbolInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
+
+  // Load preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PREFS_KEY);
+      if (stored) {
+        setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(stored) });
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
 
   const addSymbol = () => {
     const symbol = symbolInput.trim().toUpperCase();
@@ -61,12 +77,8 @@ export function PreferencesForm() {
     setSaving(true);
     setSaveStatus("idle");
     try {
-      const res = await fetch("/api/auth/preferences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(prefs),
-      });
-      setSaveStatus(res.ok ? "success" : "error");
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+      setSaveStatus("success");
     } catch {
       setSaveStatus("error");
     } finally {
