@@ -36,10 +36,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const currentUser = await authApi.getCurrentUser();
       setUser(currentUser);
-    } catch {
-      // Token invalid or expired
-      localStorage.removeItem("auth_token");
-      document.cookie = "auth_token=; path=/; max-age=0";
+    } catch (err: unknown) {
+      // Only clear the token on explicit auth failures (401/403).
+      // Network errors, timeouts, etc. should NOT log the user out.
+      const status = (err as { status?: number })?.status;
+      if (status === 401 || status === 403) {
+        localStorage.removeItem("auth_token");
+        document.cookie = "auth_token=; path=/; max-age=0";
+      }
+      // For all other errors (network down, 5xx) keep the token so the
+      // user stays logged in and retries will succeed once the server is back.
     } finally {
       setIsLoading(false);
     }

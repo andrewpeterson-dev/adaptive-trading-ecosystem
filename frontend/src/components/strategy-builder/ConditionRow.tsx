@@ -98,31 +98,36 @@ export function ConditionRow({
             </span>
           )}
 
-          {/* Operator */}
-          <select
-            value={condition.operator}
-            onChange={(e) =>
-              onChange(index, { operator: e.target.value as Operator })
-            }
-            className="h-8 rounded-md border border-border/50 bg-background px-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
-          >
-            {OPERATORS.map((op) => (
-              <option key={op.value} value={op.value}>
-                {op.label}
-              </option>
-            ))}
-          </select>
+          {/* Operator + Value — only shown once an indicator is selected */}
+          {condition.indicator && (
+            <>
+              <select
+                value={condition.operator}
+                onChange={(e) =>
+                  onChange(index, { operator: e.target.value as Operator })
+                }
+                aria-label="Comparison operator"
+                className="h-8 rounded-md border border-border/50 bg-background px-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+              >
+                {OPERATORS.map((op) => (
+                  <option key={op.value} value={op.value}>
+                    {op.label}
+                  </option>
+                ))}
+              </select>
 
-          {/* Value */}
-          <input
-            type="number"
-            value={condition.value}
-            onChange={(e) =>
-              onChange(index, { value: parseFloat(e.target.value) || 0 })
-            }
-            className="h-8 w-20 rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
-            step="any"
-          />
+              <input
+                type="number"
+                value={condition.value}
+                onChange={(e) =>
+                  onChange(index, { value: parseFloat(e.target.value) || 0 })
+                }
+                aria-label="Threshold value"
+                className="h-8 w-20 rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+                step="any"
+              />
+            </>
+          )}
         </div>
 
         {/* Row 2: Parameter editors */}

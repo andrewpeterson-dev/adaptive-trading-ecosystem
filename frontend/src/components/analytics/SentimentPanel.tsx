@@ -14,7 +14,8 @@ const MOOD_COLORS: Record<string, string> = {
   bearish: "text-red-400 bg-red-400/10 border-red-400/30",
 };
 
-function moodLabel(mood: string): string {
+function moodLabel(mood: string | null | undefined): string {
+  if (!mood) return "Neutral";
   return mood.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -96,7 +97,7 @@ export function SentimentPanel() {
           <div className="flex justify-center">
             <span
               className={`text-sm font-semibold px-4 py-1.5 rounded-full border ${
-                MOOD_COLORS[report.market_mood] || MOOD_COLORS.neutral
+                MOOD_COLORS[report.market_mood ?? ""] ?? MOOD_COLORS.neutral
               }`}
             >
               {moodLabel(report.market_mood)}
@@ -105,7 +106,7 @@ export function SentimentPanel() {
 
           {/* Per-Ticker Sentiment */}
           <div className="space-y-2">
-            {Object.entries(report.ticker_sentiments).map(([ticker, data]) => {
+            {Object.entries(report.ticker_sentiments ?? {}).map(([ticker, data]) => {
               const pctPos = ((data.score + 5) / 10) * 100;
               return (
                 <div key={ticker} className="flex items-center gap-2">

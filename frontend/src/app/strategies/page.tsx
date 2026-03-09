@@ -52,8 +52,8 @@ export default function StrategiesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold">Saved Strategies</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {strategies.length} strateg{strategies.length === 1 ? "y" : "ies"} saved
+          <p className="text-sm text-muted-foreground mt-0.5 whitespace-nowrap">
+            {strategies.length} {strategies.length === 1 ? "strategy" : "strategies"} saved
           </p>
         </div>
         <Link

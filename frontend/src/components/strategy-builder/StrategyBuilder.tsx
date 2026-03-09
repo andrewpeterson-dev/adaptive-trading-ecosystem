@@ -303,19 +303,24 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={resetBuilder}
+            aria-label="Reset strategy builder"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Reset
           </button>
           <button
+            type="button"
             onClick={runExplainer}
-            disabled={validConditions.length === 0}
+            disabled={validConditions.length === 0 || explainLoading}
+            aria-label="Analyze strategy with AI"
+            aria-disabled={validConditions.length === 0 || explainLoading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-primary border border-primary/20 hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Zap className="h-3.5 w-3.5" />
-            Analyze
+            {explainLoading ? "Analyzing…" : "Analyze"}
           </button>
           {mode === "edit" && initialStrategy && (
             <button
@@ -327,8 +332,11 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </button>
           )}
           <button
+            type="button"
             onClick={saveStrategy}
             disabled={validConditions.length === 0 || saveStatus === "saving"}
+            aria-label={mode === "edit" ? "Update strategy" : "Save strategy"}
+            aria-disabled={validConditions.length === 0 || saveStatus === "saving"}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Save className="h-3.5 w-3.5" />
