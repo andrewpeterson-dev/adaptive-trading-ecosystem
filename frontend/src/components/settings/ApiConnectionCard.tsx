@@ -11,6 +11,8 @@ export interface ApiConnection {
   api_type: string;
   status: "connected" | "disconnected" | "error" | "pending";
   is_paper: boolean;
+  unified_mode?: boolean;
+  supports_market_data?: boolean;
   nickname?: string;
   created_at: string;
   last_tested_at?: string;
@@ -137,7 +139,20 @@ export function ApiConnectionCard({
                 Fallback Data
               </span>
             )}
-            {(isBrokerage || isCryptoBroker) && (
+            {(isBrokerage || isCryptoBroker) && connection.unified_mode ? (
+              // Unified key covers everything — show capability tags
+              <>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border text-sky-400 bg-sky-400/10 border-sky-400/20">
+                  Paper + Live
+                </span>
+                {connection.supports_market_data && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border text-violet-400 bg-violet-400/10 border-violet-400/20">
+                    Quotes
+                  </span>
+                )}
+              </>
+            ) : (isBrokerage || isCryptoBroker) ? (
+              // Mode-specific credential — show which mode this key is for
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border ${
                   connection.is_paper
@@ -147,7 +162,7 @@ export function ApiConnectionCard({
               >
                 {connection.is_paper ? "Paper" : "Live"}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 

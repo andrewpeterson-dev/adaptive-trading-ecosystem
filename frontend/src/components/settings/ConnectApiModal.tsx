@@ -20,6 +20,9 @@ export interface ApiProvider {
   supports_market_data: boolean;
   supports_options: boolean;
   supports_crypto: boolean;
+  /** True when one key set covers paper, live, and data — no mode toggle shown */
+  unified_mode: boolean;
+  credential_note?: string;
   credential_fields: Array<{ key: string; label: string; secret: boolean }>;
   docs_url?: string;
 }
@@ -58,8 +61,10 @@ export function ConnectApiModal({
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Hide the paper/live toggle for unified-mode providers (one key covers both)
   const showPaperToggle =
-    provider.api_type === "brokerage" || provider.api_type === "crypto_broker";
+    !provider.unified_mode &&
+    (provider.api_type === "brokerage" || provider.api_type === "crypto_broker");
 
   const allFilled = provider.credential_fields.every((f) => credentials[f.key]?.trim());
 
@@ -120,7 +125,40 @@ export function ConnectApiModal({
         </div>
 
         <div className="px-5 pb-5 space-y-4">
-          {/* Paper/Live toggle */}
+          {/* Unified-mode: capability chips + note */}
+          {provider.unified_mode && (
+            <div className="rounded-lg border border-border/40 bg-muted/30 p-3 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {provider.supports_paper && provider.supports_trading && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                    Paper Trading
+                  </span>
+                )}
+                {provider.supports_trading && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Live Trading
+                  </span>
+                )}
+                {provider.supports_market_data && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                    Market Data
+                  </span>
+                )}
+                {provider.supports_options && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    Options
+                  </span>
+                )}
+              </div>
+              {provider.credential_note && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {provider.credential_note}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Paper/Live toggle — only for non-unified providers */}
           {showPaperToggle && provider.supports_paper && (
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Mode</label>

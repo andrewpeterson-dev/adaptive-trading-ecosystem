@@ -380,6 +380,10 @@ class ApiProvider(Base):
     supports_options = Column(Boolean, default=False)
     supports_crypto = Column(Boolean, default=False)
     requires_secret = Column(Boolean, default=True)
+    # unified_mode: one credential set covers all modes (paper, live) and data.
+    # When True the UI hides the paper/live toggle — mode is selected at trade time.
+    unified_mode = Column(Boolean, default=False)
+    credential_note = Column(String(512), nullable=True)  # shown in connect modal
     credential_fields = Column(JSON, nullable=False)
     docs_url = Column(String(512), nullable=True)
     is_available = Column(Boolean, default=True)

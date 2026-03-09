@@ -26,11 +26,18 @@ PROVIDERS = [
         supports_trading=True,
         supports_paper=True,
         supports_market_data=True,
+        unified_mode=True,
+        credential_note=(
+            "Set Base URL to https://paper-api.alpaca.markets for paper trading or "
+            "https://api.alpaca.markets for live trading. The same key pair works for "
+            "both, and also provides market data."
+        ),
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
             {"key": "api_secret", "label": "API Secret", "secret": True},
             {"key": "base_url", "label": "Base URL", "secret": False},
         ],
+        docs_url="https://docs.alpaca.markets/reference/authentication-2",
     ),
     dict(
         slug="interactive_brokers",
@@ -85,10 +92,16 @@ PROVIDERS = [
         supports_trading=True,
         supports_paper=True,
         supports_market_data=True,
+        unified_mode=True,
+        credential_note=(
+            "One App Key / App Secret covers paper trading, live trading, and market data quotes. "
+            "Trading mode (paper vs live) is selected per trade in the app — not here."
+        ),
         credential_fields=[
             {"key": "app_key", "label": "App Key", "secret": False},
             {"key": "app_secret", "label": "App Secret", "secret": True},
         ],
+        docs_url="https://developer.webull.com/en/docs",
     ),
     # ── CRYPTO_BROKER ─────────────────────────────────────────────────────
     dict(
@@ -249,24 +262,31 @@ PROVIDERS = [
 async def seed():
     # Tables are created by init_db() before seed() is called — do not call init_db() here
     async with get_session() as db:
-        # Load existing slugs to avoid duplicates
-        result = await db.execute(select(ApiProvider.slug))
-        existing_slugs = {row[0] for row in result.fetchall()}
+        result = await db.execute(select(ApiProvider))
+        existing = {p.slug: p for p in result.scalars().all()}
 
-        added = 0
+        added = updated = 0
         for data in PROVIDERS:
-            if data["slug"] in existing_slugs:
-                continue
-            provider = ApiProvider(**data)
-            db.add(provider)
-            added += 1
+            if data["slug"] not in existing:
+                db.add(ApiProvider(**data))
+                added += 1
+            else:
+                # Sync fields that may have been added after initial seed
+                p = existing[data["slug"]]
+                for field in ("unified_mode", "credential_note", "docs_url"):
+                    new_val = data.get(field)
+                    if new_val is not None and getattr(p, field, None) != new_val:
+                        setattr(p, field, new_val)
+                        updated += 1
 
         await db.commit()
 
+    parts = []
     if added:
-        print(f"Seeded {added} API providers.")
-    else:
-        print("All providers already present. Nothing to seed.")
+        parts.append(f"added {added}")
+    if updated:
+        parts.append(f"updated {updated} fields")
+    print(f"Providers: {', '.join(parts) or 'already up to date'}.")
 
 
 if __name__ == "__main__":
