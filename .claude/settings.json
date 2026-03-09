@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "zsh /Users/andrewpeterson/adaptive-trading-ecosystem/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

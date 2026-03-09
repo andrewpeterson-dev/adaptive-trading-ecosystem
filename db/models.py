@@ -24,6 +24,16 @@ from sqlalchemy.orm import relationship
 from db.database import Base
 
 
+def _enum(cls):
+    """Return an Enum column type that uses enum .value strings (not .name).
+
+    PostgreSQL native enums are created with the lowercase string values
+    (e.g. "webull"), so we must pass values_callable to stop SQLAlchemy
+    from using the uppercase member names ("WEBULL") instead.
+    """
+    return Enum(cls, values_callable=lambda obj: [e.value for e in obj])
+
+
 # ── Enums ────────────────────────────────────────────────────────────────────
 
 class TradeDirection(str, enum.Enum):
@@ -75,14 +85,14 @@ class Trade(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     model_id = Column(Integer, ForeignKey("trading_models.id"), nullable=False)
     symbol = Column(String(16), nullable=False)
-    direction = Column(Enum(TradeDirection), nullable=False)
+    direction = Column(_enum(TradeDirection), nullable=False)
     quantity = Column(Float, nullable=False)
     entry_price = Column(Float, nullable=True)
     exit_price = Column(Float, nullable=True)
     pnl = Column(Float, nullable=True)
     pnl_pct = Column(Float, nullable=True)
-    status = Column(Enum(TradeStatus), default=TradeStatus.PENDING)
-    mode = Column(Enum(TradingModeEnum), nullable=False)
+    status = Column(_enum(TradeStatus), default=TradeStatus.PENDING)
+    mode = Column(_enum(TradingModeEnum), nullable=False)
     order_id = Column(String(128), nullable=True)
     slippage = Column(Float, default=0.0)
     commission = Column(Float, default=0.0)
@@ -131,7 +141,7 @@ class ModelPerformance(Base):
     num_trades = Column(Integer, default=0)
     avg_trade_pnl = Column(Float, nullable=True)
     rolling_window_days = Column(Integer, default=30)
-    mode = Column(Enum(TradingModeEnum), nullable=False)
+    mode = Column(_enum(TradingModeEnum), nullable=False)
 
     model = relationship("TradingModel", back_populates="performance_records")
 
@@ -170,7 +180,7 @@ class PortfolioSnapshot(Base):
     num_open_positions = Column(Integer, default=0)
     exposure_pct = Column(Float, nullable=False)
     drawdown_pct = Column(Float, nullable=False)
-    mode = Column(Enum(TradingModeEnum), nullable=False)
+    mode = Column(_enum(TradingModeEnum), nullable=False)
     positions_detail = Column(JSON, default=dict)
 
     __table_args__ = (
@@ -183,7 +193,7 @@ class MarketRegimeRecord(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
-    regime = Column(Enum(MarketRegime), nullable=False)
+    regime = Column(_enum(MarketRegime), nullable=False)
     confidence = Column(Float, nullable=True)
     volatility_20d = Column(Float, nullable=True)
     trend_strength = Column(Float, nullable=True)
@@ -199,7 +209,7 @@ class RiskEvent(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
-    event_type = Column(Enum(RiskEventType), nullable=False)
+    event_type = Column(_enum(RiskEventType), nullable=False)
     severity = Column(String(16), default="warning")
     description = Column(Text, nullable=True)
     model_id = Column(Integer, ForeignKey("trading_models.id"), nullable=True)
@@ -246,7 +256,7 @@ class BrokerCredential(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    broker_type = Column(Enum(BrokerType), nullable=False)
+    broker_type = Column(_enum(BrokerType), nullable=False)
     encrypted_api_key = Column(Text, nullable=False)
     encrypted_api_secret = Column(Text, nullable=False)
     is_paper = Column(Boolean, default=True)
@@ -306,12 +316,12 @@ class PaperTrade(Base):
     portfolio_id = Column(Integer, ForeignKey("paper_portfolios.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     symbol = Column(String(16), nullable=False)
-    direction = Column(Enum(TradeDirection), nullable=False)
+    direction = Column(_enum(TradeDirection), nullable=False)
     quantity = Column(Float, nullable=False)
     entry_price = Column(Float, nullable=False)
     exit_price = Column(Float, nullable=True)
     pnl = Column(Float, nullable=True)
-    status = Column(Enum(PaperTradeStatus), default=PaperTradeStatus.OPEN)
+    status = Column(_enum(PaperTradeStatus), default=PaperTradeStatus.OPEN)
     entry_time = Column(DateTime, default=datetime.utcnow)
     exit_time = Column(DateTime, nullable=True)
 
