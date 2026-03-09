@@ -1,17 +1,20 @@
 """
 Webull broker routes — per-user, credential-isolated.
 
-Each user's Webull client is loaded from their encrypted credentials in the DB.
-Users without Webull credentials get {"connected": false} responses.
+Each request resolves the user's encrypted credentials from the DB and
+creates mode-appropriate clients via create_webull_clients().
 No user can see another user's account data.
 """
 
 import structlog
 from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Request, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from data.webull import create_webull_clients, WebullClients
+from data.webull.trading import OrderRequest as WBOrderRequest
 from db.database import get_session
 from db.encryption import decrypt_value
 from db.models import BrokerCredential, BrokerType
@@ -19,18 +22,19 @@ from db.models import BrokerCredential, BrokerType
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-# Per-user client cache: {user_id: WebullLiveClient}
-_client_cache: dict[int, object] = {}
+# Per-user client cache: {user_id: WebullClients}
+_client_cache: dict[int, WebullClients] = {}
 
 
-async def _get_user_webull_client(user_id: int):
-    """Load or return cached Webull client for a specific user."""
-    if user_id in _client_cache:
-        client = _client_cache[user_id]
-        if client.is_connected:
-            return client
+async def _get_user_clients(user_id: int) -> Optional[WebullClients]:
+    """
+    Load or return cached WebullClients for a user.
+    Clients are cached while connected; expired/disconnected entries are re-created.
+    """
+    cached = _client_cache.get(user_id)
+    if cached and cached.account._h.connected:
+        return cached
 
-    # Load credentials from DB
     async with get_session() as db:
         result = await db.execute(
             select(BrokerCredential).where(
@@ -44,75 +48,69 @@ async def _get_user_webull_client(user_id: int):
         return None
 
     try:
-        from data.webull_client import WebullLiveClient, WebullPaperClient
-        app_key = decrypt_value(cred.encrypted_api_key)
+        app_key    = decrypt_value(cred.encrypted_api_key)
         app_secret = decrypt_value(cred.encrypted_api_secret)
-        if cred.is_paper:
-            client = WebullPaperClient(app_key=app_key, app_secret=app_secret)
-        else:
-            client = WebullLiveClient(app_key=app_key, app_secret=app_secret)
-        connect_result = client.connect()
-        if connect_result.get("success"):
-            _client_cache[user_id] = client
-            account_id = client._get_allowed_account_id()
-            if not account_id:
-                logger.warning("webull_connected_no_account_id", user_id=user_id,
-                               paper_accounts=len(client._paper_account_ids),
-                               live_accounts=len(client._live_account_ids),
-                               mode=connect_result.get("mode"))
-            else:
-                logger.info("webull_client_cached", user_id=user_id, account_id=account_id)
-            return client
-        else:
-            logger.warning("webull_connect_failed", user_id=user_id, error=connect_result.get("error"))
-            return None
-    except Exception as e:
-        logger.error("webull_client_error", user_id=user_id, error=str(e))
+        mode       = "paper" if cred.is_paper else "real"
+
+        clients = create_webull_clients(
+            mode,
+            app_key=app_key,
+            app_secret=app_secret,
+        )
+        _client_cache[user_id] = clients
+        logger.info("webull_clients_loaded", user_id=user_id, mode=mode)
+        return clients
+
+    except RuntimeError as exc:
+        # Real-mode guardrails not met on this server — surface clearly
+        logger.error("webull_real_mode_blocked", user_id=user_id, error=str(exc))
+        return None
+    except Exception as exc:
+        logger.error("webull_client_error", user_id=user_id, error=str(exc))
         return None
 
 
-# ── Request Models ───────────────────────────────────────────────────────
+# ── Request models ────────────────────────────────────────────────────────────
 
 class PlaceOrderRequest(BaseModel):
-    symbol: str
-    side: str  # "BUY" or "SELL"
-    qty: int = 1
-    order_type: str = "MKT"  # "MKT", "LMT", "STP"
-    limit_price: Optional[float] = None
-    stop_price: Optional[float] = None
-    tif: str = "DAY"
+    symbol:         str
+    side:           str              # "BUY" | "SELL"
+    qty:            int = 1
+    order_type:     str = "MKT"      # "MKT" | "LMT" | "STP" | "STP_LMT"
+    limit_price:    Optional[float] = None
+    stop_price:     Optional[float] = None
+    tif:            str = "DAY"
     user_confirmed: bool = False
 
 
-# ── Routes ───────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/status")
 async def webull_status(request: Request):
-    """Check if user has a connected Webull account with accessible data."""
-    client = await _get_user_webull_client(request.state.user_id)
-    if not client:
+    """Check if the authenticated user has a connected Webull account."""
+    clients = await _get_user_clients(request.state.user_id)
+    if not clients:
         return {"connected": False}
-    account_id = client._get_allowed_account_id()
-    if not account_id:
-        return {"connected": False, "error": "Broker authenticated but no account found — check that your API key has account access."}
-    summary = client.get_account_summary()
-    if not summary:
-        return {"connected": False, "error": "Connected but could not fetch account data — API key may lack account permissions."}
+
+    result = clients.account._h.connect()
+    if not result.get("success"):
+        return {"connected": False, "error": result.get("error")}
+
     return {
         "connected": True,
-        "mode": client.mode_label,
-        "account_id": account_id,
+        "mode":       clients.mode.value,
+        "account_id": clients.account._h.allowed_account,
     }
 
 
 @router.get("/account")
 async def webull_account(request: Request):
-    """Get account summary — only returns the authenticated user's account."""
-    client = await _get_user_webull_client(request.state.user_id)
-    if not client:
+    """Account summary — only returns the authenticated user's account."""
+    clients = await _get_user_clients(request.state.user_id)
+    if not clients:
         return {"connected": False, "error": "No Webull credentials configured"}
 
-    summary = client.get_account_summary()
+    summary = clients.account.get_summary()
     if not summary:
         return {"connected": True, "error": "Could not fetch account data"}
     return {"connected": True, **summary}
@@ -120,24 +118,22 @@ async def webull_account(request: Request):
 
 @router.get("/positions")
 async def webull_positions(request: Request):
-    """Get open positions — only the authenticated user's positions."""
-    client = await _get_user_webull_client(request.state.user_id)
-    if not client:
+    """Open positions — only the authenticated user's positions."""
+    clients = await _get_user_clients(request.state.user_id)
+    if not clients:
         return {"connected": False, "positions": []}
 
-    positions = client.get_positions()
-    return {"connected": True, "positions": positions}
+    return {"connected": True, "positions": clients.account.get_positions()}
 
 
 @router.get("/orders")
 async def webull_orders(request: Request):
-    """Get open orders — only the authenticated user's orders."""
-    client = await _get_user_webull_client(request.state.user_id)
-    if not client:
+    """Open orders — only the authenticated user's orders."""
+    clients = await _get_user_clients(request.state.user_id)
+    if not clients:
         return {"connected": False, "orders": []}
 
-    orders = client.get_open_orders()
-    return {"connected": True, "orders": orders}
+    return {"connected": True, "orders": clients.account.get_open_orders()}
 
 
 @router.get("/quotes")
@@ -145,51 +141,50 @@ async def webull_quotes(
     request: Request,
     symbols: str = Query(default="SPY,QQQ,AAPL,TSLA,NVDA,MSFT,AMZN,META"),
 ):
-    """Get stock quotes. Works for any authenticated user (quotes are public data)."""
-    client = await _get_user_webull_client(request.state.user_id)
-
+    """
+    Stock quotes. Falls back to unofficial SDK if user has no Webull credentials.
+    (Quotes are public market data — auth not strictly required.)
+    """
     symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    clients     = await _get_user_clients(request.state.user_id)
 
-    if client:
-        quotes = client.get_quotes(symbol_list)
+    if clients:
+        quotes = clients.market_data.get_quotes(symbol_list)
         return {"connected": True, "quotes": quotes}
 
-    # Fallback: use unofficial webull SDK for quotes (no auth needed)
+    # Fallback: unofficial SDK (no auth required for US equity quotes)
     try:
         from webull import webull
-        wb = webull()
+        wb     = webull()
         quotes = {}
         for sym in symbol_list:
             raw = wb.get_quote(sym)
             if raw:
                 quotes[sym] = {
-                    "symbol": sym,
-                    "price": float(raw.get("close", 0)),
-                    "change": float(raw.get("change", 0)),
+                    "symbol":     sym,
+                    "price":      float(raw.get("close", 0)),
+                    "change":     float(raw.get("change", 0)),
                     "change_pct": float(raw.get("changeRatio", 0)) * 100,
-                    "volume": int(float(raw.get("volume", 0))),
-                    "open": float(raw.get("open", 0)),
-                    "high": float(raw.get("high", 0)),
-                    "low": float(raw.get("low", 0)),
+                    "volume":     int(float(raw.get("volume", 0))),
+                    "open":       float(raw.get("open", 0)),
+                    "high":       float(raw.get("high", 0)),
+                    "low":        float(raw.get("low", 0)),
                     "prev_close": float(raw.get("preClose", 0)),
                 }
         return {"connected": False, "quotes": quotes}
-    except Exception as e:
-        logger.warning("quote_fallback_failed", error=str(e))
+    except Exception as exc:
+        logger.warning("quote_fallback_failed", error=str(exc))
         return {"connected": False, "quotes": {}}
 
 
 @router.post("/order")
 async def webull_place_order(req: PlaceOrderRequest, request: Request):
     """Place an order — requires explicit user_confirmed=True."""
-    client = await _get_user_webull_client(request.state.user_id)
-    if not client:
+    clients = await _get_user_clients(request.state.user_id)
+    if not clients:
         raise HTTPException(status_code=400, detail="No Webull credentials configured")
 
-    if not req.user_confirmed:
-        raise HTTPException(status_code=400, detail="Order requires explicit confirmation (user_confirmed=true)")
-
-    result = client.place_order(
+    wb_req = WBOrderRequest(
         symbol=req.symbol.upper(),
         side=req.side.upper(),
         qty=req.qty,
@@ -197,26 +192,38 @@ async def webull_place_order(req: PlaceOrderRequest, request: Request):
         limit_price=req.limit_price,
         stop_price=req.stop_price,
         tif=req.tif.upper(),
-        user_confirmed=True,
     )
 
-    if result.get("success"):
-        logger.info("webull_order_placed",
-                     user_id=request.state.user_id,
-                     symbol=req.symbol, side=req.side, qty=req.qty)
-        return result
-    else:
-        raise HTTPException(status_code=400, detail=result.get("error", "Order failed"))
+    result = clients.trading.place_order(wb_req, user_confirmed=req.user_confirmed)
+
+    if result.success:
+        logger.info(
+            "webull_order_accepted",
+            user_id=request.state.user_id,
+            symbol=req.symbol,
+            side=req.side,
+            qty=req.qty,
+            order_id=result.order_id,
+            mode=result.mode,
+        )
+        return {
+            "success":         True,
+            "order_id":        result.order_id,
+            "client_order_id": result.client_order_id,
+            "mode":            result.mode,
+        }
+
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.delete("/order/{client_order_id}")
 async def webull_cancel_order(client_order_id: str, request: Request):
     """Cancel an open order."""
-    client = await _get_user_webull_client(request.state.user_id)
-    if not client:
+    clients = await _get_user_clients(request.state.user_id)
+    if not clients:
         raise HTTPException(status_code=400, detail="No Webull credentials configured")
 
-    result = client.cancel_order(client_order_id)
-    if result.get("success"):
+    result = clients.trading.cancel_order(client_order_id)
+    if result.success:
         return {"success": True}
-    raise HTTPException(status_code=400, detail=result.get("error", "Cancel failed"))
+    raise HTTPException(status_code=400, detail=result.error)
