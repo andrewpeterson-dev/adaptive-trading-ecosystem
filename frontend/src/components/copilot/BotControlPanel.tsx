@@ -18,11 +18,9 @@ export function BotControlPanel() {
   ];
 
   const handleAction = async (prompt: string) => {
-    if (isLoading) return;
     setIsLoading(true);
-
     addMessage({
-      id: `user-${Date.now()}`,
+      id: crypto.randomUUID(),
       role: 'user',
       contentMd: prompt,
       structuredJson: null,

@@ -19,7 +19,7 @@ from db.models import PaperPortfolio, PaperPosition
 from risk.manager import RiskManager
 
 # Webull per-user client loader (from our webull routes)
-from api.routes.webull import _get_user_webull_client
+from api.routes.webull import _get_user_clients as _get_user_webull_client
 
 logger = structlog.get_logger(__name__)
 

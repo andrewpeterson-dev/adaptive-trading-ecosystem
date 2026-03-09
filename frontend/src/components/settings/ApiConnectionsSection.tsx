@@ -193,8 +193,12 @@ export function ApiConnectionsSection() {
         apiFetch<ApiConnection[]>("/api/v2/connections"),
         apiFetch<ApiSettings>("/api/v2/api-settings"),
       ]);
-      setProviders(providerData);
-      setConnections(connectionData);
+      // Normalize api_type to UPPERCASE at the fetch boundary so all downstream
+      // components can safely use uppercase comparisons (e.g. "BROKERAGE").
+      const normalize = <T extends { api_type: string }>(items: T[]): T[] =>
+        items.map((item) => ({ ...item, api_type: item.api_type.toUpperCase() }));
+      setProviders(normalize(providerData) as ApiProvider[]);
+      setConnections(normalize(connectionData) as ApiConnection[]);
       setSettings(settingsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load API connections");
