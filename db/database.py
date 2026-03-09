@@ -80,3 +80,7 @@ async def init_db():
 async def close_db():
     if _engine is not None:
         await _engine.dispose()
+
+
+# Import copilot models so Base.metadata includes them for Alembic
+import db.copilot_models  # noqa: F401
