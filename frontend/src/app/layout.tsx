@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { NavHeader } from "@/components/layout/NavHeader";
 import { Providers } from "@/components/layout/Providers";
+import { AIWidget } from "@/components/copilot/AIWidget";
+import { ConfirmationModal } from "@/components/copilot/ConfirmationModal";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -36,6 +38,8 @@ export default function RootLayout({
         <Providers>
           <NavHeader />
           <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</main>
+          <AIWidget />
+          <ConfirmationModal />
         </Providers>
       </body>
     </html>
