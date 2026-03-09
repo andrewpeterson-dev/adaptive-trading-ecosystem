@@ -117,6 +117,40 @@ class Settings(BaseSettings):
     ollama_enabled: bool = False
     ollama_timeout_seconds: int = 30
 
+    # --- AI Copilot ---
+    openai_primary_model: str = "gpt-5.4"
+    openai_low_latency_model: str = "gpt-4.1"
+    openai_embedding_model: str = "text-embedding-3-large"
+    openai_expert_model: str = "gpt-5.4-pro"
+    anthropic_fallback_model: str = "claude-sonnet-4-6"
+    perplexity_api_key: str = ""
+    perplexity_search_model: str = "sonar"
+    perplexity_deep_research_model: str = "sonar-deep-research"
+    broker_kms_key_id: str = ""
+
+    # --- S3 Storage ---
+    s3_bucket: str = ""
+    s3_region: str = "us-east-1"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_endpoint_url: str = ""  # For MinIO in dev
+
+    # --- Feature Flags ---
+    feature_copilot_enabled: bool = True
+    feature_research_mode_enabled: bool = True
+    feature_bot_mutations_enabled: bool = False
+    feature_paper_trade_proposals_enabled: bool = False
+    feature_live_trade_proposals_enabled: bool = False
+    feature_slow_expert_mode_enabled: bool = False
+    feature_experimental_rl_enabled: bool = False
+
+    # --- Celery / Workers ---
+    celery_broker_url: str = ""  # defaults to redis_url if empty
+
+    @property
+    def effective_celery_broker_url(self) -> str:
+        return self.celery_broker_url or self.redis_url
+
     # --- Monitoring ---
     webhook_url: str = ""  # Webhook URL for failure notifications
     llm_timeout_seconds: int = 30
