@@ -79,6 +79,7 @@ interface SectionProps {
     is_paper: boolean,
     nickname?: string
   ) => Promise<void>;
+  providerMap: Map<number, ApiProvider>;
 }
 
 function ApiTypeSection({
@@ -92,6 +93,7 @@ function ApiTypeSection({
   onRemove,
   onTest,
   onConnectProvider,
+  providerMap,
 }: SectionProps) {
   const [addModalProvider, setAddModalProvider] = useState<ApiProvider | null>(null);
 
@@ -125,18 +127,24 @@ function ApiTypeSection({
       </div>
 
       {/* Connected cards */}
-      {sectionConnections.map((conn) => (
-        <ApiConnectionCard
-          key={conn.id}
-          connection={conn}
-          settings={settings}
-          onSetActiveBroker={onSetActiveBroker}
-          onSetActiveCrypto={onSetActiveCrypto}
-          onSetPrimaryData={onSetPrimaryData}
-          onRemove={onRemove}
-          onTest={onTest}
-        />
-      ))}
+      {sectionConnections.map((conn) => {
+        const provider = providerMap.get(conn.provider_id);
+        if (!provider) return null;
+        return (
+          <ApiConnectionCard
+            key={conn.id}
+            connection={conn}
+            provider={provider}
+            settings={settings}
+            onSetActiveBroker={onSetActiveBroker}
+            onSetActiveCrypto={onSetActiveCrypto}
+            onSetPrimaryData={onSetPrimaryData}
+            onRemove={onRemove}
+            onTest={onTest}
+            onEdit={onConnectProvider}
+          />
+        );
+      })}
 
       {/* Available to connect */}
       {availableProviders.map((provider) => (
@@ -147,7 +155,7 @@ function ApiTypeSection({
         />
       ))}
 
-      {/* Connect modal */}
+      {/* Section-level Add modal */}
       {addModalProvider && (
         <ConnectApiModal
           provider={addModalProvider}
@@ -301,6 +309,9 @@ export function ApiConnectionsSection() {
     );
   }
 
+  // Build provider lookup map once per render
+  const providerMap = new Map(providers.map((p) => [p.id, p]));
+
   return (
     <div className="space-y-6">
       {settings.conflicts.length > 0 && (
@@ -320,6 +331,7 @@ export function ApiConnectionsSection() {
           onRemove={handleRemove}
           onTest={handleTest}
           onConnectProvider={handleConnect}
+          providerMap={providerMap}
         />
       ))}
     </div>

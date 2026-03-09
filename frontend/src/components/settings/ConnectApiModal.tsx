@@ -8,20 +8,19 @@ export interface ApiProvider {
   slug: string;
   name: string;
   api_type:
-    | "brokerage"
-    | "market_data"
-    | "options_data"
-    | "news"
-    | "fundamentals"
-    | "macro"
-    | "crypto_broker";
+    | "BROKERAGE"
+    | "MARKET_DATA"
+    | "OPTIONS_DATA"
+    | "NEWS"
+    | "FUNDAMENTALS"
+    | "MACRO"
+    | "CRYPTO_BROKER";
   supports_trading: boolean;
   supports_paper: boolean;
   supports_market_data: boolean;
   supports_options: boolean;
   supports_crypto: boolean;
-  /** True when one key set covers paper, live, and data — no mode toggle shown */
-  unified_mode: boolean;
+  unified_mode?: boolean;
   credential_note?: string;
   credential_fields: Array<{ key: string; label: string; secret: boolean }>;
   docs_url?: string;
@@ -29,6 +28,9 @@ export interface ApiProvider {
 
 interface ConnectApiModalProps {
   provider: ApiProvider;
+  mode?: "connect" | "edit"; // edit = updating existing credentials
+  defaultNickname?: string;
+  defaultIsPaper?: boolean;
   onConnect: (
     credentials: Record<string, string>,
     is_paper: boolean,
@@ -38,17 +40,20 @@ interface ConnectApiModalProps {
 }
 
 const API_TYPE_LABELS: Record<string, string> = {
-  brokerage: "Brokerage",
-  market_data: "Market Data",
-  options_data: "Options Data",
-  news: "News",
-  fundamentals: "Fundamentals",
-  macro: "Macro",
-  crypto_broker: "Crypto Broker",
+  BROKERAGE: "Brokerage",
+  MARKET_DATA: "Market Data",
+  OPTIONS_DATA: "Options Data",
+  NEWS: "News",
+  FUNDAMENTALS: "Fundamentals",
+  MACRO: "Macro",
+  CRYPTO_BROKER: "Crypto Broker",
 };
 
 export function ConnectApiModal({
   provider,
+  mode = "connect",
+  defaultNickname = "",
+  defaultIsPaper = true,
   onConnect,
   onClose,
 }: ConnectApiModalProps) {
@@ -56,28 +61,43 @@ export function ConnectApiModal({
     Object.fromEntries(provider.credential_fields.map((f) => [f.key, ""]))
   );
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
-  const [isPaper, setIsPaper] = useState(true);
-  const [nickname, setNickname] = useState("");
+  const [isPaper, setIsPaper] = useState(defaultIsPaper);
+  const [nickname, setNickname] = useState(defaultNickname);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Hide the paper/live toggle for unified-mode providers (one key covers both)
+  const isEdit = mode === "edit";
+
+  // Paper/Live toggle: only for broker types that support paper and aren't unified
   const showPaperToggle =
     !provider.unified_mode &&
-    (provider.api_type === "brokerage" || provider.api_type === "crypto_broker");
+    provider.supports_paper &&
+    (provider.api_type === "BROKERAGE" || provider.api_type === "CRYPTO_BROKER");
 
-  const allFilled = provider.credential_fields.every((f) => credentials[f.key]?.trim());
+  // In edit mode, allow saving even with empty fields (user may only update some)
+  const allFilled = isEdit
+    ? true
+    : provider.credential_fields.every((f) => credentials[f.key]?.trim());
 
   const handleSubmit = async () => {
+    // In edit mode, only send fields the user filled in
+    const payload = isEdit
+      ? Object.fromEntries(
+          Object.entries(credentials).filter(([, v]) => v.trim() !== "")
+        )
+      : credentials;
+
+    if (!isEdit && !allFilled) return;
+
     setStatus("loading");
     setErrorMsg("");
     try {
-      await onConnect(credentials, isPaper, nickname.trim() || undefined);
+      await onConnect(payload, isPaper, nickname.trim() || undefined);
       setStatus("success");
-      setTimeout(onClose, 1500);
+      setTimeout(onClose, 1200);
     } catch (err) {
       setStatus("error");
-      setErrorMsg(err instanceof Error ? err.message : "Failed to connect");
+      setErrorMsg(err instanceof Error ? err.message : "Failed to save");
     }
   };
 
@@ -88,10 +108,7 @@ export function ConnectApiModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative z-10 w-full max-w-md rounded-xl border border-border/50 bg-card shadow-2xl">
@@ -99,11 +116,18 @@ export function ConnectApiModal({
         <div className="flex items-start justify-between p-5 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold">Connect {provider.name}</h3>
+              <h3 className="text-base font-semibold">
+                {isEdit ? "Update" : "Connect"} {provider.name}
+              </h3>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border text-muted-foreground bg-muted border-border/50">
                 {API_TYPE_LABELS[provider.api_type] ?? provider.api_type}
               </span>
             </div>
+            {isEdit && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Leave fields blank to keep existing values.
+              </p>
+            )}
             {provider.docs_url && (
               <a
                 href={provider.docs_url}
@@ -111,8 +135,7 @@ export function ConnectApiModal({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-1 transition-colors"
               >
-                View docs
-                <ExternalLink className="h-3 w-3" />
+                View docs <ExternalLink className="h-3 w-3" />
               </a>
             )}
           </div>
@@ -125,7 +148,7 @@ export function ConnectApiModal({
         </div>
 
         <div className="px-5 pb-5 space-y-4">
-          {/* Unified-mode: capability chips + note */}
+          {/* Unified mode info chips */}
           {provider.unified_mode && (
             <div className="rounded-lg border border-border/40 bg-muted/30 p-3 space-y-2">
               <div className="flex flex-wrap gap-1.5">
@@ -158,8 +181,8 @@ export function ConnectApiModal({
             </div>
           )}
 
-          {/* Paper/Live toggle — only for non-unified providers */}
-          {showPaperToggle && provider.supports_paper && (
+          {/* Paper/Live toggle */}
+          {showPaperToggle && (
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Mode</label>
               <div className="flex items-center gap-2">
@@ -198,7 +221,11 @@ export function ConnectApiModal({
                   onChange={(e) =>
                     setCredentials((prev) => ({ ...prev, [field.key]: e.target.value }))
                   }
-                  placeholder={`Enter ${field.label.toLowerCase()}...`}
+                  placeholder={
+                    isEdit
+                      ? `Leave blank to keep existing ${field.label.toLowerCase()}`
+                      : `Enter ${field.label.toLowerCase()}...`
+                  }
                   className="w-full bg-input border border-border/50 rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
                 />
                 {field.secret && (
@@ -221,14 +248,13 @@ export function ConnectApiModal({
           {/* Nickname */}
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">
-              Nickname{" "}
-              <span className="text-muted-foreground/60">(optional)</span>
+              Nickname <span className="text-muted-foreground/60">(optional)</span>
             </label>
             <input
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              placeholder="e.g. My Alpaca Paper Account"
+              placeholder="e.g. My Paper Account"
               className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
             />
           </div>
@@ -240,7 +266,7 @@ export function ConnectApiModal({
           {status === "success" && (
             <p className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Connected successfully
+              {isEdit ? "Updated successfully" : "Connected successfully"}
             </p>
           )}
 
@@ -254,12 +280,16 @@ export function ConnectApiModal({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!allFilled || status === "loading" || status === "success"}
+              disabled={(!allFilled && !isEdit) || status === "loading" || status === "success"}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {status === "loading" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {status === "success" && <CheckCircle2 className="h-3.5 w-3.5" />}
-              {status === "loading" ? "Connecting..." : status === "success" ? "Connected" : "Connect"}
+              {status === "loading"
+                ? isEdit ? "Saving..." : "Connecting..."
+                : status === "success"
+                ? isEdit ? "Saved" : "Connected"
+                : isEdit ? "Save Changes" : "Connect"}
             </button>
           </div>
         </div>
