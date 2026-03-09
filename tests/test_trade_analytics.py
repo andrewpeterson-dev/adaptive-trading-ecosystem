@@ -98,7 +98,7 @@ async def _seed_trades(session: AsyncSession, user_id: int) -> list[CopilotTrade
 
 
 def _patch_get_session(session_factory):
-    """Return a context manager that patches db.database.get_session to use our test factory."""
+    """Return a context manager that patches get_session where it's used by the analytics service."""
     @asynccontextmanager
     async def _mock_get_session():
         async with session_factory() as sess:
@@ -109,7 +109,7 @@ def _patch_get_session(session_factory):
                 await sess.rollback()
                 raise
 
-    return patch("db.database.get_session", _mock_get_session)
+    return patch("services.ai_core.analytics.trade_analytics.get_session", _mock_get_session)
 
 
 # ---------------------------------------------------------------------------
