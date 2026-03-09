@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.settings import get_settings
 from db.database import Base
 from db.models import *  # noqa: F401,F403
+from db.copilot_models import *  # noqa: F401,F403
 
 config = context.config
 
