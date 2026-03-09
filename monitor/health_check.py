@@ -37,11 +37,18 @@ class HealthChecker:
         checks["memory"] = self._check_memory()
 
         # Derive overall status
-        statuses = [c["status"] for c in checks.values()]
-        if all(s == "up" or s == "ok" for s in statuses):
-            overall = "healthy"
-        elif any(s == "down" for s in statuses):
+        # Critical services: database + Redis — app cannot function without these
+        # Optional services: broker — degraded but operational without credentials
+        critical = {k: checks[k] for k in ("database", "redis")}
+        optional = {k: checks[k] for k in ("broker",)}
+
+        critical_statuses = [c["status"] for c in critical.values()]
+        all_statuses = [c["status"] for c in checks.values()]
+
+        if any(s == "down" for s in critical_statuses):
             overall = "unhealthy"
+        elif all(s in ("up", "ok") for s in all_statuses):
+            overall = "healthy"
         else:
             overall = "degraded"
 
@@ -55,7 +62,7 @@ class HealthChecker:
         }
 
         if overall == "unhealthy":
-            failed = [k for k, v in checks.items() if v["status"] == "down"]
+            failed = [k for k, v in critical.items() if v["status"] == "down"]
             for name in failed:
                 await self.notify_failure(name, checks[name].get("error", "unknown"))
 

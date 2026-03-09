@@ -3,8 +3,17 @@ services:
     name: adaptive-trading-ecosystem
     runtime: docker
     plan: free
+    healthCheckPath: /health
     envVars:
       - key: USE_SQLITE
         value: "true"
+      - key: TRADING_MODE
+        value: "paper"
+      - key: SECRET_KEY
+        generateValue: true
       - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
         sync: false

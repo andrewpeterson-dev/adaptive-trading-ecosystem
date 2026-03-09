@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Cpu, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
@@ -35,7 +36,14 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2">
-            <Cpu className="h-6 w-6 text-primary" />
+            <Image
+              src="/logo.png"
+              alt="Adaptive Trading"
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain"
+              priority
+            />
             <span className="text-xl font-semibold tracking-tight">
               Adaptive Trading
             </span>
