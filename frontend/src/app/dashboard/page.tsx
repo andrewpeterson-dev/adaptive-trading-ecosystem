@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   RefreshCw,
   Loader2,
   Unplug,
-  TrendingUp,
+  Settings,
 } from "lucide-react";
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
@@ -126,10 +127,26 @@ export default function DashboardPage() {
           <Unplug className="h-6 w-6 text-muted-foreground/60" />
         </div>
         <div>
-          <h2 className="text-base font-semibold">No broker connected</h2>
+          <h2 className="text-base font-semibold">Broker not responding</h2>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            Connect a broker (Alpaca or Webull) to view live account data, positions, and orders.
+            Could not load account data. Your API key may need to be re-entered.
           </p>
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={fetchAll}
+            className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </button>
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Settings className="h-4 w-4" />
+            Go to Settings
+          </Link>
         </div>
       </div>
     );

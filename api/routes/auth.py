@@ -223,6 +223,14 @@ async def save_broker_credentials(req: BrokerCredentialRequest, request: Request
             db.add(cred)
 
         logger.info("broker_credentials_saved", user_id=user_id, broker=req.broker_type)
+
+        # Invalidate cached Webull client so the new credentials are picked up immediately
+        try:
+            from api.routes.webull import _client_cache
+            _client_cache.pop(user_id, None)
+        except Exception:
+            pass
+
         return {"success": True, "broker_type": req.broker_type}
 
 

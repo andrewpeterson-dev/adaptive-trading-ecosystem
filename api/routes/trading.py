@@ -76,7 +76,11 @@ async def get_account(request: Request):
                     "mode": summary.get("mode", "LIVE"),
                     "broker": "webull",
                 }
-            raise HTTPException(status_code=503, detail="Could not fetch Webull account")
+            # Evict stale cache so next request re-authenticates with current DB credentials
+            from api.routes.webull import _client_cache
+            _client_cache.pop(user_id, None)
+            logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id)
+            raise HTTPException(status_code=503, detail="Could not fetch Webull account. Your API key may be invalid — please re-enter it in Settings.")
 
     # Fallback: check for paper portfolio, then Alpaca
     if user_id:

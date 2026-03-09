@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, Menu, X, LogOut, TrendingUp } from "lucide-react";
+import Image from "next/image";
+import { Settings, Menu, X, LogOut } from "lucide-react";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { logout, getCurrentUser } from "@/lib/api/auth";
 
@@ -44,9 +45,7 @@ export function NavHeader() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[52px] flex items-center">
         {/* Brand */}
         <Link href="/" className="flex items-center gap-2 shrink-0 mr-8 group">
-          <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/10 border border-primary/20 group-hover:bg-primary/15 transition-colors">
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </div>
+          <Image src="/logo.png" alt="Adaptive Trading" width={28} height={28} className="h-7 w-7 object-contain" priority />
           <span className="font-semibold text-[14px] tracking-tight text-foreground">
             Adaptive Trading
           </span>

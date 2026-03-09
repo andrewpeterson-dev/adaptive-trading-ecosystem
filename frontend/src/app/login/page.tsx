@@ -3,7 +3,8 @@
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, TrendingUp } from "lucide-react";
+import Image from "next/image";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 function LoginForm() {
@@ -38,9 +39,7 @@ function LoginForm() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center gap-2.5 mb-4">
-            <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-primary/10 border border-primary/20">
-              <TrendingUp className="h-5 w-5 text-primary" />
-            </div>
+            <Image src="/logo.png" alt="Adaptive Trading" width={40} height={40} className="h-10 w-10 object-contain" priority />
             <span className="text-lg font-semibold tracking-tight text-foreground">
               Adaptive Trading
             </span>

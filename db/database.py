@@ -27,13 +27,15 @@ def _get_engine():
     if _engine is None:
         from sqlalchemy.ext.asyncio import create_async_engine
 
-        from sqlalchemy.pool import StaticPool
+        from sqlalchemy.pool import NullPool, QueuePool
 
         settings = get_settings()
         kwargs = dict(echo=False)
         if settings.use_sqlite:
+            # NullPool: new connection per request — always reads fresh data from disk.
+            # StaticPool caused stale reads when the DB was written by another connection.
             kwargs["connect_args"] = {"check_same_thread": False}
-            kwargs["poolclass"] = StaticPool
+            kwargs["poolclass"] = NullPool
         else:
             kwargs["pool_size"] = 20
             kwargs["max_overflow"] = 10
