@@ -8,13 +8,13 @@ export interface ApiProvider {
   slug: string;
   name: string;
   api_type:
-    | "BROKERAGE"
-    | "MARKET_DATA"
-    | "OPTIONS_DATA"
-    | "NEWS"
-    | "FUNDAMENTALS"
-    | "MACRO"
-    | "CRYPTO_BROKER";
+    | "brokerage"
+    | "market_data"
+    | "options_data"
+    | "news"
+    | "fundamentals"
+    | "macro"
+    | "crypto_broker";
   supports_trading: boolean;
   supports_paper: boolean;
   supports_market_data: boolean;
@@ -35,13 +35,13 @@ interface ConnectApiModalProps {
 }
 
 const API_TYPE_LABELS: Record<string, string> = {
-  BROKERAGE: "Brokerage",
-  MARKET_DATA: "Market Data",
-  OPTIONS_DATA: "Options Data",
-  NEWS: "News",
-  FUNDAMENTALS: "Fundamentals",
-  MACRO: "Macro",
-  CRYPTO_BROKER: "Crypto Broker",
+  brokerage: "Brokerage",
+  market_data: "Market Data",
+  options_data: "Options Data",
+  news: "News",
+  fundamentals: "Fundamentals",
+  macro: "Macro",
+  crypto_broker: "Crypto Broker",
 };
 
 export function ConnectApiModal({
@@ -59,7 +59,7 @@ export function ConnectApiModal({
   const [errorMsg, setErrorMsg] = useState("");
 
   const showPaperToggle =
-    provider.api_type === "BROKERAGE" || provider.api_type === "CRYPTO_BROKER";
+    provider.api_type === "brokerage" || provider.api_type === "crypto_broker";
 
   const allFilled = provider.credential_fields.every((f) => credentials[f.key]?.trim());
 

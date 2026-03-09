@@ -15,13 +15,13 @@ interface AvailableProviderCardProps {
 }
 
 const API_TYPE_LABELS: Record<string, string> = {
-  BROKERAGE: "Brokerage",
-  MARKET_DATA: "Market Data",
-  OPTIONS_DATA: "Options Data",
-  NEWS: "News",
-  FUNDAMENTALS: "Fundamentals",
-  MACRO: "Macro",
-  CRYPTO_BROKER: "Crypto",
+  brokerage: "Brokerage",
+  market_data: "Market Data",
+  options_data: "Options Data",
+  news: "News",
+  fundamentals: "Fundamentals",
+  macro: "Macro",
+  crypto_broker: "Crypto",
 };
 
 export function AvailableProviderCard({

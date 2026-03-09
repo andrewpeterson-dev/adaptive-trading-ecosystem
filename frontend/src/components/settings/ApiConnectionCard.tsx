@@ -69,9 +69,9 @@ export function ApiConnectionCard({
   const isPrimaryData = settings.primary_market_data_id === connection.id;
   const isFallbackData = settings.fallback_market_data_ids.includes(connection.id);
 
-  const isBrokerage = connection.api_type === "BROKERAGE";
-  const isCryptoBroker = connection.api_type === "CRYPTO_BROKER";
-  const isMarketData = connection.api_type === "MARKET_DATA";
+  const isBrokerage = connection.api_type === "brokerage";
+  const isCryptoBroker = connection.api_type === "crypto_broker";
+  const isMarketData = connection.api_type === "market_data";
 
   const handleTest = async () => {
     setTestState("loading");

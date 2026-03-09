@@ -17,32 +17,32 @@ import { ConnectApiModal, ApiProvider } from "@/components/settings/ConnectApiMo
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ApiType =
-  | "BROKERAGE"
-  | "CRYPTO_BROKER"
-  | "MARKET_DATA"
-  | "OPTIONS_DATA"
-  | "NEWS"
-  | "FUNDAMENTALS"
-  | "MACRO";
+  | "brokerage"
+  | "crypto_broker"
+  | "market_data"
+  | "options_data"
+  | "news"
+  | "fundamentals"
+  | "macro";
 
 const SECTION_ORDER: ApiType[] = [
-  "BROKERAGE",
-  "CRYPTO_BROKER",
-  "MARKET_DATA",
-  "OPTIONS_DATA",
-  "NEWS",
-  "FUNDAMENTALS",
-  "MACRO",
+  "brokerage",
+  "crypto_broker",
+  "market_data",
+  "options_data",
+  "news",
+  "fundamentals",
+  "macro",
 ];
 
 const SECTION_LABELS: Record<ApiType, string> = {
-  BROKERAGE: "Brokerage",
-  CRYPTO_BROKER: "Crypto",
-  MARKET_DATA: "Market Data",
-  OPTIONS_DATA: "Options Data",
-  NEWS: "News",
-  FUNDAMENTALS: "Fundamentals",
-  MACRO: "Macro",
+  brokerage: "Brokerage",
+  crypto_broker: "Crypto",
+  market_data: "Market Data",
+  options_data: "Options Data",
+  news: "News",
+  fundamentals: "Fundamentals",
+  macro: "Macro",
 };
 
 // ─── Loading skeleton ──────────────────────────────────────────────────────────
