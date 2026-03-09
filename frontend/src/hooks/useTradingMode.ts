@@ -23,30 +23,17 @@ const TradingModeContext = createContext<TradingModeContextValue | null>(null);
 
 const STORAGE_KEY = "trading_mode";
 
-// paper = light theme, live = dark theme
-function applyTheme(mode: TradingMode) {
-  if (mode === "live") {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
-  }
-}
-
 export function TradingModeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<TradingMode>("paper");
 
-  // Load persisted mode on mount and apply theme
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    const initial: TradingMode = stored === "live" ? "live" : "paper";
-    setModeState(initial);
-    applyTheme(initial);
+    if (stored === "live" || stored === "paper") setModeState(stored);
   }, []);
 
   const setMode = useCallback((next: TradingMode) => {
     setModeState(next);
     localStorage.setItem(STORAGE_KEY, next);
-    applyTheme(next);
   }, []);
 
   const value: TradingModeContextValue = {

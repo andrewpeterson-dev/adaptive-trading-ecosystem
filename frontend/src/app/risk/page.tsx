@@ -103,9 +103,9 @@ export default function RiskPage() {
 
   const gauges: RiskGaugeConfig[] = risk
     ? [
-        { label: "Drawdown", current: risk.current_drawdown_pct, limit: risk.max_drawdown_limit, unit: "%" },
-        { label: "Open Positions", current: risk.open_positions, limit: 20, unit: "positions" },
-        { label: "Trades / Hour", current: risk.trades_last_hour, limit: 30, unit: "trades" },
+        { label: "Drawdown", current: risk.current_drawdown_pct ?? 0, limit: risk.max_drawdown_limit ?? 0.15, unit: "%" },
+        { label: "Open Positions", current: risk.open_positions ?? 0, limit: 20, unit: "positions" },
+        { label: "Trades / Hour", current: (risk.trades_last_hour ?? (risk as any).trades_this_hour) ?? 0, limit: (risk as any).max_trades_per_hour ?? 30, unit: "trades" },
       ]
     : [];
 
@@ -153,9 +153,9 @@ export default function RiskPage() {
                   <p className="text-xs text-red-400 mt-0.5">{risk.halt_reason}</p>
                 )}
                 <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                  <span>Peak Equity: ${(risk.peak_equity ?? 0).toLocaleString()}</span>
-                  <span>{risk.open_positions} open position{risk.open_positions !== 1 ? "s" : ""}</span>
-                  <span>{risk.recent_risk_events} event{risk.recent_risk_events !== 1 ? "s" : ""}</span>
+                  {(risk.peak_equity ?? 0) > 0 && <span>Peak Equity: ${(risk.peak_equity ?? 0).toLocaleString()}</span>}
+                  {(risk.open_positions ?? null) !== null && <span>{risk.open_positions} open position{risk.open_positions !== 1 ? "s" : ""}</span>}
+                  {(risk.recent_risk_events ?? null) !== null && <span>{risk.recent_risk_events} event{risk.recent_risk_events !== 1 ? "s" : ""}</span>}
                 </div>
               </div>
             </div>
