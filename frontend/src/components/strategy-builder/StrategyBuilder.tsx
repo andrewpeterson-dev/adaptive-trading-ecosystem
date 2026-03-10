@@ -110,6 +110,59 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     Record<string, { values?: number[]; components?: Record<string, number[]> }>
   >({});
 
+  // ── Draft persistence (create mode only) ────────────────────────────────
+  const DRAFT_KEY = "strategy_builder_draft";
+
+  useEffect(() => {
+    if (mode !== "create") return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d.name) setName(d.name);
+      if (d.description) setDescription(d.description);
+      if (d.action) setAction(d.action);
+      if (d.timeframe) setTimeframe(d.timeframe);
+      if (d.conditionGroups?.length) setConditionGroups(d.conditionGroups);
+      if (d.stopLoss != null) setStopLoss(d.stopLoss);
+      if (d.takeProfit != null) setTakeProfit(d.takeProfit);
+      if (d.positionSize != null) setPositionSize(d.positionSize);
+      if (d.trailingStopEnabled != null) setTrailingStopEnabled(d.trailingStopEnabled);
+      if (d.trailingStop != null) setTrailingStop(d.trailingStop);
+      if (d.exitAfterBarsEnabled != null) setExitAfterBarsEnabled(d.exitAfterBarsEnabled);
+      if (d.exitAfterBars != null) setExitAfterBars(d.exitAfterBars);
+      if (d.symbols?.length) setSymbols(d.symbols);
+      if (d.commissionPct != null) setCommissionPct(d.commissionPct);
+      if (d.slippagePct != null) setSlippagePct(d.slippagePct);
+      if (d.cooldownBars != null) setCooldownBars(d.cooldownBars);
+      if (d.maxTradesPerDay != null) setMaxTradesPerDay(d.maxTradesPerDay);
+      if (d.maxExposurePct != null) setMaxExposurePct(d.maxExposurePct);
+      if (d.maxLossPct != null) setMaxLossPct(d.maxLossPct);
+    } catch { /* ignore corrupt draft */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "create") return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        name, description, action, timeframe, conditionGroups,
+        stopLoss, takeProfit, positionSize,
+        trailingStopEnabled, trailingStop,
+        exitAfterBarsEnabled, exitAfterBars,
+        symbols, commissionPct, slippagePct,
+        cooldownBars, maxTradesPerDay, maxExposurePct, maxLossPct,
+      }));
+    } catch { /* ignore */ }
+  }, [
+    mode, name, description, action, timeframe, conditionGroups,
+    stopLoss, takeProfit, positionSize,
+    trailingStopEnabled, trailingStop,
+    exitAfterBarsEnabled, exitAfterBars,
+    symbols, commissionPct, slippagePct,
+    cooldownBars, maxTradesPerDay, maxExposurePct, maxLossPct,
+  ]);
+
   // ── Populate from initialStrategy (edit mode) ──────────────────────────
 
   useEffect(() => {
@@ -227,6 +280,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   );
 
   const resetBuilder = useCallback(() => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
     setConditionGroups([emptyGroup(0)]);
     setDiagnostics(null);
     setExplanation(null);
@@ -235,6 +289,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setSaveStatus("idle");
     setIndicatorPreviews({});
     setSymbols(["SPY"]);
+    setStopLoss(2);
+    setTakeProfit(5);
+    setPositionSize(10);
     setTrailingStopEnabled(false);
     setExitAfterBarsEnabled(false);
   }, []);
@@ -378,7 +435,8 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           method: "POST",
           body: JSON.stringify(payload),
         });
-        // In create mode, redirect to edit after save so Backtest button becomes available
+        // Clear draft after successful save
+        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
         setSaveStatus("saved");
         setTimeout(() => router.push(`/edit/${created.id}`), 1200);
         return;

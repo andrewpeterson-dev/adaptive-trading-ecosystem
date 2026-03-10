@@ -105,5 +105,9 @@ export const useCerberusStore = create<CerberusState>()(persist((set) => ({
   setPendingProposal: (proposal) => set({ pendingProposal: proposal }),
 }), {
   name: 'cerberus-store',
-  partialize: (state) => ({ activeThreadId: state.activeThreadId }),
+  partialize: (state) => ({
+    activeThreadId: state.activeThreadId,
+    activeTab: state.activeTab,
+    mode: state.mode,
+  }),
 }));

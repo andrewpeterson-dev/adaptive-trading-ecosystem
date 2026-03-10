@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Loader2,
   RefreshCw,
@@ -15,8 +15,7 @@ import { QuoteCard } from "@/components/trading/QuoteCard";
 import type { QuoteData } from "@/components/trading/QuoteCard";
 import { WatchlistRow } from "@/components/trading/WatchlistRow";
 
-const DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "AAPL", "TSLA", "NVDA"];
-const INITIAL_SYMBOLS: string[] = [];
+const STORAGE_KEY = "watchlist_symbols";
 
 async function fetchQuotes(symbols: string[]): Promise<QuoteData[]> {
   try {
@@ -36,11 +35,28 @@ async function fetchRegime(): Promise<string | null> {
   }
 }
 
+function loadSymbols(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as string[];
+  } catch { /* ignore */ }
+  return [];
+}
+
 export default function WatchlistPage() {
-  const [symbols, setSymbols] = useState<string[]>(INITIAL_SYMBOLS);
+  const [symbols, setSymbolsRaw] = useState<string[]>(loadSymbols);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [addInput, setAddInput] = useState("");
   const [regime, setRegime] = useState<string | null>(null);
+
+  // Persist to localStorage whenever symbols change
+  const setSymbols = useCallback((next: string[] | ((prev: string[]) => string[])) => {
+    setSymbolsRaw((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch { /* ignore */ }
+      return value;
+    });
+  }, []);
 
   const quoteFetcher = useCallback(() => fetchQuotes(symbols), [symbols]);
 
@@ -49,20 +65,20 @@ export default function WatchlistPage() {
     interval: 60000,
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchRegime().then(setRegime);
   }, []);
 
   const addSymbol = () => {
     const sym = addInput.trim().toUpperCase();
     if (sym && !symbols.includes(sym)) {
-      setSymbols([...symbols, sym]);
+      setSymbols((prev) => [...prev, sym]);
       setAddInput("");
     }
   };
 
   const removeSymbol = (sym: string) => {
-    setSymbols(symbols.filter((s) => s !== sym));
+    setSymbols((prev) => prev.filter((s) => s !== sym));
   };
 
   const handleAddKeyDown = (e: React.KeyboardEvent) => {
