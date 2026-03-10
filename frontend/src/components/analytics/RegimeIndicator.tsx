@@ -23,8 +23,10 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
 
   const config = REGIME_CONFIG[data.regime] || REGIME_CONFIG.sideways;
   const Icon = config.icon;
-  const trendPct = Math.min(Math.abs(data.trend_strength) * 10000, 100);
-  const trendDirection = data.trend_strength >= 0 ? "Bullish" : "Bearish";
+  const hasTrend = data.trend_strength != null;
+  const hasVol = data.volatility_20d != null;
+  const trendPct = hasTrend ? Math.min(Math.abs(data.trend_strength!) * 10000, 100) : 0;
+  const trendDirection = (data.trend_strength ?? 0) >= 0 ? "Bullish" : "Bearish";
 
   return (
     <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
@@ -46,7 +48,9 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <div className="text-xs text-muted-foreground mb-1">Volatility (20d)</div>
-          <div className="text-sm font-mono tabular-nums">{(data.volatility_20d * 100).toFixed(1)}%</div>
+          <div className="text-sm font-mono tabular-nums">
+            {hasVol ? `${(data.volatility_20d! * 100).toFixed(1)}%` : <span className="text-muted-foreground/50">N/A</span>}
+          </div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1">
             <div
               className="h-full rounded-full bg-purple-500"
@@ -56,17 +60,21 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
         </div>
         <div>
           <div className="text-xs text-muted-foreground mb-1">Trend ({trendDirection})</div>
-          <div className="flex items-center gap-1">
-            {data.trend_strength >= 0 ? (
-              <TrendingUp className="h-3 w-3 text-emerald-400" />
-            ) : (
-              <TrendingDown className="h-3 w-3 text-red-400" />
-            )}
-            <span className="text-sm font-mono tabular-nums">{(data.trend_strength * 10000).toFixed(2)}</span>
-          </div>
+          {hasTrend ? (
+            <div className="flex items-center gap-1">
+              {(data.trend_strength ?? 0) >= 0 ? (
+                <TrendingUp className="h-3 w-3 text-emerald-400" />
+              ) : (
+                <TrendingDown className="h-3 w-3 text-red-400" />
+              )}
+              <span className="text-sm font-mono tabular-nums">{(data.trend_strength! * 10000).toFixed(2)}</span>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground/50">N/A</span>
+          )}
           <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1">
             <div
-              className={`h-full rounded-full ${data.trend_strength >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
+              className={`h-full rounded-full ${(data.trend_strength ?? 0) >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
               style={{ width: `${trendPct}%` }}
             />
           </div>

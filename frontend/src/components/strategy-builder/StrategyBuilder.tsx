@@ -475,6 +475,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                   key={condition.id}
                   condition={condition}
                   index={index}
+                  isOnly={conditions.length === 1}
                   onChange={updateCondition}
                   onRemove={removeCondition}
                 />

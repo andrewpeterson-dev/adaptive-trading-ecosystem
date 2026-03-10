@@ -16,6 +16,7 @@ import type { QuoteData } from "@/components/trading/QuoteCard";
 import { WatchlistRow } from "@/components/trading/WatchlistRow";
 
 const DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "AAPL", "TSLA", "NVDA"];
+const INITIAL_SYMBOLS: string[] = [];
 
 async function fetchQuotes(symbols: string[]): Promise<QuoteData[]> {
   try {
@@ -36,7 +37,7 @@ async function fetchRegime(): Promise<string | null> {
 }
 
 export default function WatchlistPage() {
-  const [symbols, setSymbols] = useState<string[]>(DEFAULT_SYMBOLS);
+  const [symbols, setSymbols] = useState<string[]>(INITIAL_SYMBOLS);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [addInput, setAddInput] = useState("");
   const [regime, setRegime] = useState<string | null>(null);
@@ -129,12 +130,12 @@ export default function WatchlistPage() {
           <Plus className="h-3.5 w-3.5" />
           Add
         </button>
-        {symbols.length > DEFAULT_SYMBOLS.length && (
+        {symbols.length > 0 && (
           <button
-            onClick={() => setSymbols(DEFAULT_SYMBOLS)}
+            onClick={() => setSymbols([])}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
           >
-            Reset to defaults
+            Clear all
           </button>
         )}
       </div>
@@ -185,15 +186,15 @@ export default function WatchlistPage() {
       )}
 
       {/* Empty */}
-      {symbols.length === 0 && (
+      {!loading && symbols.length === 0 && (
         <div className="text-center py-24 space-y-4">
           <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/50 border border-border/50 mx-auto">
             <Activity className="h-5 w-5 text-muted-foreground/50" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold">Watchlist empty</h2>
+            <h2 className="text-sm font-semibold">No symbols tracked</h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Add symbols above to start tracking market data.
+              Add a ticker above to start tracking market data.
             </p>
           </div>
         </div>

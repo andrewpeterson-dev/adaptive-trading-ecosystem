@@ -281,7 +281,7 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         test_result = await _test_connection_internal(conn, req.credentials)
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = test_result.get("error")
-        conn.last_tested_at = datetime.now(timezone.utc)
+        conn.last_tested_at = datetime.utcnow()
         await db.commit()
         await db.refresh(conn)
         conn.provider = provider
@@ -377,8 +377,8 @@ async def test_connection(connection_id: int, request: Request):
         # Update status
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = test_result.get("error")
-        conn.last_tested_at = datetime.now(timezone.utc)
-        conn.updated_at = datetime.now(timezone.utc)
+        conn.last_tested_at = datetime.utcnow()
+        conn.updated_at = datetime.utcnow()
         await db.commit()
 
     _test_cooldowns[connection_id] = time.time()

@@ -21,6 +21,7 @@ const OPERATORS: { value: Operator; label: string }[] = [
 interface ConditionRowProps {
   condition: StrategyCondition;
   index: number;
+  isOnly: boolean;
   onChange: (index: number, updated: Partial<StrategyCondition>) => void;
   onRemove: (index: number) => void;
 }
@@ -28,6 +29,7 @@ interface ConditionRowProps {
 export function ConditionRow({
   condition,
   index,
+  isOnly,
   onChange,
   onRemove,
 }: ConditionRowProps) {
@@ -157,7 +159,9 @@ export function ConditionRow({
       <button
         type="button"
         onClick={() => onRemove(index)}
-        className="mt-2 p-1 rounded-md text-muted-foreground/40 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+        disabled={isOnly}
+        title={isOnly ? "At least one condition is required" : "Remove condition"}
+        className="mt-2 p-1 rounded-md text-muted-foreground/40 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/40 disabled:hover:bg-transparent"
         aria-label="Remove condition"
       >
         <Trash2 className="h-4 w-4" />

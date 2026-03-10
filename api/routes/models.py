@@ -64,7 +64,7 @@ async def list_models(request: Request):
         models = result.scalars().all()
 
         if not models:
-            models = await _seed_models(db)
+            return {"models": []}
 
         # Build response with latest performance per model
         model_list = []
@@ -130,8 +130,7 @@ async def get_allocation(request: Request):
         active_models = result.scalars().all()
 
         if not active_models:
-            # Seed models first if needed
-            active_models = await _seed_models(db)
+            return {"allocations": []}
 
         n = len(active_models)
         equal_weight = round(1.0 / n, 4) if n > 0 else 0.0

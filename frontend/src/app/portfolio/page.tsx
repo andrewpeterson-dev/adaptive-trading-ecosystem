@@ -197,7 +197,7 @@ export default function PortfolioPage() {
                     innerRadius={55}
                     outerRadius={90}
                     paddingAngle={2}
-                    label={({ name, value }) => `${name} ${value.toFixed(0)}%`}
+                    label={({ name, value }) => `${name} ${value.toFixed(1)}%`}
                     labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 0.5 }}
                   >
                     {pieData.map((_, i) => (

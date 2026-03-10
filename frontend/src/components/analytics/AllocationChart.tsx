@@ -44,7 +44,7 @@ export function AllocationChart({ data }: { data: AllocationEntry[] }) {
             innerRadius={55}
             outerRadius={95}
             paddingAngle={2}
-            label={({ name, value }) => `${name} ${value.toFixed(0)}%`}
+            label={({ name, value }) => `${name} ${value.toFixed(1)}%`}
           >
             {pieData.map((_, i) => (
               <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />

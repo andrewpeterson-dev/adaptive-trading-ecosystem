@@ -71,6 +71,6 @@ async def get_equity_curve(request: Request):
         ]
         return {"equity_curve": points}
 
-    # No data yet — return seed data
-    logger.info("equity_curve_seed_data", reason="no portfolio snapshots")
-    return {"equity_curve": _generate_seed_equity_curve()}
+    # No data yet — return empty curve (no trades placed)
+    logger.info("equity_curve_empty", reason="no portfolio snapshots")
+    return {"equity_curve": []}

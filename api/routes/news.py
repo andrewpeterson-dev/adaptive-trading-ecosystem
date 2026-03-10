@@ -60,10 +60,9 @@ async def get_sentiment_report():
     report = _report_gen.load_latest()
     if report is None:
         return {
-            "overall": "neutral",
-            "score": 0.0,
-            "symbols": {},
-            "summary": "No sentiment data yet.",
-            "timestamp": None,
+            "market_mood": None,
+            "ticker_sentiments": {},
+            "article_count": 0,
+            "report_time": None,
         }
     return report

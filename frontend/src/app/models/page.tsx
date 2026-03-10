@@ -127,7 +127,7 @@ export default function ModelsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <RegimeIndicator data={regime} />
 
-        {ensemble && (
+        {ensemble && ensemble.model_count > 0 && (
           <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
               <Brain className="h-4 w-4" />

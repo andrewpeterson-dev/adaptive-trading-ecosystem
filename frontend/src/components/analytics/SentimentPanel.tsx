@@ -85,13 +85,13 @@ export function SentimentPanel() {
         </div>
       )}
 
-      {!loading && !error && !report && (
+      {!loading && !error && (!report || !report.market_mood) && (
         <div className="py-6 text-center text-muted-foreground text-sm">
           No sentiment data available
         </div>
       )}
 
-      {!loading && !error && report && (
+      {!loading && !error && report && report.market_mood && (
         <>
           {/* Mood Badge */}
           <div className="flex justify-center">
@@ -152,12 +152,14 @@ export function SentimentPanel() {
 
           {/* Footer */}
           <div className="flex justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/30">
-            <span>{report.article_count} articles analyzed</span>
+            <span>{report.article_count ?? 0} articles analyzed</span>
             <span>
-              {new Date(report.report_time).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {report.report_time
+                ? new Date(report.report_time).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "Never analyzed"}
             </span>
           </div>
         </>
