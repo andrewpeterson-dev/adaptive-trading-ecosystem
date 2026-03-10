@@ -22,6 +22,7 @@ from api.routes import market as market_routes
 from api.routes import ws as ws_routes
 from api.routes import ai_chat, ai_tools, documents as documents_routes
 from api.middleware.auth import JWTAuthMiddleware
+from api.middleware.trading_mode import TradingModeMiddleware
 from config.settings import get_settings
 from db.database import init_db, close_db
 
@@ -80,6 +81,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(TradingModeMiddleware)
 app.add_middleware(JWTAuthMiddleware)
 
 _settings = get_settings()
