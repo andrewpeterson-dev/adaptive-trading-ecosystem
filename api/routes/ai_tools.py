@@ -101,6 +101,105 @@ async def list_bots(request: Request):
     return bot_list
 
 
+class DeployFromStrategyRequest(BaseModel):
+    strategy_id: int
+    name: Optional[str] = None
+
+
+@router.post("/bots/from-strategy")
+async def create_bot_from_strategy(request: Request, body: DeployFromStrategyRequest):
+    """Create and immediately deploy a bot from a saved strategy."""
+    from db.database import get_session
+    from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
+    from db.models import Strategy
+    from sqlalchemy import select
+    import uuid
+
+    user_id = request.state.user_id
+
+    async with get_session() as session:
+        # Load the strategy
+        strat_result = await session.execute(
+            select(Strategy).where(Strategy.id == body.strategy_id, Strategy.user_id == user_id)
+        )
+        strategy = strat_result.scalar_one_or_none()
+        if not strategy:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Strategy not found")
+
+        bot_id = str(uuid.uuid4())
+        version_id = str(uuid.uuid4())
+        bot_name = body.name or strategy.name
+
+        config = {
+            "strategy_id": strategy.id,
+            "name": strategy.name,
+            "action": strategy.action,
+            "timeframe": strategy.timeframe,
+            "stop_loss_pct": strategy.stop_loss_pct,
+            "take_profit_pct": strategy.take_profit_pct,
+            "position_size_pct": strategy.position_size_pct,
+            "symbols": strategy.symbols or [],
+            "conditions": [
+                {"indicator": c.indicator, "operator": c.operator, "value": c.value, "params": c.params or {}}
+                for c in (strategy.conditions or [])
+            ],
+        }
+
+        bot = CerberusBot(id=bot_id, user_id=user_id, name=bot_name, status=BotStatus.RUNNING)
+        version = CerberusBotVersion(id=version_id, bot_id=bot_id, version_number=1, config_json=config)
+        bot.current_version_id = version_id
+        session.add(bot)
+        session.add(version)
+
+    logger.info("bot_deployed_from_strategy", bot_id=bot_id, strategy_id=body.strategy_id)
+    return {"bot_id": bot_id, "name": bot_name, "status": "running", "strategy_id": body.strategy_id}
+
+
+@router.post("/bots/{bot_id}/deploy")
+async def deploy_bot(bot_id: str, request: Request):
+    """Deploy (start running) a bot."""
+    from db.database import get_session
+    from db.cerberus_models import CerberusBot, BotStatus
+    from sqlalchemy import select
+
+    user_id = request.state.user_id
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Bot not found")
+        bot.status = BotStatus.RUNNING
+
+    logger.info("bot_deployed", bot_id=bot_id, user_id=user_id)
+    return {"bot_id": bot_id, "status": "running"}
+
+
+@router.post("/bots/{bot_id}/stop")
+async def stop_bot(bot_id: str, request: Request):
+    """Stop a running bot."""
+    from db.database import get_session
+    from db.cerberus_models import CerberusBot, BotStatus
+    from sqlalchemy import select
+
+    user_id = request.state.user_id
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Bot not found")
+        bot.status = BotStatus.STOPPED
+
+    logger.info("bot_stopped", bot_id=bot_id, user_id=user_id)
+    return {"bot_id": bot_id, "status": "stopped"}
+
+
 @router.post("/confirm-trade")
 async def confirm_trade(request: Request, body: ConfirmTradeRequest):
     """Confirm a trade proposal and get a confirmation token."""

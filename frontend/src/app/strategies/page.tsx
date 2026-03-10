@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2, Shield, ChevronRight, Pencil, Play, Copy, Brain } from "lucide-react";
+import { Trash2, Shield, ChevronRight, Pencil, Play, Copy, Rocket } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { deployBotFromStrategy } from "@/lib/cerberus-api";
 import type { StrategyRecord } from "@/types/strategy";
 
 function ScoreBadge({ score }: { score: number }) {
@@ -59,6 +60,8 @@ export default function StrategiesPage() {
   const [strategies, setStrategies] = useState<StrategyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [cloningId, setCloningId] = useState<number | null>(null);
+  const [deployingId, setDeployingId] = useState<number | null>(null);
+  const [deployedIds, setDeployedIds] = useState<Set<number>>(new Set());
 
   const fetchStrategies = useCallback(async () => {
     try {
@@ -77,6 +80,19 @@ export default function StrategiesPage() {
     e.stopPropagation();
     await apiFetch(`/api/strategies/${id}`, { method: "DELETE" });
     setStrategies((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const deployStrategy = async (s: StrategyRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeployingId(s.id);
+    try {
+      await deployBotFromStrategy(s.id, s.name);
+      setDeployedIds((prev) => new Set(prev).add(s.id));
+    } catch {
+      // show nothing — user can retry
+    } finally {
+      setDeployingId(null);
+    }
   };
 
   const cloneStrategy = async (s: StrategyRecord, e: React.MouseEvent) => {
@@ -214,6 +230,18 @@ export default function StrategiesPage() {
                   title="Backtest"
                 >
                   <Play className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => deployStrategy(s, e)}
+                  disabled={deployingId === s.id}
+                  title={deployedIds.has(s.id) ? "Bot deployed" : "Deploy as live bot"}
+                  className={`p-1.5 rounded transition-colors disabled:opacity-40 ${
+                    deployedIds.has(s.id)
+                      ? "text-emerald-400 bg-emerald-400/10"
+                      : "text-muted-foreground/40 hover:text-emerald-400 hover:bg-emerald-400/10"
+                  }`}
+                >
+                  <Rocket className="h-4 w-4" />
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); router.push(`/edit/${s.id}`); }}

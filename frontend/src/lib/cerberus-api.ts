@@ -40,6 +40,21 @@ export async function createBot(name: string, strategyJson: object): Promise<{ b
   });
 }
 
+export async function deployBotFromStrategy(strategyId: number, name?: string): Promise<{ bot_id: string; name: string; status: string }> {
+  return apiFetch('/api/ai/tools/bots/from-strategy', {
+    method: 'POST',
+    body: JSON.stringify({ strategy_id: strategyId, name }),
+  });
+}
+
+export async function deployBot(botId: string): Promise<{ bot_id: string; status: string }> {
+  return apiFetch(`/api/ai/tools/bots/${botId}/deploy`, { method: 'POST' });
+}
+
+export async function stopBot(botId: string): Promise<{ bot_id: string; status: string }> {
+  return apiFetch(`/api/ai/tools/bots/${botId}/stop`, { method: 'POST' });
+}
+
 export async function listBots(): Promise<Array<{ id: string; name: string; status: string; config: object | null; createdAt: string | null }>> {
   return apiFetch('/api/ai/tools/bots');
 }
