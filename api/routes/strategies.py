@@ -40,17 +40,28 @@ class ConditionSchema(BaseModel):
 class StrategySchema(BaseModel):
     name: str
     description: str = ""
-    conditions: list[ConditionSchema]
+    conditions: list[ConditionSchema] = Field(default_factory=list)
+    condition_groups: list[dict] = Field(default_factory=list)
     action: str = "BUY"
     stop_loss_pct: float = 0.02
     take_profit_pct: float = 0.05
     position_size_pct: float = 0.1
     timeframe: str = "1D"
+    symbols: list[str] = Field(default_factory=lambda: ["SPY"])
+    commission_pct: float = 0.001
+    slippage_pct: float = 0.0005
+    trailing_stop_pct: Optional[float] = None
+    exit_after_bars: Optional[int] = None
+    cooldown_bars: int = 0
+    max_trades_per_day: int = 0
+    max_exposure_pct: float = 1.0
+    max_loss_pct: float = 0.0
 
 class StrategyUpdateSchema(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     conditions: Optional[list[ConditionSchema]] = None
+    condition_groups: Optional[list[dict]] = None
     action: Optional[str] = None
     stop_loss_pct: Optional[float] = None
     take_profit_pct: Optional[float] = None
@@ -58,6 +69,15 @@ class StrategyUpdateSchema(BaseModel):
     timeframe: Optional[str] = None
     nickname: Optional[str] = None
     max_position_value: Optional[float] = None
+    symbols: Optional[list[str]] = None
+    commission_pct: Optional[float] = None
+    slippage_pct: Optional[float] = None
+    trailing_stop_pct: Optional[float] = None
+    exit_after_bars: Optional[int] = None
+    cooldown_bars: Optional[int] = None
+    max_trades_per_day: Optional[int] = None
+    max_exposure_pct: Optional[float] = None
+    max_loss_pct: Optional[float] = None
 
 class StrategyResponse(BaseModel):
     id: int
@@ -84,9 +104,12 @@ class DiagnoseRequest(BaseModel):
 class BacktestRequest(BaseModel):
     strategy_id: Optional[int] = None
     conditions: Optional[list[ConditionSchema]] = None
+    condition_groups: Optional[list[dict]] = None
     symbol: str = "SPY"
     lookback_days: int = 252
     initial_capital: float = 100_000.0
+    commission_pct: float = 0.001
+    slippage_pct: float = 0.0005
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -123,6 +146,7 @@ def _strategy_to_dict(s) -> dict:
         "name": s.name,
         "description": s.description or "",
         "conditions": s.conditions or [],
+        "condition_groups": s.condition_groups or [],
         "action": s.action,
         "stop_loss_pct": s.stop_loss_pct,
         "take_profit_pct": s.take_profit_pct,
@@ -131,6 +155,15 @@ def _strategy_to_dict(s) -> dict:
         "diagnostics": s.diagnostics or {},
         "created_at": s.created_at.isoformat() if s.created_at else "",
         "updated_at": s.updated_at.isoformat() if s.updated_at else "",
+        "symbols": s.symbols or ["SPY"],
+        "commission_pct": s.commission_pct or 0.001,
+        "slippage_pct": s.slippage_pct or 0.0005,
+        "trailing_stop_pct": s.trailing_stop_pct,
+        "exit_after_bars": s.exit_after_bars,
+        "cooldown_bars": s.cooldown_bars or 0,
+        "max_trades_per_day": s.max_trades_per_day or 0,
+        "max_exposure_pct": s.max_exposure_pct or 1.0,
+        "max_loss_pct": s.max_loss_pct or 0.0,
     }
 
 
@@ -145,9 +178,15 @@ async def create_strategy(strategy: StrategySchema, request: Request):
     mode = request.state.trading_mode
 
     conditions_dicts = [c.model_dump() for c in strategy.conditions]
+    # Flatten condition_groups to conditions for diagnostics when groups present
+    if strategy.condition_groups:
+        flat = [c for g in strategy.condition_groups for c in g.get("conditions", [])]
+        conditions_dicts = flat
     params = {}
-    for c in strategy.conditions:
-        params[c.indicator] = c.params
+    for c in conditions_dicts:
+        ind = c["indicator"] if isinstance(c, dict) else c.indicator
+        p = c.get("params", {}) if isinstance(c, dict) else c.params
+        params[ind] = p
 
     report = StrategyDiagnostics.run_all(conditions_dicts, params)
 
@@ -265,7 +304,13 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
         conditions_changed = False
 
         # Template-level fields
-        template_fields = {"name", "description", "conditions", "action", "stop_loss_pct", "take_profit_pct", "timeframe"}
+        template_fields = {
+            "name", "description", "conditions", "condition_groups", "action",
+            "stop_loss_pct", "take_profit_pct", "timeframe",
+            "symbols", "commission_pct", "slippage_pct",
+            "trailing_stop_pct", "exit_after_bars",
+            "cooldown_bars", "max_trades_per_day", "max_exposure_pct", "max_loss_pct",
+        }
         # Instance-level fields
         instance_fields = {"position_size_pct", "nickname", "max_position_value"}
 
@@ -273,6 +318,11 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
             if field in template_fields:
                 if field == "conditions":
                     value = [c.model_dump() if hasattr(c, "model_dump") else c for c in value]
+                    conditions_changed = True
+                elif field == "condition_groups":
+                    # Flatten groups → conditions for diagnostics re-run
+                    flat = [c for g in value for c in g.get("conditions", [])]
+                    template.conditions = flat
                     conditions_changed = True
                 setattr(template, field, value)
             elif field in instance_fields:
@@ -417,6 +467,8 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
     from services.indicator_engine import IndicatorEngine
 
     # Load conditions from DB or inline
+    commission_pct = req.commission_pct
+    slippage_pct = req.slippage_pct
     if req.strategy_id is not None:
         user_id = getattr(request.state, "user_id", None) if request else None
         async with get_session() as session:
@@ -431,7 +483,12 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                 inst = inst_result.scalar_one_or_none()
                 if inst:
                     t = inst.template
-                    conditions = t.conditions
+                    if t.condition_groups:
+                        groups = t.condition_groups
+                        conditions = [c for g in groups for c in g.get("conditions", [])]
+                    else:
+                        groups = [{"conditions": t.conditions or []}]
+                        conditions = t.conditions or []
                     stop_loss_pct = t.stop_loss_pct
                     take_profit_pct = t.take_profit_pct
                 else:
@@ -439,18 +496,36 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                     s = await session.get(Strategy, req.strategy_id)
                     if not s:
                         raise HTTPException(404, f"Strategy {req.strategy_id} not found")
-                    conditions = s.conditions
+                    if s.condition_groups:
+                        groups = s.condition_groups
+                        conditions = [c for g in groups for c in g.get("conditions", [])]
+                    else:
+                        groups = [{"conditions": s.conditions or []}]
+                        conditions = s.conditions or []
                     stop_loss_pct = s.stop_loss_pct
                     take_profit_pct = s.take_profit_pct
+                    commission_pct = s.commission_pct or req.commission_pct
+                    slippage_pct = s.slippage_pct or req.slippage_pct
             else:
                 s = await session.get(Strategy, req.strategy_id)
                 if not s:
                     raise HTTPException(404, f"Strategy {req.strategy_id} not found")
-                conditions = s.conditions
+                if s.condition_groups:
+                    groups = s.condition_groups
+                    conditions = [c for g in groups for c in g.get("conditions", [])]
+                else:
+                    groups = [{"conditions": s.conditions or []}]
+                    conditions = s.conditions or []
                 stop_loss_pct = s.stop_loss_pct
                 take_profit_pct = s.take_profit_pct
+    elif req.condition_groups:
+        groups = req.condition_groups
+        conditions = [c for g in groups for c in g.get("conditions", [])]
+        stop_loss_pct = 0.02
+        take_profit_pct = 0.05
     elif req.conditions:
         conditions = [c.model_dump() for c in req.conditions]
+        groups = [{"conditions": conditions}]
         stop_loss_pct = 0.02
         take_profit_pct = 0.05
     else:
@@ -485,74 +560,67 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
         if ind_name not in indicator_cache:
             indicator_cache[ind_name] = IndicatorEngine.compute(ind_name, df, cond.get("params", {}))
 
-    # Evaluate conditions per bar to build signal series
+    # Evaluate conditions per bar — AND within group, OR between groups
     n_bars = len(df)
-    signals = np.zeros(n_bars)  # 1 = entry signal
+    signals = np.zeros(n_bars)
+
+    def _eval_cond(cond: dict, i: int) -> bool:
+        ind_name = cond["indicator"]
+        op = cond["operator"]
+        val = cond["value"]
+        result = indicator_cache.get(ind_name)
+        if result is None:
+            return False
+        if isinstance(result, pd.Series):
+            ind_val = result.iloc[i]
+        elif isinstance(result, dict):
+            first_key = next(iter(result))
+            series = result[first_key]
+            ind_val = series.iloc[i] if isinstance(series, pd.Series) else np.nan
+        else:
+            ind_val = np.nan
+        if pd.isna(ind_val):
+            return False
+        threshold = float(val) if not isinstance(val, (int, float)) else val
+        if op == ">":
+            return ind_val > threshold
+        elif op == "<":
+            return ind_val < threshold
+        elif op == ">=":
+            return ind_val >= threshold
+        elif op == "<=":
+            return ind_val <= threshold
+        elif op == "==":
+            return abs(ind_val - threshold) < 0.001
+        elif op in ("crosses_above", "crosses_below"):
+            if i == 0:
+                return False
+            prev_result = indicator_cache[ind_name]
+            if isinstance(prev_result, pd.Series):
+                prev_val = prev_result.iloc[i - 1]
+            elif isinstance(prev_result, dict):
+                fk = next(iter(prev_result))
+                sv = prev_result[fk]
+                prev_val = sv.iloc[i - 1] if isinstance(sv, pd.Series) else np.nan
+            else:
+                prev_val = np.nan
+            if pd.isna(prev_val):
+                return False
+            if op == "crosses_above":
+                return prev_val <= threshold and ind_val > threshold
+            else:
+                return prev_val >= threshold and ind_val < threshold
+        return False
 
     for i in range(n_bars):
-        all_met = True
-        for cond in conditions:
-            ind_name = cond["indicator"]
-            op = cond["operator"]
-            val = cond["value"]
-            result = indicator_cache[ind_name]
-
-            # Get indicator value at bar i
-            if isinstance(result, pd.Series):
-                ind_val = result.iloc[i]
-            elif isinstance(result, dict):
-                first_key = next(iter(result))
-                series = result[first_key]
-                ind_val = series.iloc[i] if isinstance(series, pd.Series) else np.nan
-            else:
-                ind_val = np.nan
-
-            if pd.isna(ind_val):
-                all_met = False
+        for g in groups:
+            group_conds = g.get("conditions", [])
+            if group_conds and all(_eval_cond(c, i) for c in group_conds):
+                signals[i] = 1
                 break
 
-            # Compare
-            threshold = float(val) if not isinstance(val, (int, float)) else val
-            if op == ">":
-                met = ind_val > threshold
-            elif op == "<":
-                met = ind_val < threshold
-            elif op == ">=":
-                met = ind_val >= threshold
-            elif op == "<=":
-                met = ind_val <= threshold
-            elif op == "==":
-                met = abs(ind_val - threshold) < 0.001
-            elif op in ("crosses_above", "crosses_below"):
-                if i == 0:
-                    met = False
-                else:
-                    prev_result = indicator_cache[ind_name]
-                    if isinstance(prev_result, pd.Series):
-                        prev_val = prev_result.iloc[i - 1]
-                    elif isinstance(prev_result, dict):
-                        first_key = next(iter(prev_result))
-                        s = prev_result[first_key]
-                        prev_val = s.iloc[i - 1] if isinstance(s, pd.Series) else np.nan
-                    else:
-                        prev_val = np.nan
-                    if pd.isna(prev_val):
-                        met = False
-                    elif op == "crosses_above":
-                        met = prev_val <= threshold and ind_val > threshold
-                    else:
-                        met = prev_val >= threshold and ind_val < threshold
-            else:
-                met = False
-
-            if not met:
-                all_met = False
-                break
-
-        if all_met:
-            signals[i] = 1
-
-    # Simulate trades with stop-loss/take-profit
+    # Simulate trades with stop-loss/take-profit and friction costs
+    friction = (commission_pct + slippage_pct) * 2  # round-trip: entry + exit
     trades = []
     equity = [req.initial_capital]
     capital = req.initial_capital
@@ -568,7 +636,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
             # Check stop-loss
             if pnl_pct <= -stop_loss_pct:
                 exit_price = entry_price * (1 - stop_loss_pct)
-                pnl = capital * (exit_price / entry_price - 1)
+                pnl = capital * (exit_price / entry_price - 1) - capital * friction
                 capital += pnl
                 trades.append({
                     "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
@@ -584,7 +652,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
             # Check take-profit
             elif pnl_pct >= take_profit_pct:
                 exit_price = entry_price * (1 + take_profit_pct)
-                pnl = capital * (exit_price / entry_price - 1)
+                pnl = capital * (exit_price / entry_price - 1) - capital * friction
                 capital += pnl
                 trades.append({
                     "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
@@ -608,7 +676,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
     # Close any open position at end
     if in_position:
         final_price = close[-1]
-        pnl = capital * (final_price / entry_price - 1)
+        pnl = capital * (final_price / entry_price - 1) - capital * friction
         capital += pnl
         trades.append({
             "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
@@ -620,7 +688,11 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
             "pnl_pct": round((final_price / entry_price - 1) * 100, 2),
             "bars_held": n_bars - 1 - entry_idx,
         })
-        equity[-1] = capital + pnl
+        equity[-1] = capital
+
+    # Buy-and-hold benchmark
+    bh_start = close[0]
+    benchmark_equity = [req.initial_capital * (close[i] / bh_start) for i in range(n_bars)]
 
     # Compute metrics
     equity_arr = np.array(equity[1:])  # skip initial
@@ -653,9 +725,16 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
             "value": round(float(equity_arr[i]), 2),
         })
 
+    benchmark_curve = [
+        {"date": dates[i].strftime("%Y-%m-%d"), "value": round(float(benchmark_equity[i]), 2)}
+        for i in range(min(len(dates), len(benchmark_equity)))
+    ]
+
     return {
         "synthetic_data": True,
         "data_warning": "Backtest ran on synthetic random-walk data, not real historical prices. Results are for logic verification only.",
+        "commission_pct": commission_pct,
+        "slippage_pct": slippage_pct,
         "metrics": {
             "sharpe_ratio": round(float(sharpe), 3),
             "sortino_ratio": round(float(sortino), 3),
@@ -667,6 +746,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
             "profit_factor": round(float(min(profit_factor, 999)), 3),
         },
         "equity_curve": equity_curve,
+        "benchmark_equity_curve": benchmark_curve,
         "trades": trades,
     }
 
