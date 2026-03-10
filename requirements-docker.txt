@@ -27,7 +27,6 @@ xgboost==2.0.3
 scipy==1.12.0
 
 # Trading (Alpaca)
-alpaca-trade-api==3.0.2
 alpaca-py==0.21.1
 websocket-client==1.7.0
 
