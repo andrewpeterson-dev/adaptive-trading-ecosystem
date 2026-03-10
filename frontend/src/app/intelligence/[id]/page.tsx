@@ -363,7 +363,7 @@ function MonteCarloChart({ mc }: { mc: MonteCarlo }) {
               fontSize: 11,
               borderRadius: 6,
             }}
-            formatter={(v: number | undefined, name: string | undefined) => [fmtK(v ?? 0), (name ?? "").toUpperCase()]}
+            formatter={(v, name) => [fmtK(typeof v === "number" ? v : 0), String(name ?? "").toUpperCase()] as [string, string]}
           />
           <defs>
             <linearGradient id="mc95" x1="0" y1="0" x2="0" y2="1">
