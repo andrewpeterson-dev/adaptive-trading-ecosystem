@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCerberusStore } from '@/stores/cerberus-store';
+import { getThreadMessages } from '@/lib/cerberus-api';
 import { ChatPanel } from './ChatPanel';
 import { StrategyBuilder } from './StrategyBuilder';
 import { PortfolioAnalysis } from './PortfolioAnalysis';
@@ -18,7 +19,7 @@ const TABS = [
 ];
 
 export function AIWidget() {
-  const { isOpen, activeTab, setActiveTab, openCerberus, closeCerberus } = useCerberusStore();
+  const { isOpen, activeTab, activeThreadId, messages, setActiveTab, openCerberus, closeCerberus, setMessages } = useCerberusStore();
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -37,6 +38,17 @@ export function AIWidget() {
       localStorage.setItem('cerberus_position', JSON.stringify(position));
     }
   }, [position]);
+
+  // Restore thread history when panel opens with a persisted thread but no messages loaded
+  useEffect(() => {
+    if (isOpen && activeThreadId && messages.length === 0) {
+      getThreadMessages(activeThreadId).then((fetched) => {
+        if (fetched && fetched.length > 0) {
+          setMessages(fetched);
+        }
+      }).catch(() => { /* ignore — new session starts fresh */ });
+    }
+  }, [isOpen, activeThreadId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

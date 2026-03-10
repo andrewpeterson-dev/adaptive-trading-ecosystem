@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type {
   ConversationThread,
   ConversationMessageItem,
@@ -59,7 +60,7 @@ interface CerberusState {
   setPendingProposal: (proposal: TradeProposal | null) => void;
 }
 
-export const useCerberusStore = create<CerberusState>((set) => ({
+export const useCerberusStore = create<CerberusState>()(persist((set) => ({
   // Initial state
   isOpen: false,
   activeTab: 'chat',
@@ -102,4 +103,7 @@ export const useCerberusStore = create<CerberusState>((set) => ({
 
   // Proposals
   setPendingProposal: (proposal) => set({ pendingProposal: proposal }),
+}), {
+  name: 'cerberus-store',
+  partialize: (state) => ({ activeThreadId: state.activeThreadId }),
 }));

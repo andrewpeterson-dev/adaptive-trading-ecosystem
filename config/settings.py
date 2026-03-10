@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     # --- Feature Flags ---
     feature_cerberus_enabled: bool = True
     feature_research_mode_enabled: bool = True
-    feature_bot_mutations_enabled: bool = False
+    feature_bot_mutations_enabled: bool = True
     feature_paper_trade_proposals_enabled: bool = False
     feature_live_trade_proposals_enabled: bool = False
     feature_slow_expert_mode_enabled: bool = False

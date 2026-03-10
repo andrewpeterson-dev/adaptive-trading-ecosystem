@@ -61,6 +61,7 @@ class ConversationMode(str, enum.Enum):
     TRADE = "trade"
     BACKTEST = "backtest"
     BUILD = "build"
+    PORTFOLIO = "portfolio"
 
 
 class MessageRole(str, enum.Enum):

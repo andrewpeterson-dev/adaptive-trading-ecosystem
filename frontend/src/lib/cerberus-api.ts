@@ -33,6 +33,17 @@ export async function executeTrade(proposalId: string, confirmationToken: string
   });
 }
 
+export async function createBot(name: string, strategyJson: object): Promise<{ bot_id: string; name: string; status: string }> {
+  return apiFetch('/api/ai/tools/create-bot', {
+    method: 'POST',
+    body: JSON.stringify({ name, strategy_json: strategyJson }),
+  });
+}
+
+export async function listBots(): Promise<Array<{ id: string; name: string; status: string; config: object | null; createdAt: string | null }>> {
+  return apiFetch('/api/ai/tools/bots');
+}
+
 export async function listProposals(status?: string): Promise<TradeProposal[]> {
   const params = status ? `?status=${status}` : '';
   return apiFetch(`/api/ai/tools/proposals${params}`);
