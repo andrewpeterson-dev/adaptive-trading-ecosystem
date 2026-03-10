@@ -23,7 +23,10 @@ export interface BacktestTrade {
 export interface BacktestResult {
   metrics: BacktestMetrics;
   equity_curve: { date: string; value: number }[];
+  benchmark_equity_curve: { date: string; value: number }[];
   trades: BacktestTrade[];
+  commission_pct: number;
+  slippage_pct: number;
   synthetic_data?: boolean;
   data_warning?: string;
 }
@@ -37,7 +40,13 @@ export interface BacktestRequest {
     params: Record<string, number>;
     action: string;
   }>;
+  condition_groups?: Array<{
+    id: string;
+    conditions: BacktestRequest["conditions"];
+  }>;
   symbol: string;
   lookback_days: number;
   initial_capital: number;
+  commission_pct?: number;
+  slippage_pct?: number;
 }

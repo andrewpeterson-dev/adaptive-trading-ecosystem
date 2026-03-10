@@ -12,16 +12,36 @@ export interface StrategyCondition {
   action: Action;
 }
 
+export interface ConditionGroup {
+  id: string;
+  label?: string;
+  conditions: StrategyCondition[];
+}
+
 export interface Strategy {
   id?: string;
   name: string;
   description: string;
-  conditions: StrategyCondition[];
+  conditions?: StrategyCondition[];       // legacy — backward compat
+  condition_groups: ConditionGroup[];     // primary representation
   action: Action;
   stop_loss_pct: number;
   take_profit_pct: number;
   position_size_pct: number;
   timeframe: string;
+  // Universe
+  symbols: string[];
+  // Execution
+  commission_pct: number;
+  slippage_pct: number;
+  // Exit
+  trailing_stop_pct: number | null;
+  exit_after_bars: number | null;
+  // Risk
+  cooldown_bars: number;
+  max_trades_per_day: number;
+  max_exposure_pct: number;
+  max_loss_pct: number;
 }
 
 export interface Diagnostic {
@@ -60,6 +80,11 @@ export interface StrategyRecord {
     params: Record<string, number>;
     action: string;
   }>;
+  condition_groups: Array<{
+    id: string;
+    label?: string;
+    conditions: StrategyRecord["conditions"];
+  }>;
   action: string;
   stop_loss_pct: number;
   take_profit_pct: number;
@@ -79,4 +104,14 @@ export interface StrategyRecord {
   };
   created_at: string;
   updated_at: string;
+  // Settings
+  symbols: string[];
+  commission_pct: number;
+  slippage_pct: number;
+  trailing_stop_pct: number | null;
+  exit_after_bars: number | null;
+  cooldown_bars: number;
+  max_trades_per_day: number;
+  max_exposure_pct: number;
+  max_loss_pct: number;
 }
