@@ -996,7 +996,7 @@ export default function IntelligencePage() {
                     fontSize: 11,
                     borderRadius: 6,
                   }}
-                  formatter={(v: number | undefined) => [`${(v ?? 0).toFixed(2)}%`, "DD"]}
+                  formatter={(v) => [`${Number(v ?? 0).toFixed(2)}%`, "DD"] as [string, string]}
                 />
                 <Area type="monotone" dataKey="value" stroke="#ef4444" fill="url(#ddGrad)" strokeWidth={1.5} dot={false} />
               </AreaChart>
@@ -1041,7 +1041,7 @@ export default function IntelligencePage() {
                         fontSize: 11,
                         borderRadius: 6,
                       }}
-                      formatter={(v: number | undefined) => [((v ?? 0) * 100).toFixed(0) + "%", "Importance"]}
+                      formatter={(v) => [(Number(v ?? 0) * 100).toFixed(0) + "%", "Importance"] as [string, string]}
                     />
                     <Bar dataKey="importance" radius={[0, 3, 3, 0]}>
                       {features.slice(0, 8).map((_, i) => (
