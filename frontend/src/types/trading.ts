@@ -45,3 +45,45 @@ export interface RiskSummary {
   trades_this_hour: number;
   max_trades_per_hour: number;
 }
+
+export type AssetMode = 'stocks' | 'options';
+
+export type TradeSource = 'manual' | string;
+
+export interface Quote {
+  symbol: string;
+  price: number;
+  bid?: number;
+  ask?: number;
+  last?: number;
+  change?: number;
+  change_pct?: number;
+  volume?: number;
+}
+
+export interface OptionContract {
+  symbol: string;
+  underlying: string;
+  expiration: string;
+  strike: number;
+  type: 'call' | 'put';
+  bid?: number;
+  ask?: number;
+  last?: number;
+  volume?: number;
+  open_interest?: number;
+  implied_volatility?: number;
+  delta?: number;
+  gamma?: number;
+  theta?: number;
+  vega?: number;
+}
+
+export interface OptionPosition {
+  contract: OptionContract;
+  quantity: number;
+  avg_entry_price: number;
+  current_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+}
