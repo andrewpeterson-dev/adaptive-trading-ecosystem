@@ -77,6 +77,18 @@ class BrokerType(str, enum.Enum):
     WEBULL = "webull"
 
 
+class SystemEventType(str, enum.Enum):
+    MODE_SWITCH = "mode_switch"
+    STRATEGY_PROMOTED = "strategy_promoted"
+    TRADE_EXECUTED = "trade_executed"
+    TRADE_FAILED = "trade_failed"
+    ACCOUNT_SYNC = "account_sync"
+    RISK_LIMIT_TRIGGERED = "risk_limit_triggered"
+    KILL_SWITCH_TOGGLED = "kill_switch_toggled"
+    BOT_ENABLED = "bot_enabled"
+    BOT_DISABLED = "bot_disabled"
+
+
 # ── Models ───────────────────────────────────────────────────────────────────
 
 class Trade(Base):
@@ -116,6 +128,7 @@ class TradingModel(Base):
     model_type = Column(String(64), nullable=False)
     version = Column(String(32), default="1.0.0")
     is_active = Column(Boolean, default=True)
+    mode = Column(_enum(TradingModeEnum), nullable=False, default=TradingModeEnum.PAPER)
     parameters = Column(JSON, default=dict)
     artifact_path = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -159,6 +172,7 @@ class CapitalAllocation(Base):
     weight = Column(Float, nullable=False)
     allocated_capital = Column(Float, nullable=False)
     reason = Column(Text, nullable=True)
+    mode = Column(_enum(TradingModeEnum), nullable=False)
 
     model = relationship("TradingModel", back_populates="allocations")
 
@@ -214,6 +228,7 @@ class RiskEvent(Base):
     description = Column(Text, nullable=True)
     model_id = Column(Integer, ForeignKey("trading_models.id"), nullable=True)
     action_taken = Column(Text, nullable=True)
+    mode = Column(_enum(TradingModeEnum), nullable=False)
     metadata_json = Column(JSON, default=dict)
 
     __table_args__ = (
@@ -422,3 +437,105 @@ class UserApiSettings(Base):
     fallback_market_data_ids = Column(JSON, default=list)
     primary_options_data_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Paper / Live Mode Separation Models ──────────────────────────────────────
+
+
+class UserTradingSession(Base):
+    __tablename__ = "user_trading_sessions"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    active_mode = Column(_enum(TradingModeEnum), nullable=False, default=TradingModeEnum.PAPER)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StrategyTemplate(Base):
+    __tablename__ = "strategy_templates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    conditions = Column(JSON, nullable=False)
+    action = Column(String(16), nullable=False, default="BUY")
+    stop_loss_pct = Column(Float, default=0.02)
+    take_profit_pct = Column(Float, default=0.05)
+    timeframe = Column(String(16), default="1D")
+    diagnostics = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    instances = relationship("StrategyInstance", back_populates="template")
+
+    __table_args__ = (
+        Index("ix_strategy_template_user", "user_id"),
+    )
+
+
+class StrategyInstance(Base):
+    __tablename__ = "strategy_instances"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_id = Column(Integer, ForeignKey("strategy_templates.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    mode = Column(_enum(TradingModeEnum), nullable=False)
+    is_active = Column(Boolean, default=True)
+    position_size_pct = Column(Float, default=0.1)
+    max_position_value = Column(Float, nullable=True)
+    nickname = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    promoted_from_id = Column(Integer, ForeignKey("strategy_instances.id"), nullable=True)
+
+    template = relationship("StrategyTemplate", back_populates="instances")
+
+    __table_args__ = (
+        Index("ix_strategy_instance_user_mode", "user_id", "mode"),
+    )
+
+
+class UserBrokerAccount(Base):
+    __tablename__ = "user_broker_accounts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    connection_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=False)
+    broker_account_id = Column(String(128), nullable=False)
+    account_type = Column(String(32), nullable=False)
+    nickname = Column(String(100), nullable=True)
+    discovered_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_user_broker_acct_user_type", "user_id", "account_type"),
+    )
+
+
+class UserRiskLimits(Base):
+    __tablename__ = "user_risk_limits"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    mode = Column(_enum(TradingModeEnum), primary_key=True)
+    daily_loss_limit = Column(Float, nullable=True)
+    max_position_size_pct = Column(Float, default=0.25)
+    max_open_positions = Column(Integer, default=10)
+    kill_switch_active = Column(Boolean, default=False)
+    live_bot_trading_confirmed = Column(Boolean, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SystemEvent(Base):
+    __tablename__ = "system_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    event_type = Column(_enum(SystemEventType), nullable=False)
+    mode = Column(_enum(TradingModeEnum), nullable=False)
+    severity = Column(String(16), default="info")
+    description = Column(Text, nullable=True)
+    metadata_json = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_system_events_user_time", "user_id", "created_at"),
+        Index("ix_system_events_type", "event_type"),
+    )
