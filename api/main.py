@@ -128,7 +128,13 @@ app.include_router(quant_routes.router, prefix="/api/quant", tags=["Quant Intell
 
 @app.get("/health")
 async def health_check():
-    """Comprehensive health check — used by Docker healthcheck and monitoring."""
+    """Lightweight liveness probe — always returns 200 if the app is running."""
+    return {"status": "ok"}
+
+
+@app.get("/health/detailed")
+async def health_check_detailed():
+    """Comprehensive health check — database, Redis, broker, disk, memory."""
     from monitor.health_check import HealthChecker
 
     checker = HealthChecker()
