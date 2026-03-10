@@ -7,7 +7,7 @@ import {
   Unplug,
   TrendingUp,
 } from "lucide-react";
-import { OrderForm } from "@/components/trading/OrderForm";
+import { StockOrderTicket } from "@/components/trading/StockOrderTicket";
 import { PositionCard } from "@/components/trading/PositionCard";
 import { TradeHistory } from "@/components/trading/TradeHistory";
 import { TradingChart } from "@/components/charts/TradingChart";
@@ -132,7 +132,7 @@ export default function TradePage() {
               </div>
             </div>
           ) : (
-            <OrderForm onOrderPlaced={refresh} isPaperMode={mode === "paper"} />
+            <StockOrderTicket onOrderPlaced={refresh} isPaperMode={mode === "paper"} />
           )}
 
           {/* Positions */}

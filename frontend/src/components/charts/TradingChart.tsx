@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { useTradeStore } from "@/stores/trade-store";
 import type { CandleData, TradeMarker, TimeFrame } from "@/types/chart";
 import type {
   IChartApi,
@@ -11,6 +12,7 @@ import type {
   LineSeriesOptions,
   SeriesMarker,
   Time,
+  IPriceLine,
 } from "lightweight-charts";
 
 const TIMEFRAMES: TimeFrame[] = ["1m", "5m", "15m", "1H", "4H", "1D"];
@@ -22,8 +24,19 @@ const CHART_COLORS = {
   up: "#10b981",
   down: "#ef4444",
   volume: "#334155",
-  sma: "#f59e0b",
+  sma20: "#f59e0b",
+  sma50: "#3b82f6",
+  ema9: "#a855f7",
   crosshair: "#64748b",
+};
+
+type Indicator = "sma20" | "sma50" | "ema9" | "volume";
+
+const INDICATOR_LABELS: Record<Indicator, string> = {
+  sma20: "SMA 20",
+  sma50: "SMA 50",
+  ema9: "EMA 9",
+  volume: "Volume",
 };
 
 function computeSMA(data: CandleData[], period: number): { time: string | number; value: number }[] {
@@ -34,6 +47,19 @@ function computeSMA(data: CandleData[], period: number): { time: string | number
       sum += data[i - j].close;
     }
     result.push({ time: data[i].time, value: +(sum / period).toFixed(2) });
+  }
+  return result;
+}
+
+function computeEMA(data: CandleData[], period: number): { time: string | number; value: number }[] {
+  const result: { time: string | number; value: number }[] = [];
+  const multiplier = 2 / (period + 1);
+  let ema = data[0]?.close ?? 0;
+  for (let i = 0; i < data.length; i++) {
+    ema = (data[i].close - ema) * multiplier + ema;
+    if (i >= period - 1) {
+      result.push({ time: data[i].time, value: +ema.toFixed(2) });
+    }
   }
   return result;
 }
@@ -55,11 +81,77 @@ export function TradingChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
-  const smaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const sma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const sma50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema9SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const priceLinesRef = useRef<IPriceLine[]>([]);
+  const barsRef = useRef<CandleData[]>([]);
 
   const [timeframe, setTimeframe] = useState<TimeFrame>("1D");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [indicators, setIndicators] = useState<Record<Indicator, boolean>>({
+    sma20: true,
+    sma50: false,
+    ema9: false,
+    volume: showVolume,
+  });
+
+  const { quote, positions } = useTradeStore();
+
+  const toggleIndicator = useCallback((ind: Indicator) => {
+    setIndicators((prev) => ({ ...prev, [ind]: !prev[ind] }));
+  }, []);
+
+  // Apply indicator visibility when toggled
+  useEffect(() => {
+    if (sma20SeriesRef.current) {
+      sma20SeriesRef.current.applyOptions({ visible: indicators.sma20 });
+    }
+    if (sma50SeriesRef.current) {
+      sma50SeriesRef.current.applyOptions({ visible: indicators.sma50 });
+    }
+    if (ema9SeriesRef.current) {
+      ema9SeriesRef.current.applyOptions({ visible: indicators.ema9 });
+    }
+    if (volumeSeriesRef.current) {
+      volumeSeriesRef.current.applyOptions({ visible: indicators.volume });
+    }
+  }, [indicators]);
+
+  // Position entry lines
+  useEffect(() => {
+    if (!candleSeriesRef.current) return;
+
+    // Remove old price lines
+    for (const line of priceLinesRef.current) {
+      try {
+        candleSeriesRef.current.removePriceLine(line);
+      } catch {
+        // series may have been removed
+      }
+    }
+    priceLinesRef.current = [];
+
+    // Draw new lines for matching positions
+    const matchingPositions = positions.filter(
+      (p) => p.symbol.toUpperCase() === symbol.toUpperCase()
+    );
+
+    for (const pos of matchingPositions) {
+      if (pos.avg_entry_price && candleSeriesRef.current) {
+        const line = candleSeriesRef.current.createPriceLine({
+          price: pos.avg_entry_price,
+          color: "#10b981",
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: `Entry ${pos.side?.toUpperCase() ?? ""}`,
+        });
+        priceLinesRef.current.push(line);
+      }
+    }
+  }, [positions, symbol]);
 
   const fetchAndRender = useCallback(
     async (tf: TimeFrame) => {
@@ -78,6 +170,8 @@ export function TradingChart({
           return;
         }
 
+        barsRef.current = bars;
+
         // Set candle data
         candleSeriesRef.current?.setData(
           bars.map((b) => ({
@@ -90,7 +184,7 @@ export function TradingChart({
         );
 
         // Set volume data
-        if (showVolume && volumeSeriesRef.current) {
+        if (volumeSeriesRef.current) {
           volumeSeriesRef.current.setData(
             bars.map((b) => ({
               time: b.time as Time,
@@ -100,11 +194,27 @@ export function TradingChart({
           );
         }
 
-        // Set SMA overlay
-        if (smaSeriesRef.current) {
-          const smaData = computeSMA(bars, 20);
-          smaSeriesRef.current.setData(
-            smaData.map((s) => ({ time: s.time as Time, value: s.value }))
+        // SMA 20
+        if (sma20SeriesRef.current) {
+          const sma20Data = computeSMA(bars, 20);
+          sma20SeriesRef.current.setData(
+            sma20Data.map((s) => ({ time: s.time as Time, value: s.value }))
+          );
+        }
+
+        // SMA 50
+        if (sma50SeriesRef.current) {
+          const sma50Data = computeSMA(bars, 50);
+          sma50SeriesRef.current.setData(
+            sma50Data.map((s) => ({ time: s.time as Time, value: s.value }))
+          );
+        }
+
+        // EMA 9
+        if (ema9SeriesRef.current) {
+          const ema9Data = computeEMA(bars, 9);
+          ema9SeriesRef.current.setData(
+            ema9Data.map((s) => ({ time: s.time as Time, value: s.value }))
           );
         }
 
@@ -136,7 +246,7 @@ export function TradingChart({
         setLoading(false);
       }
     },
-    [symbol, showVolume, trades]
+    [symbol, trades]
   );
 
   // Initialize chart
@@ -189,24 +299,43 @@ export function TradingChart({
       } as CandlestickSeriesOptions);
 
       // Volume histogram
-      if (showVolume) {
-        volumeSeriesRef.current = chart.addHistogramSeries({
-          priceFormat: { type: "volume" },
-          priceScaleId: "volume",
-        } as HistogramSeriesOptions);
+      volumeSeriesRef.current = chart.addHistogramSeries({
+        priceFormat: { type: "volume" },
+        priceScaleId: "volume",
+      } as HistogramSeriesOptions);
 
-        chart.priceScale("volume").applyOptions({
-          scaleMargins: { top: 0.8, bottom: 0 },
-        });
-      }
+      chart.priceScale("volume").applyOptions({
+        scaleMargins: { top: 0.8, bottom: 0 },
+      });
 
-      // SMA line
-      smaSeriesRef.current = chart.addLineSeries({
-        color: CHART_COLORS.sma,
+      // SMA 20 line
+      sma20SeriesRef.current = chart.addLineSeries({
+        color: CHART_COLORS.sma20,
         lineWidth: 1,
         priceLineVisible: false,
         lastValueVisible: false,
         crosshairMarkerVisible: false,
+        visible: true,
+      } as LineSeriesOptions);
+
+      // SMA 50 line
+      sma50SeriesRef.current = chart.addLineSeries({
+        color: CHART_COLORS.sma50,
+        lineWidth: 1,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        visible: false,
+      } as LineSeriesOptions);
+
+      // EMA 9 line
+      ema9SeriesRef.current = chart.addLineSeries({
+        color: CHART_COLORS.ema9,
+        lineWidth: 1,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        visible: false,
       } as LineSeriesOptions);
 
       // ResizeObserver
@@ -234,7 +363,7 @@ export function TradingChart({
         chartRef.current = null;
       }
     };
-  }, [height, showVolume]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [height]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refetch on timeframe or symbol change
   useEffect(() => {
@@ -247,15 +376,34 @@ export function TradingChart({
     setTimeframe(tf);
   };
 
+  // Quote display values
+  const lastPrice = quote?.price ?? quote?.last;
+  const change = quote?.change;
+  const changePct = quote?.change_pct;
+  const isPositive = change != null ? change >= 0 : null;
+
   return (
     <div className="rounded-lg border border-border/50 bg-card p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <span className="text-sm font-mono font-bold">{symbol}</span>
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">
-            Candlestick Chart
-          </span>
+          {lastPrice != null && (
+            <span className="text-sm font-mono tabular-nums font-semibold">
+              ${lastPrice.toFixed(2)}
+            </span>
+          )}
+          {change != null && changePct != null && (
+            <span
+              className={`text-xs font-mono tabular-nums font-medium ${
+                isPositive ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {isPositive ? "+" : ""}
+              {change.toFixed(2)} ({isPositive ? "+" : ""}
+              {changePct.toFixed(2)}%)
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {TIMEFRAMES.map((tf) => (
@@ -274,6 +422,38 @@ export function TradingChart({
         </div>
       </div>
 
+      {/* Indicator toggles */}
+      <div className="flex items-center gap-1 mb-3">
+        {(Object.keys(INDICATOR_LABELS) as Indicator[]).map((ind) => (
+          <button
+            key={ind}
+            onClick={() => toggleIndicator(ind)}
+            className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider rounded-md transition-colors ${
+              indicators[ind]
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground/50 hover:text-muted-foreground"
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <span
+                className="inline-block w-2.5 h-0.5 rounded"
+                style={{
+                  backgroundColor:
+                    ind === "sma20"
+                      ? CHART_COLORS.sma20
+                      : ind === "sma50"
+                        ? CHART_COLORS.sma50
+                        : ind === "ema9"
+                          ? CHART_COLORS.ema9
+                          : CHART_COLORS.volume,
+                }}
+              />
+              {INDICATOR_LABELS[ind]}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Chart container */}
       <div className="relative" style={{ height }}>
         <div ref={containerRef} className="absolute inset-0" />
@@ -289,20 +469,6 @@ export function TradingChart({
             <AlertTriangle className="h-5 w-5 text-muted-foreground/60" />
             <span className="text-sm text-muted-foreground">{error}</span>
           </div>
-        )}
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: CHART_COLORS.sma }} />
-          SMA(20)
-        </span>
-        {showVolume && (
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: CHART_COLORS.volume }} />
-            Volume
-          </span>
         )}
       </div>
     </div>
