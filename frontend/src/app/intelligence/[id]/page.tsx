@@ -686,7 +686,7 @@ function EquityWithMarkers({
             fontSize: 11,
             borderRadius: 6,
           }}
-          formatter={(v: number | undefined) => [`$${Number(v ?? 0).toLocaleString()}`, "Equity"]}
+          formatter={(v) => [`$${Number(v ?? 0).toLocaleString()}`, "Equity"] as [string, string]}
         />
         <Area
           type="monotone"
