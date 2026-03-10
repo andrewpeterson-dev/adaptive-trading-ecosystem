@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2, Shield, ChevronRight, Pencil, Play, Copy, Rocket } from "lucide-react";
+import { Trash2, Shield, ChevronRight, Pencil, Play, Copy, Rocket, Brain } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { deployBotFromStrategy } from "@/lib/cerberus-api";
 import type { StrategyRecord } from "@/types/strategy";
