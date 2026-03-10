@@ -123,6 +123,7 @@ def _instance_to_dict(inst: StrategyInstance) -> dict:
         "name": t.name,
         "description": t.description or "",
         "conditions": t.conditions or [],
+        "condition_groups": t.condition_groups or [],
         "action": t.action,
         "stop_loss_pct": t.stop_loss_pct,
         "take_profit_pct": t.take_profit_pct,
@@ -136,6 +137,15 @@ def _instance_to_dict(inst: StrategyInstance) -> dict:
         "promoted_from_id": inst.promoted_from_id,
         "created_at": t.created_at.isoformat() if t.created_at else "",
         "updated_at": t.updated_at.isoformat() if t.updated_at else "",
+        "symbols": t.symbols or ["SPY"],
+        "commission_pct": t.commission_pct or 0.001,
+        "slippage_pct": t.slippage_pct or 0.0005,
+        "trailing_stop_pct": t.trailing_stop_pct,
+        "exit_after_bars": t.exit_after_bars,
+        "cooldown_bars": t.cooldown_bars or 0,
+        "max_trades_per_day": t.max_trades_per_day or 0,
+        "max_exposure_pct": t.max_exposure_pct or 1.0,
+        "max_loss_pct": t.max_loss_pct or 0.0,
     }
 
 
@@ -197,11 +207,21 @@ async def create_strategy(strategy: StrategySchema, request: Request):
             name=strategy.name,
             description=strategy.description,
             conditions=conditions_dicts,
+            condition_groups=strategy.condition_groups or [],
             action=strategy.action,
             stop_loss_pct=strategy.stop_loss_pct,
             take_profit_pct=strategy.take_profit_pct,
             timeframe=strategy.timeframe,
             diagnostics=report.to_dict(),
+            symbols=strategy.symbols,
+            commission_pct=strategy.commission_pct,
+            slippage_pct=strategy.slippage_pct,
+            trailing_stop_pct=strategy.trailing_stop_pct,
+            exit_after_bars=strategy.exit_after_bars,
+            cooldown_bars=strategy.cooldown_bars,
+            max_trades_per_day=strategy.max_trades_per_day,
+            max_exposure_pct=strategy.max_exposure_pct,
+            max_loss_pct=strategy.max_loss_pct,
         )
         session.add(template)
         await session.flush()
