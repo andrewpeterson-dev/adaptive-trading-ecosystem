@@ -90,8 +90,8 @@ class NewsIngestion:
         """Fetch from Alpha Vantage NEWS_SENTIMENT (free tier: 25 req/day)."""
         api_key = self.settings.alphavantage_api_key if hasattr(self.settings, "alphavantage_api_key") else ""
         if not api_key:
-            # Use demo key for limited access
-            api_key = "demo"
+            logger.warning("alphavantage_key_missing", detail="Set ALPHAVANTAGE_API_KEY to enable news sentiment")
+            return []
 
         tickers = ",".join(symbols)
         url = "https://www.alphavantage.co/query"

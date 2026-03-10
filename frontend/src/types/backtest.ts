@@ -24,6 +24,8 @@ export interface BacktestResult {
   metrics: BacktestMetrics;
   equity_curve: { date: string; value: number }[];
   trades: BacktestTrade[];
+  synthetic_data?: boolean;
+  data_warning?: string;
 }
 
 export interface BacktestRequest {

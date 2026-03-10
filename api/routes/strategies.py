@@ -216,10 +216,12 @@ async def compute_indicator(req: ComputeRequest):
     import numpy as np
     from services.indicator_engine import IndicatorEngine
 
-    # Generate sample data for computation preview
+    # Generate synthetic OHLCV for indicator shape preview only.
+    # This is NOT real market data — results show indicator behavior, not a real signal.
     np.random.seed(42)
     n = req.bars
-    dates = pd.date_range(end="2026-02-27", periods=n, freq="B")
+    end_date = pd.Timestamp.utcnow().normalize()
+    dates = pd.date_range(end=end_date, periods=n, freq="B")
     close = 100 * np.exp(np.cumsum(np.random.randn(n) * 0.01))
     high = close * (1 + np.abs(np.random.randn(n) * 0.005))
     low = close * (1 - np.abs(np.random.randn(n) * 0.005))
@@ -239,7 +241,7 @@ async def compute_indicator(req: ComputeRequest):
     # Serialize result
     if isinstance(result, pd.Series):
         values = result.tail(50).tolist()
-        return {"indicator": req.indicator, "params": req.params, "values": values}
+        return {"indicator": req.indicator, "params": req.params, "values": values, "synthetic_data": True}
     elif isinstance(result, dict):
         serialized = {}
         for k, v in result.items():
@@ -247,8 +249,8 @@ async def compute_indicator(req: ComputeRequest):
                 serialized[k] = v.tail(50).tolist()
             else:
                 serialized[k] = v
-        return {"indicator": req.indicator, "params": req.params, "components": serialized}
-    return {"indicator": req.indicator, "params": req.params, "value": str(result)}
+        return {"indicator": req.indicator, "params": req.params, "components": serialized, "synthetic_data": True}
+    return {"indicator": req.indicator, "params": req.params, "value": str(result), "synthetic_data": True}
 
 
 @router.post("/backtest")
@@ -276,10 +278,13 @@ async def run_backtest(req: BacktestRequest):
     else:
         raise HTTPException(400, "Provide strategy_id or inline conditions")
 
-    # Generate synthetic OHLCV data
+    # NOTE: synthetic OHLCV — real market data integration not yet wired.
+    # All metrics below are computed on a random walk, NOT on historical prices.
+    # Do not use these results for live trading decisions.
     np.random.seed(123)
     n = req.lookback_days
-    dates = pd.date_range(end="2026-02-27", periods=n, freq="B")
+    end_date = pd.Timestamp.utcnow().normalize()
+    dates = pd.date_range(end=end_date, periods=n, freq="B")
     returns = np.random.randn(n) * 0.012
     close = 100 * np.exp(np.cumsum(returns))
     high = close * (1 + np.abs(np.random.randn(n) * 0.005))
@@ -471,6 +476,8 @@ async def run_backtest(req: BacktestRequest):
         })
 
     return {
+        "synthetic_data": True,
+        "data_warning": "Backtest ran on synthetic random-walk data, not real historical prices. Results are for logic verification only.",
         "metrics": {
             "sharpe_ratio": round(float(sharpe), 3),
             "sortino_ratio": round(float(sortino), 3),

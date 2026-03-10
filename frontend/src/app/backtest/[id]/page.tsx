@@ -169,6 +169,15 @@ export default function BacktestPage() {
       {/* Results */}
       {result && (
         <div className="space-y-4">
+          {/* Synthetic data warning */}
+          {result.synthetic_data && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-400/30 bg-amber-400/5 px-3.5 py-2.5">
+              <span className="text-amber-400 text-xs font-bold uppercase tracking-widest mt-0.5">⚠ Simulated</span>
+              <p className="text-xs text-amber-300/80">
+                {result.data_warning ?? "This backtest used synthetic random-walk data. Results reflect logic correctness, not real market performance."}
+              </p>
+            </div>
+          )}
           {/* Tab bar */}
           <div className="flex gap-1 border-b">
             {([
