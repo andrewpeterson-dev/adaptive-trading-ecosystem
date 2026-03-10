@@ -7,6 +7,7 @@ import {
   Unplug,
 } from "lucide-react";
 import { StockOrderTicket } from "@/components/trading/StockOrderTicket";
+import { OptionsPanel } from "@/components/trading/OptionsPanel";
 import { PositionsPanel } from "@/components/trading/PositionsPanel";
 import { TradeHistoryPanel } from "@/components/trading/TradeHistoryPanel";
 import { TradingChart } from "@/components/charts/TradingChart";
@@ -111,6 +112,11 @@ export default function TradePage() {
         {/* Left Column: Symbol Search + Chart + Trade History */}
         <div className="lg:col-span-3 space-y-5">
           <SymbolSearch />
+          {assetMode === "options" && (
+            <div className="text-xs text-muted-foreground mb-1">
+              Showing underlying: {symbol}
+            </div>
+          )}
           <TradingChart symbol={symbol} trades={tradeMarkers} />
           <TradeHistoryPanel />
         </div>
@@ -121,14 +127,7 @@ export default function TradePage() {
 
           {/* Order Ticket Area */}
           {assetMode === "options" ? (
-            <div className="rounded-xl border border-border/50 bg-card p-6 flex flex-col items-center justify-center gap-2 text-center min-h-[200px]">
-              <div className="text-sm font-medium text-muted-foreground">
-                Options panel coming soon
-              </div>
-              <div className="text-xs text-muted-foreground/60">
-                Options trading will be available in a future update
-              </div>
-            </div>
+            <OptionsPanel />
           ) : (
             <StockOrderTicket onOrderPlaced={refresh} isPaperMode={mode === "paper"} />
           )}
