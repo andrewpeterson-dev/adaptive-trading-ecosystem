@@ -15,8 +15,9 @@ from sqlalchemy import select
 
 from config.settings import get_settings, TradingMode
 from db.database import get_session
-from db.models import PaperPortfolio, PaperPosition
+from db.models import PaperPortfolio, PaperPosition, Trade, TradingModeEnum, SystemEventType
 from risk.manager import RiskManager
+from services.event_logger import log_event
 
 # Webull per-user client loader (from our webull routes)
 from api.routes.webull import _get_user_clients as _get_user_webull_client
@@ -58,9 +59,12 @@ class SwitchModeRequest(BaseModel):
 
 @router.get("/account")
 async def get_account(request: Request):
-    """Get current account information — uses Webull if connected."""
+    """Get current account information — routes by active trading mode."""
     user_id = getattr(request.state, "user_id", None)
-    if user_id:
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    if user_id and mode == TradingModeEnum.LIVE:
+        # Live mode — use Webull broker
         client = await _get_user_webull_client(user_id)
         if client:
             summary = client.get_account_summary()
@@ -73,7 +77,7 @@ async def get_account(request: Request):
                     "unrealized_pnl": summary.get("unrealized_pnl", 0),
                     "realized_pnl": summary.get("realized_pnl", 0),
                     "account_id": summary.get("account_id"),
-                    "mode": summary.get("mode", "LIVE"),
+                    "mode": "LIVE",
                     "broker": "webull",
                 }
             # Evict stale cache so next request re-authenticates with current DB credentials
@@ -82,7 +86,7 @@ async def get_account(request: Request):
             logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id)
             raise HTTPException(status_code=503, detail="Could not fetch Webull account. Your API key may be invalid — please re-enter it in Settings.")
 
-    # Fallback: check for paper portfolio, then Alpaca
+    # Paper mode or no broker — use paper portfolio
     if user_id:
         async with get_session() as session:
             result = await session.execute(
@@ -115,7 +119,7 @@ async def get_account(request: Request):
                 "buying_power": portfolio.cash,
                 "portfolio_value": positions_value,
                 "broker": "paper",
-                "mode": "PAPER",
+                "mode": mode.value.upper(),
             }
 
     try:
@@ -126,9 +130,11 @@ async def get_account(request: Request):
 
 @router.get("/positions")
 async def get_positions(request: Request):
-    """Get all open positions — uses Webull if connected."""
+    """Get all open positions — routes by active trading mode."""
     user_id = getattr(request.state, "user_id", None)
-    if user_id:
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    if user_id and mode == TradingModeEnum.LIVE:
         client = await _get_user_webull_client(user_id)
         if client:
             raw = client.get_positions()
@@ -143,12 +149,15 @@ async def get_positions(request: Request):
                     "unrealized_pnl": p.get("unrealized_pnl", 0),
                     "unrealized_pnl_pct": p.get("unrealized_pnl_pct", 0),
                 })
-            return {"positions": positions}
+            return {"positions": positions, "mode": "live"}
 
-    # Fallback: paper positions for authenticated users
+    # Paper/backtest mode — paper positions for authenticated users
     if user_id:
         from api.routes.paper_trading import get_paper_positions
-        return await get_paper_positions(request)
+        result = await get_paper_positions(request)
+        if isinstance(result, dict):
+            result["mode"] = mode.value
+        return result
 
     try:
         return _get_executor().get_positions()
@@ -158,9 +167,11 @@ async def get_positions(request: Request):
 
 @router.get("/orders")
 async def get_orders(request: Request, status: str = "open"):
-    """Get orders — uses Webull if connected."""
+    """Get orders — routes by active trading mode."""
     user_id = getattr(request.state, "user_id", None)
-    if user_id:
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    if user_id and mode == TradingModeEnum.LIVE:
         client = await _get_user_webull_client(user_id)
         if client:
             raw = client.get_open_orders()
@@ -176,13 +187,17 @@ async def get_orders(request: Request, status: str = "open"):
                     "filled_price": o.get("filled_price"),
                     "submitted_at": o.get("place_time", o.get("created_at", "")),
                 })
-            return {"orders": orders}
+            return {"orders": orders, "mode": "live"}
+
+    # Paper mode — no open orders mechanism yet, return empty
+    if user_id and mode == TradingModeEnum.PAPER:
+        return {"orders": [], "mode": "paper"}
 
     try:
         return _get_executor().get_orders(status=status)
     except Exception as e:
         logger.warning("get_orders_failed", error=str(e))
-        return []
+        return {"orders": []}
 
 
 @router.get("/quotes")
@@ -252,9 +267,12 @@ async def get_single_quote(request: Request, symbol: str = Query(...)):
 
 @router.post("/execute")
 async def execute_signal(request: Request, req: ExecuteSignalRequest):
-    """Execute a trade — routes to Webull when connected."""
+    """Execute a trade — routes by active trading mode."""
     user_id = getattr(request.state, "user_id", None)
-    if user_id:
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    if user_id and mode == TradingModeEnum.LIVE:
+        # Live mode — route to Webull
         client = await _get_user_webull_client(user_id)
         if client:
             # Map direction to Webull side
@@ -280,18 +298,32 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                     "executed": False,
                     "blocked": True,
                     "reason": result.get("error", "Order requires user_confirmed=true"),
+                    "mode": "live",
                 }
 
             if result.get("success"):
-                return {"executed": True, **result}
+                # Log the trade event
+                await log_event(
+                    user_id=user_id,
+                    event_type=SystemEventType.TRADE_EXECUTED,
+                    mode=TradingModeEnum.LIVE,
+                    description=f"LIVE {side} {int(req.quantity)} {req.symbol.upper()}",
+                )
+                return {"executed": True, "mode": "live", **result}
 
+            await log_event(
+                user_id=user_id,
+                event_type=SystemEventType.TRADE_FAILED,
+                mode=TradingModeEnum.LIVE,
+                description=f"LIVE order failed: {result.get('error', 'unknown')}",
+            )
             raise HTTPException(
                 status_code=400,
                 detail=result.get("error", "Order failed"),
             )
 
-    # Fallback: route through paper trading for authenticated users
-    if user_id:
+    # Paper mode — route through paper trading for authenticated users
+    if user_id and mode in (TradingModeEnum.PAPER, TradingModeEnum.BACKTEST):
         from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
 
         side = req.direction.upper()
@@ -306,9 +338,20 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
             quantity=req.quantity,
             user_confirmed=req.user_confirmed,
         )
-        return await execute_paper_trade(request, paper_req)
+        result = await execute_paper_trade(request, paper_req)
 
-    # Last resort: Alpaca executor
+        await log_event(
+            user_id=user_id,
+            event_type=SystemEventType.TRADE_EXECUTED,
+            mode=mode,
+            description=f"PAPER {side} {int(req.quantity)} {req.symbol.upper()}",
+        )
+
+        if isinstance(result, dict):
+            result["mode"] = mode.value
+        return result
+
+    # Last resort: Alpaca executor (no user context)
     from models.base import Signal
     from engine.executor import OrderType
 
@@ -353,9 +396,11 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
 
 @router.get("/risk-summary")
 async def get_risk_summary(request: Request):
-    """Get current risk status."""
+    """Get current risk status — scoped to active trading mode."""
     user_id = getattr(request.state, "user_id", None)
-    if user_id:
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    if user_id and mode == TradingModeEnum.LIVE:
         client = await _get_user_webull_client(user_id)
         if client:
             summary = client.get_account_summary()
@@ -370,10 +415,13 @@ async def get_risk_summary(request: Request):
                 "trades_this_hour": 0,
                 "max_trades_per_hour": settings.max_trades_per_hour,
                 "equity": equity,
+                "mode": "live",
             }
     try:
         account = _get_executor().get_account()
-        return _risk_manager.get_risk_summary(account["equity"])
+        summary = _risk_manager.get_risk_summary(account["equity"])
+        summary["mode"] = mode.value
+        return summary
     except Exception:
         settings = get_settings()
         return {
@@ -390,16 +438,51 @@ async def get_risk_summary(request: Request):
             "peak_equity": 0,
             "open_positions": 0,
             "recent_risk_events": 0,
+            "mode": mode.value,
         }
 
 
 @router.get("/trade-log")
-async def get_trade_log(limit: int = 100):
-    """Get execution audit trail."""
+async def get_trade_log(request: Request, limit: int = 100):
+    """Get execution audit trail — filtered by active trading mode."""
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    # Try database Trade records first (mode-scoped)
+    async with get_session() as session:
+        result = await session.execute(
+            select(Trade)
+            .where(Trade.mode == mode)
+            .order_by(Trade.entry_time.desc())
+            .limit(limit)
+        )
+        trades = result.scalars().all()
+
+        if trades:
+            return {
+                "trades": [
+                    {
+                        "id": t.id,
+                        "symbol": t.symbol,
+                        "direction": t.direction.value if hasattr(t.direction, "value") else str(t.direction),
+                        "quantity": t.quantity,
+                        "entry_price": t.entry_price,
+                        "exit_price": t.exit_price,
+                        "pnl": t.pnl,
+                        "pnl_pct": t.pnl_pct,
+                        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
+                        "entry_time": t.entry_time.isoformat() if t.entry_time else None,
+                        "exit_time": t.exit_time.isoformat() if t.exit_time else None,
+                    }
+                    for t in trades
+                ],
+                "mode": mode.value,
+            }
+
+    # Fallback to executor log
     try:
         return _get_executor().get_trade_log(limit=limit)
     except Exception:
-        return []
+        return {"trades": [], "mode": mode.value}
 
 
 @router.post("/switch-mode")

@@ -58,21 +58,30 @@ async def _seed_models(db):
 
 @router.get("/list")
 async def list_models(request: Request):
-    """List all trading models with their latest performance metrics."""
+    """List all trading models with their latest performance metrics — filtered by mode."""
+    mode = request.state.trading_mode
+
     async with get_session() as db:
-        result = await db.execute(select(TradingModel).order_by(TradingModel.id))
+        result = await db.execute(
+            select(TradingModel)
+            .where(TradingModel.mode == mode)
+            .order_by(TradingModel.id)
+        )
         models = result.scalars().all()
 
         if not models:
-            return {"models": []}
+            return {"models": [], "mode": mode.value}
 
         # Build response with latest performance per model
         model_list = []
         for m in models:
-            # Get latest performance record
+            # Get latest performance record for this mode
             perf_result = await db.execute(
                 select(ModelPerformance)
-                .where(ModelPerformance.model_id == m.id)
+                .where(
+                    ModelPerformance.model_id == m.id,
+                    ModelPerformance.mode == mode,
+                )
                 .order_by(ModelPerformance.timestamp.desc())
                 .limit(1)
             )
@@ -90,25 +99,31 @@ async def list_models(request: Request):
                 "num_trades": perf.num_trades if perf else 0,
             })
 
-    return {"models": model_list}
+    return {"models": model_list, "mode": mode.value}
 
 
 @router.get("/allocation")
 async def get_allocation(request: Request):
-    """Get current capital allocation across models."""
+    """Get current capital allocation across models — filtered by mode."""
+    mode = request.state.trading_mode
+
     async with get_session() as db:
-        # Get the latest allocation timestamp
+        # Get the latest allocation timestamp for this mode
         latest_ts = await db.execute(
             select(func.max(CapitalAllocation.timestamp))
+            .where(CapitalAllocation.mode == mode)
         )
         max_ts = latest_ts.scalar()
 
         if max_ts:
-            # Get all allocations at the latest timestamp
+            # Get all allocations at the latest timestamp for this mode
             result = await db.execute(
                 select(CapitalAllocation, TradingModel.name)
                 .join(TradingModel, CapitalAllocation.model_id == TradingModel.id)
-                .where(CapitalAllocation.timestamp == max_ts)
+                .where(
+                    CapitalAllocation.timestamp == max_ts,
+                    CapitalAllocation.mode == mode,
+                )
                 .order_by(TradingModel.name)
             )
             rows = result.all()
@@ -121,16 +136,19 @@ async def get_allocation(request: Request):
                 }
                 for row in rows
             ]
-            return {"allocations": allocations}
+            return {"allocations": allocations, "mode": mode.value}
 
-        # No allocation data — return equal weight across active models
+        # No allocation data — return equal weight across active models for this mode
         result = await db.execute(
-            select(TradingModel).where(TradingModel.is_active == True)
+            select(TradingModel).where(
+                TradingModel.is_active == True,
+                TradingModel.mode == mode,
+            )
         )
         active_models = result.scalars().all()
 
         if not active_models:
-            return {"allocations": []}
+            return {"allocations": [], "mode": mode.value}
 
         n = len(active_models)
         equal_weight = round(1.0 / n, 4) if n > 0 else 0.0
@@ -145,8 +163,8 @@ async def get_allocation(request: Request):
             for m in active_models
         ]
 
-    logger.info("allocation_seed_data", reason="no allocations in db", count=len(allocations))
-    return {"allocations": allocations}
+    logger.info("allocation_seed_data", reason="no allocations in db", count=len(allocations), mode=mode.value)
+    return {"allocations": allocations, "mode": mode.value}
 
 
 @router.get("/regime")
@@ -182,10 +200,15 @@ async def get_current_regime(request: Request):
 
 @router.get("/performance/{model_name}")
 async def get_model_performance(model_name: str, request: Request):
-    """Get detailed performance history for a specific model."""
+    """Get detailed performance history for a specific model — filtered by mode."""
+    mode = request.state.trading_mode
+
     async with get_session() as db:
         model_result = await db.execute(
-            select(TradingModel).where(TradingModel.name == model_name)
+            select(TradingModel).where(
+                TradingModel.name == model_name,
+                TradingModel.mode == mode,
+            )
         )
         model = model_result.scalar_one_or_none()
         if not model:
@@ -193,7 +216,10 @@ async def get_model_performance(model_name: str, request: Request):
 
         perf_result = await db.execute(
             select(ModelPerformance)
-            .where(ModelPerformance.model_id == model.id)
+            .where(
+                ModelPerformance.model_id == model.id,
+                ModelPerformance.mode == mode,
+            )
             .order_by(ModelPerformance.timestamp.desc())
             .limit(50)
         )
@@ -203,6 +229,7 @@ async def get_model_performance(model_name: str, request: Request):
         "name": model.name,
         "model_type": model.model_type,
         "is_active": model.is_active,
+        "mode": mode.value,
         "performance_history": [
             {
                 "timestamp": r.timestamp.isoformat() if r.timestamp else None,
@@ -233,13 +260,23 @@ async def retrain_model(model_name: str = None, request: Request = None):
 
 @router.get("/ensemble-status")
 async def get_ensemble_status(request: Request = None):
-    """Returns current ensemble weights and model voting status."""
+    """Returns current ensemble weights and model voting status — filtered by mode."""
+    mode = request.state.trading_mode if request else TradingModeEnum.PAPER
+
     async with get_session() as db:
-        result = await db.execute(select(TradingModel).where(TradingModel.is_active == True))
+        result = await db.execute(
+            select(TradingModel).where(
+                TradingModel.is_active == True,
+                TradingModel.mode == mode,
+            )
+        )
         models = result.scalars().all()
 
-        # Try to get latest allocation weights
-        latest_ts = await db.execute(select(func.max(CapitalAllocation.timestamp)))
+        # Try to get latest allocation weights for this mode
+        latest_ts = await db.execute(
+            select(func.max(CapitalAllocation.timestamp))
+            .where(CapitalAllocation.mode == mode)
+        )
         max_ts = latest_ts.scalar()
 
         weights: dict = {}
@@ -247,7 +284,10 @@ async def get_ensemble_status(request: Request = None):
             alloc_result = await db.execute(
                 select(CapitalAllocation, TradingModel.name)
                 .join(TradingModel, CapitalAllocation.model_id == TradingModel.id)
-                .where(CapitalAllocation.timestamp == max_ts)
+                .where(
+                    CapitalAllocation.timestamp == max_ts,
+                    CapitalAllocation.mode == mode,
+                )
             )
             for row in alloc_result.all():
                 weights[row.name] = round(row.CapitalAllocation.weight, 4)
@@ -260,5 +300,6 @@ async def get_ensemble_status(request: Request = None):
             "ensemble_active": len(models) > 0,
             "model_count": len(models),
             "weights": weights,
+            "mode": mode.value,
             "last_updated": models[0].updated_at.isoformat() if models and models[0].updated_at else None,
         }

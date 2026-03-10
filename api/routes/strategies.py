@@ -1,13 +1,26 @@
 """
 Strategy Intelligence API routes.
-Handles strategy CRUD with DB persistence, indicator computation, diagnostics, and backtesting.
+Handles strategy CRUD with DB persistence (StrategyTemplate + StrategyInstance),
+indicator computation, diagnostics, and backtesting.
+All strategy queries are scoped to the user's active trading mode.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Any, Optional, Union
 import structlog
+
+from sqlalchemy import select
+from db.database import get_session
+from db.models import (
+    StrategyTemplate,
+    StrategyInstance,
+    Strategy,
+    TradingModeEnum,
+    SystemEventType,
+)
+from services.event_logger import log_event
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +56,8 @@ class StrategyUpdateSchema(BaseModel):
     take_profit_pct: Optional[float] = None
     position_size_pct: Optional[float] = None
     timeframe: Optional[str] = None
+    nickname: Optional[str] = None
+    max_position_value: Optional[float] = None
 
 class StrategyResponse(BaseModel):
     id: int
@@ -50,6 +65,11 @@ class StrategyResponse(BaseModel):
     conditions: list[dict]
     diagnostics: dict
     created_at: str
+
+class PromoteRequest(BaseModel):
+    position_size_pct: Optional[float] = None
+    max_position_value: Optional[float] = None
+    nickname: Optional[str] = None
 
 class ComputeRequest(BaseModel):
     indicator: str
@@ -71,7 +91,33 @@ class BacktestRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
+def _instance_to_dict(inst: StrategyInstance) -> dict:
+    """Serialize a StrategyInstance joined with its template."""
+    t = inst.template
+    return {
+        "id": inst.id,
+        "template_id": t.id,
+        "name": t.name,
+        "description": t.description or "",
+        "conditions": t.conditions or [],
+        "action": t.action,
+        "stop_loss_pct": t.stop_loss_pct,
+        "take_profit_pct": t.take_profit_pct,
+        "position_size_pct": inst.position_size_pct,
+        "max_position_value": inst.max_position_value,
+        "timeframe": t.timeframe,
+        "diagnostics": t.diagnostics or {},
+        "mode": inst.mode.value if hasattr(inst.mode, "value") else str(inst.mode),
+        "is_active": inst.is_active,
+        "nickname": inst.nickname,
+        "promoted_from_id": inst.promoted_from_id,
+        "created_at": t.created_at.isoformat() if t.created_at else "",
+        "updated_at": t.updated_at.isoformat() if t.updated_at else "",
+    }
+
+
 def _strategy_to_dict(s) -> dict:
+    """Legacy helper for old Strategy model (backward compat)."""
     return {
         "id": s.id,
         "name": s.name,
@@ -91,10 +137,12 @@ def _strategy_to_dict(s) -> dict:
 # ── Routes ───────────────────────────────────────────────────────────────
 
 @router.post("/create", response_model=StrategyResponse)
-async def create_strategy(strategy: StrategySchema):
+async def create_strategy(strategy: StrategySchema, request: Request):
+    """Create a new strategy template + instance for the current mode."""
     from services.diagnostics import StrategyDiagnostics
-    from db.database import get_session
-    from db.models import Strategy
+
+    user_id = request.state.user_id
+    mode = request.state.trading_mode
 
     conditions_dicts = [c.model_dump() for c in strategy.conditions]
     params = {}
@@ -104,101 +152,210 @@ async def create_strategy(strategy: StrategySchema):
     report = StrategyDiagnostics.run_all(conditions_dicts, params)
 
     async with get_session() as session:
-        db_strategy = Strategy(
+        # Create the template (logic)
+        template = StrategyTemplate(
+            user_id=user_id,
             name=strategy.name,
             description=strategy.description,
             conditions=conditions_dicts,
             action=strategy.action,
             stop_loss_pct=strategy.stop_loss_pct,
             take_profit_pct=strategy.take_profit_pct,
-            position_size_pct=strategy.position_size_pct,
             timeframe=strategy.timeframe,
             diagnostics=report.to_dict(),
         )
-        session.add(db_strategy)
+        session.add(template)
         await session.flush()
 
-        logger.info("strategy_created", id=db_strategy.id, name=strategy.name, score=report.score)
+        # Create the instance (sizing, mode-specific)
+        instance = StrategyInstance(
+            template_id=template.id,
+            user_id=user_id,
+            mode=mode,
+            is_active=True,
+            position_size_pct=strategy.position_size_pct,
+        )
+        session.add(instance)
+        await session.flush()
+
+        logger.info(
+            "strategy_created",
+            template_id=template.id,
+            instance_id=instance.id,
+            name=strategy.name,
+            mode=mode.value,
+            score=report.score,
+        )
         return StrategyResponse(
-            id=db_strategy.id,
+            id=instance.id,
             name=strategy.name,
             conditions=conditions_dicts,
             diagnostics=report.to_dict(),
-            created_at=db_strategy.created_at.isoformat() if db_strategy.created_at else "",
+            created_at=template.created_at.isoformat() if template.created_at else "",
         )
 
 
 @router.get("/list")
-async def list_strategies():
-    from sqlalchemy import select
-    from db.database import get_session
-    from db.models import Strategy
+async def list_strategies(request: Request):
+    """List strategy instances for the current user and mode."""
+    user_id = request.state.user_id
+    mode = request.state.trading_mode
 
     async with get_session() as session:
         result = await session.execute(
-            select(Strategy).order_by(Strategy.created_at.desc())
+            select(StrategyInstance)
+            .where(
+                StrategyInstance.user_id == user_id,
+                StrategyInstance.mode == mode,
+            )
+            .order_by(StrategyInstance.created_at.desc())
         )
-        strategies = result.scalars().all()
-        return {"strategies": [_strategy_to_dict(s) for s in strategies]}
+        instances = result.scalars().all()
+
+        # Eager-load templates (they're lazy by default)
+        strategies = []
+        for inst in instances:
+            # Access template to trigger load within session
+            _ = inst.template
+            strategies.append(_instance_to_dict(inst))
+
+    return {"strategies": strategies, "mode": mode.value}
 
 
-@router.get("/{strategy_id}")
-async def get_strategy(strategy_id: int):
-    from db.database import get_session
-    from db.models import Strategy
+@router.get("/{instance_id}")
+async def get_strategy(instance_id: int, request: Request):
+    """Get a single strategy instance by ID — scoped to user."""
+    user_id = request.state.user_id
 
     async with get_session() as session:
-        s = await session.get(Strategy, strategy_id)
-        if not s:
-            raise HTTPException(404, f"Strategy {strategy_id} not found")
-        return _strategy_to_dict(s)
+        result = await session.execute(
+            select(StrategyInstance).where(
+                StrategyInstance.id == instance_id,
+                StrategyInstance.user_id == user_id,
+            )
+        )
+        inst = result.scalar_one_or_none()
+        if not inst:
+            raise HTTPException(404, f"Strategy instance {instance_id} not found")
+        # Access template within session
+        _ = inst.template
+        return _instance_to_dict(inst)
 
 
-@router.patch("/{strategy_id}")
-async def update_strategy(strategy_id: int, update: StrategyUpdateSchema):
+@router.patch("/{instance_id}")
+async def update_strategy(instance_id: int, update: StrategyUpdateSchema, request: Request):
+    """Update a strategy template (logic) and/or instance (sizing)."""
     from services.diagnostics import StrategyDiagnostics
-    from db.database import get_session
-    from db.models import Strategy
+
+    user_id = request.state.user_id
 
     async with get_session() as session:
-        s = await session.get(Strategy, strategy_id)
-        if not s:
-            raise HTTPException(404, f"Strategy {strategy_id} not found")
+        result = await session.execute(
+            select(StrategyInstance).where(
+                StrategyInstance.id == instance_id,
+                StrategyInstance.user_id == user_id,
+            )
+        )
+        inst = result.scalar_one_or_none()
+        if not inst:
+            raise HTTPException(404, f"Strategy instance {instance_id} not found")
 
+        template = inst.template
         update_data = update.model_dump(exclude_unset=True)
         conditions_changed = False
 
+        # Template-level fields
+        template_fields = {"name", "description", "conditions", "action", "stop_loss_pct", "take_profit_pct", "timeframe"}
+        # Instance-level fields
+        instance_fields = {"position_size_pct", "nickname", "max_position_value"}
+
         for field, value in update_data.items():
-            if field == "conditions":
-                value = [c.model_dump() if hasattr(c, "model_dump") else c for c in value]
-                conditions_changed = True
-            setattr(s, field, value)
+            if field in template_fields:
+                if field == "conditions":
+                    value = [c.model_dump() if hasattr(c, "model_dump") else c for c in value]
+                    conditions_changed = True
+                setattr(template, field, value)
+            elif field in instance_fields:
+                setattr(inst, field, value)
 
         # Re-run diagnostics if conditions changed
         if conditions_changed:
-            conditions_dicts = s.conditions
+            conditions_dicts = template.conditions
             params = {}
             for c in conditions_dicts:
                 params[c["indicator"]] = c.get("params", {})
             report = StrategyDiagnostics.run_all(conditions_dicts, params)
-            s.diagnostics = report.to_dict()
+            template.diagnostics = report.to_dict()
 
         await session.flush()
-        logger.info("strategy_updated", id=strategy_id)
-        return _strategy_to_dict(s)
+        logger.info("strategy_updated", instance_id=instance_id)
+        return _instance_to_dict(inst)
 
 
-@router.delete("/{strategy_id}")
-async def delete_strategy(strategy_id: int):
-    from db.database import get_session
-    from db.models import Strategy
+@router.delete("/{instance_id}")
+async def delete_strategy(instance_id: int, request: Request):
+    """Deactivate a strategy instance (soft delete)."""
+    user_id = request.state.user_id
 
     async with get_session() as session:
-        s = await session.get(Strategy, strategy_id)
-        if not s:
-            raise HTTPException(404, f"Strategy {strategy_id} not found")
-        await session.delete(s)
-        return {"deleted": strategy_id}
+        result = await session.execute(
+            select(StrategyInstance).where(
+                StrategyInstance.id == instance_id,
+                StrategyInstance.user_id == user_id,
+            )
+        )
+        inst = result.scalar_one_or_none()
+        if not inst:
+            raise HTTPException(404, f"Strategy instance {instance_id} not found")
+        inst.is_active = False
+        await session.flush()
+
+    return {"deactivated": instance_id}
+
+
+@router.post("/{instance_id}/promote")
+async def promote_strategy(instance_id: int, req: PromoteRequest, request: Request):
+    """Promote a paper strategy instance to live."""
+    user_id = request.state.user_id
+    mode = request.state.trading_mode
+
+    if mode != TradingModeEnum.PAPER:
+        raise HTTPException(400, "Can only promote from paper mode")
+
+    async with get_session() as db:
+        result = await db.execute(
+            select(StrategyInstance).where(
+                StrategyInstance.id == instance_id,
+                StrategyInstance.user_id == user_id,
+                StrategyInstance.mode == TradingModeEnum.PAPER,
+            )
+        )
+        paper_inst = result.scalar_one_or_none()
+        if not paper_inst:
+            raise HTTPException(404, "Paper strategy instance not found")
+
+        live_inst = StrategyInstance(
+            template_id=paper_inst.template_id,
+            user_id=user_id,
+            mode=TradingModeEnum.LIVE,
+            is_active=True,
+            position_size_pct=req.position_size_pct or paper_inst.position_size_pct,
+            max_position_value=req.max_position_value,
+            nickname=req.nickname,
+            promoted_from_id=paper_inst.id,
+        )
+        db.add(live_inst)
+        await db.flush()
+        new_id = live_inst.id
+
+    await log_event(
+        user_id=user_id,
+        event_type=SystemEventType.STRATEGY_PROMOTED,
+        mode=TradingModeEnum.LIVE,
+        description=f"Promoted instance {instance_id} to live",
+    )
+
+    return {"id": new_id, "mode": "live", "promoted_from": instance_id}
 
 
 @router.post("/diagnose")
@@ -254,23 +411,44 @@ async def compute_indicator(req: ComputeRequest):
 
 
 @router.post("/backtest")
-async def run_backtest(req: BacktestRequest):
+async def run_backtest(req: BacktestRequest, request: Request = None):
     import pandas as pd
     import numpy as np
     from services.indicator_engine import IndicatorEngine
 
     # Load conditions from DB or inline
     if req.strategy_id is not None:
-        from db.database import get_session
-        from db.models import Strategy
-
+        user_id = getattr(request.state, "user_id", None) if request else None
         async with get_session() as session:
-            s = await session.get(Strategy, req.strategy_id)
-            if not s:
-                raise HTTPException(404, f"Strategy {req.strategy_id} not found")
-            conditions = s.conditions
-            stop_loss_pct = s.stop_loss_pct
-            take_profit_pct = s.take_profit_pct
+            # Try StrategyInstance first (new model)
+            if user_id:
+                inst_result = await session.execute(
+                    select(StrategyInstance).where(
+                        StrategyInstance.id == req.strategy_id,
+                        StrategyInstance.user_id == user_id,
+                    )
+                )
+                inst = inst_result.scalar_one_or_none()
+                if inst:
+                    t = inst.template
+                    conditions = t.conditions
+                    stop_loss_pct = t.stop_loss_pct
+                    take_profit_pct = t.take_profit_pct
+                else:
+                    # Fall back to legacy Strategy table
+                    s = await session.get(Strategy, req.strategy_id)
+                    if not s:
+                        raise HTTPException(404, f"Strategy {req.strategy_id} not found")
+                    conditions = s.conditions
+                    stop_loss_pct = s.stop_loss_pct
+                    take_profit_pct = s.take_profit_pct
+            else:
+                s = await session.get(Strategy, req.strategy_id)
+                if not s:
+                    raise HTTPException(404, f"Strategy {req.strategy_id} not found")
+                conditions = s.conditions
+                stop_loss_pct = s.stop_loss_pct
+                take_profit_pct = s.take_profit_pct
     elif req.conditions:
         conditions = [c.model_dump() for c in req.conditions]
         stop_loss_pct = 0.02

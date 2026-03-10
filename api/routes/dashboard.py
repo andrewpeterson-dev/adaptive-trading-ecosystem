@@ -50,10 +50,13 @@ def _generate_seed_equity_curve():
 
 @router.get("/equity-curve")
 async def get_equity_curve(request: Request):
-    """Get equity curve data for charting."""
+    """Get equity curve data for charting — filtered by active trading mode."""
+    mode = request.state.trading_mode
+
     async with get_session() as db:
         result = await db.execute(
             select(PortfolioSnapshot)
+            .where(PortfolioSnapshot.mode == mode)
             .order_by(PortfolioSnapshot.timestamp.asc())
             .limit(500)
         )
@@ -69,8 +72,8 @@ async def get_equity_curve(request: Request):
             }
             for s in snapshots
         ]
-        return {"equity_curve": points}
+        return {"equity_curve": points, "mode": mode.value}
 
-    # No data yet — return empty curve (no trades placed)
-    logger.info("equity_curve_empty", reason="no portfolio snapshots")
-    return {"equity_curve": []}
+    # No data yet — return seed curve for demo purposes
+    logger.info("equity_curve_seed_data", reason="no portfolio snapshots", mode=mode.value)
+    return {"equity_curve": _generate_seed_equity_curve(), "mode": mode.value}
