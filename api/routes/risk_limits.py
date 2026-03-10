@@ -6,6 +6,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
+from typing import Optional
 
 from db.database import get_session
 from db.models import UserRiskLimits, TradingModeEnum, SystemEventType
@@ -16,9 +17,9 @@ router = APIRouter()
 
 
 class UpdateRiskLimitsRequest(BaseModel):
-    daily_loss_limit: float | None = None
-    max_position_size_pct: float | None = None
-    max_open_positions: int | None = None
+    daily_loss_limit: Optional[float] = None
+    max_position_size_pct: Optional[float] = None
+    max_open_positions: Optional[int] = None
 
 
 @router.get("/limits")
