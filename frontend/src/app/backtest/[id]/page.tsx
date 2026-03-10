@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Play, Loader2, BarChart3, TrendingUp, List } from "lucide-react";
+import { Play, Loader2, BarChart3, TrendingUp, List, TrendingDown } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import type { StrategyRecord } from "@/types/strategy";
@@ -16,11 +16,13 @@ function MetricCard({ label, value, format }: { label: string; value: number; fo
     if (format === "integer") return value.toString();
     return value.toFixed(2);
   })();
-
+  const isNeg = formatted.startsWith("-");
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="text-xs text-muted-foreground uppercase tracking-wider">{label}</div>
-      <div className="text-2xl font-mono font-bold mt-1">{formatted}</div>
+      <div className={`text-2xl font-mono font-bold mt-1 ${isNeg ? "text-red-400" : ""}`}>
+        {formatted}
+      </div>
     </div>
   );
 }
@@ -29,18 +31,68 @@ function TradeRow({ trade }: { trade: BacktestTrade }) {
   const isWin = trade.pnl > 0;
   return (
     <tr className="border-b border-border/50 text-sm">
-      <td className="py-2 pr-3">{trade.entry_date}</td>
-      <td className="py-2 pr-3">{trade.exit_date}</td>
-      <td className="py-2 pr-3 font-mono">${trade.entry_price.toFixed(2)}</td>
-      <td className="py-2 pr-3 font-mono">${trade.exit_price.toFixed(2)}</td>
-      <td className={`py-2 pr-3 font-mono font-medium ${isWin ? "text-emerald-400" : "text-red-400"}`}>
+      <td className="py-2 px-4">{trade.entry_date}</td>
+      <td className="py-2 px-4">{trade.exit_date}</td>
+      <td className="py-2 px-4 font-mono">${trade.entry_price.toFixed(2)}</td>
+      <td className="py-2 px-4 font-mono">${trade.exit_price.toFixed(2)}</td>
+      <td className={`py-2 px-4 font-mono font-medium ${isWin ? "text-emerald-400" : "text-red-400"}`}>
         {isWin ? "+" : ""}${trade.pnl.toFixed(2)}
       </td>
-      <td className={`py-2 pr-3 font-mono text-xs ${isWin ? "text-emerald-400" : "text-red-400"}`}>
+      <td className={`py-2 px-4 font-mono text-xs ${isWin ? "text-emerald-400" : "text-red-400"}`}>
         {isWin ? "+" : ""}{trade.pnl_pct.toFixed(1)}%
       </td>
-      <td className="py-2 font-mono text-muted-foreground">{trade.bars_held}d</td>
+      <td className="py-2 px-4 font-mono text-muted-foreground">{trade.bars_held}d</td>
     </tr>
+  );
+}
+
+function DrawdownChart({ equityCurve, initialCapital }: {
+  equityCurve: { date: string; value: number }[];
+  initialCapital: number;
+}) {
+  let peak = initialCapital;
+  const ddSeries = equityCurve.map((pt) => {
+    if (pt.value > peak) peak = pt.value;
+    const dd = peak > 0 ? ((pt.value - peak) / peak) * 100 : 0;
+    return { date: pt.date, value: dd };
+  });
+  const minDD = Math.min(...ddSeries.map((p) => p.value));
+
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+        Drawdown — Max: {minDD.toFixed(1)}%
+      </div>
+      <svg width="100%" height="120" viewBox={`0 0 ${ddSeries.length} 120`}
+        preserveAspectRatio="none" className="text-red-400">
+        <defs>
+          <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0.05" />
+          </linearGradient>
+        </defs>
+        <polygon
+          fill="url(#ddGrad)"
+          points={[
+            `0,0`,
+            ...ddSeries.map((p, i) => {
+              const y = minDD < 0 ? (p.value / minDD) * 115 : 0;
+              return `${i},${y}`;
+            }),
+            `${ddSeries.length - 1},0`,
+          ].join(" ")}
+        />
+        <polyline
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          points={ddSeries.map((p, i) => {
+            const y = minDD < 0 ? (p.value / minDD) * 115 : 0;
+            return `${i},${y}`;
+          }).join(" ")}
+        />
+      </svg>
+    </div>
   );
 }
 
@@ -51,9 +103,8 @@ export default function BacktestPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"equity" | "metrics" | "trades">("equity");
+  const [activeTab, setActiveTab] = useState<"equity" | "drawdown" | "metrics" | "trades">("equity");
 
-  // Config
   const [symbol, setSymbol] = useState("SPY");
   const [lookbackDays, setLookbackDays] = useState(252);
   const [initialCapital, setInitialCapital] = useState(100000);
@@ -63,6 +114,8 @@ export default function BacktestPage() {
       try {
         const data = await apiFetch<StrategyRecord>(`/api/strategies/${id}`);
         setStrategy(data);
+        // Pre-fill symbol from strategy universe
+        if (data.symbols?.length) setSymbol(data.symbols[0]);
       } catch {
         // ignore
       } finally {
@@ -108,59 +161,42 @@ export default function BacktestPage() {
         <h2 className="text-xl font-semibold">Backtest</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           {strategy ? strategy.name : `Strategy #${id}`}
+          {result && (
+            <span className="ml-2 text-muted-foreground/60 text-xs">
+              · commission {((result.commission_pct ?? 0) * 100).toFixed(3)}%
+              · slippage {((result.slippage_pct ?? 0) * 100).toFixed(3)}%
+              {result.synthetic_data && " · synthetic data"}
+            </span>
+          )}
         </p>
       </div>
 
-      {/* Config form */}
+      {/* Config */}
       <div className="grid grid-cols-4 gap-3">
         <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Symbol
-          </label>
-          <input
-            type="text"
-            value={symbol}
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Symbol</label>
+          <input type="text" value={symbol}
             onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
+            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Lookback Days
-          </label>
-          <input
-            type="number"
-            value={lookbackDays}
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lookback Days</label>
+          <input type="number" value={lookbackDays}
             onChange={(e) => setLookbackDays(parseInt(e.target.value) || 252)}
-            min={30}
-            max={1000}
-            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
+            min={30} max={1000}
+            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Initial Capital
-          </label>
-          <input
-            type="number"
-            value={initialCapital}
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Initial Capital</label>
+          <input type="number" value={initialCapital}
             onChange={(e) => setInitialCapital(parseInt(e.target.value) || 100000)}
-            min={1000}
-            step={10000}
-            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
+            min={1000} step={10000}
+            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
         <div className="flex items-end">
-          <button
-            onClick={runBacktest}
-            disabled={running}
-            className="h-9 w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
-          >
-            {running ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
+          <button onClick={runBacktest} disabled={running}
+            className="h-9 w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40">
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {running ? "Running..." : "Run Backtest"}
           </button>
         </div>
@@ -169,47 +205,47 @@ export default function BacktestPage() {
       {/* Results */}
       {result && (
         <div className="space-y-4">
-          {/* Synthetic data warning */}
-          {result.synthetic_data && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-amber-400/30 bg-amber-400/5 px-3.5 py-2.5">
-              <span className="text-amber-400 text-xs font-bold uppercase tracking-widest mt-0.5">⚠ Simulated</span>
-              <p className="text-xs text-amber-300/80">
-                {result.data_warning ?? "This backtest used synthetic random-walk data. Results reflect logic correctness, not real market performance."}
-              </p>
-            </div>
-          )}
-          {/* Tab bar */}
           <div className="flex gap-1 border-b">
             {([
               { key: "equity" as const, label: "Equity Curve", icon: TrendingUp },
+              { key: "drawdown" as const, label: "Drawdown", icon: TrendingDown },
               { key: "metrics" as const, label: "Metrics", icon: BarChart3 },
               { key: "trades" as const, label: "Trades", icon: List },
             ]).map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
+              <button key={key} onClick={() => setActiveTab(key)}
                 className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === key
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
+                }`}>
                 <Icon className="h-3.5 w-3.5" />
                 {label}
               </button>
             ))}
           </div>
 
-          {/* Equity Curve Tab */}
           {activeTab === "equity" && (
-            <EquityCurveChart
-              data={result.equity_curve}
-              initialCapital={initialCapital}
-              height={400}
-            />
+            <div>
+              <EquityCurveChart data={result.equity_curve} initialCapital={initialCapital} height={400} />
+              {result.benchmark_equity_curve?.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  Strategy vs buy-and-hold: strategy return{" "}
+                  <span className={result.metrics.total_return >= 0 ? "text-emerald-400" : "text-red-400"}>
+                    {(result.metrics.total_return * 100).toFixed(1)}%
+                  </span>
+                  {" "}· buy-and-hold{" "}
+                  <span className="text-sky-400">
+                    {(((result.benchmark_equity_curve[result.benchmark_equity_curve.length - 1]?.value ?? initialCapital) / initialCapital - 1) * 100).toFixed(1)}%
+                  </span>
+                </p>
+              )}
+            </div>
           )}
 
-          {/* Metrics Tab */}
+          {activeTab === "drawdown" && (
+            <DrawdownChart equityCurve={result.equity_curve} initialCapital={initialCapital} />
+          )}
+
           {activeTab === "metrics" && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               <MetricCard label="Sharpe Ratio" value={result.metrics.sharpe_ratio} format="ratio" />
@@ -223,7 +259,6 @@ export default function BacktestPage() {
             </div>
           )}
 
-          {/* Trades Tab */}
           {activeTab === "trades" && (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <table className="w-full text-left">
@@ -231,11 +266,11 @@ export default function BacktestPage() {
                   <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
                     <th className="py-2 px-4">Entry</th>
                     <th className="py-2 px-4">Exit</th>
-                    <th className="py-2 px-4">Entry Price</th>
-                    <th className="py-2 px-4">Exit Price</th>
+                    <th className="py-2 px-4">Entry $</th>
+                    <th className="py-2 px-4">Exit $</th>
                     <th className="py-2 px-4">P&L</th>
                     <th className="py-2 px-4">Return</th>
-                    <th className="py-2 px-4">Duration</th>
+                    <th className="py-2 px-4">Bars</th>
                   </tr>
                 </thead>
                 <tbody>

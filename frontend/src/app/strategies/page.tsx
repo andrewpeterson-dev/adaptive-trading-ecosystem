@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2, Shield, ChevronRight, Pencil, Play } from "lucide-react";
+import { Trash2, Shield, ChevronRight, Pencil, Play, Copy } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 
@@ -21,25 +21,57 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
+function relativeTime(iso: string): string {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function conditionCount(s: StrategyRecord): number {
+  if (s.condition_groups?.length) {
+    return s.condition_groups.reduce((sum, g) => sum + (g.conditions?.length ?? 0), 0);
+  }
+  return s.conditions?.length ?? 0;
+}
+
+function conditionSummary(s: StrategyRecord): string {
+  if (s.condition_groups?.length) {
+    return s.condition_groups
+      .map((g) =>
+        g.conditions
+          .map((c) => `${c.indicator.toUpperCase()} ${c.operator} ${c.value}`)
+          .join(" AND ")
+      )
+      .join(" OR ");
+  }
+  return s.conditions
+    ?.map((c) => `${c.indicator.toUpperCase()} ${c.operator} ${c.value}`)
+    .join(" AND ") ?? "";
+}
+
 export default function StrategiesPage() {
   const router = useRouter();
   const [strategies, setStrategies] = useState<StrategyRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cloningId, setCloningId] = useState<number | null>(null);
 
-  const fetchStrategies = async () => {
+  const fetchStrategies = useCallback(async () => {
     try {
-      const data = await apiFetch<any>("/api/strategies/list");
+      const data = await apiFetch<{ strategies: StrategyRecord[] }>("/api/strategies/list");
       setStrategies(data.strategies || []);
     } catch {
       // offline
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchStrategies();
   }, []);
+
+  useEffect(() => { fetchStrategies(); }, [fetchStrategies]);
 
   const deleteStrategy = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -47,12 +79,61 @@ export default function StrategiesPage() {
     setStrategies((prev) => prev.filter((s) => s.id !== id));
   };
 
+  const cloneStrategy = async (s: StrategyRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCloningId(s.id);
+    // Optimistic insert
+    const tempId = -Date.now();
+    const optimistic: StrategyRecord = {
+      ...s,
+      id: tempId,
+      name: `${s.name} (copy)`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    setStrategies((prev) => [optimistic, ...prev]);
+    try {
+      const created = await apiFetch<StrategyRecord>("/api/strategies/create", {
+        method: "POST",
+        body: JSON.stringify({
+          name: `${s.name} (copy)`,
+          description: s.description,
+          condition_groups: s.condition_groups,
+          conditions: s.conditions,
+          action: s.action,
+          stop_loss_pct: s.stop_loss_pct,
+          take_profit_pct: s.take_profit_pct,
+          position_size_pct: s.position_size_pct,
+          timeframe: s.timeframe,
+          symbols: s.symbols,
+          commission_pct: s.commission_pct,
+          slippage_pct: s.slippage_pct,
+          trailing_stop_pct: s.trailing_stop_pct,
+          exit_after_bars: s.exit_after_bars,
+          cooldown_bars: s.cooldown_bars,
+          max_trades_per_day: s.max_trades_per_day,
+          max_exposure_pct: s.max_exposure_pct,
+          max_loss_pct: s.max_loss_pct,
+        }),
+      });
+      // Replace optimistic with real
+      setStrategies((prev) =>
+        prev.map((x) => (x.id === tempId ? { ...optimistic, id: created.id } : x))
+      );
+    } catch {
+      // Revert
+      setStrategies((prev) => prev.filter((x) => x.id !== tempId));
+    } finally {
+      setCloningId(null);
+    }
+  };
+
   return (
     <>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold">Saved Strategies</h2>
-          <p className="text-sm text-muted-foreground mt-0.5 whitespace-nowrap">
+          <p className="text-sm text-muted-foreground mt-0.5">
             {strategies.length} {strategies.length === 1 ? "strategy" : "strategies"} saved
           </p>
         </div>
@@ -65,17 +146,12 @@ export default function StrategiesPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">
-          Loading strategies...
-        </div>
+        <div className="text-center py-12 text-muted-foreground text-sm">Loading strategies...</div>
       ) : strategies.length === 0 ? (
         <div className="text-center py-12 border border-dashed rounded-lg">
           <Shield className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-muted-foreground">No strategies yet</p>
-          <Link
-            href="/"
-            className="text-primary text-sm mt-1 inline-block hover:underline"
-          >
+          <Link href="/" className="text-primary text-sm mt-1 inline-block hover:underline">
             Create your first strategy
           </Link>
         </div>
@@ -85,54 +161,74 @@ export default function StrategiesPage() {
             <div
               key={s.id}
               onClick={() => router.push(`/edit/${s.id}`)}
-              className="flex items-center gap-4 p-4 rounded-lg border border-border/50 bg-card hover:border-primary/30 hover:bg-card/80 transition-colors group cursor-pointer"
+              className="flex items-start gap-4 p-4 rounded-lg border border-border/50 bg-card hover:border-primary/30 hover:bg-card/80 transition-colors group cursor-pointer"
             >
               <ScoreBadge score={s.diagnostics?.score ?? 0} />
+
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                {/* Row 1: Name + badges */}
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-medium truncate">{s.name}</h3>
                   <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                     {s.action}
                   </span>
-                  <span className="text-xs text-muted-foreground font-mono">
-                    #{s.id}
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                    {s.timeframe}
                   </span>
+                  {s.id > 0 && (
+                    <span className="text-xs text-muted-foreground/50 font-mono">#{s.id}</span>
+                  )}
                 </div>
+                {/* Row 2: Condition summary */}
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {s.conditions
-                    ?.map(
-                      (c) =>
-                        `${c.indicator.toUpperCase()} ${c.operator} ${c.value}`
-                    )
-                    .join(" AND ")}
+                  {conditionSummary(s) || "No conditions defined"}
                 </p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {s.diagnostics?.total_issues > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {s.diagnostics.total_issues} issue
-                    {s.diagnostics.total_issues > 1 ? "s" : ""}
-                  </span>
+                {/* Row 3: Description */}
+                {s.description && (
+                  <p className="text-xs text-muted-foreground/70 mt-0.5 truncate italic">
+                    {s.description}
+                  </p>
                 )}
+                {/* Row 4: Metadata */}
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-[10px] text-muted-foreground/60">
+                    {conditionCount(s)} condition{conditionCount(s) !== 1 ? "s" : ""}
+                  </span>
+                  {s.diagnostics?.total_issues > 0 && (
+                    <span className="text-[10px] text-amber-400/80">
+                      {s.diagnostics.total_issues} issue{s.diagnostics.total_issues > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {s.updated_at && (
+                    <span className="text-[10px] text-muted-foreground/50">
+                      {relativeTime(s.updated_at)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/backtest/${s.id}`);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); router.push(`/backtest/${s.id}`); }}
                   className="p-1.5 rounded text-muted-foreground/40 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
                   title="Backtest"
                 >
                   <Play className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/edit/${s.id}`);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); router.push(`/edit/${s.id}`); }}
                   className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
                   title="Edit"
                 >
                   <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => cloneStrategy(s, e)}
+                  disabled={cloningId === s.id}
+                  className="p-1.5 rounded text-muted-foreground/40 hover:text-sky-400 hover:bg-sky-400/10 transition-colors disabled:opacity-30"
+                  title="Clone"
+                >
+                  <Copy className="h-4 w-4" />
                 </button>
                 <button
                   onClick={(e) => deleteStrategy(s.id, e)}
