@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -404,6 +405,9 @@ class ApiProvider(Base):
     supports_market_data = Column(Boolean, default=False)
     supports_options = Column(Boolean, default=False)
     supports_crypto = Column(Boolean, default=False)
+    supports_stocks = Column(Boolean, default=False)
+    supports_order_placement = Column(Boolean, default=False)
+    supports_positions_streaming = Column(Boolean, default=False)
     requires_secret = Column(Boolean, default=True)
     # unified_mode: one credential set covers all modes (paper, live) and data.
     # When True the UI hides the paper/live toggle — mode is selected at trade time.
@@ -446,6 +450,8 @@ class UserApiSettings(Base):
     primary_market_data_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
     fallback_market_data_ids = Column(JSON, default=list)
     primary_options_data_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
+    options_fallback_enabled = Column(Boolean, default=False)
+    options_provider_connection_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -558,4 +564,33 @@ class SystemEvent(Base):
     __table_args__ = (
         Index("ix_system_events_user_time", "user_id", "created_at"),
         Index("ix_system_events_type", "event_type"),
+    )
+
+
+class OptionSimTrade(Base):
+    """
+    Tracks real Tradier paper options orders routed through the options fallback system.
+    P&L here feeds ledgerOptionsSim. Never mix with ledgerBroker.
+    """
+    __tablename__ = "option_sim_trades"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    connection_id = Column(Integer, ForeignKey("user_api_connections.id"), nullable=False)
+    tradier_order_id = Column(String(64), nullable=True)
+    symbol = Column(String(32), nullable=False)
+    option_symbol = Column(String(32), nullable=True)
+    option_type = Column(String(4), nullable=False)
+    strike = Column(Float, nullable=False)
+    expiry = Column(Date, nullable=False)
+    qty = Column(Integer, nullable=False)
+    fill_price = Column(Float, nullable=True)
+    realized_pnl = Column(Float, nullable=True)
+    status = Column(String(16), default="pending")
+    opened_at = Column(DateTime, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_option_sim_user", "user_id"),
+        Index("ix_option_sim_status", "status"),
     )

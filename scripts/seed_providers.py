@@ -26,6 +26,9 @@ PROVIDERS = [
         supports_trading=True,
         supports_paper=True,
         supports_market_data=True,
+        supports_stocks=True,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         unified_mode=True,
         credential_note=(
             "Set Base URL to https://paper-api.alpaca.markets for paper trading or "
@@ -45,6 +48,9 @@ PROVIDERS = [
         api_type=ApiProviderType.BROKERAGE,
         supports_trading=True,
         supports_paper=True,
+        supports_stocks=True,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "host", "label": "TWS Host", "secret": False},
             {"key": "port", "label": "TWS Port", "secret": False},
@@ -59,6 +65,9 @@ PROVIDERS = [
         supports_paper=True,
         supports_market_data=True,
         supports_options=True,
+        supports_stocks=True,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "access_token", "label": "Access Token", "secret": True},
         ],
@@ -69,6 +78,9 @@ PROVIDERS = [
         api_type=ApiProviderType.BROKERAGE,
         supports_trading=True,
         supports_paper=True,
+        supports_stocks=True,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
             {"key": "api_secret", "label": "API Secret", "secret": True},
@@ -80,6 +92,9 @@ PROVIDERS = [
         api_type=ApiProviderType.BROKERAGE,
         supports_trading=True,
         supports_market_data=True,
+        supports_stocks=True,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "username", "label": "Username", "secret": False},
             {"key": "password", "label": "Password", "secret": True},
@@ -92,6 +107,10 @@ PROVIDERS = [
         supports_trading=True,
         supports_paper=True,
         supports_market_data=True,
+        supports_options=False,
+        supports_stocks=True,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         unified_mode=True,
         credential_note=(
             "One App Key / App Secret covers paper trading, live trading, and market data quotes. "
@@ -110,6 +129,9 @@ PROVIDERS = [
         api_type=ApiProviderType.CRYPTO_BROKER,
         supports_trading=True,
         supports_crypto=True,
+        supports_stocks=False,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
             {"key": "api_secret", "label": "API Secret", "secret": True},
@@ -121,6 +143,9 @@ PROVIDERS = [
         api_type=ApiProviderType.CRYPTO_BROKER,
         supports_trading=True,
         supports_crypto=True,
+        supports_stocks=False,
+        supports_order_placement=True,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
             {"key": "api_secret", "label": "API Secret", "secret": True},
@@ -133,6 +158,9 @@ PROVIDERS = [
         api_type=ApiProviderType.MARKET_DATA,
         supports_market_data=True,
         supports_options=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -142,6 +170,9 @@ PROVIDERS = [
         name="Finnhub",
         api_type=ApiProviderType.MARKET_DATA,
         supports_market_data=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -151,6 +182,9 @@ PROVIDERS = [
         name="Alpha Vantage",
         api_type=ApiProviderType.MARKET_DATA,
         supports_market_data=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -160,6 +194,9 @@ PROVIDERS = [
         name="Twelve Data",
         api_type=ApiProviderType.MARKET_DATA,
         supports_market_data=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -169,6 +206,9 @@ PROVIDERS = [
         name="IEX Cloud",
         api_type=ApiProviderType.MARKET_DATA,
         supports_market_data=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -179,6 +219,9 @@ PROVIDERS = [
         name="ORATS",
         api_type=ApiProviderType.OPTIONS_DATA,
         supports_options=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -188,6 +231,9 @@ PROVIDERS = [
         name="CBOE LiveVol",
         api_type=ApiProviderType.OPTIONS_DATA,
         supports_options=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
             {"key": "api_secret", "label": "API Secret", "secret": True},
@@ -199,6 +245,9 @@ PROVIDERS = [
         api_type=ApiProviderType.OPTIONS_DATA,
         supports_options=True,
         supports_market_data=True,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "access_token", "label": "Access Token", "secret": True},
         ],
@@ -208,6 +257,9 @@ PROVIDERS = [
         slug="benzinga",
         name="Benzinga Pro",
         api_type=ApiProviderType.NEWS,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -216,6 +268,9 @@ PROVIDERS = [
         slug="marketaux",
         name="MarketAux",
         api_type=ApiProviderType.NEWS,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -224,6 +279,9 @@ PROVIDERS = [
         slug="finnhub_news",
         name="Finnhub News",
         api_type=ApiProviderType.NEWS,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -233,6 +291,9 @@ PROVIDERS = [
         slug="fmp",
         name="Financial Modeling Prep",
         api_type=ApiProviderType.FUNDAMENTALS,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -241,6 +302,9 @@ PROVIDERS = [
         slug="intrinio",
         name="Intrinio",
         api_type=ApiProviderType.FUNDAMENTALS,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
             {"key": "api_secret", "label": "API Secret", "secret": True},
@@ -252,6 +316,9 @@ PROVIDERS = [
         name="FRED (Federal Reserve)",
         api_type=ApiProviderType.MACRO,
         requires_secret=False,
+        supports_stocks=False,
+        supports_order_placement=False,
+        supports_positions_streaming=False,
         credential_fields=[
             {"key": "api_key", "label": "API Key", "secret": False},
         ],
@@ -273,7 +340,8 @@ async def seed():
             else:
                 # Sync fields that may have been added after initial seed
                 p = existing[data["slug"]]
-                for field in ("unified_mode", "credential_note", "docs_url"):
+                for field in ("unified_mode", "credential_note", "docs_url",
+                              "supports_stocks", "supports_order_placement", "supports_positions_streaming"):
                     new_val = data.get(field)
                     if new_val is not None and getattr(p, field, None) != new_val:
                         setattr(p, field, new_val)
