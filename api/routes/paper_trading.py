@@ -37,6 +37,11 @@ class PaperTradeRequest(BaseModel):
     quantity: float
     price: Optional[float] = None   # ignored — server fetches live price
     user_confirmed: bool = True     # default true; UI submit is the gate
+    # Options fields (only needed for options orders)
+    instrument_type: str = "stock"      # "stock" | "option"
+    option_type: Optional[str] = None   # "call" | "put"
+    strike: Optional[float] = None
+    expiry: Optional[str] = None        # "YYYY-MM-DD"
 
 
 class ResetRequest(BaseModel):
@@ -145,6 +150,87 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
         raise HTTPException(status_code=400, detail="side must be BUY or SELL")
     if qty <= 0:
         raise HTTPException(status_code=400, detail="quantity must be positive")
+
+    # ── Options routing check ─────────────────────────────────────────────
+    if req.instrument_type == "option":
+        from db.models import UserApiConnection, ApiProvider
+        from services.order_router import (
+            OrderRequest as RouterOrderRequest,
+            resolve_route,
+            OptionsNotSupportedError,
+        )
+        from services.api_connection_manager import api_connection_manager as conn_manager
+        from sqlalchemy import select
+
+        routing_settings = await conn_manager.get_or_create_settings(user_id)
+        active_conn = None
+        options_conn = None
+
+        if routing_settings.active_equity_broker_id:
+            async with get_session() as _db:
+                _r = await _db.execute(
+                    select(UserApiConnection).join(ApiProvider)
+                    .where(UserApiConnection.id == routing_settings.active_equity_broker_id)
+                )
+                active_conn = _r.scalar_one_or_none()
+
+        if getattr(routing_settings, "options_provider_connection_id", None):
+            async with get_session() as _db:
+                _r = await _db.execute(
+                    select(UserApiConnection).join(ApiProvider)
+                    .where(UserApiConnection.id == routing_settings.options_provider_connection_id)
+                )
+                options_conn = _r.scalar_one_or_none()
+
+        if active_conn:
+            router_req = RouterOrderRequest(
+                symbol=req.symbol.upper(),
+                side=req.side or req.direction or "BUY",
+                qty=int(req.quantity),
+                instrument_type=req.instrument_type,
+                option_type=req.option_type,
+                strike=req.strike,
+                expiry=req.expiry,
+            )
+            try:
+                route = resolve_route(
+                    router_req,
+                    active_connection=active_conn,
+                    settings=routing_settings,
+                    options_connection=options_conn,
+                )
+            except OptionsNotSupportedError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "OPTIONS_NOT_SUPPORTED",
+                        "message": str(e),
+                        "active_broker": e.active_broker_name,
+                    },
+                )
+
+            if route.is_options_sim:
+                from db.models import OptionSimTrade
+                import datetime as dt
+                sim_trade = OptionSimTrade(
+                    user_id=user_id,
+                    connection_id=options_conn.id,
+                    symbol=req.symbol.upper(),
+                    option_type=req.option_type,
+                    strike=req.strike,
+                    expiry=dt.date.fromisoformat(req.expiry),
+                    qty=int(req.quantity),
+                    status="pending",
+                )
+                async with get_session() as _db:
+                    _db.add(sim_trade)
+                    await _db.commit()
+                    await _db.refresh(sim_trade)
+                return {
+                    "status": "options_sim_pending",
+                    "sim_trade_id": sim_trade.id,
+                    "message": f"Options order queued for {options_conn.provider.name} paper ({req.option_type} {req.strike} {req.expiry})",
+                }
 
     # Get current price
     current_price = await _fetch_current_price(symbol)
