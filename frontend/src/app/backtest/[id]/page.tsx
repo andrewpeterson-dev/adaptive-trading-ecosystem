@@ -101,7 +101,9 @@ export default function BacktestPage() {
   const id = params.id as string;
   const [strategy, setStrategy] = useState<StrategyRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [activeTab, setActiveTab] = useState<"equity" | "drawdown" | "metrics" | "trades">("equity");
 
@@ -116,8 +118,8 @@ export default function BacktestPage() {
         setStrategy(data);
         // Pre-fill symbol from strategy universe
         if (data.symbols?.length) setSymbol(data.symbols[0]);
-      } catch {
-        // ignore
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "Failed to load strategy");
       } finally {
         setLoading(false);
       }
@@ -128,6 +130,7 @@ export default function BacktestPage() {
   const runBacktest = async () => {
     setRunning(true);
     setResult(null);
+    setRunError(null);
     try {
       const data = await apiFetch<BacktestResult>("/api/strategies/backtest", {
         method: "POST",
@@ -140,8 +143,8 @@ export default function BacktestPage() {
       });
       setResult(data);
       setActiveTab("equity");
-    } catch {
-      // ignore
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Backtest failed");
     } finally {
       setRunning(false);
     }
@@ -151,6 +154,15 @@ export default function BacktestPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="rounded-lg border border-red-400/30 bg-red-400/5 p-6 text-center">
+        <p className="text-red-400 font-medium">Failed to load strategy</p>
+        <p className="text-sm text-muted-foreground mt-1">{loadError}</p>
       </div>
     );
   }
@@ -201,6 +213,13 @@ export default function BacktestPage() {
           </button>
         </div>
       </div>
+
+      {/* Run error */}
+      {runError && (
+        <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-3 text-sm text-red-400">
+          {runError}
+        </div>
+      )}
 
       {/* Results */}
       {result && (
