@@ -497,9 +497,13 @@ async def switch_mode(req: SwitchModeRequest):
 
 
 @router.get("/risk-events")
-async def get_risk_events(limit: int = 50):
-    """Get recent risk events."""
-    return _risk_manager.get_risk_events(limit=limit)
+async def get_risk_events(request: Request, limit: int = 50):
+    """Get recent risk events filtered by current trading mode."""
+    mode = getattr(request.state, "trading_mode", None)
+    events = _risk_manager.get_risk_events(limit=limit)
+    if mode and isinstance(events, list):
+        return [e for e in events if e.get("mode") == mode.value or "mode" not in e]
+    return events
 
 
 @router.post("/resume-trading")

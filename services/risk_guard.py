@@ -54,6 +54,8 @@ async def check_pre_trade(
         raise RiskViolation("Kill switch is active. All trading is halted.")
 
     # 2. Daily loss limit
+    # TODO: Trade has no user_id column — query currently sums all users' trades.
+    # Once Trade.user_id is added (requires migration), add .where(Trade.user_id == user_id).
     if limits.daily_loss_limit is not None:
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         async with get_session() as db:
