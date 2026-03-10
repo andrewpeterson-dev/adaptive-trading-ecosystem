@@ -28,6 +28,11 @@ from services.event_logger import log_event
 # Webull per-user client loader (from our webull routes)
 from api.routes.webull import _get_user_clients as _get_user_webull_client
 
+
+def _wb_mode(mode: "TradingModeEnum") -> str:
+    """Map TradingModeEnum to Webull SDK mode string."""
+    return "real" if mode == TradingModeEnum.LIVE else "paper"
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
@@ -125,15 +130,19 @@ class SwitchModeRequest(BaseModel):
 
 @router.get("/account")
 async def get_account(request: Request):
-    """Get current account information — routes by active trading mode."""
+    """Get current account information — routes by active trading mode.
+
+    Priority: Webull (any mode) → Alpaca (mode-matched) → Paper portfolio.
+    For unified_mode brokers (Webull), the same credentials serve both modes.
+    """
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
-    if user_id and mode == TradingModeEnum.LIVE:
-        # Live mode — use Webull broker
-        client = await _get_user_webull_client(user_id)
-        if client:
-            summary = client.get_account_summary()
+    # Try Webull first (works for both paper and live via unified_mode)
+    if user_id:
+        wb = await _get_user_webull_client(user_id, _wb_mode(mode))
+        if wb:
+            summary = wb.account.get_summary()
             if summary:
                 return {
                     "equity": summary.get("net_liquidation", 0),
@@ -143,14 +152,13 @@ async def get_account(request: Request):
                     "unrealized_pnl": summary.get("unrealized_pnl", 0),
                     "realized_pnl": summary.get("realized_pnl", 0),
                     "account_id": summary.get("account_id"),
-                    "mode": "LIVE",
+                    "mode": mode.value.upper(),
                     "broker": "webull",
                 }
             # Evict stale cache so next request re-authenticates with current DB credentials
             from api.routes.webull import _client_cache
-            _client_cache.pop(user_id, None)
-            logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id)
-            raise HTTPException(status_code=503, detail="Could not fetch Webull account. Your API key may be invalid — please re-enter it in Settings.")
+            _client_cache.pop((user_id, _wb_mode(mode)), None)
+            logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id, mode=mode.value)
 
     # Check for connected Alpaca broker (mode-aware)
     if user_id:
@@ -218,10 +226,11 @@ async def get_positions(request: Request):
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
-    if user_id and mode == TradingModeEnum.LIVE:
-        client = await _get_user_webull_client(user_id)
-        if client:
-            raw = client.get_positions()
+    # Try Webull first (works for both paper and live)
+    if user_id:
+        wb = await _get_user_webull_client(user_id, _wb_mode(mode))
+        if wb:
+            raw = wb.account.get_positions()
             positions = []
             for p in raw:
                 positions.append({
@@ -233,7 +242,7 @@ async def get_positions(request: Request):
                     "unrealized_pnl": p.get("unrealized_pnl", 0),
                     "unrealized_pnl_pct": p.get("unrealized_pnl_pct", 0),
                 })
-            return {"positions": positions, "mode": "live"}
+            return {"positions": positions, "mode": mode.value}
 
     # Paper/backtest mode — paper positions for authenticated users
     if user_id:
@@ -255,10 +264,10 @@ async def get_orders(request: Request, status: str = "open"):
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
-    if user_id and mode == TradingModeEnum.LIVE:
-        client = await _get_user_webull_client(user_id)
-        if client:
-            raw = client.get_open_orders()
+    if user_id:
+        wb = await _get_user_webull_client(user_id, _wb_mode(mode))
+        if wb:
+            raw = wb.account.get_open_orders()
             orders = []
             for o in raw:
                 orders.append({
@@ -271,7 +280,7 @@ async def get_orders(request: Request, status: str = "open"):
                     "filled_price": o.get("filled_price"),
                     "submitted_at": o.get("place_time", o.get("created_at", "")),
                 })
-            return {"orders": orders, "mode": "live"}
+            return {"orders": orders, "mode": mode.value}
 
     # Paper mode — no open orders mechanism yet, return empty
     if user_id and mode == TradingModeEnum.PAPER:
@@ -294,9 +303,10 @@ async def get_quotes(
     user_id = getattr(request.state, "user_id", None)
 
     if user_id:
-        client = await _get_user_webull_client(user_id)
-        if client:
-            raw = client.get_quotes(symbol_list)
+        mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+        wb = await _get_user_webull_client(user_id, _wb_mode(mode))
+        if wb:
+            raw = wb.market_data.get_quotes(symbol_list)
             quotes = []
             for sym in symbol_list:
                 q = raw.get(sym, {})
@@ -357,8 +367,9 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
 
     if user_id and mode == TradingModeEnum.LIVE:
         # Live mode — route to Webull
-        client = await _get_user_webull_client(user_id)
-        if client:
+        wb = await _get_user_webull_client(user_id, "real")
+        if wb:
+            from data.webull.trading import OrderRequest as WBOrderRequest
             # Map direction to Webull side
             side = req.direction.upper()
             if side in ("LONG", "BUY"):
@@ -368,43 +379,45 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
 
             order_type = "MKT" if req.order_type.lower() == "market" else "LMT"
 
-            result = client.place_order(
+            wb_req = WBOrderRequest(
                 symbol=req.symbol.upper(),
                 side=side,
                 qty=int(req.quantity),
                 order_type=order_type,
                 limit_price=req.limit_price,
-                user_confirmed=req.user_confirmed,
             )
+            order_result = wb.trading.place_order(wb_req, user_confirmed=req.user_confirmed)
 
-            if result.get("blocked"):
-                return {
-                    "executed": False,
-                    "blocked": True,
-                    "reason": result.get("error", "Order requires user_confirmed=true"),
-                    "mode": "live",
-                }
-
-            if result.get("success"):
-                # Log the trade event
+            if not order_result.success and not order_result.order_id:
+                if "confirm" in (order_result.error or "").lower():
+                    return {
+                        "executed": False,
+                        "blocked": True,
+                        "reason": order_result.error or "Order requires user_confirmed=true",
+                        "mode": "live",
+                    }
                 await log_event(
                     user_id=user_id,
-                    event_type=SystemEventType.TRADE_EXECUTED,
+                    event_type=SystemEventType.TRADE_FAILED,
                     mode=TradingModeEnum.LIVE,
-                    description=f"LIVE {side} {int(req.quantity)} {req.symbol.upper()}",
+                    description=f"LIVE order failed: {order_result.error or 'unknown'}",
                 )
-                return {"executed": True, "mode": "live", **result}
+                raise HTTPException(status_code=400, detail=order_result.error or "Order failed")
 
+            # Success
             await log_event(
                 user_id=user_id,
-                event_type=SystemEventType.TRADE_FAILED,
+                event_type=SystemEventType.TRADE_EXECUTED,
                 mode=TradingModeEnum.LIVE,
-                description=f"LIVE order failed: {result.get('error', 'unknown')}",
+                description=f"LIVE {side} {int(req.quantity)} {req.symbol.upper()}",
             )
-            raise HTTPException(
-                status_code=400,
-                detail=result.get("error", "Order failed"),
-            )
+            return {
+                "executed": True,
+                "mode": "live",
+                "success": True,
+                "order_id": order_result.order_id,
+                "client_order_id": order_result.client_order_id,
+            }
 
     # Paper mode — route through paper trading for authenticated users
     if user_id and mode in (TradingModeEnum.PAPER, TradingModeEnum.BACKTEST):
@@ -485,9 +498,9 @@ async def get_risk_summary(request: Request):
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
     if user_id and mode == TradingModeEnum.LIVE:
-        client = await _get_user_webull_client(user_id)
-        if client:
-            summary = client.get_account_summary()
+        wb = await _get_user_webull_client(user_id, "real")
+        if wb:
+            summary = wb.account.get_summary()
             equity = summary.get("net_liquidation", 0) if summary else 0
             settings = get_settings()
             return {

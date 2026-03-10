@@ -19,7 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Brain, ChevronRight, Loader2, Plus, X } from "lucide-react";
+import { BarChart3, Brain, ChevronRight, Loader2, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,14 +27,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface StrategyPerf {
-  sharpe: number;
-  sortino: number;
-  win_rate: number;
-  profit_factor: number;
-  max_drawdown: number;
-  total_return: number;
+  sharpe: number | null;
+  sortino: number | null;
+  win_rate: number | null;
+  profit_factor: number | null;
+  max_drawdown: number | null;
+  total_return: number | null;
   num_trades: number;
-  confidence: number;
+  confidence: number | null;
 }
 
 interface CompareStrategy {
@@ -82,17 +82,40 @@ function metricLabel(key: keyof StrategyPerf) {
   }
 }
 
+/** Safe number accessor — returns 0 for null. */
+function safeNum(v: number | null | undefined): number {
+  return v ?? 0;
+}
+
+/** Format metric value or return dash for null. */
+function safePct(n: number | null | undefined): string {
+  if (n == null) return "\u2014";
+  return fmtPct(n);
+}
+
+function safeRatio(n: number | null | undefined): string {
+  if (n == null) return "\u2014";
+  return fmtRatio(n);
+}
+
+/** Check if any strategy in the compare set has real performance data. */
+function hasAnyPerfData(strategies: CompareStrategy[]): boolean {
+  return strategies.some(
+    (s) => s.equity_curve.length > 0 || s.performance.sharpe != null
+  );
+}
+
 /** Normalise a metric to 0–100 for radar chart. */
 function normalise(
-  value: number,
+  value: number | null,
   key: keyof StrategyPerf,
   all: CompareStrategy[]
 ): number {
-  const values = all.map((s) => s.performance[key] as number);
+  const values = all.map((s) => safeNum(s.performance[key] as number | null));
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  const t = (value - min) / range;
+  const t = (safeNum(value) - min) / range;
   const m = RADAR_METRICS.find((m) => m.key === key);
   return Math.round((m?.invert ? 1 - t : t) * 100);
 }
@@ -165,12 +188,13 @@ export default function QuantPage() {
   };
 
   // Build radar data
+  const hasPerfData = hasAnyPerfData(compareData);
   const radarData =
-    compareData.length > 0
+    compareData.length > 0 && hasPerfData
       ? RADAR_METRICS.map(({ key, label }) => {
           const entry: Record<string, string | number> = { metric: label };
           compareData.forEach((s) => {
-            entry[s.name] = normalise(s.performance[key] as number, key, compareData);
+            entry[s.name] = normalise(s.performance[key] as number | null, key, compareData);
           });
           return entry;
         })
@@ -246,7 +270,19 @@ export default function QuantPage() {
         </div>
       )}
 
-      {!compareLoading && compareData.length > 0 && (
+      {!compareLoading && compareData.length > 0 && !hasPerfData && (
+        <div className="rounded-xl border border-dashed border-border/50 p-12 text-center space-y-3">
+          <BarChart3 className="h-10 w-10 text-muted-foreground/30 mx-auto" />
+          <div className="text-sm text-muted-foreground">
+            No performance data available for comparison
+          </div>
+          <p className="text-xs text-muted-foreground/60">
+            Run your strategies in paper or live mode to generate performance data.
+          </p>
+        </div>
+      )}
+
+      {!compareLoading && compareData.length > 0 && hasPerfData && (
         <>
           {/* Side-by-side equity curves */}
           <div className="rounded-xl border border-border/50 bg-card p-4">
@@ -383,13 +419,17 @@ export default function QuantPage() {
                 <div key={key}>
                   <div className="text-[10px] text-muted-foreground mb-1">{label}</div>
                   {compareData.map((s, i) => {
-                    const val = s.performance[key] as number;
+                    const val = s.performance[key];
                     const displayVal =
-                      key === "sharpe" ? val.toFixed(2) : fmtPct(val);
+                      val == null
+                        ? "\u2014"
+                        : key === "sharpe"
+                        ? (val as number).toFixed(2)
+                        : fmtPct(val as number);
                     const maxVal = Math.max(
-                      ...compareData.map((x) => Math.abs(x.performance[key] as number))
+                      ...compareData.map((x) => Math.abs(safeNum(x.performance[key] as number | null)))
                     );
-                    const barPct = maxVal > 0 ? (Math.abs(val) / maxVal) * 100 : 0;
+                    const barPct = val != null && maxVal > 0 ? (Math.abs(val as number) / maxVal) * 100 : 0;
                     const color = PALETTE[i % PALETTE.length];
                     return (
                       <div key={s.id} className="flex items-center gap-2 mb-1">
@@ -468,60 +508,61 @@ export default function QuantPage() {
                         </td>
                         <td
                           className={`py-3 px-3 text-right font-mono text-xs ${
-                            p.sharpe > 0 ? "text-emerald-400" : "text-red-400"
+                            p.sharpe == null ? "text-muted-foreground" : p.sharpe > 0 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
-                          {p.sharpe.toFixed(2)}
+                          {safeRatio(p.sharpe)}
                         </td>
                         <td
                           className={`py-3 px-3 text-right font-mono text-xs ${
-                            p.sortino > 0 ? "text-emerald-400" : "text-red-400"
+                            p.sortino == null ? "text-muted-foreground" : p.sortino > 0 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
-                          {p.sortino.toFixed(2)}
+                          {safeRatio(p.sortino)}
                         </td>
                         <td
                           className={`py-3 px-3 text-right font-mono text-xs ${
-                            p.win_rate > 0.5 ? "text-emerald-400" : "text-red-400"
+                            p.win_rate == null ? "text-muted-foreground" : p.win_rate > 0.5 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
-                          {fmtPct(p.win_rate)}
+                          {safePct(p.win_rate)}
                         </td>
                         <td
                           className={`py-3 px-3 text-right font-mono text-xs ${
-                            p.profit_factor > 1 ? "text-emerald-400" : "text-red-400"
+                            p.profit_factor == null ? "text-muted-foreground" : p.profit_factor > 1 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
-                          {p.profit_factor.toFixed(2)}
+                          {safeRatio(p.profit_factor)}
                         </td>
                         <td
                           className={`py-3 px-3 text-right font-mono text-xs ${
-                            p.max_drawdown > -0.15 ? "text-emerald-400" : "text-red-400"
+                            p.max_drawdown == null ? "text-muted-foreground" : p.max_drawdown > -0.15 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
-                          {fmtPct(p.max_drawdown)}
+                          {safePct(p.max_drawdown)}
                         </td>
                         <td
                           className={`py-3 px-3 text-right font-mono text-xs ${
-                            p.total_return > 0 ? "text-emerald-400" : "text-red-400"
+                            p.total_return == null ? "text-muted-foreground" : p.total_return > 0 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
-                          {p.total_return >= 0 ? "+" : ""}
-                          {fmtPct(p.total_return)}
+                          {p.total_return == null ? "\u2014" : `${p.total_return >= 0 ? "+" : ""}${fmtPct(p.total_return)}`}
                         </td>
                         <td className="py-3 px-3 text-right font-mono text-xs text-muted-foreground">
                           {p.num_trades}
                         </td>
                         <td
                           className={`py-3 px-3 text-right font-mono text-xs ${
-                            p.confidence >= 70
+                            p.confidence == null
+                              ? "text-muted-foreground"
+                              : p.confidence >= 70
                               ? "text-emerald-400"
                               : p.confidence >= 50
                               ? "text-amber-400"
                               : "text-red-400"
                           }`}
                         >
-                          {p.confidence.toFixed(0)}%
+                          {p.confidence != null ? `${p.confidence.toFixed(0)}%` : "\u2014"}
                         </td>
                         <td className="py-3 px-3 text-center">
                           <Link

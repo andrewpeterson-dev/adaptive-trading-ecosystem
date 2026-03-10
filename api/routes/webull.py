@@ -4,8 +4,13 @@ Webull broker routes — per-user, credential-isolated.
 Each request resolves the user's encrypted credentials from the DB and
 creates mode-appropriate clients via create_webull_clients().
 No user can see another user's account data.
+
+Credentials are loaded from BrokerCredential (legacy) first, then
+UserApiConnection (new api-connections system) as fallback.
+For unified_mode providers, the same credentials serve both paper and live.
 """
 
+import json
 import structlog
 from typing import Optional
 
@@ -17,24 +22,35 @@ from data.webull import create_webull_clients, WebullClients
 from data.webull.trading import OrderRequest as WBOrderRequest
 from db.database import get_session
 from db.encryption import decrypt_value
-from db.models import BrokerCredential, BrokerType
+from db.models import BrokerCredential, BrokerType, UserApiConnection, ApiProvider
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-# Per-user client cache: {user_id: WebullClients}
-_client_cache: dict[int, WebullClients] = {}
+# Per-user client cache keyed by (user_id, mode_str)
+_client_cache: dict[tuple[int, str], WebullClients] = {}
 
 
-async def _get_user_clients(user_id: int) -> Optional[WebullClients]:
+async def _get_user_clients(user_id: int, mode: str = "paper") -> Optional[WebullClients]:
     """
-    Load or return cached WebullClients for a user.
-    Clients are cached while connected; expired/disconnected entries are re-created.
+    Load or return cached WebullClients for a user and mode.
+
+    Args:
+        user_id: The authenticated user.
+        mode: "paper" or "real" — determines which Webull host is used.
+
+    Checks BrokerCredential (legacy) first, then UserApiConnection (new system).
+    For unified_mode providers the same credentials work for both modes.
     """
-    cached = _client_cache.get(user_id)
+    cache_key = (user_id, mode)
+    cached = _client_cache.get(cache_key)
     if cached and cached.account._h.connected:
         return cached
 
+    app_key: Optional[str] = None
+    app_secret: Optional[str] = None
+
+    # 1. Try legacy BrokerCredential table
     async with get_session() as db:
         result = await db.execute(
             select(BrokerCredential).where(
@@ -44,20 +60,44 @@ async def _get_user_clients(user_id: int) -> Optional[WebullClients]:
         )
         cred = result.scalar_one_or_none()
 
-    if not cred:
+    if cred:
+        app_key = decrypt_value(cred.encrypted_api_key)
+        app_secret = decrypt_value(cred.encrypted_api_secret)
+    else:
+        # 2. Fallback: new UserApiConnection system
+        async with get_session() as db:
+            result = await db.execute(
+                select(UserApiConnection)
+                .join(ApiProvider)
+                .where(
+                    UserApiConnection.user_id == user_id,
+                    UserApiConnection.status == "connected",
+                    ApiProvider.slug == "webull",
+                )
+            )
+            conn = result.scalar_one_or_none()
+
+        if not conn:
+            return None
+
+        try:
+            creds = json.loads(decrypt_value(conn.encrypted_credentials))
+            app_key = creds.get("app_key", "")
+            app_secret = creds.get("app_secret", "")
+        except Exception as exc:
+            logger.error("webull_cred_decrypt_failed", user_id=user_id, error=str(exc))
+            return None
+
+    if not app_key or not app_secret:
         return None
 
     try:
-        app_key    = decrypt_value(cred.encrypted_api_key)
-        app_secret = decrypt_value(cred.encrypted_api_secret)
-        mode       = "paper" if cred.is_paper else "real"
-
         clients = create_webull_clients(
             mode,
             app_key=app_key,
             app_secret=app_secret,
         )
-        _client_cache[user_id] = clients
+        _client_cache[cache_key] = clients
         logger.info("webull_clients_loaded", user_id=user_id, mode=mode)
         return clients
 
@@ -85,10 +125,17 @@ class PlaceOrderRequest(BaseModel):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+def _mode_str(request: Request) -> str:
+    """Map the middleware's TradingModeEnum to the Webull SDK's mode string."""
+    from db.models import TradingModeEnum
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+    return "real" if mode == TradingModeEnum.LIVE else "paper"
+
+
 @router.get("/status")
 async def webull_status(request: Request):
     """Check if the authenticated user has a connected Webull account."""
-    clients = await _get_user_clients(request.state.user_id)
+    clients = await _get_user_clients(request.state.user_id, _mode_str(request))
     if not clients:
         return {"connected": False}
 
@@ -106,7 +153,7 @@ async def webull_status(request: Request):
 @router.get("/account")
 async def webull_account(request: Request):
     """Account summary — only returns the authenticated user's account."""
-    clients = await _get_user_clients(request.state.user_id)
+    clients = await _get_user_clients(request.state.user_id, _mode_str(request))
     if not clients:
         return {"connected": False, "error": "No Webull credentials configured"}
 
@@ -119,7 +166,7 @@ async def webull_account(request: Request):
 @router.get("/positions")
 async def webull_positions(request: Request):
     """Open positions — only the authenticated user's positions."""
-    clients = await _get_user_clients(request.state.user_id)
+    clients = await _get_user_clients(request.state.user_id, _mode_str(request))
     if not clients:
         return {"connected": False, "positions": []}
 
@@ -129,7 +176,7 @@ async def webull_positions(request: Request):
 @router.get("/orders")
 async def webull_orders(request: Request):
     """Open orders — only the authenticated user's orders."""
-    clients = await _get_user_clients(request.state.user_id)
+    clients = await _get_user_clients(request.state.user_id, _mode_str(request))
     if not clients:
         return {"connected": False, "orders": []}
 
@@ -146,7 +193,7 @@ async def webull_quotes(
     (Quotes are public market data — auth not strictly required.)
     """
     symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    clients     = await _get_user_clients(request.state.user_id)
+    clients     = await _get_user_clients(request.state.user_id, _mode_str(request))
 
     if clients:
         quotes = clients.market_data.get_quotes(symbol_list)
@@ -180,7 +227,7 @@ async def webull_quotes(
 @router.post("/order")
 async def webull_place_order(req: PlaceOrderRequest, request: Request):
     """Place an order — requires explicit user_confirmed=True."""
-    clients = await _get_user_clients(request.state.user_id)
+    clients = await _get_user_clients(request.state.user_id, _mode_str(request))
     if not clients:
         raise HTTPException(status_code=400, detail="No Webull credentials configured")
 
@@ -219,7 +266,7 @@ async def webull_place_order(req: PlaceOrderRequest, request: Request):
 @router.delete("/order/{client_order_id}")
 async def webull_cancel_order(client_order_id: str, request: Request):
     """Cancel an open order."""
-    clients = await _get_user_clients(request.state.user_id)
+    clients = await _get_user_clients(request.state.user_id, _mode_str(request))
     if not clients:
         raise HTTPException(status_code=400, detail="No Webull credentials configured")
 

@@ -21,6 +21,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  BarChart3,
   Brain,
   ChevronDown,
   ChevronUp,
@@ -40,14 +41,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Performance {
-  sharpe: number;
-  sortino: number;
-  win_rate: number;
-  profit_factor: number;
-  max_drawdown: number;
-  total_return: number;
+  sharpe: number | null;
+  sortino: number | null;
+  win_rate: number | null;
+  profit_factor: number | null;
+  max_drawdown: number | null;
+  total_return: number | null;
   num_trades: number;
-  confidence: number;
+  confidence: number | null;
 }
 
 interface StrategyMeta {
@@ -75,7 +76,6 @@ interface IntelligenceBundle {
   regime: { current: string; confidence: number };
   equity_curve: { date: string; value: number }[];
   decision_pipeline: PipelineStage[];
-  is_simulated?: boolean;
 }
 
 interface TradeEntry {
@@ -128,7 +128,7 @@ interface FeatureImportance {
 }
 
 interface HeatmapData {
-  data: { day: string; hour: number; avg_pnl_pct: number }[];
+  data: { day: string; hour: number; avg_pnl_pct: number | null }[];
   days: string[];
   hours: number[];
 }
@@ -164,6 +164,24 @@ function fmtDate(iso: string) {
   } catch {
     return iso?.slice(0, 10) ?? "";
   }
+}
+
+/** Display a metric value or a dash if null/undefined. */
+function metricVal(
+  n: number | null | undefined,
+  type: "pct" | "ratio" | "currency" | "int" = "ratio"
+): string {
+  if (n == null) return "\u2014";
+  return fmt(n, type);
+}
+
+function EmptyState({ icon: Icon, message }: { icon: React.FC<{ className?: string }>; message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <Icon className="h-8 w-8 text-muted-foreground/30 mb-3" />
+      <p className="text-sm text-muted-foreground">{message}</p>
+    </div>
+  );
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -273,9 +291,15 @@ function PipelineFlow({ stages }: { stages: PipelineStage[] }) {
 }
 
 function HeatmapGrid({ data, days, hours }: HeatmapData) {
-  const vals = data.map((d) => d.avg_pnl_pct);
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
+  const nonNullVals = data.map((d) => d.avg_pnl_pct).filter((v): v is number => v != null);
+
+  // If all cells are null, show empty state
+  if (nonNullVals.length === 0) {
+    return <EmptyState icon={BarChart3} message="No trade data for heatmap" />;
+  }
+
+  const min = Math.min(...nonNullVals);
+  const max = Math.max(...nonNullVals);
   const range = max - min || 1;
 
   const color = (v: number) => {
@@ -304,20 +328,26 @@ function HeatmapGrid({ data, days, hours }: HeatmapData) {
               <td className="px-2 py-0.5 text-muted-foreground">{day}</td>
               {hours.map((hour) => {
                 const cell = data.find((d) => d.day === day && d.hour === hour);
-                const v = cell?.avg_pnl_pct ?? 0;
+                const v = cell?.avg_pnl_pct;
                 return (
                   <td
                     key={hour}
-                    title={`${day} ${hour}h: ${v.toFixed(2)}%`}
+                    title={v != null ? `${day} ${hour}h: ${v.toFixed(2)}%` : `${day} ${hour}h: no data`}
                     className="px-1 py-0.5"
                   >
-                    <div
-                      className="w-full h-6 rounded-sm flex items-center justify-center font-mono"
-                      style={{ backgroundColor: color(v) }}
-                    >
-                      {v > 0 ? "+" : ""}
-                      {v.toFixed(1)}
-                    </div>
+                    {v != null ? (
+                      <div
+                        className="w-full h-6 rounded-sm flex items-center justify-center font-mono"
+                        style={{ backgroundColor: color(v) }}
+                      >
+                        {v > 0 ? "+" : ""}
+                        {v.toFixed(1)}
+                      </div>
+                    ) : (
+                      <div className="w-full h-6 rounded-sm flex items-center justify-center font-mono bg-muted/20 text-muted-foreground/40">
+                        —
+                      </div>
+                    )}
                   </td>
                 );
               })}
@@ -738,7 +768,6 @@ export default function IntelligencePage() {
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isSimulated, setIsSimulated] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<TradeEntry | null>(null);
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
@@ -747,21 +776,20 @@ export default function IntelligencePage() {
       const [bundleData, tradesData, logsData, mcData, featData, hmData] =
         await Promise.all([
           apiFetch<IntelligenceBundle>(`/api/quant/strategy/${strategyId}`),
-          apiFetch<{ trades: TradeEntry[]; is_simulated?: boolean }>(`/api/quant/strategy/${strategyId}/trades`),
+          apiFetch<{ trades: TradeEntry[] }>(`/api/quant/strategy/${strategyId}/trades`),
           apiFetch<{ logs: ReasoningLog[] }>(
             `/api/quant/strategy/${strategyId}/reasoning-logs`
           ),
-          apiFetch<MonteCarlo>(`/api/quant/strategy/${strategyId}/monte-carlo`),
+          apiFetch<MonteCarlo | null>(`/api/quant/strategy/${strategyId}/monte-carlo`),
           apiFetch<FeatureImportance>(
             `/api/quant/strategy/${strategyId}/feature-importance`
           ),
           apiFetch<HeatmapData>(`/api/quant/strategy/${strategyId}/heatmap`),
         ]);
       setBundle(bundleData);
-      setIsSimulated(bundleData.is_simulated ?? tradesData.is_simulated ?? false);
       setTrades(tradesData.trades ?? []);
       setLogs(logsData.logs ?? []);
-      setMc(mcData);
+      setMc(mcData && mcData.dates ? mcData : null);
       setFeatures(featData.features ?? []);
       setHeatmap(hmData);
     } catch (err) {
@@ -809,7 +837,7 @@ export default function IntelligencePage() {
 
   const { strategy, performance: perf, regime, equity_curve, decision_pipeline } = bundle;
 
-  const totalReturn = perf.total_return;
+  const totalReturn = perf.total_return ?? null;
   const regimeColor = REGIME_COLOR[regime.current] ?? "#6b7280";
 
   // Drawdown series
@@ -876,50 +904,38 @@ export default function IntelligencePage() {
         </div>
       </div>
 
-      {/* ── Simulated data banner ─── */}
-      {isSimulated && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-400">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          <span>
-            <strong>Simulated data</strong> — no real trades have been placed yet. These figures are
-            generated from your strategy parameters to preview what the analytics look like.
-            Run the strategy in paper or live mode to see real results.
-          </span>
-        </div>
-      )}
-
       {/* ── Metrics Bar ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <MetricCard
           label="Win Rate"
-          value={fmt(perf.win_rate, "pct")}
-          positive={perf.win_rate > 0.5}
+          value={metricVal(perf.win_rate, "pct")}
+          positive={perf.win_rate != null ? perf.win_rate > 0.5 : undefined}
         />
         <MetricCard
           label="Sharpe"
-          value={perf.sharpe.toFixed(2)}
+          value={perf.sharpe != null ? perf.sharpe.toFixed(2) : "\u2014"}
           sub="annualised"
-          positive={perf.sharpe > 0}
+          positive={perf.sharpe != null ? perf.sharpe > 0 : undefined}
         />
         <MetricCard
           label="Max Drawdown"
-          value={fmt(perf.max_drawdown, "pct")}
-          positive={perf.max_drawdown > -0.15}
+          value={metricVal(perf.max_drawdown, "pct")}
+          positive={perf.max_drawdown != null ? perf.max_drawdown > -0.15 : undefined}
         />
         <MetricCard
           label="Total Return"
-          value={fmt(totalReturn, "pct")}
-          positive={totalReturn > 0}
+          value={metricVal(totalReturn, "pct")}
+          positive={totalReturn != null ? totalReturn > 0 : undefined}
         />
         <MetricCard
           label="Trades"
           value={String(perf.num_trades)}
-          sub={`PF: ${perf.profit_factor.toFixed(2)}`}
+          sub={perf.profit_factor != null ? `PF: ${perf.profit_factor.toFixed(2)}` : undefined}
         />
         <MetricCard
           label="Confidence"
-          value={`${perf.confidence.toFixed(0)}%`}
-          positive={perf.confidence > 60}
+          value={perf.confidence != null ? `${perf.confidence.toFixed(0)}%` : "\u2014"}
+          positive={perf.confidence != null ? perf.confidence > 60 : undefined}
         />
       </div>
 
@@ -959,18 +975,24 @@ export default function IntelligencePage() {
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Equity Curve
                 </div>
-                <span
-                  className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
-                    totalReturn >= 0
-                      ? "text-emerald-400 bg-emerald-400/10"
-                      : "text-red-400 bg-red-400/10"
-                  }`}
-                >
-                  {totalReturn >= 0 ? "+" : ""}
-                  {fmt(totalReturn, "pct")}
-                </span>
+                {totalReturn != null && (
+                  <span
+                    className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                      totalReturn >= 0
+                        ? "text-emerald-400 bg-emerald-400/10"
+                        : "text-red-400 bg-red-400/10"
+                    }`}
+                  >
+                    {totalReturn >= 0 ? "+" : ""}
+                    {fmt(totalReturn, "pct")}
+                  </span>
+                )}
               </div>
-              <EquityWithMarkers curve={equity_curve} trades={trades} />
+              {equity_curve.length > 0 ? (
+                <EquityWithMarkers curve={equity_curve} trades={trades} />
+              ) : (
+                <EmptyState icon={TrendingUp} message="No trading data yet" />
+              )}
             </div>
 
             {/* AI Intelligence Panel */}
@@ -980,7 +1002,7 @@ export default function IntelligencePage() {
               </div>
               <PipelineFlow stages={decision_pipeline} />
               <div className="border-t border-border/30 pt-3">
-                <ConfidenceGauge value={perf.confidence} />
+                <ConfidenceGauge value={perf.confidence ?? 0} />
               </div>
               <div className="text-[10px] text-muted-foreground">
                 {strategy.description || "No description provided."}
@@ -989,9 +1011,10 @@ export default function IntelligencePage() {
           </div>
 
           {/* Drawdown chart */}
+          {equity_curve.length > 0 && (
           <div className="rounded-xl border border-border/50 bg-card p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Drawdown — Max: {fmt(perf.max_drawdown, "pct")}
+              Drawdown — Max: {metricVal(perf.max_drawdown, "pct")}
             </div>
             <ResponsiveContainer width="100%" height={100}>
               <AreaChart data={ddSeries}>
@@ -1017,6 +1040,7 @@ export default function IntelligencePage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          )}
 
           {/* Heatmap + Feature Importance */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1069,7 +1093,7 @@ export default function IntelligencePage() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <Skeleton className="h-48" />
+                <EmptyState icon={BarChart3} message="No feature data available" />
               )}
             </div>
           </div>
@@ -1084,7 +1108,11 @@ export default function IntelligencePage() {
                 </span>
               )}
             </div>
-            {mc ? <MonteCarloChart mc={mc} /> : <Skeleton className="h-48" />}
+            {mc ? (
+              <MonteCarloChart mc={mc} />
+            ) : (
+              <EmptyState icon={Activity} message="Insufficient data for simulation" />
+            )}
           </div>
         </div>
       )}
@@ -1092,15 +1120,15 @@ export default function IntelligencePage() {
       {/* ── Trades Tab ─── */}
       {tab === "trades" && (
         <div className="space-y-4">
-          {trades.length > 0 && <TradeReplay trades={trades} />}
+          {trades.length === 0 ? (
+            <div className="rounded-xl border border-border/50 bg-card">
+              <EmptyState icon={TrendingUp} message="No trades recorded yet" />
+            </div>
+          ) : (
+          <>
+          <TradeReplay trades={trades} />
 
           <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
-            {isSimulated && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/8 border-b border-amber-500/20 text-[11px] text-amber-400">
-                <AlertTriangle className="h-3 w-3" />
-                Simulated trades — not real orders
-              </div>
-            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/20">
@@ -1190,6 +1218,8 @@ export default function IntelligencePage() {
               </tbody>
             </table>
           </div>
+          </>
+          )}
         </div>
       )}
 
@@ -1251,20 +1281,27 @@ export default function IntelligencePage() {
             </div>
           )}
 
-          {mc && (
-            <div className="rounded-xl border border-border/50 bg-card p-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Forward Risk (Monte Carlo)
-              </div>
-              <MonteCarloChart mc={mc} />
+          <div className="rounded-xl border border-border/50 bg-card p-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Forward Risk (Monte Carlo)
             </div>
-          )}
+            {mc ? (
+              <MonteCarloChart mc={mc} />
+            ) : (
+              <EmptyState icon={Activity} message="Insufficient data for simulation" />
+            )}
+          </div>
         </div>
       )}
 
       {/* ── AI Logs Tab ─── */}
       {tab === "logs" && (
         <div className="space-y-2">
+          {logs.length === 0 && (
+            <div className="rounded-xl border border-border/50 bg-card">
+              <EmptyState icon={Brain} message="No AI decisions logged yet" />
+            </div>
+          )}
           {logs.map((log) => (
             <div
               key={log.id}
