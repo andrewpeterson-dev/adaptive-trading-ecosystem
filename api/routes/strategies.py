@@ -12,6 +12,7 @@ from typing import Any, Optional, Union
 import structlog
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from db.database import get_session
 from db.models import (
     StrategyTemplate,
@@ -263,6 +264,7 @@ async def list_strategies(request: Request):
     async with get_session() as session:
         result = await session.execute(
             select(StrategyInstance)
+            .options(selectinload(StrategyInstance.template))
             .where(
                 StrategyInstance.user_id == user_id,
                 StrategyInstance.mode == mode,
@@ -270,13 +272,7 @@ async def list_strategies(request: Request):
             .order_by(StrategyInstance.created_at.desc())
         )
         instances = result.scalars().all()
-
-        # Eager-load templates (they're lazy by default)
-        strategies = []
-        for inst in instances:
-            # Access template to trigger load within session
-            _ = inst.template
-            strategies.append(_instance_to_dict(inst))
+        strategies = [_instance_to_dict(inst) for inst in instances]
 
     return {"strategies": strategies, "mode": mode.value}
 
@@ -288,7 +284,9 @@ async def get_strategy(instance_id: int, request: Request):
 
     async with get_session() as session:
         result = await session.execute(
-            select(StrategyInstance).where(
+            select(StrategyInstance)
+            .options(selectinload(StrategyInstance.template))
+            .where(
                 StrategyInstance.id == instance_id,
                 StrategyInstance.user_id == user_id,
             )
@@ -296,8 +294,6 @@ async def get_strategy(instance_id: int, request: Request):
         inst = result.scalar_one_or_none()
         if not inst:
             raise HTTPException(404, f"Strategy instance {instance_id} not found")
-        # Access template within session
-        _ = inst.template
         return _instance_to_dict(inst)
 
 
@@ -310,7 +306,9 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
 
     async with get_session() as session:
         result = await session.execute(
-            select(StrategyInstance).where(
+            select(StrategyInstance)
+            .options(selectinload(StrategyInstance.template))
+            .where(
                 StrategyInstance.id == instance_id,
                 StrategyInstance.user_id == user_id,
             )
