@@ -353,6 +353,7 @@ async def list_strategies(request: Request):
             .where(
                 StrategyInstance.user_id == user_id,
                 StrategyInstance.mode == mode,
+                StrategyInstance.is_active == True,  # noqa: E712
             )
             .order_by(StrategyInstance.created_at.desc())
         )

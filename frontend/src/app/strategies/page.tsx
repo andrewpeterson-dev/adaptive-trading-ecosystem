@@ -80,8 +80,15 @@ export default function StrategiesPage() {
 
   const deleteStrategy = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    await apiFetch(`/api/strategies/${id}`, { method: "DELETE" });
-    setStrategies((prev) => prev.filter((s) => s.id !== id));
+    // Optimistic remove
+    const prev = strategies;
+    setStrategies((s) => s.filter((x) => x.id !== id));
+    try {
+      await apiFetch(`/api/strategies/${id}`, { method: "DELETE" });
+    } catch {
+      // Revert if API fails
+      setStrategies(prev);
+    }
   };
 
   const deployStrategy = async (s: StrategyRecord, e: React.MouseEvent) => {
