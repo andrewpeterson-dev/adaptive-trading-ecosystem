@@ -3,7 +3,8 @@
 import React from "react";
 import { useTradeStore } from "@/stores/trade-store";
 
-function formatCurrency(val: number): string {
+function formatCurrency(val: number | null | undefined): string {
+  if (val == null) return "\u2014";
   return val.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",

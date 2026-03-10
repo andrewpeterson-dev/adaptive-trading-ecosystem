@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3, TrendingUp, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Settings, BarChart3, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
 import { apiFetch } from "@/lib/api/client";
 import type { OptionContract } from "@/types/trading";
@@ -243,15 +243,16 @@ function ContractSummary({
   direction: OptionDirection;
   quantity: number;
 }) {
-  const bid = contract.bid ?? 0;
-  const ask = contract.ask ?? 0;
-  const mark = (bid + ask) / 2;
+  const bid = contract.bid;
+  const ask = contract.ask;
+  const hasPricing = bid != null && ask != null;
+  const mark = hasPricing ? (bid + ask) / 2 : null;
   const premium = direction === "buy_to_open" ? ask : bid;
-  const totalCost = premium * quantity * 100;
+  const totalCost = premium != null ? premium * quantity * 100 : null;
 
   // Breakeven for buy-to-open
   const breakeven =
-    direction === "buy_to_open"
+    direction === "buy_to_open" && premium != null
       ? contract.type === "call"
         ? contract.strike + premium
         : contract.strike - premium
@@ -273,29 +274,31 @@ function ContractSummary({
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div>
           <span className="text-[10px] uppercase tracking-wider">Bid</span>{" "}
-          <span className="font-mono tabular-nums">${fmt(bid)}</span>
+          <span className="font-mono tabular-nums">{bid != null ? `$${fmt(bid)}` : "\u2014"}</span>
         </div>
         <div>
           <span className="text-[10px] uppercase tracking-wider">Ask</span>{" "}
-          <span className="font-mono tabular-nums">${fmt(ask)}</span>
+          <span className="font-mono tabular-nums">{ask != null ? `$${fmt(ask)}` : "\u2014"}</span>
         </div>
         <div>
           <span className="text-[10px] uppercase tracking-wider">Mark</span>{" "}
-          <span className="font-mono tabular-nums">${fmt(mark)}</span>
+          <span className="font-mono tabular-nums">{mark != null ? `$${fmt(mark)}` : "\u2014"}</span>
         </div>
       </div>
 
       {/* Cost + breakeven */}
-      <div className="flex items-center justify-between text-xs">
-        <div>
-          <span className="text-muted-foreground">
-            {direction === "buy_to_open" ? "Total Cost" : "Total Credit"}
+      {totalCost != null && (
+        <div className="flex items-center justify-between text-xs">
+          <div>
+            <span className="text-muted-foreground">
+              {direction === "buy_to_open" ? "Total Cost" : "Total Credit"}
+            </span>
+          </div>
+          <span className="font-mono tabular-nums font-medium">
+            ${totalCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
-        <span className="font-mono tabular-nums font-medium">
-          ${totalCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </span>
-      </div>
+      )}
       {breakeven != null && (
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Breakeven</span>

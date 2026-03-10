@@ -383,7 +383,7 @@ export function TradingChart({
   const isPositive = change != null ? change >= 0 : null;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card p-4">
+    <div className="rounded-xl border border-border/50 bg-card p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
