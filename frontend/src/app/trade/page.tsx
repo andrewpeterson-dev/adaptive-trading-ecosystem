@@ -5,11 +5,10 @@ import {
   Loader2,
   RefreshCw,
   Unplug,
-  TrendingUp,
 } from "lucide-react";
 import { StockOrderTicket } from "@/components/trading/StockOrderTicket";
-import { PositionCard } from "@/components/trading/PositionCard";
-import { TradeHistory } from "@/components/trading/TradeHistory";
+import { PositionsPanel } from "@/components/trading/PositionsPanel";
+import { TradeHistoryPanel } from "@/components/trading/TradeHistoryPanel";
 import { TradingChart } from "@/components/charts/TradingChart";
 import { MetricsBar } from "@/components/trading/MetricsBar";
 import { SymbolSearch } from "@/components/trading/SymbolSearch";
@@ -24,7 +23,6 @@ export default function TradePage() {
     symbol,
     assetMode,
     account,
-    positions,
     trades,
     loading,
     error,
@@ -114,7 +112,7 @@ export default function TradePage() {
         <div className="lg:col-span-3 space-y-5">
           <SymbolSearch />
           <TradingChart symbol={symbol} trades={tradeMarkers} />
-          <TradeHistory trades={trades} />
+          <TradeHistoryPanel />
         </div>
 
         {/* Right Column: Asset Mode + Order Ticket + Positions */}
@@ -136,39 +134,7 @@ export default function TradePage() {
           )}
 
           {/* Positions */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                Open Positions
-              </div>
-              <span className="text-xs font-mono text-muted-foreground">
-                {positions.length}
-              </span>
-            </div>
-            {positions.length === 0 ? (
-              <div className="rounded-xl border border-border/50 bg-card py-12 flex flex-col items-center gap-3 text-center px-4">
-                <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-muted/50 border border-border/50">
-                  <TrendingUp className="h-4 w-4 text-muted-foreground/50" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">
-                    No open positions
-                  </div>
-                  <div className="text-xs text-muted-foreground/60 mt-0.5">
-                    Place an order to open a position
-                  </div>
-                </div>
-              </div>
-            ) : (
-              positions.map((p) => (
-                <PositionCard
-                  key={p.symbol}
-                  position={p}
-                  onClose={refresh}
-                />
-              ))
-            )}
-          </div>
+          <PositionsPanel onClose={refresh} />
         </div>
       </div>
     </div>
