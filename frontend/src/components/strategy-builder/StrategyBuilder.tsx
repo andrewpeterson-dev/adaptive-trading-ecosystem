@@ -455,6 +455,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           method: "PATCH",
           body: JSON.stringify(payload),
         });
+        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
       } else {
         const created = await apiFetch<{ id: number }>("/api/strategies/create", {
           method: "POST",

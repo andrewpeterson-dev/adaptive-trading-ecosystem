@@ -69,6 +69,9 @@ export function StrategyBuilder() {
         const parsed = extractStrategyJson(markdown);
         if (parsed) {
           setGeneratedStrategy(parsed);
+        } else {
+          // No JSON extracted — switch to chat so user sees the full response
+          setActiveTab('chat');
         }
       }
     } catch (error) {

@@ -7,7 +7,7 @@ import { useUIContextStore } from '@/stores/ui-context-store';
 
 export function PortfolioAnalysis() {
   const [isLoading, setIsLoading] = useState(false);
-  const { addMessage, activeThreadId, setActiveThread } = useCerberusStore();
+  const { addMessage, activeThreadId, setActiveThread, setActiveTab } = useCerberusStore();
   const { pageContext } = useUIContextStore();
 
   const quickActions = [
@@ -33,6 +33,9 @@ export function PortfolioAnalysis() {
       toolCalls: [],
       createdAt: new Date().toISOString(),
     });
+
+    // Switch to chat tab so user sees the response
+    setActiveTab('chat');
 
     try {
       const response = await sendChatMessage({

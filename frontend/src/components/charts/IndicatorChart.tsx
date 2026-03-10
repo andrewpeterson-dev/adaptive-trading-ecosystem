@@ -41,7 +41,8 @@ export function IndicatorChart({
 
   if (multiLine) {
     const keys = Object.keys(multiLine);
-    const chartData = Array.from({ length: Math.max(...keys.map((k) => multiLine[k].length)) }, (_, i) => {
+    const maxLength = keys.length > 0 ? Math.max(...keys.map((k) => multiLine[k].length)) : 0;
+    const chartData = Array.from({ length: maxLength }, (_, i) => {
       const point: Record<string, number> = { index: i };
       for (const key of keys) {
         point[key] = multiLine[key][i] ?? 0;
