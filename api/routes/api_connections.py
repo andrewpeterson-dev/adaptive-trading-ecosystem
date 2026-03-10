@@ -90,6 +90,8 @@ def _settings_dict(s: UserApiSettings) -> dict:
         "primary_market_data_id": s.primary_market_data_id,
         "fallback_market_data_ids": s.fallback_market_data_ids or [],
         "primary_options_data_id": s.primary_options_data_id,
+        "options_fallback_enabled": getattr(s, "options_fallback_enabled", False),
+        "options_provider_connection_id": getattr(s, "options_provider_connection_id", None),
     }
 
 
@@ -111,21 +113,35 @@ async def _test_connection_internal(
             if slug == "alpaca":
                 api_key = credentials.get("api_key", "")
                 api_secret = credentials.get("api_secret", "")
-                base = (
-                    "https://paper-api.alpaca.markets"
-                    if conn.is_paper
-                    else "https://api.alpaca.markets"
-                )
-                resp = await client.get(
-                    f"{base}/v2/account",
-                    headers={
-                        "APCA-API-KEY-ID": api_key,
-                        "APCA-API-SECRET-KEY": api_secret,
-                    },
-                )
-                if resp.status_code == 200:
-                    return {"connected": True, "error": None}
-                return {"connected": False, "error": f"Alpaca returned {resp.status_code}"}
+
+                # Auto-detect paper vs live: try paper first, then live
+                for try_paper, base in [
+                    (True, "https://paper-api.alpaca.markets"),
+                    (False, "https://api.alpaca.markets"),
+                ]:
+                    resp = await client.get(
+                        f"{base}/v2/account",
+                        headers={
+                            "APCA-API-KEY-ID": api_key,
+                            "APCA-API-SECRET-KEY": api_secret,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        acct = resp.json()
+                        detected_paper = try_paper
+                        return {
+                            "connected": True,
+                            "error": None,
+                            "is_paper": detected_paper,
+                            "account_data": {
+                                "equity": float(acct.get("equity", 0)),
+                                "cash": float(acct.get("cash", 0)),
+                                "buying_power": float(acct.get("buying_power", 0)),
+                                "portfolio_value": float(acct.get("portfolio_value", 0)),
+                                "account_number": acct.get("account_number", ""),
+                            },
+                        }
+                return {"connected": False, "error": "Alpaca rejected credentials for both paper and live"}
 
             elif slug == "polygon":
                 api_key = credentials.get("api_key", "")
@@ -282,22 +298,51 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = test_result.get("error")
         conn.last_tested_at = datetime.utcnow()
+        # Auto-detect paper vs live for Alpaca
+        if "is_paper" in test_result and provider.slug == "alpaca":
+            conn.is_paper = test_result["is_paper"]
         await db.commit()
         await db.refresh(conn)
         conn.provider = provider
 
-    # Discover and store broker accounts for Webull
-    if provider.slug == "webull":
-        try:
-            from services.account_discovery import discover_and_store_accounts
-            await discover_and_store_accounts(
-                user_id=user_id,
-                connection_id=conn.id,
-                app_key=req.credentials.get("app_key", ""),
-                app_secret=req.credentials.get("app_secret", ""),
-            )
-        except Exception as exc:
-            logger.warning("account_discovery_failed_on_connect", error=str(exc))
+    # Sync account data after successful connection
+    if test_result.get("connected"):
+        # Sync Alpaca account data into PaperPortfolio
+        acct_data = test_result.get("account_data")
+        if acct_data and provider.slug == "alpaca":
+            try:
+                from db.models import PaperPortfolio
+                async with get_session() as db:
+                    result = await db.execute(
+                        select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+                    )
+                    portfolio = result.scalar_one_or_none()
+                    if portfolio:
+                        portfolio.cash = acct_data["cash"]
+                        portfolio.initial_capital = acct_data["equity"]
+                    else:
+                        db.add(PaperPortfolio(
+                            user_id=user_id,
+                            cash=acct_data["cash"],
+                            initial_capital=acct_data["equity"],
+                        ))
+                    await db.commit()
+                logger.info("alpaca_account_synced", user_id=user_id, equity=acct_data["equity"])
+            except Exception as exc:
+                logger.warning("alpaca_account_sync_failed", error=str(exc))
+
+        # Discover and store broker accounts for Webull
+        if provider.slug == "webull":
+            try:
+                from services.account_discovery import discover_and_store_accounts
+                await discover_and_store_accounts(
+                    user_id=user_id,
+                    connection_id=conn.id,
+                    app_key=req.credentials.get("app_key", ""),
+                    app_secret=req.credentials.get("app_secret", ""),
+                )
+            except Exception as exc:
+                logger.warning("account_discovery_failed_on_connect", error=str(exc))
 
     logger.info(
         "connection_created",
@@ -528,3 +573,54 @@ async def set_market_data_priority(req: SetMarketDataPriorityRequest, request: R
     )
     conflicts = await api_connection_manager.get_conflicts(user_id)
     return {**_settings_dict(settings), "conflicts": conflicts}
+
+
+class SetOptionsFallbackRequest(BaseModel):
+    enabled: bool
+    provider_connection_id: Optional[int] = None
+
+
+@router.post("/api-settings/options-fallback")
+async def set_options_fallback(req: SetOptionsFallbackRequest, request: Request):
+    """Enable or disable the options fallback provider."""
+    user_id = _require_user(request)
+
+    if req.enabled:
+        if not req.provider_connection_id:
+            raise HTTPException(
+                status_code=400,
+                detail="provider_connection_id is required when enabling options fallback",
+            )
+        async with get_session() as db:
+            r = await db.execute(
+                select(UserApiConnection)
+                .join(ApiProvider)
+                .where(
+                    UserApiConnection.id == req.provider_connection_id,
+                    UserApiConnection.user_id == user_id,
+                )
+            )
+            conn = r.scalar_one_or_none()
+            if not conn:
+                raise HTTPException(status_code=404, detail="Connection not found")
+            from services.order_router import validate_options_provider
+            try:
+                validate_options_provider(conn)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+    async with get_session() as db:
+        r = await db.execute(
+            select(UserApiSettings).where(UserApiSettings.user_id == user_id)
+        )
+        s = r.scalar_one_or_none()
+        if not s:
+            s = UserApiSettings(user_id=user_id, fallback_market_data_ids=[])
+            db.add(s)
+        s.options_fallback_enabled = req.enabled
+        s.options_provider_connection_id = req.provider_connection_id if req.enabled else None
+        await db.commit()
+        await db.refresh(s)
+
+    conflicts = await api_connection_manager.get_conflicts(user_id)
+    return {**_settings_dict(s), "conflicts": conflicts}

@@ -113,6 +113,8 @@ app.include_router(intelligence_routes.router, prefix="/api/intelligence", tags=
 app.include_router(paper_routes.router, prefix="/api/paper", tags=["Paper Trading"])
 app.include_router(admin_routes.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(api_connections_routes.router, prefix="/api/v2", tags=["api-connections"])
+from api.routes import ledger as ledger_routes
+app.include_router(ledger_routes.router, prefix="/api/v2", tags=["ledger"])
 app.include_router(market_routes.router, prefix="/api/market", tags=["Market Data"])
 app.include_router(ws_routes.router, prefix="/ws", tags=["WebSocket"])
 app.include_router(ai_chat.router, prefix="/api/ai", tags=["Cerberus"])
