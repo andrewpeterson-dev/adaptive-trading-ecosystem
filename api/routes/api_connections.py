@@ -286,6 +286,19 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         await db.refresh(conn)
         conn.provider = provider
 
+    # Discover and store broker accounts for Webull
+    if provider.slug == "webull":
+        try:
+            from services.account_discovery import discover_and_store_accounts
+            await discover_and_store_accounts(
+                user_id=user_id,
+                connection_id=conn.id,
+                app_key=req.credentials.get("app_key", ""),
+                app_secret=req.credentials.get("app_secret", ""),
+            )
+        except Exception as exc:
+            logger.warning("account_discovery_failed_on_connect", error=str(exc))
+
     logger.info(
         "connection_created",
         user_id=user_id,

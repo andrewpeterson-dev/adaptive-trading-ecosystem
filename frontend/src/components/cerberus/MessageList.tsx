@@ -1,8 +1,18 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import type { ConversationMessageItem } from '@/types/cerberus';
 import { CitationList } from './CitationList';
+import { ImplementButton } from './ImplementButton';
+import { extractJson, parseStrategySpec } from '@/lib/strategy-spec';
+
+function hasValidStrategyJson(text: string | null): boolean {
+  if (!text) return false;
+  const jsonStr = extractJson(text);
+  if (!jsonStr) return false;
+  const result = parseStrategySpec(text);
+  return result.ok;
+}
 
 interface MessageListProps {
   messages: ConversationMessageItem[];
@@ -44,6 +54,9 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
           >
             <p className="whitespace-pre-wrap">{msg.contentMd}</p>
             {msg.citations.length > 0 && <CitationList citations={msg.citations} />}
+            {msg.role === 'assistant' && hasValidStrategyJson(msg.contentMd) && (
+              <ImplementButton messageContent={msg.contentMd!} />
+            )}
           </div>
         </div>
       ))}

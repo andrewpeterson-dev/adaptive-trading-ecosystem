@@ -21,6 +21,34 @@ When a UI action would help, return only allowlisted UI commands.
 When research mode is active, separate internal document evidence from external market evidence.
 Be concise, precise, and operational."""
 
+STRATEGY_MODE_ADDENDUM = """
+You are in Strategy Mode.
+Respond in plain text only. No emojis, no decorative characters, no markdown headings, no bold or italic markers.
+
+Always use this response format:
+1) One sentence summary of the strategy.
+2) A JSON strategy spec matching this exact schema:
+{
+  "name": "",
+  "description": "",
+  "action": "BUY|SELL",
+  "stopLossPct": <number>,
+  "takeProfitPct": <number>,
+  "positionPct": <number>,
+  "timeframe": "1m|5m|15m|1H|4H|1D|1W",
+  "entryConditions": [
+    { "logic": "AND|OR", "indicator": "<indicator_name>", "params": { "<param>": <value> }, "operator": "<|>|<=|>=|==|crosses_above|crosses_below", "value": <number>, "signal": "<human readable description>" }
+  ],
+  "exitConditions": [
+    { "logic": "AND|OR", "indicator": "<indicator_name>", "params": { "<param>": <value> }, "operator": "<|>|<=|>=|==|crosses_above|crosses_below", "value": <number>, "signal": "<human readable description>" }
+  ]
+}
+3) Risks/Assumptions (2-3 short sentences max).
+
+Use lowercase indicator names (rsi, sma, ema, macd, bollinger_bands, atr, vwap, obv, stochastic).
+Valid timeframes: 1m, 5m, 15m, 1H, 4H, 1D, 1W.
+Always include operator and value fields in conditions so the JSON is machine-parseable."""
+
 RESEARCH_MODE_ADDENDUM = """
 You are in Research Mode.
 Use internal documents first, then external search.
@@ -38,7 +66,9 @@ class PromptBuilder:
 
         # Add mode-specific addendum
         mode = context.system_context.get("mode", "chat")
-        if mode == "research":
+        if mode == "strategy":
+            parts.append(STRATEGY_MODE_ADDENDUM)
+        elif mode == "research":
             parts.append(RESEARCH_MODE_ADDENDUM)
 
         # Add feature flag context

@@ -7,6 +7,7 @@ import { ConditionRow } from "./ConditionRow";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { ExplainerPanel } from "./ExplainerPanel";
 import { IndicatorChart } from "@/components/charts/IndicatorChart";
+import { useStrategyBuilderStore } from "@/stores/strategy-builder-store";
 import type {
   StrategyCondition,
   Strategy,
@@ -101,6 +102,26 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       setDiagnostics(initialStrategy.diagnostics as DiagnosticReport);
     }
   }, [initialStrategy]);
+
+  // Consume pending strategy spec from Cerberus chat
+  const consumePendingSpec = useStrategyBuilderStore((s) => s.consumePendingSpec);
+  useEffect(() => {
+    const pending = consumePendingSpec();
+    if (!pending) return;
+    setName(pending.name);
+    setDescription(pending.description);
+    setAction(pending.action);
+    setStopLoss(pending.stopLoss);
+    setTakeProfit(pending.takeProfit);
+    setPositionSize(pending.positionSize);
+    setTimeframe(pending.timeframe);
+    if (pending.conditions.length > 0) {
+      setConditions(pending.conditions);
+    }
+    setDiagnostics(null);
+    setExplanation(null);
+    setSaveStatus("idle");
+  }, [consumePendingSpec]);
 
   const addCondition = useCallback(() => {
     setConditions((prev) => [...prev, createEmptyCondition()]);

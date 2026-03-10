@@ -1,0 +1,169 @@
+/**
+ * Parse and validate a strategy JSON spec from Cerberus chat responses.
+ * Maps the spec to Strategy Builder fields.
+ */
+
+import type { Action, Operator, StrategyCondition } from "@/types/strategy";
+
+export interface StrategySpec {
+  name: string;
+  description: string;
+  action: "BUY" | "SELL";
+  stopLossPct: number;
+  takeProfitPct: number;
+  positionPct: number;
+  timeframe: string;
+  entryConditions: SpecCondition[];
+  exitConditions?: SpecCondition[];
+}
+
+export interface SpecCondition {
+  logic: "AND" | "OR";
+  indicator: string;
+  params: Record<string, number>;
+  operator?: string;
+  value?: number;
+  signal?: string;
+}
+
+const VALID_ACTIONS: Action[] = ["BUY", "SELL"];
+const VALID_TIMEFRAMES = ["1m", "5m", "15m", "1H", "4H", "1D", "1W"];
+const VALID_OPERATORS: Operator[] = [">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"];
+
+/**
+ * Extract a JSON object from a text response.
+ * Handles both fenced code blocks and raw JSON.
+ */
+export function extractJson(text: string): string | null {
+  // Try fenced code block first
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+
+  // Try raw JSON object (first { to last matching })
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") depth--;
+    if (depth === 0) return text.slice(start, i + 1);
+  }
+  return null;
+}
+
+export type ParseResult =
+  | { ok: true; spec: StrategySpec }
+  | { ok: false; error: string };
+
+/**
+ * Parse and validate a strategy spec from raw text.
+ */
+export function parseStrategySpec(text: string): ParseResult {
+  const jsonStr = extractJson(text);
+  if (!jsonStr) return { ok: false, error: "No JSON found in response" };
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonStr);
+  } catch {
+    return { ok: false, error: "Invalid strategy JSON" };
+  }
+
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return { ok: false, error: "Invalid strategy JSON" };
+  }
+
+  const obj = raw as Record<string, unknown>;
+
+  // Required string fields
+  if (typeof obj.name !== "string" || !obj.name.trim()) {
+    return { ok: false, error: "Missing or empty 'name'" };
+  }
+  if (typeof obj.action !== "string" || !VALID_ACTIONS.includes(obj.action as Action)) {
+    return { ok: false, error: "Invalid 'action' (must be BUY or SELL)" };
+  }
+  if (typeof obj.timeframe !== "string" || !VALID_TIMEFRAMES.includes(obj.timeframe)) {
+    return { ok: false, error: `Invalid 'timeframe' (must be one of: ${VALID_TIMEFRAMES.join(", ")})` };
+  }
+
+  // Required number fields
+  for (const field of ["stopLossPct", "takeProfitPct", "positionPct"] as const) {
+    if (typeof obj[field] !== "number" || obj[field] <= 0) {
+      return { ok: false, error: `Invalid '${field}' (must be a positive number)` };
+    }
+  }
+
+  // Entry conditions
+  if (!Array.isArray(obj.entryConditions) || obj.entryConditions.length === 0) {
+    return { ok: false, error: "Missing or empty 'entryConditions'" };
+  }
+
+  for (const cond of obj.entryConditions) {
+    if (typeof cond !== "object" || !cond) {
+      return { ok: false, error: "Invalid entry condition" };
+    }
+    if (typeof cond.indicator !== "string" || !cond.indicator.trim()) {
+      return { ok: false, error: "Entry condition missing 'indicator'" };
+    }
+  }
+
+  const spec: StrategySpec = {
+    name: obj.name as string,
+    description: (typeof obj.description === "string" ? obj.description : ""),
+    action: obj.action as "BUY" | "SELL",
+    stopLossPct: obj.stopLossPct as number,
+    takeProfitPct: obj.takeProfitPct as number,
+    positionPct: obj.positionPct as number,
+    timeframe: obj.timeframe as string,
+    entryConditions: obj.entryConditions as SpecCondition[],
+    exitConditions: Array.isArray(obj.exitConditions) ? obj.exitConditions as SpecCondition[] : [],
+  };
+
+  return { ok: true, spec };
+}
+
+/**
+ * Convert a StrategySpec to Strategy Builder fields.
+ */
+export function specToBuilderFields(spec: StrategySpec): {
+  name: string;
+  description: string;
+  action: Action;
+  stopLoss: number;
+  takeProfit: number;
+  positionSize: number;
+  timeframe: string;
+  conditions: StrategyCondition[];
+} {
+  let condId = 0;
+  const conditions: StrategyCondition[] = spec.entryConditions.map((c) => {
+    condId++;
+    const operator = (
+      c.operator && VALID_OPERATORS.includes(c.operator as Operator)
+        ? c.operator
+        : "<"
+    ) as Operator;
+    const value = typeof c.value === "number" ? c.value : 0;
+
+    return {
+      id: `spec_${Date.now()}_${condId}`,
+      indicator: c.indicator.toLowerCase(),
+      operator,
+      value,
+      params: c.params || {},
+      action: spec.action,
+    };
+  });
+
+  return {
+    name: spec.name,
+    description: spec.description,
+    action: spec.action,
+    stopLoss: spec.stopLossPct,
+    takeProfit: spec.takeProfitPct,
+    positionSize: spec.positionPct,
+    timeframe: spec.timeframe,
+    conditions,
+  };
+}
