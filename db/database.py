@@ -87,6 +87,9 @@ async def init_db():
     # Seed static reference data (idempotent — skips existing rows)
     from scripts.seed_providers import seed as _seed_providers
     await _seed_providers()
+    # Seed demo strategies so Quant Intelligence features are immediately visible
+    from scripts.seed_demo_strategies import seed as _seed_demo_strategies
+    await _seed_demo_strategies()
 
 
 async def close_db():

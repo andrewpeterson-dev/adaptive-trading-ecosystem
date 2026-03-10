@@ -26,6 +26,7 @@ from db.database import get_db
 from db.models import (
     MarketRegimeRecord,
     Strategy,
+    StrategyInstance,
     StrategySnapshot,
     StrategyTemplate,
     TradeEvent,
@@ -459,13 +460,28 @@ def _profit_heatmap(trades: List[Dict], rng: random.Random) -> Dict:
 
 
 async def _load_strategy(strategy_id: int, db: AsyncSession):
-    """Load strategy from StrategyTemplate or Strategy table."""
-    result = await db.execute(
-        select(StrategyTemplate).where(StrategyTemplate.id == strategy_id)
+    """Load strategy by ID.
+
+    Resolution order (matches how frontend references strategies):
+    1. StrategyInstance.id → returns its template (real user strategies)
+    2. Strategy.id — legacy / demo seeded strategies (user_id=NULL)
+
+    We deliberately skip direct StrategyTemplate.id lookup to avoid ID-space
+    collisions with Strategy demo records.
+    """
+    from sqlalchemy.orm import selectinload as _selectinload
+
+    # 1. Try StrategyInstance.id → return its template (user-created strategies)
+    inst_result = await db.execute(
+        select(StrategyInstance)
+        .options(_selectinload(StrategyInstance.template))
+        .where(StrategyInstance.id == strategy_id)
     )
-    s = result.scalar_one_or_none()
-    if s:
-        return s
+    inst = inst_result.scalar_one_or_none()
+    if inst and inst.template:
+        return inst.template
+
+    # 2. Fall back to legacy/demo Strategy table
     result = await db.execute(select(Strategy).where(Strategy.id == strategy_id))
     return result.scalar_one_or_none()
 
