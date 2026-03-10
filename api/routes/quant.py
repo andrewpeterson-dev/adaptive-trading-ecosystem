@@ -516,8 +516,10 @@ async def get_strategy_intelligence(
             {"date": s.timestamp.strftime("%Y-%m-%d"), "value": s.equity}
             for s in snapshots
         ]
+        is_simulated = False
     else:
         equity_curve = _synthetic_equity_curve(strategy, rng)
+        is_simulated = True
 
     perf = _compute_performance(equity_curve, params)
 
@@ -559,6 +561,7 @@ async def get_strategy_intelligence(
     ]
 
     return {
+        "is_simulated": is_simulated,
         "strategy": {
             "id": strategy.id,
             "name": strategy.name,
@@ -624,8 +627,9 @@ async def get_strategy_trades(
     else:
         rng = _seeded_rng(strategy_id)
         trades = _synthetic_trades(strategy, rng, n=min(limit, 35))
+        return {"trades": trades, "total": len(trades), "is_simulated": True}
 
-    return {"trades": trades, "total": len(trades)}
+    return {"trades": trades, "total": len(trades), "is_simulated": False}
 
 
 @router.get("/strategy/{strategy_id}/reasoning-logs")

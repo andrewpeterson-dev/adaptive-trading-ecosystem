@@ -125,11 +125,12 @@ export default function QuantPage() {
 
   // Load available strategies
   useEffect(() => {
-    apiFetch<StrategyRecord[]>("/api/strategies/list")
+    apiFetch<{ strategies: StrategyRecord[] } | StrategyRecord[]>("/api/strategies/list")
       .then((data) => {
-        setStrategies(data ?? []);
+        const list = Array.isArray(data) ? data : data.strategies ?? [];
+        setStrategies(list);
         // Auto-select up to 3
-        const ids = (data ?? []).slice(0, 3).map((s) => s.id);
+        const ids = list.slice(0, 3).map((s) => s.id);
         setSelectedIds(ids);
       })
       .catch((e) => setError(e.message))

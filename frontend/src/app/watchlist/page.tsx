@@ -201,6 +201,28 @@ export default function WatchlistPage() {
         </div>
       )}
 
+      {/* No quote data for tracked symbols */}
+      {!loading && symbols.length > 0 && quotes && quotes.length === 0 && (
+        <div className="text-center py-16 space-y-3">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto">
+            <Activity className="h-5 w-5 text-amber-400/60" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">No quote data available</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Could not fetch prices for {symbols.join(", ")}. The market may be closed or the API is unavailable.
+            </p>
+          </div>
+          <button
+            onClick={refresh}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-primary hover:bg-primary/10 border border-primary/20 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Empty */}
       {!loading && symbols.length === 0 && (
         <div className="text-center py-24 space-y-4">

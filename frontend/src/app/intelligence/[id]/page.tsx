@@ -75,6 +75,7 @@ interface IntelligenceBundle {
   regime: { current: string; confidence: number };
   equity_curve: { date: string; value: number }[];
   decision_pipeline: PipelineStage[];
+  is_simulated?: boolean;
 }
 
 interface TradeEntry {
@@ -737,6 +738,7 @@ export default function IntelligencePage() {
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isSimulated, setIsSimulated] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<TradeEntry | null>(null);
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
@@ -745,7 +747,7 @@ export default function IntelligencePage() {
       const [bundleData, tradesData, logsData, mcData, featData, hmData] =
         await Promise.all([
           apiFetch<IntelligenceBundle>(`/api/quant/strategy/${strategyId}`),
-          apiFetch<{ trades: TradeEntry[] }>(`/api/quant/strategy/${strategyId}/trades`),
+          apiFetch<{ trades: TradeEntry[]; is_simulated?: boolean }>(`/api/quant/strategy/${strategyId}/trades`),
           apiFetch<{ logs: ReasoningLog[] }>(
             `/api/quant/strategy/${strategyId}/reasoning-logs`
           ),
@@ -756,6 +758,7 @@ export default function IntelligencePage() {
           apiFetch<HeatmapData>(`/api/quant/strategy/${strategyId}/heatmap`),
         ]);
       setBundle(bundleData);
+      setIsSimulated(bundleData.is_simulated ?? tradesData.is_simulated ?? false);
       setTrades(tradesData.trades ?? []);
       setLogs(logsData.logs ?? []);
       setMc(mcData);
@@ -872,6 +875,18 @@ export default function IntelligencePage() {
           )}
         </div>
       </div>
+
+      {/* ── Simulated data banner ─── */}
+      {isSimulated && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            <strong>Simulated data</strong> — no real trades have been placed yet. These figures are
+            generated from your strategy parameters to preview what the analytics look like.
+            Run the strategy in paper or live mode to see real results.
+          </span>
+        </div>
+      )}
 
       {/* ── Metrics Bar ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1080,6 +1095,12 @@ export default function IntelligencePage() {
           {trades.length > 0 && <TradeReplay trades={trades} />}
 
           <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+            {isSimulated && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/8 border-b border-amber-500/20 text-[11px] text-amber-400">
+                <AlertTriangle className="h-3 w-3" />
+                Simulated trades — not real orders
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/20">
