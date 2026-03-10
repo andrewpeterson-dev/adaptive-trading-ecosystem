@@ -69,6 +69,18 @@ async def get_session():
             raise
 
 
+async def get_db():
+    """FastAPI dependency that yields an AsyncSession."""
+    factory = _get_session_factory()
+    async with factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
 async def init_db():
     async with _get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

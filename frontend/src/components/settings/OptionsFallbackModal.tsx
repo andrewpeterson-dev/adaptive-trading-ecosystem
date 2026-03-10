@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { apiFetch } from "@/lib/api/client";
 import type { OptionsNotSupportedPayload } from "@/hooks/useOptionsGuard";
-import type { ApiConnection, ApiProvider } from "./ApiConnectionCard";
-import { ConnectApiModal } from "./ConnectApiModal";
+import type { ApiConnection } from "./ApiConnectionCard";
+import { ConnectApiModal, type ApiProvider } from "./ConnectApiModal";
 
 interface Props {
   payload: OptionsNotSupportedPayload;

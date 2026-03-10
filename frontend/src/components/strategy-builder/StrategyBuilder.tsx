@@ -18,6 +18,7 @@ import type {
   StrategyExplanation,
   Action,
 } from "@/types/strategy";
+import { useStrategyBuilderStore } from "@/stores/strategy-builder-store";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,30 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     symbols, commissionPct, slippagePct,
     cooldownBars, maxTradesPerDay, maxExposurePct, maxLossPct,
   ]);
+
+  // ── Consume pending spec from Cerberus chat ────────────────────────────
+
+  useEffect(() => {
+    if (mode !== "create") return;
+    const spec = useStrategyBuilderStore.getState().consumePendingSpec();
+    if (!spec) return;
+    setName(spec.name);
+    setDescription(spec.description);
+    setAction(spec.action);
+    setStopLoss(spec.stopLoss);
+    setTakeProfit(spec.takeProfit);
+    setPositionSize(spec.positionSize);
+    setTimeframe(spec.timeframe);
+    if (spec.conditions.length > 0) {
+      setConditionGroups([{
+        id: genId(),
+        label: "Group A",
+        conditions: spec.conditions,
+      }]);
+    }
+    localStorage.removeItem(DRAFT_KEY);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Populate from initialStrategy (edit mode) ──────────────────────────
 
@@ -524,9 +549,11 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               ? "Saving..."
               : saveStatus === "saved"
                 ? "Saved ✓"
-                : mode === "edit"
-                  ? "Update Strategy"
-                  : "Save"}
+                : saveStatus === "error"
+                  ? "Failed — Retry"
+                  : mode === "edit"
+                    ? "Update Strategy"
+                    : "Save"}
           </button>
         </div>
       </div>
