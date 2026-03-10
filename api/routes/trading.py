@@ -5,8 +5,10 @@ Routes delegate to the user's Webull client when Webull credentials exist,
 otherwise fall back to the Alpaca-based ExecutionEngine.
 """
 
+import json
 from typing import Optional
 
+import httpx
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -15,7 +17,11 @@ from sqlalchemy import select
 
 from config.settings import get_settings, TradingMode
 from db.database import get_session
-from db.models import PaperPortfolio, PaperPosition, Trade, TradingModeEnum, SystemEventType
+from db.models import (
+    PaperPortfolio, PaperPosition, Trade, TradingModeEnum, SystemEventType,
+    UserApiConnection, ApiProvider,
+)
+from db.encryption import decrypt_value
 from risk.manager import RiskManager
 from services.event_logger import log_event
 
@@ -37,6 +43,66 @@ def _get_executor():
         from engine.executor import ExecutionEngine
         _executor = ExecutionEngine(risk_manager=_risk_manager)
     return _executor
+
+
+async def _fetch_alpaca_account(user_id: int, mode: TradingModeEnum) -> Optional[dict]:
+    """
+    Fetch live account data from a connected Alpaca API for this user.
+    Only returns data if the connection's paper/live status matches the active mode.
+    """
+    try:
+        async with get_session() as db:
+            result = await db.execute(
+                select(UserApiConnection)
+                .join(ApiProvider)
+                .where(
+                    UserApiConnection.user_id == user_id,
+                    UserApiConnection.status == "connected",
+                    ApiProvider.slug == "alpaca",
+                )
+            )
+            conn = result.scalar_one_or_none()
+            if not conn:
+                return None
+
+            # Mode mismatch: paper API in live mode or vice versa → skip
+            conn_is_paper = conn.is_paper if conn.is_paper is not None else True
+            if mode == TradingModeEnum.LIVE and conn_is_paper:
+                return None
+            if mode == TradingModeEnum.PAPER and not conn_is_paper:
+                return None
+
+            creds = json.loads(decrypt_value(conn.encrypted_credentials))
+            api_key = creds.get("api_key", "")
+            api_secret = creds.get("api_secret", "")
+            base = (
+                "https://paper-api.alpaca.markets"
+                if conn_is_paper
+                else "https://api.alpaca.markets"
+            )
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{base}/v2/account",
+                headers={
+                    "APCA-API-KEY-ID": api_key,
+                    "APCA-API-SECRET-KEY": api_secret,
+                },
+            )
+            if resp.status_code == 200:
+                acct = resp.json()
+                return {
+                    "equity": float(acct.get("equity", 0)),
+                    "cash": float(acct.get("cash", 0)),
+                    "buying_power": float(acct.get("buying_power", 0)),
+                    "portfolio_value": float(acct.get("portfolio_value", 0)),
+                    "unrealized_pnl": float(acct.get("unrealized_pl", 0)),
+                    "account_number": acct.get("account_number", ""),
+                    "broker": "alpaca",
+                }
+    except Exception as exc:
+        logger.warning("alpaca_account_fetch_failed", user_id=user_id, error=str(exc))
+    return None
 
 
 class ExecuteSignalRequest(BaseModel):
@@ -86,7 +152,26 @@ async def get_account(request: Request):
             logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id)
             raise HTTPException(status_code=503, detail="Could not fetch Webull account. Your API key may be invalid — please re-enter it in Settings.")
 
-    # Paper mode or no broker — use paper portfolio
+    # Check for connected Alpaca broker (mode-aware)
+    if user_id:
+        alpaca_account = await _fetch_alpaca_account(user_id, mode)
+        if alpaca_account:
+            return {**alpaca_account, "mode": mode.value.upper()}
+
+    # Live mode but no live broker found — tell user
+    if user_id and mode == TradingModeEnum.LIVE:
+        return {
+            "equity": 0,
+            "cash": 0,
+            "buying_power": 0,
+            "portfolio_value": 0,
+            "broker": "none",
+            "mode": "LIVE",
+            "not_configured": True,
+            "message": "No live trading account configured. Connect a live API key in Settings.",
+        }
+
+    # Paper mode — use paper portfolio
     if user_id:
         async with get_session() as session:
             result = await session.execute(
@@ -95,7 +180,6 @@ async def get_account(request: Request):
             portfolio = result.scalar_one_or_none()
 
             if not portfolio:
-                # Auto-create paper portfolio for users without a broker
                 portfolio = PaperPortfolio(
                     user_id=user_id,
                     cash=1_000_000.0,

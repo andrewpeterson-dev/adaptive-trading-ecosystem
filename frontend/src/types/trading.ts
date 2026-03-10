@@ -7,6 +7,8 @@ export interface Account {
   status?: string;
   broker?: string;
   mode?: string;
+  not_configured?: boolean;
+  message?: string;
 }
 
 export interface Position {

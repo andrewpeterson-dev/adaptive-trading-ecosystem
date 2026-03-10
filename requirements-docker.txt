@@ -16,6 +16,9 @@ psycopg2-binary==2.9.9
 redis==5.0.1
 aioredis==2.0.1
 
+# Task Queue
+celery[redis]>=5.4.0
+
 # Data & ML
 pandas==2.1.4
 numpy==1.26.3
