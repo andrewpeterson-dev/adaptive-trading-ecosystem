@@ -567,6 +567,55 @@ class SystemEvent(Base):
     )
 
 
+class TradeEvent(Base):
+    """Individual trade with AI decision metadata — signals, confidence, regime, reasoning."""
+    __tablename__ = "trade_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strategy_id = Column(Integer, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    symbol = Column(String(16), nullable=False)
+    direction = Column(String(8), nullable=False)  # long / short
+    entry_price = Column(Float, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    entry_time = Column(DateTime, nullable=True)
+    exit_time = Column(DateTime, nullable=True)
+    pnl = Column(Float, nullable=True)
+    pnl_pct = Column(Float, nullable=True)
+    confidence = Column(Float, nullable=True)
+    regime = Column(String(32), nullable=True)
+    signals_json = Column(JSON, default=list)    # list of signal description strings
+    approved = Column(Boolean, default=True)
+    rejection_reason = Column(Text, nullable=True)
+    reasoning_text = Column(Text, nullable=True)
+    model_name = Column(String(64), nullable=True)
+
+    __table_args__ = (
+        Index("ix_trade_events_strategy_time", "strategy_id", "timestamp"),
+    )
+
+
+class StrategySnapshot(Base):
+    """Periodic performance snapshot for a strategy — drives equity curve & rolling metrics."""
+    __tablename__ = "strategy_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strategy_id = Column(Integer, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    equity = Column(Float, nullable=False)
+    realized_pnl = Column(Float, nullable=True)
+    num_trades = Column(Integer, default=0)
+    win_rate = Column(Float, nullable=True)
+    sharpe = Column(Float, nullable=True)
+    max_drawdown = Column(Float, nullable=True)
+    regime = Column(String(32), nullable=True)
+    metrics_json = Column(JSON, default=dict)
+
+    __table_args__ = (
+        Index("ix_strategy_snapshot_strategy_time", "strategy_id", "timestamp"),
+    )
+
+
 class OptionSimTrade(Base):
     """
     Tracks real Tradier paper options orders routed through the options fallback system.

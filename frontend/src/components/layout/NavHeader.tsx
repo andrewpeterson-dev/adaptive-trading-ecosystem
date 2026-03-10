@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/portfolio", label: "Portfolio" },
   { href: "/models", label: "Models" },
   { href: "/risk", label: "Risk" },
+  { href: "/quant", label: "Quant" },
 ];
 
 export function NavHeader() {

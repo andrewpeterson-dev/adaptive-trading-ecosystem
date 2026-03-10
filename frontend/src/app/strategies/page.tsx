@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2, Shield, ChevronRight, Pencil, Play, Copy } from "lucide-react";
+import { Trash2, Shield, ChevronRight, Pencil, Play, Copy, Brain } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 
@@ -229,6 +229,13 @@ export default function StrategiesPage() {
                   title="Clone"
                 >
                   <Copy className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); router.push(`/intelligence/${s.id}`); }}
+                  className="p-1.5 rounded text-muted-foreground/40 hover:text-purple-400 hover:bg-purple-400/10 transition-colors"
+                  title="Intelligence"
+                >
+                  <Brain className="h-4 w-4" />
                 </button>
                 <button
                   onClick={(e) => deleteStrategy(s.id, e)}

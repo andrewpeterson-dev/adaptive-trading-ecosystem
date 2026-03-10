@@ -23,6 +23,7 @@ from api.routes import ws as ws_routes
 from api.routes import ai_chat, ai_tools, documents as documents_routes
 from api.routes import user_mode as user_mode_routes
 from api.routes import risk_limits as risk_limits_routes
+from api.routes import quant as quant_routes
 from api.middleware.auth import JWTAuthMiddleware
 from api.middleware.trading_mode import TradingModeMiddleware
 from config.settings import get_settings
@@ -122,6 +123,7 @@ app.include_router(ai_tools.router, prefix="/api/ai/tools", tags=["Cerberus Tool
 app.include_router(documents_routes.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(user_mode_routes.router, prefix="/api/user", tags=["User"])
 app.include_router(risk_limits_routes.router, prefix="/api/risk", tags=["Risk"])
+app.include_router(quant_routes.router, prefix="/api/quant", tags=["Quant Intelligence"])
 
 
 @app.get("/health")
