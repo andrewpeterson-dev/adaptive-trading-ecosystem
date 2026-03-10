@@ -19,7 +19,4 @@ RUN mkdir -p logs artifacts
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=5 --start-period=120s \
-    CMD curl --fail http://localhost:${PORT:-8000}/health || exit 1
-
 CMD ["sh", "-c", "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
