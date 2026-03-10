@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useModeResetListener } from "@/hooks/useTradingMode";
 
 interface UsePollingOptions<T> {
   fetcher: () => Promise<T>;
@@ -52,6 +53,8 @@ export function usePolling<T>({
     setLoading(true);
     doFetch();
   }, [doFetch]);
+
+  useModeResetListener(refresh);
 
   return { data, loading, error, refresh };
 }
