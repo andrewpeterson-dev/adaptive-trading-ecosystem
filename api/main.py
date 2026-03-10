@@ -65,13 +65,29 @@ def _validate_env(settings) -> None:
                 auto_loop=settings.auto_loop_enabled)
 
 
+async def _init_db_with_retry() -> None:
+    """Initialize DB in the background with retries so startup never blocks the healthcheck."""
+    for attempt in range(10):
+        try:
+            await init_db()
+            logger.info("db_initialized", attempt=attempt + 1)
+            return
+        except Exception as exc:
+            wait = min(5 * (attempt + 1), 30)
+            logger.warning("db_init_retry", attempt=attempt + 1, error=str(exc), retry_in=wait)
+            await asyncio.sleep(wait)
+    logger.error("db_init_failed_permanently")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
     settings = get_settings()
     _validate_env(settings)
     logger.info("starting_trading_ecosystem", mode=settings.trading_mode.value)
-    await init_db()
+    # Non-blocking: DB init runs in background so /health responds immediately.
+    # This prevents Railway's 30s healthcheck from expiring during DB connection.
+    asyncio.create_task(_init_db_with_retry())
     yield
     await close_db()
     logger.info("trading_ecosystem_stopped")
