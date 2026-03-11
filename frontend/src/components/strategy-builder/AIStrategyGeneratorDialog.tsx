@@ -291,26 +291,28 @@ export function AIStrategyGeneratorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl border border-border/70 bg-card p-0">
-        <div className="border-b border-border/60 bg-[linear-gradient(135deg,rgba(14,165,233,0.12),rgba(249,115,22,0.06),rgba(16,185,129,0.08))] px-6 py-6">
-          <DialogHeader className="p-0">
-            <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-400">
-              <BrainCircuit className="h-3.5 w-3.5" />
-              Cerberus Bot Designer
-            </div>
-            <DialogTitle className="text-2xl tracking-tight text-foreground">
-              Build a trading bot with Cerberus
-            </DialogTitle>
-            <DialogDescription className="max-w-3xl pt-2 text-sm leading-6 text-muted-foreground">
-              Cerberus should do more than one-shot prompt expansion. Give it a real brief, let it
-              translate the idea into executable builder logic, review the assumptions, and only
-              then apply the draft to the strategy builder.
-            </DialogDescription>
-          </DialogHeader>
-        </div>
+      <DialogContent className="top-2 h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] max-w-6xl translate-y-0 overflow-hidden border border-border/70 bg-card p-0 sm:top-4 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)]">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="shrink-0 border-b border-border/60 bg-[linear-gradient(135deg,rgba(14,165,233,0.12),rgba(249,115,22,0.06),rgba(16,185,129,0.08))] px-6 py-6 pr-16">
+            <DialogHeader className="p-0">
+              <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-400">
+                <BrainCircuit className="h-3.5 w-3.5" />
+                Cerberus Bot Designer
+              </div>
+              <DialogTitle className="text-2xl tracking-tight text-foreground">
+                Build a trading bot with Cerberus
+              </DialogTitle>
+              <DialogDescription className="max-w-3xl pt-2 text-sm leading-6 text-muted-foreground">
+                Cerberus should do more than one-shot prompt expansion. Give it a real brief, let it
+                translate the idea into executable builder logic, review the assumptions, and only
+                then apply the draft to the strategy builder.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
-        <div className="grid gap-0 xl:grid-cols-[1.35fr,0.95fr]">
-          <div className="space-y-5 p-6">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="grid min-h-full gap-0 xl:grid-cols-[1.35fr,0.95fr]">
+              <div className="space-y-5 p-6">
             <div className="space-y-2">
               <label className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Primary Objective
@@ -458,154 +460,156 @@ export function AIStrategyGeneratorDialog({
                 {isGenerating ? "Cerberus is designing..." : "Generate with Cerberus"}
               </button>
             </div>
-          </div>
-
-          <div className="border-t xl:border-t-0 xl:border-l border-border/60 bg-muted/10 p-6">
-            <div className="rounded-3xl border border-border/60 bg-card/80 p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <Bot className="h-4 w-4 text-primary" />
-                <div>
-                  <div className="text-sm font-semibold text-foreground">Cerberus Workflow</div>
-                  <div className="text-xs text-muted-foreground">
-                    Builder-first, bot-aware, and explicit about assumptions.
-                  </div>
-                </div>
               </div>
 
-              <div className="space-y-3">
-                {PROCESS_STEPS.map((step) => {
-                  const Icon = step.icon;
-                  return (
-                    <div
-                      key={step.title}
-                      className="rounded-2xl border border-border/50 bg-muted/15 p-3"
-                    >
-                      <div className="mb-1 flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5 text-primary" />
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground">
-                          {step.title}
+              <div className="border-t border-border/60 bg-muted/10 p-6 xl:border-l xl:border-t-0">
+                <div className="rounded-3xl border border-border/60 bg-card/80 p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">Cerberus Workflow</div>
+                      <div className="text-xs text-muted-foreground">
+                        Builder-first, bot-aware, and explicit about assumptions.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {PROCESS_STEPS.map((step) => {
+                      const Icon = step.icon;
+                      return (
+                        <div
+                          key={step.title}
+                          className="rounded-2xl border border-border/50 bg-muted/15 p-3"
+                        >
+                          <div className="mb-1 flex items-center gap-2">
+                            <Icon className="h-3.5 w-3.5 text-primary" />
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground">
+                              {step.title}
+                            </div>
+                          </div>
+                          <p className="text-xs leading-5 text-muted-foreground">{step.copy}</p>
                         </div>
-                      </div>
-                      <p className="text-xs leading-5 text-muted-foreground">{step.copy}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-border/60 bg-card/80 p-5">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Draft Preview
-              </div>
-
-              {!preview && (
-                <div className="space-y-3 text-sm text-muted-foreground">
-                  <p>
-                    Cerberus will return:
-                  </p>
-                  <ul className="space-y-2 text-xs leading-5">
-                    <li>- A concrete strategy summary</li>
-                    <li>- Executable indicator logic for the builder</li>
-                    <li>- Feature signals and explicit assumptions</li>
-                    <li>- A draft you can inspect before saving or deploying</li>
-                  </ul>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
 
-              {preview && generationSummary && (
-                <div className="space-y-4">
-                  {preview.fallbackReason && (
-                    <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs leading-5 text-amber-500">
-                      {preview.fallbackReason}
-                    </div>
-                  )}
-
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                    <div className="text-lg font-semibold tracking-tight text-foreground">
-                      {generationSummary.name}
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {generationSummary.overview || "Cerberus produced a builder-ready draft."}
-                    </p>
+                <div className="mt-5 rounded-3xl border border-border/60 bg-card/80 p-5">
+                  <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Draft Preview
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-border/50 bg-muted/15 p-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Action
-                      </div>
-                      <div className="mt-1 text-sm font-medium text-foreground">
-                        {generationSummary.action}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-border/50 bg-muted/15 p-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Timeframe
-                      </div>
-                      <div className="mt-1 text-sm font-medium text-foreground">
-                        {generationSummary.timeframe}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-border/50 bg-muted/15 p-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Symbols
-                    </div>
-                    <div className="mt-1 text-sm font-medium text-foreground">
-                      {generationSummary.symbols}
-                    </div>
-                  </div>
-
-                  {featureSignals.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Feature Signals
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {featureSignals.map((signal) => (
-                          <span
-                            key={signal}
-                            className="rounded-full border border-border/60 bg-muted/15 px-2.5 py-1 text-xs text-foreground"
-                          >
-                            {signal}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {assumptions.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Assumptions
-                      </div>
-                      <ul className="space-y-2 text-xs leading-5 text-muted-foreground">
-                        {assumptions.map((assumption) => (
-                          <li key={assumption}>- {assumption}</li>
-                        ))}
+                  {!preview && (
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <p>
+                        Cerberus will return:
+                      </p>
+                      <ul className="space-y-2 text-xs leading-5">
+                        <li>- A concrete strategy summary</li>
+                        <li>- Executable indicator logic for the builder</li>
+                        <li>- Feature signals and explicit assumptions</li>
+                        <li>- A draft you can inspect before saving or deploying</li>
                       </ul>
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-2 pt-2 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={handleApplyDraft}
-                      className="app-button-primary flex-1 justify-center"
-                    >
-                      Apply Draft to Builder
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleContinueInCerberus}
-                      className="app-button-secondary flex-1 justify-center"
-                    >
-                      Continue in Cerberus
-                    </button>
-                  </div>
+                  {preview && generationSummary && (
+                    <div className="space-y-4">
+                      {preview.fallbackReason && (
+                        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs leading-5 text-amber-500">
+                          {preview.fallbackReason}
+                        </div>
+                      )}
+
+                      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                        <div className="text-lg font-semibold tracking-tight text-foreground">
+                          {generationSummary.name}
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          {generationSummary.overview || "Cerberus produced a builder-ready draft."}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-border/50 bg-muted/15 p-3">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Action
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-foreground">
+                            {generationSummary.action}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-border/50 bg-muted/15 p-3">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Timeframe
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-foreground">
+                            {generationSummary.timeframe}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-border/50 bg-muted/15 p-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Symbols
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-foreground">
+                          {generationSummary.symbols}
+                        </div>
+                      </div>
+
+                      {featureSignals.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Feature Signals
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {featureSignals.map((signal) => (
+                              <span
+                                key={signal}
+                                className="rounded-full border border-border/60 bg-muted/15 px-2.5 py-1 text-xs text-foreground"
+                              >
+                                {signal}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {assumptions.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Assumptions
+                          </div>
+                          <ul className="space-y-2 text-xs leading-5 text-muted-foreground">
+                            {assumptions.map((assumption) => (
+                              <li key={assumption}>- {assumption}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={handleApplyDraft}
+                          className="app-button-primary flex-1 justify-center"
+                        >
+                          Apply Draft to Builder
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleContinueInCerberus}
+                          className="app-button-secondary flex-1 justify-center"
+                        >
+                          Continue in Cerberus
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
