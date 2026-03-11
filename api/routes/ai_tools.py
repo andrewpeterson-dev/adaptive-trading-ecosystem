@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -33,26 +33,26 @@ router = APIRouter()
 
 
 class CreateBotRequest(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=200)
     strategy_json: dict[str, Any]
 
 
 class GenerateStrategyRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., min_length=1, max_length=20_000)
 
 
 class ConfirmTradeRequest(BaseModel):
-    proposalId: str
+    proposalId: str = Field(..., min_length=1)
 
 
 class ExecuteTradeRequest(BaseModel):
-    proposalId: str
-    confirmationToken: str
+    proposalId: str = Field(..., min_length=1)
+    confirmationToken: str = Field(..., min_length=1)
 
 
 class DeployFromStrategyRequest(BaseModel):
     strategy_id: int
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -62,6 +62,91 @@ def _coerce_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _clean_name(value: str | None) -> str:
+    return str(value or "").strip()
+
+
+def _normalized_symbols(config: dict[str, Any]) -> list[str]:
+    raw = config.get("symbols")
+    if not isinstance(raw, list):
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        symbol = str(item or "").strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        normalized.append(symbol)
+    return normalized
+
+
+def _iter_condition_candidates(config: dict[str, Any]):
+    raw_conditions = config.get("conditions")
+    if isinstance(raw_conditions, list):
+        for condition in raw_conditions:
+            if isinstance(condition, dict):
+                yield condition
+
+    raw_groups = config.get("condition_groups")
+    if isinstance(raw_groups, list):
+        for group in raw_groups:
+            if not isinstance(group, dict):
+                continue
+            conditions = group.get("conditions")
+            if not isinstance(conditions, list):
+                continue
+            for condition in conditions:
+                if isinstance(condition, dict):
+                    yield condition
+
+
+def _is_executable_condition(condition: dict[str, Any]) -> bool:
+    indicator = str(condition.get("indicator", "") or "").strip()
+    operator = str(condition.get("operator", "") or "").strip()
+    return bool(indicator and operator)
+
+
+def _validate_bot_config(config: dict[str, Any] | None) -> tuple[dict[str, Any], list[str]]:
+    normalized = normalize_bot_config(config)
+    errors: list[str] = []
+
+    action = str(normalized.get("action", "") or "").strip().upper()
+    if action not in {"BUY", "SELL", "SHORT"}:
+        errors.append("action must be BUY, SELL, or SHORT")
+    else:
+        normalized["action"] = action
+
+    timeframe = str(normalized.get("timeframe", "") or "").strip()
+    if not timeframe:
+        errors.append("timeframe is required")
+    else:
+        normalized["timeframe"] = timeframe
+
+    symbols = _normalized_symbols(normalized)
+    if not symbols:
+        errors.append("at least one symbol is required")
+    else:
+        normalized["symbols"] = symbols
+
+    if not any(_is_executable_condition(condition) for condition in _iter_condition_candidates(normalized)):
+        errors.append("at least one executable condition is required")
+
+    return normalized, errors
+
+
+def _ensure_valid_bot_config(
+    config: dict[str, Any] | None,
+    *,
+    error_detail: str = "Bot configuration is not deployable",
+) -> dict[str, Any]:
+    normalized, errors = _validate_bot_config(config)
+    if errors:
+        raise HTTPException(status_code=400, detail=f"{error_detail}: {', '.join(errors)}")
+    return normalized
 
 
 def _extract_probability_score(payload: dict[str, Any]) -> float | None:
@@ -313,8 +398,11 @@ async def _load_strategy_record(session, user_id: int, strategy_id: int) -> dict
 async def generate_strategy(body: GenerateStrategyRequest):
     """Generate a structured strategy from a plain-language prompt."""
     service = AIStrategyService()
+    prompt = body.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required")
     try:
-        return await service.generate(body.prompt)
+        return await service.generate(prompt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -325,14 +413,23 @@ async def create_bot(request: Request, body: CreateBotRequest):
     user_id = request.state.user_id
     bot_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
-    config = normalize_bot_config(body.strategy_json)
+    bot_name = _clean_name(body.name)
+    if not bot_name:
+        raise HTTPException(status_code=400, detail="Bot name is required")
+
+    try:
+        config = _ensure_valid_bot_config(body.strategy_json, error_detail="Bot configuration is invalid")
+    except HTTPException as exc:
+        logger.warning("bot_create_rejected", user_id=user_id, name=bot_name, detail=exc.detail)
+        raise
+
     learning = config.get("learning") or {}
 
     async with get_session() as session:
         bot = CerberusBot(
             id=bot_id,
             user_id=user_id,
-            name=body.name,
+            name=bot_name,
             status=BotStatus.DRAFT,
             learning_enabled=bool(learning.get("enabled", True)),
             learning_status_json={
@@ -356,10 +453,10 @@ async def create_bot(request: Request, body: CreateBotRequest):
         session.add(bot)
         session.add(version)
 
-    logger.info("bot_created", bot_id=bot_id, user_id=user_id, name=body.name)
+    logger.info("bot_created", bot_id=bot_id, user_id=user_id, name=bot_name)
     return {
         "bot_id": bot_id,
-        "name": body.name,
+        "name": bot_name,
         "status": "draft",
         "version": 1,
     }
@@ -421,8 +518,25 @@ async def create_bot_from_strategy(request: Request, body: DeployFromStrategyReq
 
         bot_id = str(uuid.uuid4())
         version_id = str(uuid.uuid4())
-        bot_name = body.name or strategy_record["name"]
-        config = strategy_record_to_bot_config(strategy_record)
+        requested_name = _clean_name(body.name)
+        strategy_name = _clean_name(strategy_record.get("name"))
+        bot_name = requested_name or strategy_name
+        if not bot_name:
+            raise HTTPException(status_code=400, detail="Bot name is required")
+
+        try:
+            config = _ensure_valid_bot_config(
+                strategy_record_to_bot_config(strategy_record),
+                error_detail="Saved strategy cannot be deployed",
+            )
+        except HTTPException as exc:
+            logger.warning(
+                "bot_deploy_from_strategy_rejected",
+                strategy_id=body.strategy_id,
+                user_id=user_id,
+                detail=exc.detail,
+            )
+            raise
 
         bot = CerberusBot(
             id=bot_id,
@@ -534,6 +648,35 @@ async def deploy_bot(bot_id: str, request: Request):
         bot = result.scalar_one_or_none()
         if not bot:
             raise HTTPException(status_code=404, detail="Bot not found")
+
+        if not bot.current_version_id:
+            logger.warning("bot_deploy_missing_version", bot_id=bot_id, user_id=user_id)
+            raise HTTPException(status_code=400, detail="Bot has no deployable version")
+
+        version_result = await session.execute(
+            select(CerberusBotVersion).where(
+                CerberusBotVersion.id == bot.current_version_id,
+                CerberusBotVersion.bot_id == bot.id,
+            )
+        )
+        version = version_result.scalar_one_or_none()
+        if not version:
+            logger.warning(
+                "bot_deploy_version_not_found",
+                bot_id=bot_id,
+                user_id=user_id,
+                version_id=bot.current_version_id,
+            )
+            raise HTTPException(status_code=400, detail="Bot has no deployable version")
+
+        try:
+            config = _ensure_valid_bot_config(version.config_json)
+        except HTTPException as exc:
+            logger.warning("bot_deploy_rejected", bot_id=bot_id, user_id=user_id, detail=exc.detail)
+            raise
+
+        version.config_json = config
+        bot.learning_enabled = bool((config.get("learning") or {}).get("enabled", False))
         bot.status = BotStatus.RUNNING
 
     logger.info("bot_deployed", bot_id=bot_id, user_id=user_id)

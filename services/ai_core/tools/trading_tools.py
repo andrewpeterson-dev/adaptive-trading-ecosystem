@@ -5,12 +5,14 @@ Live trade execution requires explicit user confirmation via the proposal flow.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 import uuid
 
 import structlog
 
 from services.ai_core.tools.base import ToolDefinition, ToolCategory, ToolSideEffect
 from services.ai_core.tools.registry import get_registry
+from services.strategy_learning_engine import normalize_bot_config
 
 logger = structlog.get_logger(__name__)
 
@@ -18,6 +20,83 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
+
+
+def _clean_name(value: str | None) -> str:
+    return str(value or "").strip()
+
+
+def _normalized_symbols(config: dict) -> list[str]:
+    raw = config.get("symbols")
+    if not isinstance(raw, list):
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        symbol = str(item or "").strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        normalized.append(symbol)
+    return normalized
+
+
+def _iter_condition_candidates(config: dict):
+    raw_conditions = config.get("conditions")
+    if isinstance(raw_conditions, list):
+        for condition in raw_conditions:
+            if isinstance(condition, dict):
+                yield condition
+
+    raw_groups = config.get("condition_groups")
+    if isinstance(raw_groups, list):
+        for group in raw_groups:
+            if not isinstance(group, dict):
+                continue
+            conditions = group.get("conditions")
+            if not isinstance(conditions, list):
+                continue
+            for condition in conditions:
+                if isinstance(condition, dict):
+                    yield condition
+
+
+def _prepare_bot_config(config: dict | None) -> tuple[dict | None, str | None]:
+    if not isinstance(config, dict):
+        return None, "Bot config is required"
+
+    normalized = normalize_bot_config(config)
+    errors: list[str] = []
+
+    action = str(normalized.get("action", "") or "").strip().upper()
+    if action not in {"BUY", "SELL", "SHORT"}:
+        errors.append("action must be BUY, SELL, or SHORT")
+    else:
+        normalized["action"] = action
+
+    timeframe = str(normalized.get("timeframe", "") or "").strip()
+    if not timeframe:
+        errors.append("timeframe is required")
+    else:
+        normalized["timeframe"] = timeframe
+
+    symbols = _normalized_symbols(normalized)
+    if not symbols:
+        errors.append("at least one symbol is required")
+    else:
+        normalized["symbols"] = symbols
+
+    if not any(
+        str(condition.get("indicator", "") or "").strip()
+        and str(condition.get("operator", "") or "").strip()
+        for condition in _iter_condition_candidates(normalized)
+    ):
+        errors.append("at least one executable condition is required")
+
+    if errors:
+        return None, f"Bot configuration is invalid: {', '.join(errors)}"
+    return normalized, None
 
 async def _create_bot(
     user_id: int,
@@ -29,6 +108,16 @@ async def _create_bot(
     from db.database import get_session
     from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
 
+    bot_name = _clean_name(name)
+    if not bot_name:
+        return {"error": "Bot name is required"}
+
+    normalized_config, error = _prepare_bot_config(config)
+    if error:
+        logger.warning("tool_create_bot_rejected", user_id=user_id, name=bot_name, detail=error)
+        return {"error": error, "name": bot_name}
+
+    learning = normalized_config.get("learning") or {}
     bot_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
 
@@ -36,15 +125,24 @@ async def _create_bot(
         bot = CerberusBot(
             id=bot_id,
             user_id=user_id,
-            name=name,
+            name=bot_name,
             status=BotStatus.DRAFT,
             current_version_id=version_id,
+            learning_enabled=bool(learning.get("enabled", True)),
+            learning_status_json={
+                "status": "monitoring" if learning.get("enabled", True) else "disabled",
+                "summary": learning.get("last_summary", "Bot created and waiting for deployment."),
+                "metrics": {},
+                "featureSignals": normalized_config.get("feature_signals", []),
+                "parameterAdjustments": [],
+                "methods": learning.get("methods", []),
+            },
         )
         version = CerberusBotVersion(
             id=version_id,
             bot_id=bot_id,
             version_number=1,
-            config_json=config or {"strategy_name": strategy_name},
+            config_json=normalized_config,
             diff_summary="Initial version",
             created_by="cerberus",
         )
@@ -54,7 +152,7 @@ async def _create_bot(
     return {
         "bot_id": bot_id,
         "version_id": version_id,
-        "name": name,
+        "name": bot_name,
         "status": "draft",
         "version_number": 1,
     }
@@ -79,6 +177,26 @@ async def _modify_bot(
         if not bot:
             return {"error": "Bot not found or not owned by user", "bot_id": bot_id}
 
+        base_config: dict = {}
+        if bot.current_version_id:
+            current_version_stmt = select(CerberusBotVersion).where(
+                CerberusBotVersion.id == bot.current_version_id,
+                CerberusBotVersion.bot_id == bot_id,
+            )
+            current_version_result = await session.execute(current_version_stmt)
+            current_version = current_version_result.scalar_one_or_none()
+            if current_version and isinstance(current_version.config_json, dict):
+                base_config = deepcopy(current_version.config_json)
+
+        merged_config = deepcopy(base_config)
+        if config:
+            merged_config.update(config)
+
+        normalized_config, error = _prepare_bot_config(merged_config if merged_config else config)
+        if error:
+            logger.warning("tool_modify_bot_rejected", user_id=user_id, bot_id=bot_id, detail=error)
+            return {"error": error, "bot_id": bot_id}
+
         # Get next version number
         ver_stmt = select(func.max(CerberusBotVersion.version_number)).where(
             CerberusBotVersion.bot_id == bot_id
@@ -91,12 +209,13 @@ async def _modify_bot(
             id=version_id,
             bot_id=bot_id,
             version_number=max_ver + 1,
-            config_json=config or {},
+            config_json=normalized_config,
             diff_summary=diff_summary or "Updated via Cerberus",
             created_by="cerberus",
         )
         session.add(version)
         bot.current_version_id = version_id
+        bot.learning_enabled = bool((normalized_config.get("learning") or {}).get("enabled", False))
 
     return {
         "bot_id": bot_id,
@@ -124,7 +243,7 @@ async def _resume_bot(user_id: int, bot_id: str) -> dict:
 async def _set_bot_status(user_id: int, bot_id: str, new_status: str) -> dict:
     """Set bot status (internal helper)."""
     from db.database import get_session
-    from db.cerberus_models import CerberusBot, BotStatus
+    from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
     from sqlalchemy import select
 
     async with get_session() as session:
@@ -133,6 +252,27 @@ async def _set_bot_status(user_id: int, bot_id: str, new_status: str) -> dict:
         bot = result.scalar_one_or_none()
         if not bot:
             return {"error": "Bot not found or not owned by user", "bot_id": bot_id}
+
+        if new_status == "running":
+            if not bot.current_version_id:
+                return {"error": "Bot has no deployable version", "bot_id": bot_id}
+
+            version_stmt = select(CerberusBotVersion).where(
+                CerberusBotVersion.id == bot.current_version_id,
+                CerberusBotVersion.bot_id == bot_id,
+            )
+            version_result = await session.execute(version_stmt)
+            version = version_result.scalar_one_or_none()
+            if not version:
+                return {"error": "Bot has no deployable version", "bot_id": bot_id}
+
+            normalized_config, error = _prepare_bot_config(version.config_json)
+            if error:
+                logger.warning("tool_set_bot_status_rejected", user_id=user_id, bot_id=bot_id, detail=error)
+                return {"error": error, "bot_id": bot_id}
+
+            version.config_json = normalized_config
+            bot.learning_enabled = bool((normalized_config.get("learning") or {}).get("enabled", False))
 
         old_status = bot.status.value if isinstance(bot.status, BotStatus) else str(bot.status)
         bot.status = BotStatus(new_status)
@@ -258,9 +398,9 @@ def register():
             "properties": {
                 "name": {"type": "string", "description": "Bot name"},
                 "strategy_name": {"type": "string", "description": "Strategy identifier"},
-                "config": {"type": "object", "description": "Bot configuration object"},
+                "config": {"type": "object", "description": "Full executable bot configuration object"},
             },
-            "required": ["name"],
+            "required": ["name", "config"],
         },
         output_schema={"type": "object"},
         handler=_create_bot,
@@ -277,10 +417,10 @@ def register():
             "type": "object",
             "properties": {
                 "bot_id": {"type": "string", "description": "Bot ID to modify"},
-                "config": {"type": "object", "description": "New configuration"},
+                "config": {"type": "object", "description": "New or partial bot configuration"},
                 "diff_summary": {"type": "string", "description": "Description of changes"},
             },
-            "required": ["bot_id"],
+            "required": ["bot_id", "config"],
         },
         output_schema={"type": "object"},
         handler=_modify_bot,

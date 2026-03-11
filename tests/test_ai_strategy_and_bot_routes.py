@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from config.settings import get_settings
-from db.cerberus_models import CerberusBot, CerberusBotVersion
+from db.cerberus_models import BotStatus, CerberusBot, CerberusBotVersion
 from db.database import Base
 from db.models import StrategyInstance, StrategyTemplate, TradingModeEnum, User
 
@@ -300,6 +300,96 @@ class TestBotDeploymentFromStrategy:
         assert version.config_json["position_size_pct"] == pytest.approx(0.1)
         assert version.config_json["conditions"][0]["indicator"] == "rsi"
         assert version.config_json["condition_groups"][0]["conditions"][0]["indicator"] == "rsi"
+
+    @pytest.mark.anyio
+    async def test_create_bot_rejects_non_executable_strategy(self, session, session_factory):
+        user_id = await _seed_user(session)
+        await session.commit()
+        app, mock_get_session = _build_app(session_factory, user_id)
+
+        with patch("api.routes.ai_tools.get_session", mock_get_session):
+            client = TestClient(app)
+            response = client.post(
+                "/api/ai/tools/create-bot",
+                json={
+                    "name": "Broken Bot",
+                    "strategy_json": {
+                        "name": "Broken Strategy",
+                        "action": "BUY",
+                        "timeframe": "1D",
+                        "symbols": ["SPY"],
+                        "conditions": [],
+                        "condition_groups": [],
+                    },
+                },
+            )
+
+        assert response.status_code == 400
+        assert "at least one executable condition is required" in response.json()["detail"]
+
+        result = await session.execute(select(CerberusBot))
+        assert result.scalars().all() == []
+
+    @pytest.mark.anyio
+    async def test_create_bot_from_strategy_rejects_empty_saved_strategy(self, session, session_factory):
+        user_id = await _seed_user(session)
+        template = StrategyTemplate(
+            user_id=user_id,
+            name="Empty Strategy",
+            description="No rules defined",
+            conditions=[],
+            condition_groups=[],
+            action="BUY",
+            stop_loss_pct=0.02,
+            take_profit_pct=0.05,
+            timeframe="1D",
+            symbols=["SPY"],
+            strategy_type="manual",
+        )
+        session.add(template)
+        await session.flush()
+
+        instance = StrategyInstance(
+            template_id=template.id,
+            user_id=user_id,
+            mode=TradingModeEnum.PAPER,
+            is_active=True,
+            position_size_pct=0.1,
+        )
+        session.add(instance)
+        await session.commit()
+
+        app, mock_get_session = _build_app(session_factory, user_id)
+        with patch("api.routes.ai_tools.get_session", mock_get_session):
+            client = TestClient(app)
+            response = client.post(
+                "/api/ai/tools/bots/from-strategy",
+                json={"strategy_id": instance.id, "name": "Empty Strategy Bot"},
+            )
+
+        assert response.status_code == 400
+        assert "Saved strategy cannot be deployed" in response.json()["detail"]
+
+    @pytest.mark.anyio
+    async def test_deploy_bot_rejects_missing_current_version(self, session, session_factory):
+        user_id = await _seed_user(session)
+        bot = CerberusBot(
+            id="bot-without-version",
+            user_id=user_id,
+            name="Draft Bot",
+            status=BotStatus.DRAFT,
+            learning_enabled=False,
+        )
+        session.add(bot)
+        await session.commit()
+
+        app, mock_get_session = _build_app(session_factory, user_id)
+        with patch("api.routes.ai_tools.get_session", mock_get_session):
+            client = TestClient(app)
+            response = client.post("/api/ai/tools/bots/bot-without-version/deploy")
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Bot has no deployable version"
 
 
 class TestBacktestFromSavedStrategy:

@@ -9,6 +9,7 @@ import uuid
 import pandas as pd
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -18,7 +19,7 @@ from db.models import User
 from services.ai_core.tools.market_tools import _get_earnings_calendar, _get_options_chain
 from services.ai_core.tools.research_tools import _get_market_news, _run_research_session
 from services.ai_core.tools.risk_tools import _calculate_var
-from services.ai_core.tools.trading_tools import _backtest_strategy
+from services.ai_core.tools.trading_tools import _backtest_strategy, _create_bot, _modify_bot
 from services.workers.job_runners import execute_backtest_job
 
 TEST_DB_URL = "sqlite+aiosqlite:///"
@@ -351,3 +352,83 @@ async def test_execute_backtest_job_uses_bot_version_config(session, session_fac
         assert stored.status == "completed"
         assert stored.metrics_json["total_return"] == 0.21
         assert stored.leakage_checks_json["benchmark_equity_curve"]
+
+
+@pytest.mark.asyncio
+async def test_create_bot_tool_requires_executable_config(session, session_factory):
+    user_id = await _seed_user(session)
+    await session.commit()
+
+    with _patch_get_session(session_factory):
+        payload = await _create_bot(
+            user_id=user_id,
+            name="AI Tool Bot",
+            strategy_name="Momentum",
+            config=None,
+        )
+
+    assert payload["error"] == "Bot config is required"
+
+    result = await session.execute(select(CerberusBot))
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_modify_bot_tool_merges_partial_updates_into_current_version(session, session_factory):
+    user_id = await _seed_user(session)
+    bot = CerberusBot(id=str(uuid.uuid4()), user_id=user_id, name="Merge Bot")
+    version = CerberusBotVersion(
+        id=str(uuid.uuid4()),
+        bot_id=bot.id,
+        version_number=1,
+        config_json={
+            "name": "Merge Bot",
+            "action": "BUY",
+            "timeframe": "1D",
+            "symbols": ["SPY"],
+            "conditions": [
+                {
+                    "indicator": "rsi",
+                    "operator": ">",
+                    "value": 55,
+                    "params": {"period": 14},
+                    "action": "BUY",
+                }
+            ],
+            "condition_groups": [
+                {
+                    "conditions": [
+                        {
+                            "indicator": "rsi",
+                            "operator": ">",
+                            "value": 55,
+                            "params": {"period": 14},
+                            "action": "BUY",
+                        }
+                    ]
+                }
+            ],
+        },
+    )
+    bot.current_version_id = version.id
+    session.add(bot)
+    session.add(version)
+    await session.commit()
+
+    with _patch_get_session(session_factory):
+        payload = await _modify_bot(
+            user_id=user_id,
+            bot_id=bot.id,
+            config={"timeframe": "4H"},
+            diff_summary="Tighten cadence",
+        )
+
+    assert payload["version_number"] == 2
+
+    async with session_factory() as verify_session:
+        stored_bot = await verify_session.get(CerberusBot, bot.id)
+        stored_version = await verify_session.get(CerberusBotVersion, payload["version_id"])
+        assert stored_bot.current_version_id == payload["version_id"]
+        assert stored_version.config_json["timeframe"] == "4H"
+        assert stored_version.config_json["symbols"] == ["SPY"]
+        assert stored_version.config_json["conditions"][0]["indicator"] == "rsi"

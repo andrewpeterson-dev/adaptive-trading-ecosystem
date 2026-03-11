@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Bot, Download, Sparkles } from 'lucide-react';
-import { createBot, sendChatMessage } from '@/lib/cerberus-api';
+import { createBot, generateStrategyWithAI, sendChatMessage } from '@/lib/cerberus-api';
 import { parseStrategySpec, specToBuilderFields, type StrategySpec } from '@/lib/strategy-spec';
 import { useStrategyBuilderStore } from '@/stores/strategy-builder-store';
 import { useCerberusStore } from '@/stores/cerberus-store';
@@ -35,6 +35,19 @@ export function StrategyBuilder() {
       setStrategyPrompt(seededPrompt);
     }
   }, [consumeStrategySeedPrompt]);
+
+  const generateStructuredFallback = async (prompt: string) => {
+    const fallback = await generateStrategyWithAI(prompt);
+    const parsed = parseStrategySpec(JSON.stringify(fallback.strategy_spec));
+    if (!parsed.ok) {
+      throw new Error(`Structured fallback failed: ${parsed.error}`);
+    }
+
+    return {
+      name: parsed.spec.name || fallback.builder_draft.name || 'AI Strategy',
+      spec: parsed.spec,
+    };
+  };
 
   const runPrompt = async (prompt: string) => {
     if (!prompt.trim() || isGenerating) return;
@@ -76,20 +89,28 @@ export function StrategyBuilder() {
           toolCalls: [],
           createdAt: new Date().toISOString(),
         });
+
         const parsed = parseStrategySpec(markdown);
-        if (parsed.ok) {
-          const nextStrategy = {
-            name: parsed.spec.name || 'AI Strategy',
-            spec: parsed.spec,
-          };
-          setGeneratedStrategy(nextStrategy);
-        } else {
-          setActiveTab('chat');
-        }
+        const nextStrategy = parsed.ok
+          ? {
+              name: parsed.spec.name || 'AI Strategy',
+              spec: parsed.spec,
+            }
+          : await generateStructuredFallback(prompt);
+
+        setGeneratedStrategy(nextStrategy);
       }
     } catch (error) {
-      console.error('Strategy generation error:', error);
-      setError(error instanceof Error ? error.message : 'Strategy generation failed');
+      try {
+        const nextStrategy = await generateStructuredFallback(prompt);
+        setGeneratedStrategy(nextStrategy);
+      } catch (fallbackError) {
+        console.error('Strategy generation error:', error, fallbackError);
+        const primaryMessage = error instanceof Error ? error.message : 'Strategy generation failed';
+        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : 'Fallback generation failed';
+        setError(`${primaryMessage}. ${fallbackMessage}`.trim());
+        setActiveTab('chat');
+      }
     } finally {
       setIsGenerating(false);
       if (shouldClearPrompt) {
@@ -101,6 +122,7 @@ export function StrategyBuilder() {
   const handleSendToBuilder = async () => {
     if (!generatedStrategy || isSendingToBuilder) return;
     setIsSendingToBuilder(true);
+    setError(null);
     try {
       setPendingSpec(specToBuilderFields(generatedStrategy.spec));
       router.push('/');
@@ -112,12 +134,15 @@ export function StrategyBuilder() {
   const handleImportBot = async () => {
     if (!generatedStrategy || isImporting) return;
     setIsImporting(true);
+    setError(null);
     try {
       const result = await createBot(generatedStrategy.name, generatedStrategy.spec);
       setImportedBotId(result.bot_id);
       setTimeout(() => setActiveTab('bots'), 800);
     } catch (error) {
       console.error('Bot import error:', error);
+      setImportedBotId(null);
+      setError(error instanceof Error ? error.message : 'Bot creation failed');
     } finally {
       setIsImporting(false);
     }
