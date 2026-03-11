@@ -89,6 +89,10 @@ async def lifespan(app: FastAPI):
     # This prevents Railway's 30s healthcheck from expiring during DB connection.
     asyncio.create_task(_init_db_with_retry())
 
+    # Register all Cerberus AI tools so the chat controller can use them
+    from services.ai_core.tools.register_all import register_all_tools
+    register_all_tools()
+
     # Start the bot execution engine (evaluates running bots every 60s)
     from services.bot_engine.runner import bot_runner
     asyncio.create_task(bot_runner.start())

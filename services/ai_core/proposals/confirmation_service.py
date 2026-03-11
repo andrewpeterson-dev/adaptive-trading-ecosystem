@@ -255,25 +255,177 @@ class ConfirmationService:
         return secrets.compare_digest(computed, token_hash)
 
     async def _execute_order(self, user_id: int, proposal_json: dict) -> dict:
-        """Execute an order via the broker adapter.
+        """Execute an order via paper trading or Webull depending on user's mode.
 
-        This is a placeholder — the actual implementation will call the
-        appropriate broker adapter (Webull, Alpaca, etc.) based on the
-        user's brokerage account configuration.
+        Routes:
+          - Paper mode (default): executes via PaperPortfolio system
+          - Live mode: routes to Webull if user has credentials
         """
-        # TODO: Integrate with actual broker adapters
+        from db.models import UserTradingSession, TradingModeEnum
+        from sqlalchemy import select
+
+        symbol = (proposal_json.get("symbol") or "").upper()
+        raw_side = (proposal_json.get("side") or "buy").upper()
+        quantity = float(proposal_json.get("quantity") or 0)
+        order_type = proposal_json.get("order_type", "market")
+        limit_price = proposal_json.get("limit_price")
+
+        side = "BUY" if raw_side in ("BUY", "LONG") else "SELL"
+
+        if not symbol or quantity <= 0:
+            raise ValueError(f"Invalid order: symbol={symbol}, quantity={quantity}")
+
+        # Check user's trading mode
+        mode = TradingModeEnum.PAPER
+        async with get_session() as session:
+            result = await session.execute(
+                select(UserTradingSession).where(UserTradingSession.user_id == user_id)
+            )
+            session_row = result.scalar_one_or_none()
+            if session_row:
+                mode = session_row.active_mode
+
+        if mode == TradingModeEnum.LIVE:
+            return await self._execute_live_order(
+                user_id, symbol, side, int(quantity), order_type, limit_price
+            )
+
+        # Paper mode
+        return await self._execute_paper_order(user_id, symbol, side, quantity)
+
+    async def _execute_paper_order(
+        self, user_id: int, symbol: str, side: str, quantity: float
+    ) -> dict:
+        """Execute via paper trading system."""
+        from api.routes.paper_trading import PaperTradeRequest
+        from db.models import (
+            PaperPortfolio, PaperPosition, PaperTrade,
+            PaperTradeStatus, TradeDirection,
+        )
+        from api.routes.paper_trading import _fetch_current_price
+
+        current_price = await _fetch_current_price(symbol)
+
+        async with get_session() as session:
+            result = await session.execute(
+                select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+            )
+            portfolio = result.scalar_one_or_none()
+            if not portfolio:
+                portfolio = PaperPortfolio(
+                    user_id=user_id, cash=1_000_000.0, initial_capital=1_000_000.0
+                )
+                session.add(portfolio)
+                await session.flush()
+
+            if side == "BUY":
+                cost = current_price * quantity
+                if cost > portfolio.cash:
+                    raise ValueError(
+                        f"Insufficient cash: need ${cost:,.2f}, have ${portfolio.cash:,.2f}"
+                    )
+                portfolio.cash -= cost
+
+                pos_result = await session.execute(
+                    select(PaperPosition).where(
+                        PaperPosition.portfolio_id == portfolio.id,
+                        PaperPosition.symbol == symbol,
+                    )
+                )
+                position = pos_result.scalar_one_or_none()
+
+                if position:
+                    total_cost = (position.avg_entry_price * position.quantity) + cost
+                    position.quantity += quantity
+                    position.avg_entry_price = total_cost / position.quantity
+                    position.current_price = current_price
+                else:
+                    position = PaperPosition(
+                        portfolio_id=portfolio.id, user_id=user_id,
+                        symbol=symbol, quantity=quantity,
+                        avg_entry_price=current_price, current_price=current_price,
+                    )
+                    session.add(position)
+
+                trade = PaperTrade(
+                    portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
+                    direction=TradeDirection.LONG, quantity=quantity,
+                    entry_price=current_price, status=PaperTradeStatus.OPEN,
+                )
+                session.add(trade)
+            else:
+                pos_result = await session.execute(
+                    select(PaperPosition).where(
+                        PaperPosition.portfolio_id == portfolio.id,
+                        PaperPosition.symbol == symbol,
+                    )
+                )
+                position = pos_result.scalar_one_or_none()
+                if not position or position.quantity < quantity:
+                    held = position.quantity if position else 0
+                    raise ValueError(f"Insufficient shares: want {quantity}, hold {held}")
+
+                proceeds = current_price * quantity
+                pnl = proceeds - (position.avg_entry_price * quantity)
+                portfolio.cash += proceeds
+                position.quantity -= quantity
+                if position.quantity <= 0.0001:
+                    await session.delete(position)
+
+                trade = PaperTrade(
+                    portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
+                    direction=TradeDirection.SHORT, quantity=quantity,
+                    entry_price=position.avg_entry_price, exit_price=current_price,
+                    pnl=pnl, status=PaperTradeStatus.CLOSED,
+                    exit_time=datetime.utcnow(),
+                )
+                session.add(trade)
+
         logger.info(
-            "order_execution_placeholder",
-            user_id=user_id,
-            symbol=proposal_json.get("symbol"),
-            side=proposal_json.get("side"),
-            quantity=proposal_json.get("quantity"),
+            "paper_order_executed", user_id=user_id,
+            symbol=symbol, side=side, quantity=quantity, price=current_price,
         )
         return {
-            "status": "submitted",
-            "broker": "placeholder",
-            "symbol": proposal_json.get("symbol"),
-            "side": proposal_json.get("side"),
-            "quantity": proposal_json.get("quantity"),
-            "message": "Order submitted (broker adapter not yet connected)",
+            "status": "executed",
+            "broker": "paper",
+            "symbol": symbol,
+            "side": side,
+            "quantity": quantity,
+            "price": current_price,
+        }
+
+    async def _execute_live_order(
+        self, user_id: int, symbol: str, side: str, quantity: int,
+        order_type: str = "market", limit_price: float = None,
+    ) -> dict:
+        """Execute via Webull live trading."""
+        from api.routes.webull import _get_user_clients
+        from data.webull.trading import OrderRequest as WBOrderRequest
+
+        wb = await _get_user_clients(user_id, "real")
+        if not wb:
+            raise ValueError("No Webull credentials configured for live trading")
+
+        wb_order_type = "MKT" if order_type == "market" else "LMT"
+        req = WBOrderRequest(
+            symbol=symbol, side=side, qty=quantity,
+            order_type=wb_order_type, limit_price=limit_price,
+        )
+        result = wb.trading.place_order(req, user_confirmed=True)
+
+        if not result.success:
+            raise ValueError(f"Webull order failed: {result.error or 'unknown'}")
+
+        logger.info(
+            "live_order_executed", user_id=user_id,
+            symbol=symbol, side=side, quantity=quantity,
+            order_id=result.order_id,
+        )
+        return {
+            "status": "executed",
+            "broker": "webull",
+            "symbol": symbol,
+            "side": side,
+            "quantity": quantity,
+            "order_id": result.order_id,
         }
