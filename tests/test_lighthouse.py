@@ -53,6 +53,7 @@ def _make_mock_proc(stdout: bytes, stderr: bytes, returncode: int):
     mock_proc.returncode = returncode
     mock_proc.communicate = AsyncMock(return_value=(stdout, stderr))
     mock_proc.kill = MagicMock()
+    mock_proc.wait = AsyncMock(return_value=None)
     return mock_proc
 
 
@@ -84,6 +85,7 @@ class TestRunAudit:
         mock_proc = MagicMock()
         mock_proc.kill = MagicMock()
         mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_proc.wait = AsyncMock(return_value=None)
         mock_create = AsyncMock(return_value=mock_proc)
 
         with patch("asyncio.create_subprocess_exec", mock_create):

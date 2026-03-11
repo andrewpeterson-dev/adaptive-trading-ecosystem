@@ -3,6 +3,7 @@ Lighthouse audit automation — runs Google Lighthouse via npx and tracks result
 """
 
 import asyncio
+from contextlib import suppress
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,15 +48,16 @@ class LighthouseAuditor:
 
         logger.info("lighthouse_audit_start", url=url, categories=cats)
 
+        proc = None
+        communicate_task = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=AUDIT_TIMEOUT
-            )
+            communicate_task = asyncio.create_task(proc.communicate())
+            stdout, stderr = await asyncio.wait_for(communicate_task, timeout=AUDIT_TIMEOUT)
         except FileNotFoundError:
             logger.error("lighthouse_not_installed")
             return {
@@ -65,7 +67,14 @@ class LighthouseAuditor:
             }
         except asyncio.TimeoutError:
             logger.error("lighthouse_timeout", url=url, timeout=AUDIT_TIMEOUT)
-            proc.kill()
+            if communicate_task and not communicate_task.done():
+                communicate_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await communicate_task
+            if proc is not None:
+                proc.kill()
+                with suppress(ProcessLookupError):
+                    await proc.wait()
             return {
                 "error": f"Lighthouse audit timed out after {AUDIT_TIMEOUT}s",
                 "url": url,

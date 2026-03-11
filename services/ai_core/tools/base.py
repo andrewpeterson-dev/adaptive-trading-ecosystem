@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ToolCategory(str, Enum):
@@ -52,8 +52,7 @@ class ToolDefinition:
 
 class ToolInput(BaseModel):
     """Base class for tool inputs — subclassed per tool."""
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class ToolOutput(BaseModel):
@@ -62,5 +61,4 @@ class ToolOutput(BaseModel):
     data: Any = None
     error: Optional[str] = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
