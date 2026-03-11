@@ -25,6 +25,41 @@ function cleanContent(text: string): string {
     .trim();
 }
 
+/** Memoized single message bubble — only re-renders when message content changes. */
+const MessageBubble = memo(function MessageBubble({ msg }: { msg: ConversationMessageItem }) {
+  return (
+    <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-sm ${
+          msg.role === 'user'
+            ? 'bg-primary text-primary-foreground rounded-br-md'
+            : 'bg-muted/80 text-foreground rounded-bl-md'
+        }`}
+      >
+        {msg.role === 'user' ? (
+          <p className="whitespace-pre-wrap">{msg.contentMd}</p>
+        ) : (
+          <div className="cerberus-md prose prose-sm prose-invert max-w-none
+            [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5
+            [&_strong]:text-foreground [&_strong]:font-semibold
+            [&_code]:text-xs [&_code]:bg-background/50 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded
+            [&_pre]:bg-background/50 [&_pre]:rounded-lg [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto
+            [&_a]:text-primary [&_a]:no-underline [&_a:hover]:underline
+            [&_hr]:hidden">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {cleanContent(msg.contentMd || '')}
+            </ReactMarkdown>
+          </div>
+        )}
+        {msg.citations.length > 0 && <CitationList citations={msg.citations} />}
+        {msg.role === 'assistant' && hasValidStrategyJson(msg.contentMd) && (
+          <ImplementButton messageContent={msg.contentMd!} />
+        )}
+      </div>
+    </div>
+  );
+});
+
 interface MessageListProps {
   messages: ConversationMessageItem[];
   streamingContent: string;
@@ -62,38 +97,7 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
       {messages.map((msg) => (
-        <div
-          key={msg.id}
-          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-        >
-          <div
-            className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-sm ${
-              msg.role === 'user'
-                ? 'bg-primary text-primary-foreground rounded-br-md'
-                : 'bg-muted/80 text-foreground rounded-bl-md'
-            }`}
-          >
-            {msg.role === 'user' ? (
-              <p className="whitespace-pre-wrap">{msg.contentMd}</p>
-            ) : (
-              <div className="cerberus-md prose prose-sm prose-invert max-w-none
-                [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5
-                [&_strong]:text-foreground [&_strong]:font-semibold
-                [&_code]:text-xs [&_code]:bg-background/50 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded
-                [&_pre]:bg-background/50 [&_pre]:rounded-lg [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto
-                [&_a]:text-primary [&_a]:no-underline [&_a:hover]:underline
-                [&_hr]:hidden">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {cleanContent(msg.contentMd || '')}
-                </ReactMarkdown>
-              </div>
-            )}
-            {msg.citations.length > 0 && <CitationList citations={msg.citations} />}
-            {msg.role === 'assistant' && hasValidStrategyJson(msg.contentMd) && (
-              <ImplementButton messageContent={msg.contentMd!} />
-            )}
-          </div>
-        </div>
+        <MessageBubble key={msg.id} msg={msg} />
       ))}
 
       {isStreaming && streamingContent && (

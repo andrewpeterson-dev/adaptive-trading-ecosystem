@@ -16,7 +16,7 @@ export type TradingMode = "paper" | "live";
 
 interface TradingModeContextValue {
   mode: TradingMode;
-  setMode: (mode: TradingMode) => void;
+  setMode: (mode: TradingMode) => Promise<void>;
   isPaper: boolean;
   isLive: boolean;
   switching: boolean;
@@ -67,6 +67,7 @@ export function TradingModeProvider({ children }: { children: ReactNode }) {
       broadcastModeReset();
     } catch (err) {
       console.error("Failed to switch mode:", err);
+      throw err instanceof Error ? err : new Error("Failed to switch mode");
     } finally {
       setSwitching(false);
     }

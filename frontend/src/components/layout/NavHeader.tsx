@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ export function NavHeader() {
   const [confirmLiveOpen, setConfirmLiveOpen] = useState(false);
   const { mode, setMode, switching } = useTradingMode();
   const { user, logout } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -57,13 +59,30 @@ export function NavHeader() {
     return pathname.startsWith(href);
   };
 
-  const handleModeRequest = (targetMode: "paper" | "live") => {
+  const handleModeRequest = async (targetMode: "paper" | "live") => {
     if (switching || mode === targetMode) return;
     if (targetMode === "live") {
       setConfirmLiveOpen(true);
       return;
     }
-    setMode(targetMode);
+    try {
+      await setMode(targetMode);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to switch trading mode";
+      toast(`Unable to switch to ${targetMode} mode: ${message}`, "error");
+    }
+  };
+
+  const handleConfirmLive = async () => {
+    setConfirmLiveOpen(false);
+    try {
+      await setMode("live");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to switch trading mode";
+      toast(`Unable to switch to live mode: ${message}`, "error");
+    }
   };
 
   return (
@@ -75,11 +94,11 @@ export function NavHeader() {
               <Link href="/" className="flex min-w-0 items-center gap-3">
                 <div className="app-card flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px]">
                   <Image
-                    src="/favicon.svg"
+                    src="/logo.svg"
                     alt="Adaptive Trading"
-                    width={28}
-                    height={28}
-                    className="h-7 w-7 object-contain"
+                    width={36}
+                    height={36}
+                    className="h-9 w-9 object-contain"
                     priority
                   />
                 </div>
@@ -132,7 +151,7 @@ export function NavHeader() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleModeRequest("paper")}
+                    onClick={() => void handleModeRequest("paper")}
                     disabled={switching || mode === "paper"}
                     className={cn(
                       "app-segment text-[11px] font-semibold uppercase tracking-[0.18em]",
@@ -146,7 +165,7 @@ export function NavHeader() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleModeRequest("live")}
+                    onClick={() => void handleModeRequest("live")}
                     disabled={switching}
                     className={cn(
                       "app-segment text-[11px] font-semibold uppercase tracking-[0.18em]",
@@ -247,7 +266,7 @@ export function NavHeader() {
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => handleModeRequest("paper")}
+                      onClick={() => void handleModeRequest("paper")}
                       disabled={switching || mode === "paper"}
                       className={cn(
                         "app-inset rounded-2xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all",
@@ -260,7 +279,7 @@ export function NavHeader() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleModeRequest("live")}
+                      onClick={() => void handleModeRequest("live")}
                       disabled={switching}
                       className={cn(
                         "app-inset rounded-2xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all",
@@ -323,10 +342,7 @@ export function NavHeader() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setConfirmLiveOpen(false);
-                setMode("live");
-              }}
+              onClick={() => void handleConfirmLive()}
               disabled={switching}
               className="rounded-full border border-emerald-500/25 bg-emerald-500/12 px-5 py-2.5 text-sm font-semibold text-emerald-300 transition-colors hover:border-emerald-400/35 hover:bg-emerald-500/18 disabled:opacity-50"
             >

@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 import { ConflictBanner } from "@/components/settings/ConflictBanner";
 import {
   ApiConnectionCard,
@@ -70,10 +71,10 @@ interface SectionProps {
   connections: ApiConnection[];
   providers: ApiProvider[];
   settings: ApiSettings;
-  onSetActiveBroker: (id: number) => void;
-  onSetActiveCrypto: (id: number) => void;
-  onSetPrimaryData: (id: number) => void;
-  onRemove: (id: number) => void;
+  onSetActiveBroker: (id: number) => Promise<void>;
+  onSetActiveCrypto: (id: number) => Promise<void>;
+  onSetPrimaryData: (id: number) => Promise<void>;
+  onRemove: (id: number) => Promise<void>;
   onTest: (id: number) => Promise<{ connected: boolean; error?: string }>;
   onConnectProvider: (
     provider: ApiProvider,
@@ -170,6 +171,7 @@ function ApiTypeSection({
 // ─── Main exported component ──────────────────────────────────────────────────
 
 export function ApiConnectionsSection() {
+  const { toast } = useToast();
   const [providers, setProviders] = useState<ApiProvider[]>([]);
   const [connections, setConnections] = useState<ApiConnection[]>([]);
   const [settings, setSettings] = useState<ApiSettings>({
@@ -224,37 +226,53 @@ export function ApiConnectionsSection() {
       is_paper: boolean,
       nickname?: string
     ) => {
-      const newConn = await apiFetch<ApiConnection>("/api/v2/connections", {
-        method: "POST",
-        body: JSON.stringify({ provider_id: provider.id, credentials, is_paper, nickname }),
-      });
-      setConnections((prev) => {
-        const idx = prev.findIndex((c) => c.provider_id === newConn.provider_id);
-        return idx >= 0
-          ? prev.map((c, i) => (i === idx ? newConn : c))
-          : [...prev, newConn];
-      });
-      await refreshSettings();
+      try {
+        const newConn = await apiFetch<ApiConnection>("/api/v2/connections", {
+          method: "POST",
+          body: JSON.stringify({ provider_id: provider.id, credentials, is_paper, nickname }),
+        });
+        setConnections((prev) => {
+          const idx = prev.findIndex((c) => c.provider_id === newConn.provider_id);
+          return idx >= 0
+            ? prev.map((c, i) => (i === idx ? newConn : c))
+            : [...prev, newConn];
+        });
+        await refreshSettings();
+        toast(`${provider.name} connected`, "success");
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to connect provider";
+        toast(`Failed to connect ${provider.name}: ${message}`, "error");
+        throw err;
+      }
     },
-    [refreshSettings]
+    [refreshSettings, toast]
   );
 
   const handleRemove = useCallback(
     async (id: number) => {
-      await apiFetch(`/api/v2/connections/${id}`, { method: "DELETE" });
-      setConnections((prev) => prev.filter((c) => c.id !== id));
-      setSettings((prev) => ({
-        ...prev,
-        active_equity_broker_id:
-          prev.active_equity_broker_id === id ? null : prev.active_equity_broker_id,
-        active_crypto_broker_id:
-          prev.active_crypto_broker_id === id ? null : prev.active_crypto_broker_id,
-        primary_market_data_id:
-          prev.primary_market_data_id === id ? null : prev.primary_market_data_id,
-        fallback_market_data_ids: prev.fallback_market_data_ids.filter((fid) => fid !== id),
-      }));
+      try {
+        await apiFetch(`/api/v2/connections/${id}`, { method: "DELETE" });
+        setConnections((prev) => prev.filter((c) => c.id !== id));
+        setSettings((prev) => ({
+          ...prev,
+          active_equity_broker_id:
+            prev.active_equity_broker_id === id ? null : prev.active_equity_broker_id,
+          active_crypto_broker_id:
+            prev.active_crypto_broker_id === id ? null : prev.active_crypto_broker_id,
+          primary_market_data_id:
+            prev.primary_market_data_id === id ? null : prev.primary_market_data_id,
+          fallback_market_data_ids: prev.fallback_market_data_ids.filter((fid) => fid !== id),
+        }));
+        toast("Connection removed", "success");
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to remove connection";
+        toast(`Failed to remove connection: ${message}`, "error");
+        throw err;
+      }
     },
-    []
+    [toast]
   );
 
   const handleTest = useCallback(
@@ -268,36 +286,64 @@ export function ApiConnectionsSection() {
 
   const handleSetActiveBroker = useCallback(
     async (id: number) => {
-      await apiFetch("/api/v2/api-settings/active-broker", {
-        method: "POST",
-        body: JSON.stringify({ connection_id: id }),
-      });
-      await refreshSettings();
+      try {
+        await apiFetch("/api/v2/api-settings/active-broker", {
+          method: "POST",
+          body: JSON.stringify({ connection_id: id }),
+        });
+        await refreshSettings();
+        toast("Active broker updated", "success");
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to update active broker";
+        toast(`Failed to update active broker: ${message}`, "error");
+        throw err;
+      }
     },
-    [refreshSettings]
+    [refreshSettings, toast]
   );
 
   const handleSetActiveCrypto = useCallback(
     async (id: number) => {
-      await apiFetch("/api/v2/api-settings/active-crypto-broker", {
-        method: "POST",
-        body: JSON.stringify({ connection_id: id }),
-      });
-      await refreshSettings();
+      try {
+        await apiFetch("/api/v2/api-settings/active-crypto-broker", {
+          method: "POST",
+          body: JSON.stringify({ connection_id: id }),
+        });
+        await refreshSettings();
+        toast("Active crypto broker updated", "success");
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to update active crypto broker";
+        toast(`Failed to update active crypto broker: ${message}`, "error");
+        throw err;
+      }
     },
-    [refreshSettings]
+    [refreshSettings, toast]
   );
 
   const handleSetPrimaryData = useCallback(
     async (id: number) => {
       const fallbacks = settings.fallback_market_data_ids.filter((fid) => fid !== id);
-      await apiFetch("/api/v2/api-settings/market-data-priority", {
-        method: "PUT",
-        body: JSON.stringify({ primary_id: id, fallback_ids: fallbacks }),
-      });
-      await refreshSettings();
+      try {
+        await apiFetch("/api/v2/api-settings/market-data-priority", {
+          method: "PUT",
+          body: JSON.stringify({ primary_id: id, fallback_ids: fallbacks }),
+        });
+        await refreshSettings();
+        toast("Primary market-data source updated", "success");
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to update market-data priority";
+        toast(`Failed to update market-data priority: ${message}`, "error");
+        throw err;
+      }
     },
-    [settings.fallback_market_data_ids, refreshSettings]
+    [settings.fallback_market_data_ids, refreshSettings, toast]
   );
 
   if (loading) return <SectionSkeleton />;

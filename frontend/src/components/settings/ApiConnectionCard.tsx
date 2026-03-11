@@ -41,10 +41,10 @@ interface ApiConnectionCardProps {
   connection: ApiConnection;
   provider: ApiProvider;
   settings: ApiSettings;
-  onSetActiveBroker: (id: number) => void;
-  onSetActiveCrypto: (id: number) => void;
-  onSetPrimaryData: (id: number) => void;
-  onRemove: (id: number) => void;
+  onSetActiveBroker: (id: number) => Promise<void>;
+  onSetActiveCrypto: (id: number) => Promise<void>;
+  onSetPrimaryData: (id: number) => Promise<void>;
+  onRemove: (id: number) => Promise<void>;
   onTest: (id: number) => Promise<{ connected: boolean; error?: string }>;
   onEdit: (
     provider: ApiProvider,
@@ -117,8 +117,34 @@ export function ApiConnectionCard({
     setRemoving(true);
     try {
       await onRemove(connection.id);
+    } catch {
+      // parent callback surfaces the failure
     } finally {
       setRemoving(false);
+    }
+  };
+
+  const handleSetActiveBroker = async () => {
+    try {
+      await onSetActiveBroker(connection.id);
+    } catch {
+      // parent callback surfaces the failure
+    }
+  };
+
+  const handleSetActiveCrypto = async () => {
+    try {
+      await onSetActiveCrypto(connection.id);
+    } catch {
+      // parent callback surfaces the failure
+    }
+  };
+
+  const handleSetPrimaryData = async () => {
+    try {
+      await onSetPrimaryData(connection.id);
+    } catch {
+      // parent callback surfaces the failure
     }
   };
 
@@ -193,7 +219,7 @@ export function ApiConnectionCard({
 
           {isBrokerage && !isActiveBroker && (
             <Button
-              onClick={() => onSetActiveBroker(connection.id)}
+              onClick={() => void handleSetActiveBroker()}
               variant="secondary"
               size="sm"
               className="h-9 rounded-full px-3"
@@ -205,7 +231,7 @@ export function ApiConnectionCard({
 
           {isCryptoBroker && !isActiveCrypto && (
             <Button
-              onClick={() => onSetActiveCrypto(connection.id)}
+              onClick={() => void handleSetActiveCrypto()}
               variant="secondary"
               size="sm"
               className="h-9 rounded-full px-3"
@@ -217,7 +243,7 @@ export function ApiConnectionCard({
 
           {isMarketData && !isPrimaryData && (
             <Button
-              onClick={() => onSetPrimaryData(connection.id)}
+              onClick={() => void handleSetPrimaryData()}
               variant="secondary"
               size="sm"
               className="h-9 rounded-full px-3"

@@ -24,6 +24,7 @@ export function ResearchPanel() {
   const [isResearching, setIsResearching] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDocState[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     messages,
@@ -40,6 +41,8 @@ export function ResearchPanel() {
   const handleResearch = async () => {
     if (!query.trim() || isResearching) return;
     setIsResearching(true);
+    setError(null);
+    let shouldClearQuery = false;
 
     addMessage({
       id: `user-${Date.now()}`,
@@ -60,6 +63,7 @@ export function ResearchPanel() {
         pageContext,
         attachments: uploadedDocs.length > 0 ? uploadedDocs.map((doc) => doc.id) : undefined,
       });
+      shouldClearQuery = true;
       if (!activeThreadId) setActiveThread(response.threadId);
       if (response.message) {
         addMessage({
@@ -75,9 +79,12 @@ export function ResearchPanel() {
       }
     } catch (error) {
       console.error('Research error:', error);
+      setError(error instanceof Error ? error.message : 'Research request failed');
     } finally {
       setIsResearching(false);
-      setQuery('');
+      if (shouldClearQuery) {
+        setQuery('');
+      }
     }
   };
 
@@ -267,6 +274,12 @@ export function ResearchPanel() {
             {isResearching ? '...' : 'Ask'}
           </button>
         </div>
+
+        {error && (
+          <div className="rounded-2xl border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
       </div>
       <MessageList messages={messages} streamingContent={streamingContent} isStreaming={isStreaming} />
     </div>

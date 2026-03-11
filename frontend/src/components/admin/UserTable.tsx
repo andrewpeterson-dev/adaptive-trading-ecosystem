@@ -17,6 +17,7 @@ import type { AdminUser } from "@/types/admin";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 
 const PAGE_SIZE = 10;
 
@@ -27,6 +28,7 @@ export function UserTable() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [toggling, setToggling] = useState<number | null>(null);
+  const { toast } = useToast();
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -56,6 +58,14 @@ export function UserTable() {
           user.id === userId ? { ...user, is_admin: !currentAdmin } : user
         )
       );
+      toast(
+        currentAdmin ? "Admin access removed" : "Admin access granted",
+        "success"
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update admin access";
+      toast(message, "error");
     } finally {
       setToggling(null);
     }

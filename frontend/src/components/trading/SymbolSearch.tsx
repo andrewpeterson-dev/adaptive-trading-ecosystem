@@ -177,10 +177,8 @@ export function SymbolSearch() {
                     <button
                       key={result.symbol}
                       type="button"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        commitSymbol(result.symbol);
-                      }}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => commitSymbol(result.symbol)}
                       className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[20px] px-3 py-3 text-left transition-colors hover:bg-muted/45"
                     >
                       <div className="min-w-0">
@@ -236,10 +234,8 @@ export function SymbolSearch() {
                   <button
                     key={item.symbol}
                     type="button"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      commitSymbol(item.symbol);
-                    }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => commitSymbol(item.symbol)}
                     className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/35 px-3 py-2 text-xs transition-colors hover:bg-muted/55"
                   >
                     <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />

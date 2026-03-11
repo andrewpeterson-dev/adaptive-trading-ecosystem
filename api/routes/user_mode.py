@@ -10,6 +10,7 @@ from sqlalchemy import select
 from db.database import get_session
 from db.models import UserTradingSession, TradingModeEnum, SystemEventType
 from services.event_logger import log_event
+from api.middleware.trading_mode import invalidate_mode_cache
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -67,6 +68,9 @@ async def set_mode(req: SetModeRequest, request: Request):
             session.updated_at = datetime.utcnow()
         else:
             db.add(UserTradingSession(user_id=user_id, active_mode=new_mode))
+
+    # Bust the in-memory middleware cache so subsequent requests see the new mode
+    invalidate_mode_cache(user_id)
 
     # Log the event
     await log_event(

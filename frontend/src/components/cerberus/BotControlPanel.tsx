@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { useCerberusWorkspaceStatus } from "@/hooks/useCerberusWorkspaceStatus";
 
@@ -41,17 +42,23 @@ export function BotControlPanel() {
   const router = useRouter();
   const { mode } = useTradingMode();
   const { status } = useCerberusWorkspaceStatus(mode);
+  const { toast } = useToast();
   const [bots, setBots] = useState<BotSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchBots = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await listBots();
       setBots(data);
     } catch (error) {
       console.error("Failed to load bots:", error);
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to load bots"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -70,8 +77,16 @@ export function BotControlPanel() {
           item.id === bot.id ? { ...item, status: "running" } : item
         )
       );
+      toast(
+        bot.status === "paused" ? `${bot.name} resumed` : `${bot.name} deployed`,
+        "success"
+      );
     } catch (error) {
       console.error("Deploy error:", error);
+      const actionLabel = bot.status === "paused" ? "resume" : "deploy";
+      const message =
+        error instanceof Error ? error.message : `Failed to ${actionLabel} bot`;
+      toast(`Failed to ${actionLabel} ${bot.name}: ${message}`, "error");
     } finally {
       setActioningId(null);
     }
@@ -86,8 +101,12 @@ export function BotControlPanel() {
           item.id === bot.id ? { ...item, status: "stopped" } : item
         )
       );
+      toast(`${bot.name} stopped`, "success");
     } catch (error) {
       console.error("Stop error:", error);
+      const message =
+        error instanceof Error ? error.message : "Failed to stop bot";
+      toast(`Failed to stop ${bot.name}: ${message}`, "error");
     } finally {
       setActioningId(null);
     }
@@ -157,6 +176,12 @@ export function BotControlPanel() {
           Refresh
         </Button>
       </div>
+
+      {loadError && (
+        <div className="rounded-2xl border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-300">
+          {loadError}
+        </div>
+      )}
 
       {bots.length === 0 && !isLoading && (
         <EmptyState

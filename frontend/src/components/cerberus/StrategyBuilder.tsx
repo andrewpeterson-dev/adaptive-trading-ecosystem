@@ -17,6 +17,7 @@ export function StrategyBuilder() {
   const [isImporting, setIsImporting] = useState(false);
   const [isSendingToBuilder, setIsSendingToBuilder] = useState(false);
   const [importedBotId, setImportedBotId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const {
     addMessage,
     activeThreadId,
@@ -40,6 +41,8 @@ export function StrategyBuilder() {
     setIsGenerating(true);
     setGeneratedStrategy(null);
     setImportedBotId(null);
+    setError(null);
+    let shouldClearPrompt = false;
 
     addMessage({
       id: `user-${Date.now()}`,
@@ -59,6 +62,7 @@ export function StrategyBuilder() {
         message: prompt,
         pageContext,
       });
+      shouldClearPrompt = true;
       if (!activeThreadId) setActiveThread(response.threadId);
       if (response.message) {
         const markdown = response.message.markdown || '';
@@ -85,9 +89,12 @@ export function StrategyBuilder() {
       }
     } catch (error) {
       console.error('Strategy generation error:', error);
+      setError(error instanceof Error ? error.message : 'Strategy generation failed');
     } finally {
       setIsGenerating(false);
-      setStrategyPrompt('');
+      if (shouldClearPrompt) {
+        setStrategyPrompt('');
+      }
     }
   };
 
@@ -182,6 +189,12 @@ export function StrategyBuilder() {
           rows={4}
           className="app-textarea min-h-[7rem] resize-none"
         />
+
+        {error && (
+          <div className="rounded-2xl border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
 
         <button
           onClick={() => void runPrompt(strategyPrompt)}

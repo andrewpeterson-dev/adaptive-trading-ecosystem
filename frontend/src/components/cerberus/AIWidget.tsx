@@ -19,6 +19,7 @@ import {
 } from '@/hooks/useCerberusWorkspaceStatus';
 import { getThreadMessages } from '@/lib/cerberus-api';
 import { useCerberusStore } from '@/stores/cerberus-store';
+import { useShallow } from 'zustand/react/shallow';
 import { useUIContextStore } from '@/stores/ui-context-store';
 import dynamic from 'next/dynamic';
 
@@ -85,18 +86,20 @@ function clampBubblePosition(position: { x: number; y: number }) {
 }
 
 export function AIWidget() {
-  const {
-    isOpen,
-    activeTab,
-    activeThreadId,
-    messages,
-    setActiveTab,
-    setMode,
-    openCerberus,
-    closeCerberus,
-    setMessages,
-  } = useCerberusStore();
-  const { pageContext } = useUIContextStore();
+  const { isOpen, activeTab, activeThreadId, messages } = useCerberusStore(
+    useShallow((s) => ({
+      isOpen: s.isOpen,
+      activeTab: s.activeTab,
+      activeThreadId: s.activeThreadId,
+      messages: s.messages,
+    }))
+  );
+  const setActiveTab = useCerberusStore((s) => s.setActiveTab);
+  const setMode = useCerberusStore((s) => s.setMode);
+  const openCerberus = useCerberusStore((s) => s.openCerberus);
+  const closeCerberus = useCerberusStore((s) => s.closeCerberus);
+  const setMessages = useCerberusStore((s) => s.setMessages);
+  const pageContext = useUIContextStore((s) => s.pageContext);
   const { mode } = useTradingMode();
   const { status, loading, refresh } = useCerberusWorkspaceStatus(mode);
   const [position, setPosition] = useState({ x: 0, y: 0 });
