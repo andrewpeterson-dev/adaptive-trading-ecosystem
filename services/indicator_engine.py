@@ -16,6 +16,16 @@ class IndicatorEngine:
     """Stateless indicator computation. All methods are class-level or static."""
 
     @staticmethod
+    def _normalize_params(indicator_name: str, params: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(params or {})
+        if "period" in normalized:
+            if indicator_name in {"rsi", "sma", "ema", "atr", "bollinger_bands"} and "length" not in normalized:
+                normalized["length"] = normalized.pop("period")
+            elif indicator_name == "stochastic" and "k_period" not in normalized:
+                normalized["k_period"] = normalized.pop("period")
+        return normalized
+
+    @staticmethod
     def rsi(close: pd.Series, length: int = 14) -> pd.Series:
         delta = close.diff()
         gain = delta.where(delta > 0, 0.0)
@@ -88,21 +98,22 @@ class IndicatorEngine:
     def compute(cls, indicator_name: str, df: pd.DataFrame, params: dict[str, Any]) -> Any:
         """Dispatch computation by indicator name."""
         name = indicator_name.lower().replace(" ", "_").replace("-", "_")
+        normalized_params = cls._normalize_params(name, params)
         dispatch = {
-            "rsi": lambda: cls.rsi(df["close"], **params),
-            "sma": lambda: cls.sma(df["close"], **params),
-            "ema": lambda: cls.ema(df["close"], **params),
-            "macd": lambda: cls.macd(df["close"], **params),
-            "bollinger_bands": lambda: cls.bollinger_bands(df["close"], **params),
-            "atr": lambda: cls.atr(df["high"], df["low"], df["close"], **params),
+            "rsi": lambda: cls.rsi(df["close"], **normalized_params),
+            "sma": lambda: cls.sma(df["close"], **normalized_params),
+            "ema": lambda: cls.ema(df["close"], **normalized_params),
+            "macd": lambda: cls.macd(df["close"], **normalized_params),
+            "bollinger_bands": lambda: cls.bollinger_bands(df["close"], **normalized_params),
+            "atr": lambda: cls.atr(df["high"], df["low"], df["close"], **normalized_params),
             "vwap": lambda: cls.vwap(df["high"], df["low"], df["close"], df["volume"]),
-            "stochastic": lambda: cls.stochastic(df["high"], df["low"], df["close"], **params),
+            "stochastic": lambda: cls.stochastic(df["high"], df["low"], df["close"], **normalized_params),
             "obv": lambda: cls.obv(df["close"], df["volume"]),
         }
         fn = dispatch.get(name)
         if fn is None:
             raise ValueError(f"Unknown indicator: {indicator_name}")
-        logger.info("indicator_computed", name=name, params=params)
+        logger.info("indicator_computed", name=name, params=normalized_params)
         return fn()
 
     @classmethod

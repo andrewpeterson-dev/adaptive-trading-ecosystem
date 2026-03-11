@@ -35,6 +35,7 @@ class ConditionSchema(BaseModel):
     operator: str = ">"
     value: Union[float, str] = 0
     compare_to: Optional[str] = None  # e.g., "close", "ema_200"
+    field: Optional[str] = None
     params: dict[str, Any] = Field(default_factory=dict)
     action: str = "BUY"
 
@@ -497,6 +498,7 @@ async def compute_indicator(req: ComputeRequest):
 
 @router.post("/backtest")
 async def run_backtest(req: BacktestRequest, request: Request = None):
+    import json
     import pandas as pd
     import numpy as np
     from services.indicator_engine import IndicatorEngine
@@ -504,13 +506,16 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
     # Load conditions from DB or inline
     commission_pct = req.commission_pct
     slippage_pct = req.slippage_pct
+    action = "BUY"
     if req.strategy_id is not None:
         user_id = getattr(request.state, "user_id", None) if request else None
         async with get_session() as session:
             # Try StrategyInstance first (new model)
             if user_id:
                 inst_result = await session.execute(
-                    select(StrategyInstance).where(
+                    select(StrategyInstance)
+                    .options(selectinload(StrategyInstance.template))
+                    .where(
                         StrategyInstance.id == req.strategy_id,
                         StrategyInstance.user_id == user_id,
                     )
@@ -526,6 +531,9 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                         conditions = t.conditions or []
                     stop_loss_pct = t.stop_loss_pct
                     take_profit_pct = t.take_profit_pct
+                    commission_pct = t.commission_pct if t.commission_pct is not None else req.commission_pct
+                    slippage_pct = t.slippage_pct if t.slippage_pct is not None else req.slippage_pct
+                    action = t.action or "BUY"
                 else:
                     # Fall back to legacy Strategy table
                     s = await session.get(Strategy, req.strategy_id)
@@ -539,8 +547,9 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                         conditions = s.conditions or []
                     stop_loss_pct = s.stop_loss_pct
                     take_profit_pct = s.take_profit_pct
-                    commission_pct = s.commission_pct or req.commission_pct
-                    slippage_pct = s.slippage_pct or req.slippage_pct
+                    commission_pct = s.commission_pct if s.commission_pct is not None else req.commission_pct
+                    slippage_pct = s.slippage_pct if s.slippage_pct is not None else req.slippage_pct
+                    action = s.action or "BUY"
             else:
                 s = await session.get(Strategy, req.strategy_id)
                 if not s:
@@ -553,16 +562,21 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                     conditions = s.conditions or []
                 stop_loss_pct = s.stop_loss_pct
                 take_profit_pct = s.take_profit_pct
+                commission_pct = s.commission_pct if s.commission_pct is not None else req.commission_pct
+                slippage_pct = s.slippage_pct if s.slippage_pct is not None else req.slippage_pct
+                action = s.action or "BUY"
     elif req.condition_groups:
         groups = req.condition_groups
         conditions = [c for g in groups for c in g.get("conditions", [])]
         stop_loss_pct = 0.02
         take_profit_pct = 0.05
+        action = next((c.get("action") for c in conditions if c.get("action")), "BUY")
     elif req.conditions:
         conditions = [c.model_dump() for c in req.conditions]
         groups = [{"conditions": conditions}]
         stop_loss_pct = 0.02
         take_profit_pct = 0.05
+        action = next((c.get("action") for c in conditions if c.get("action")), "BUY")
     else:
         raise HTTPException(400, "Provide strategy_id or inline conditions")
 
@@ -588,64 +602,128 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
         "volume": volume,
     })
 
-    # Pre-compute all indicators
+    def _indicator_cache_key(indicator_name: str, params: dict[str, Any] | None) -> str:
+        return f"{indicator_name.strip().lower()}::{json.dumps(params or {}, sort_keys=True, default=str)}"
+
+    default_fields = {
+        "macd": "macd",
+        "bollinger_bands": "middle",
+        "stochastic": "k",
+    }
+
     indicator_cache: dict[str, Any] = {}
-    for cond in conditions:
-        ind_name = cond["indicator"]
-        if ind_name not in indicator_cache:
-            indicator_cache[ind_name] = IndicatorEngine.compute(ind_name, df, cond.get("params", {}))
+
+    def _compute_indicator(indicator_name: str, params: dict[str, Any] | None) -> Any:
+        cache_key = _indicator_cache_key(indicator_name, params)
+        if cache_key not in indicator_cache:
+            indicator_cache[cache_key] = IndicatorEngine.compute(indicator_name, df, params or {})
+        return indicator_cache[cache_key]
+
+    def _extract_series(indicator_name: str, result: Any, field: str | None = None):
+        if isinstance(result, pd.Series):
+            return result
+        if isinstance(result, dict):
+            target_field = str(field or default_fields.get(indicator_name.strip().lower(), "")).strip().lower()
+            if target_field:
+                series = result.get(target_field)
+                if isinstance(series, pd.Series):
+                    return series
+            for series in result.values():
+                if isinstance(series, pd.Series):
+                    return series
+        return None
+
+    def _condition_aliases(condition: dict[str, Any]) -> set[str]:
+        indicator_name = str(condition.get("indicator", "")).strip().lower()
+        if not indicator_name:
+            return set()
+        aliases = {indicator_name}
+        params = condition.get("params") or {}
+        period = params.get("period", params.get("length"))
+        if isinstance(period, (int, float)):
+            aliases.add(f"{indicator_name}_{int(period)}")
+        field = str(condition.get("field", "")).strip().lower()
+        if field:
+            aliases.add(f"{indicator_name}.{field}")
+            if isinstance(period, (int, float)):
+                aliases.add(f"{indicator_name}_{int(period)}.{field}")
+        return aliases
+
+    def _resolve_reference_series(reference: str):
+        ref = reference.strip().lower()
+        if not ref:
+            return None
+        if ref in {"price", "close"}:
+            return df["close"]
+
+        for condition in conditions:
+            aliases = _condition_aliases(condition)
+            if ref in aliases:
+                result = _compute_indicator(condition["indicator"], condition.get("params", {}))
+                field = condition.get("field")
+                if "." in ref:
+                    _, field = ref.split(".", 1)
+                return _extract_series(condition["indicator"], result, field)
+
+        field = None
+        indicator_ref = ref
+        if "." in indicator_ref:
+            indicator_ref, field = indicator_ref.split(".", 1)
+
+        params: dict[str, Any] = {}
+        if "_" in indicator_ref:
+            base, suffix = indicator_ref.rsplit("_", 1)
+            if suffix.isdigit():
+                indicator_ref = base
+                params["period"] = int(suffix)
+
+        result = _compute_indicator(indicator_ref, params)
+        return _extract_series(indicator_ref, result, field)
 
     # Evaluate conditions per bar — AND within group, OR between groups
     n_bars = len(df)
     signals = np.zeros(n_bars)
 
-    def _eval_cond(cond: dict, i: int) -> bool:
-        ind_name = cond["indicator"]
-        op = cond["operator"]
-        val = cond["value"]
-        result = indicator_cache.get(ind_name)
-        if result is None:
+    def _compare(current: float, previous: float | None, operator: str, threshold: float) -> bool:
+        if pd.isna(current) or pd.isna(threshold):
             return False
-        if isinstance(result, pd.Series):
-            ind_val = result.iloc[i]
-        elif isinstance(result, dict):
-            first_key = next(iter(result))
-            series = result[first_key]
-            ind_val = series.iloc[i] if isinstance(series, pd.Series) else np.nan
-        else:
-            ind_val = np.nan
-        if pd.isna(ind_val):
-            return False
-        threshold = float(val) if not isinstance(val, (int, float)) else val
-        if op == ">":
-            return ind_val > threshold
-        elif op == "<":
-            return ind_val < threshold
-        elif op == ">=":
-            return ind_val >= threshold
-        elif op == "<=":
-            return ind_val <= threshold
-        elif op == "==":
-            return abs(ind_val - threshold) < 0.001
-        elif op in ("crosses_above", "crosses_below"):
-            if i == 0:
+        if operator == ">":
+            return current > threshold
+        elif operator == "<":
+            return current < threshold
+        elif operator == ">=":
+            return current >= threshold
+        elif operator == "<=":
+            return current <= threshold
+        elif operator == "==":
+            return abs(current - threshold) < 0.001
+        elif operator == "crosses_above":
+            if previous is None or pd.isna(previous):
                 return False
-            prev_result = indicator_cache[ind_name]
-            if isinstance(prev_result, pd.Series):
-                prev_val = prev_result.iloc[i - 1]
-            elif isinstance(prev_result, dict):
-                fk = next(iter(prev_result))
-                sv = prev_result[fk]
-                prev_val = sv.iloc[i - 1] if isinstance(sv, pd.Series) else np.nan
-            else:
-                prev_val = np.nan
-            if pd.isna(prev_val):
+            return previous <= threshold and current > threshold
+        elif operator == "crosses_below":
+            if previous is None or pd.isna(previous):
                 return False
-            if op == "crosses_above":
-                return prev_val <= threshold and ind_val > threshold
-            else:
-                return prev_val >= threshold and ind_val < threshold
+            return previous >= threshold and current < threshold
         return False
+
+    def _eval_cond(cond: dict, i: int) -> bool:
+        indicator_name = cond["indicator"]
+        result = _compute_indicator(indicator_name, cond.get("params", {}))
+        series = _extract_series(indicator_name, result, cond.get("field"))
+        if series is None:
+            return False
+
+        ind_val = series.iloc[i]
+        prev_val = series.iloc[i - 1] if i > 0 else np.nan
+        compare_to = str(cond.get("compare_to", "") or "").strip()
+        if compare_to:
+            threshold_series = _resolve_reference_series(compare_to)
+            threshold = threshold_series.iloc[i] if threshold_series is not None else np.nan
+        else:
+            raw_value = cond.get("value", 0)
+            threshold = float(raw_value) if not isinstance(raw_value, (int, float)) else raw_value
+        return _compare(ind_val, prev_val, cond["operator"], threshold)
 
     for i in range(n_bars):
         for g in groups:
@@ -655,6 +733,8 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                 break
 
     # Simulate trades with stop-loss/take-profit and friction costs
+    is_short = str(action).upper() in {"SELL", "SHORT"}
+    direction = "SHORT" if is_short else "LONG"
     friction = (commission_pct + slippage_pct) * 2  # round-trip: entry + exit
     trades = []
     equity = [req.initial_capital]
@@ -663,20 +743,26 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
     entry_price = 0.0
     entry_idx = 0
 
+    def _trade_return(current_price: float) -> float:
+        if is_short:
+            return (entry_price - current_price) / entry_price
+        return (current_price - entry_price) / entry_price
+
     for i in range(n_bars):
         price = close[i]
 
         if in_position:
-            pnl_pct = (price - entry_price) / entry_price
+            pnl_pct = _trade_return(price)
             # Check stop-loss
             if pnl_pct <= -stop_loss_pct:
-                exit_price = entry_price * (1 - stop_loss_pct)
-                pnl = capital * (exit_price / entry_price - 1) - capital * friction
+                exit_price = entry_price * (1 + stop_loss_pct) if is_short else entry_price * (1 - stop_loss_pct)
+                realized_return = _trade_return(exit_price)
+                pnl = capital * realized_return - capital * friction
                 capital += pnl
                 trades.append({
                     "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
                     "exit_date": dates[i].strftime("%Y-%m-%d"),
-                    "direction": "LONG",
+                    "direction": direction,
                     "entry_price": round(entry_price, 2),
                     "exit_price": round(exit_price, 2),
                     "pnl": round(pnl, 2),
@@ -686,13 +772,14 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                 in_position = False
             # Check take-profit
             elif pnl_pct >= take_profit_pct:
-                exit_price = entry_price * (1 + take_profit_pct)
-                pnl = capital * (exit_price / entry_price - 1) - capital * friction
+                exit_price = entry_price * (1 - take_profit_pct) if is_short else entry_price * (1 + take_profit_pct)
+                realized_return = _trade_return(exit_price)
+                pnl = capital * realized_return - capital * friction
                 capital += pnl
                 trades.append({
                     "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
                     "exit_date": dates[i].strftime("%Y-%m-%d"),
-                    "direction": "LONG",
+                    "direction": direction,
                     "entry_price": round(entry_price, 2),
                     "exit_price": round(exit_price, 2),
                     "pnl": round(pnl, 2),
@@ -706,21 +793,25 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
             entry_idx = i
             in_position = True
 
-        equity.append(capital if not in_position else capital * (price / entry_price))
+        if not in_position:
+            equity.append(capital)
+        else:
+            equity.append(capital * (1 + _trade_return(price)))
 
     # Close any open position at end
     if in_position:
         final_price = close[-1]
-        pnl = capital * (final_price / entry_price - 1) - capital * friction
+        realized_return = _trade_return(final_price)
+        pnl = capital * realized_return - capital * friction
         capital += pnl
         trades.append({
             "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
             "exit_date": dates[-1].strftime("%Y-%m-%d"),
-            "direction": "LONG",
+            "direction": direction,
             "entry_price": round(entry_price, 2),
             "exit_price": round(final_price, 2),
             "pnl": round(pnl, 2),
-            "pnl_pct": round((final_price / entry_price - 1) * 100, 2),
+            "pnl_pct": round(realized_return * 100, 2),
             "bars_held": n_bars - 1 - entry_idx,
         })
         equity[-1] = capital

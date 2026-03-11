@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
+from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from config.settings import get_settings
@@ -21,13 +22,85 @@ from db.cerberus_models import (
     CerberusTrade,
 )
 from db.database import get_session
-from services.ai_strategy_service import default_learning_plan, derive_feature_signals
+from services.ai_strategy_service import (
+    GeneratedStrategySpec,
+    compile_strategy_payload,
+    default_learning_plan,
+    derive_feature_signals,
+)
 
 logger = structlog.get_logger(__name__)
 
 
+def _normalize_fractional_pct(value: Any) -> float | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return round(numeric / 100, 4) if numeric > 1 else numeric
+
+
+def _compile_legacy_ai_strategy(config: dict[str, Any]) -> dict[str, Any] | None:
+    if not config.get("entryConditions"):
+        return None
+
+    raw_spec = deepcopy(config)
+    raw_spec.setdefault("strategyType", raw_spec.get("strategy_type") or "ai_generated")
+    raw_spec.setdefault("sourcePrompt", raw_spec.get("source_prompt") or "")
+    raw_spec.setdefault("overview", raw_spec.get("overview") or raw_spec.get("description") or "")
+    raw_spec.setdefault("featureSignals", raw_spec.get("feature_signals") or [])
+    raw_spec.setdefault("symbols", raw_spec.get("symbols") or ["SPY"])
+
+    try:
+        spec = GeneratedStrategySpec.model_validate(raw_spec)
+    except ValidationError:
+        return None
+
+    compiled = compile_strategy_payload(spec)
+    if "learning" in config:
+        compiled["learning"] = deepcopy(config["learning"])
+    return compiled
+
+
 def normalize_bot_config(config: dict[str, Any] | None) -> dict[str, Any]:
     normalized = deepcopy(config or {})
+    compiled = _compile_legacy_ai_strategy(normalized)
+    if compiled:
+        normalized = compiled
+
+    if "conditionGroups" in normalized and "condition_groups" not in normalized:
+        normalized["condition_groups"] = deepcopy(normalized["conditionGroups"])
+    if "strategyType" in normalized and "strategy_type" not in normalized:
+        normalized["strategy_type"] = normalized["strategyType"]
+    if "sourcePrompt" in normalized and "source_prompt" not in normalized:
+        normalized["source_prompt"] = normalized["sourcePrompt"]
+    if "aiContext" in normalized and "ai_context" not in normalized:
+        normalized["ai_context"] = deepcopy(normalized["aiContext"])
+    if "featureSignals" in normalized and "feature_signals" not in normalized:
+        normalized["feature_signals"] = deepcopy(normalized["featureSignals"])
+
+    if "stopLossPct" in normalized and "stop_loss_pct" not in normalized:
+        normalized["stop_loss_pct"] = _normalize_fractional_pct(normalized["stopLossPct"])
+    elif "stopLoss" in normalized and "stop_loss_pct" not in normalized:
+        normalized["stop_loss_pct"] = _normalize_fractional_pct(normalized["stopLoss"])
+
+    if "takeProfitPct" in normalized and "take_profit_pct" not in normalized:
+        normalized["take_profit_pct"] = _normalize_fractional_pct(normalized["takeProfitPct"])
+    elif "takeProfit" in normalized and "take_profit_pct" not in normalized:
+        normalized["take_profit_pct"] = _normalize_fractional_pct(normalized["takeProfit"])
+
+    if "positionPct" in normalized and "position_size_pct" not in normalized:
+        normalized["position_size_pct"] = _normalize_fractional_pct(normalized["positionPct"])
+    elif "positionSize" in normalized and "position_size_pct" not in normalized:
+        normalized["position_size_pct"] = _normalize_fractional_pct(normalized["positionSize"])
+
+    if not normalized.get("conditions") and normalized.get("condition_groups"):
+        normalized["conditions"] = [
+            deepcopy(condition)
+            for group in normalized["condition_groups"]
+            for condition in group.get("conditions", [])
+        ]
+
     normalized.setdefault("conditions", [])
     normalized.setdefault("condition_groups", [])
     normalized.setdefault("symbols", ["SPY"])

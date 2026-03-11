@@ -88,6 +88,7 @@ async def init_db():
     # Compatibility shim for local/dev startups that call create_all directly
     # instead of running Alembic migrations against an existing database.
     await _ensure_legacy_trade_user_schema()
+    await _ensure_ai_strategy_schema()
     # Seed static reference data (idempotent — skips existing rows)
     from scripts.seed_providers import seed as _seed_providers
     await _seed_providers()
@@ -121,6 +122,69 @@ async def _ensure_legacy_trade_user_schema() -> None:
                     "ON trades (user_id, mode, entry_time)"
                 )
             )
+
+        await conn.run_sync(_ensure)
+
+
+async def _ensure_ai_strategy_schema() -> None:
+    async with _get_engine().begin() as conn:
+        def _ensure(sync_conn) -> None:
+            inspector = inspect(sync_conn)
+            tables = set(inspector.get_table_names())
+
+            def add_column_if_missing(table: str, column: str, ddl: str) -> None:
+                if table not in tables:
+                    return
+                columns = {c["name"] for c in inspector.get_columns(table)}
+                if column not in columns:
+                    sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
+            add_column_if_missing("strategies", "strategy_type", "VARCHAR(32) DEFAULT 'manual'")
+            add_column_if_missing("strategies", "source_prompt", "TEXT")
+            add_column_if_missing("strategies", "ai_context", "JSON")
+
+            add_column_if_missing("strategy_templates", "strategy_type", "VARCHAR(32) DEFAULT 'manual'")
+            add_column_if_missing("strategy_templates", "source_prompt", "TEXT")
+            add_column_if_missing("strategy_templates", "ai_context", "JSON")
+
+            add_column_if_missing("cerberus_bots", "learning_enabled", "BOOLEAN DEFAULT 1")
+            add_column_if_missing("cerberus_bots", "learning_status_json", "JSON")
+            add_column_if_missing("cerberus_bots", "last_optimization_at", "DATETIME")
+
+            if "cerberus_bot_optimization_runs" not in tables:
+                sync_conn.execute(
+                    text(
+                        """
+                        CREATE TABLE cerberus_bot_optimization_runs (
+                            id VARCHAR(36) NOT NULL PRIMARY KEY,
+                            bot_id VARCHAR(36) NOT NULL,
+                            source_version_id VARCHAR(36),
+                            result_version_id VARCHAR(36),
+                            method VARCHAR(64) NOT NULL DEFAULT 'parameter_optimization',
+                            status VARCHAR(32) NOT NULL DEFAULT 'completed',
+                            metrics_json JSON,
+                            adjustments_json JSON,
+                            summary TEXT,
+                            created_at DATETIME,
+                            FOREIGN KEY(bot_id) REFERENCES cerberus_bots (id),
+                            FOREIGN KEY(source_version_id) REFERENCES cerberus_bot_versions (id),
+                            FOREIGN KEY(result_version_id) REFERENCES cerberus_bot_versions (id)
+                        )
+                        """
+                    )
+                )
+                sync_conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_cerberus_botopt_bot "
+                        "ON cerberus_bot_optimization_runs (bot_id)"
+                    )
+                )
+                sync_conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_cerberus_botopt_created "
+                        "ON cerberus_bot_optimization_runs (created_at)"
+                    )
+                )
 
         await conn.run_sync(_ensure)
 
