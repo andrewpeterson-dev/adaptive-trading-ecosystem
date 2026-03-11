@@ -227,52 +227,6 @@ function ExpirationSelector({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Strike Row                                                         */
-/* ------------------------------------------------------------------ */
-
-function StrikeRow({
-  strike,
-  callContract,
-  putContract,
-  selected,
-  onSelect,
-}: {
-  strike: number;
-  callContract?: OptionContract;
-  putContract?: OptionContract;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`grid grid-cols-5 gap-1 px-2 py-1.5 rounded-md text-xs transition-colors w-full ${
-        selected
-          ? "bg-muted/80 border border-border/50"
-          : "hover:bg-muted/40"
-      }`}
-    >
-      <span className="font-mono tabular-nums text-emerald-400 text-right">
-        {fmt(callContract?.bid)}
-      </span>
-      <span className="font-mono tabular-nums text-muted-foreground text-right">
-        {fmt(callContract?.ask)}
-      </span>
-      <span className="font-mono tabular-nums font-semibold text-foreground text-center">
-        {strike.toFixed(strike % 1 === 0 ? 0 : 2)}
-      </span>
-      <span className="font-mono tabular-nums text-red-400 text-left">
-        {fmt(putContract?.bid)}
-      </span>
-      <span className="font-mono tabular-nums text-muted-foreground text-left">
-        {fmt(putContract?.ask)}
-      </span>
-    </button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Greeks Display                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -644,6 +598,7 @@ export function OptionsPanel() {
   const [selectedExpiration, setSelectedExpiration] = useState("");
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
   const [optionSide, setOptionSide] = useState<OptionSide>("call");
+  const [liquidityFilter, setLiquidityFilter] = useState<"all" | "active">("active");
   const [direction, setDirection] = useState<OptionDirection>("buy_to_open");
   const [quantity, setQuantity] = useState(1);
 
@@ -723,22 +678,33 @@ export function OptionsPanel() {
     [chainData, selectedExpiration]
   );
 
-  const strikes = useMemo(
+  const filteredContracts = useMemo(
     () =>
-      Array.from(new Set(contracts.map((c) => c.strike))).sort(
-        (a, b) => a - b
-      ),
-    [contracts]
+      contracts
+        .filter((contract) => contract.type === optionSide)
+        .filter((contract) => {
+          if (liquidityFilter === "all") return true;
+          return (contract.volume ?? 0) > 0 || (contract.open_interest ?? 0) > 0;
+        })
+        .sort((left, right) => left.strike - right.strike),
+    [contracts, liquidityFilter, optionSide]
   );
+
+  useEffect(() => {
+    if (selectedStrike == null) return;
+    if (!filteredContracts.some((contract) => contract.strike === selectedStrike)) {
+      setSelectedStrike(null);
+    }
+  }, [filteredContracts, selectedStrike]);
 
   const selectedContract = useMemo(
     () =>
       selectedStrike != null
-        ? contracts.find(
+        ? filteredContracts.find(
             (c) => c.strike === selectedStrike && c.type === optionSide
           ) ?? null
         : null,
-    [contracts, selectedStrike, optionSide]
+    [filteredContracts, selectedStrike, optionSide]
   );
 
   const cashAvailable = account?.cash ?? null;
@@ -908,41 +874,84 @@ export function OptionsPanel() {
           </div>
         </div>
 
-        {/* Strike selector (chain view) */}
+        {/* Chain table */}
         <div>
-          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">
-            Strikes
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Chain
+            </div>
+            <div className="flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 p-1">
+              {(["active", "all"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLiquidityFilter(value)}
+                  className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors ${
+                    liquidityFilter === value
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {value === "active" ? "Active only" : "All strikes"}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-5 gap-1 px-2 mb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-            <span className="text-right">C Bid</span>
-            <span className="text-right">C Ask</span>
-            <span className="text-center">Strike</span>
-            <span className="text-left">P Bid</span>
-            <span className="text-left">P Ask</span>
-          </div>
-          <div className="max-h-48 overflow-y-auto space-y-0.5">
-            {strikes.map((strike) => {
-              const callC = contracts.find(
-                (c) => c.strike === strike && c.type === "call"
-              );
-              const putC = contracts.find(
-                (c) => c.strike === strike && c.type === "put"
-              );
-              return (
-                <StrikeRow
-                  key={strike}
-                  strike={strike}
-                  callContract={callC}
-                  putContract={putC}
-                  selected={selectedStrike === strike}
-                  onSelect={() => setSelectedStrike(strike)}
-                />
-              );
-            })}
-          </div>
-          {selectedStrike == null && (
-            <p className="text-[10px] text-muted-foreground/60 mt-1 text-center">
-              Click a row to select a strike
+          {filteredContracts.length === 0 ? (
+            <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
+              No {optionSide} contracts match the current expiration and liquidity filters.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-3xl border border-border/60">
+              <div className="max-h-72 overflow-auto">
+                <table className="app-table min-w-full text-xs">
+                  <thead>
+                    <tr>
+                      <th>Strike</th>
+                      <th>Bid</th>
+                      <th>Ask</th>
+                      <th>Last</th>
+                      <th>IV</th>
+                      <th>Volume</th>
+                      <th>OI</th>
+                      <th>Delta</th>
+                      <th>Gamma</th>
+                      <th>Theta</th>
+                      <th>Vega</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredContracts.map((contract) => (
+                      <tr
+                        key={`${contract.symbol}-${contract.strike}`}
+                        onClick={() => setSelectedStrike(contract.strike)}
+                        className={`cursor-pointer transition-colors ${
+                          selectedStrike === contract.strike ? "bg-muted/35" : "hover:bg-muted/25"
+                        }`}
+                      >
+                        <td className="font-mono font-semibold tabular-nums">
+                          {contract.strike.toFixed(contract.strike % 1 === 0 ? 0 : 2)}
+                        </td>
+                        <td className="font-mono tabular-nums">{fmt(contract.bid)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.ask)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.last)}</td>
+                        <td className="font-mono tabular-nums">{fmtPct(contract.implied_volatility)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.volume, 0)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.open_interest, 0)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.delta, 4)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.gamma, 4)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.theta, 4)}</td>
+                        <td className="font-mono tabular-nums">{fmt(contract.vega, 4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {selectedStrike == null && filteredContracts.length > 0 && (
+            <p className="mt-2 text-[10px] text-muted-foreground/60">
+              Select a row to stage that contract in the order form below.
             </p>
           )}
         </div>

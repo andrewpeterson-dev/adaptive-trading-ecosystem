@@ -41,11 +41,11 @@ export function AuthShell({
           <Link href="/" className="inline-flex items-center gap-3">
             <div className="app-card flex h-14 w-14 items-center justify-center rounded-[20px]">
               <Image
-                src="/logo.png"
+                src="/favicon.svg"
                 alt="Adaptive Trading"
-                width={32}
-                height={32}
-                className="h-8 w-8 object-contain"
+                width={28}
+                height={28}
+                className="h-7 w-7 object-contain"
                 priority
               />
             </div>
@@ -90,11 +90,11 @@ export function AuthShell({
               <div className="inline-flex items-center gap-3 lg:hidden">
                 <div className="app-card flex h-12 w-12 items-center justify-center rounded-[18px]">
                   <Image
-                    src="/logo.png"
+                    src="/favicon.svg"
                     alt="Adaptive Trading"
-                    width={28}
-                    height={28}
-                    className="h-7 w-7 object-contain"
+                    width={24}
+                    height={24}
+                    className="h-6 w-6 object-contain"
                     priority
                   />
                 </div>

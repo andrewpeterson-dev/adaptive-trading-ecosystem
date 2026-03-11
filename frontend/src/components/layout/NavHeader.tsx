@@ -7,14 +7,11 @@ import { usePathname } from "next/navigation";
 import {
   LogOut,
   Menu,
-  MoonStar,
   Settings,
   ShieldAlert,
-  SunMedium,
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useThemeMode } from "@/hooks/useThemeMode";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { cn } from "@/lib/utils";
 import {
@@ -49,7 +46,6 @@ export function NavHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmLiveOpen, setConfirmLiveOpen] = useState(false);
   const { mode, setMode, switching } = useTradingMode();
-  const { theme, toggleTheme } = useThemeMode();
   const { user, logout } = useAuth();
 
   useEffect(() => {
@@ -75,15 +71,15 @@ export function NavHeader() {
       <header className="sticky top-0 z-50 px-4 pt-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1440px]">
           <div className="app-panel px-4 py-3 sm:px-5">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-4 xl:flex-nowrap">
               <Link href="/" className="flex min-w-0 items-center gap-3">
                 <div className="app-card flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px]">
                   <Image
-                    src="/logo.png"
+                    src="/favicon.svg"
                     alt="Adaptive Trading"
-                    width={36}
-                    height={36}
-                    className="h-9 w-9 object-contain"
+                    width={28}
+                    height={28}
+                    className="h-7 w-7 object-contain"
                     priority
                   />
                 </div>
@@ -100,17 +96,17 @@ export function NavHeader() {
                 </div>
               </Link>
 
-              <nav className="ml-4 hidden flex-1 justify-center xl:flex">
-                <div className="app-segmented">
+              <nav className="hidden min-w-0 flex-1 xl:flex">
+                <div className="flex w-full flex-wrap items-center justify-center gap-1.5 rounded-[24px] border border-border/65 bg-muted/24 px-3 py-2">
                   {NAV_ITEMS.map((item) => (
                     <Link
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        "app-segment text-[13px] tracking-tight",
+                        "rounded-full px-4 py-2.5 text-[13px] font-medium tracking-tight transition-all",
                         isActive(item.href)
-                          ? "app-toggle-active"
-                          : "text-muted-foreground"
+                          ? "border border-primary/20 bg-primary/12 text-primary shadow-[0_14px_26px_-22px_rgba(59,130,246,0.55)]"
+                          : "text-muted-foreground hover:bg-muted/35 hover:text-foreground"
                       )}
                     >
                       {item.label}
@@ -163,19 +159,6 @@ export function NavHeader() {
                     {mode === "live" ? "Live On" : "Enable Live"}
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  className="hidden h-10 items-center gap-2 rounded-full border border-border/60 bg-muted/30 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground md:flex"
-                >
-                  {theme === "dark" ? (
-                    <MoonStar className="h-3.5 w-3.5" />
-                  ) : (
-                    <SunMedium className="h-3.5 w-3.5" />
-                  )}
-                  Theme
-                </button>
 
                 {user?.email && (
                   <div className="app-pill hidden max-w-[220px] px-3 py-2 text-[11px] font-medium 2xl:block">
@@ -290,19 +273,6 @@ export function NavHeader() {
                     </button>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  className="app-button-secondary justify-center px-4 py-2 text-xs"
-                >
-                  {theme === "dark" ? (
-                    <MoonStar className="h-4 w-4" />
-                  ) : (
-                    <SunMedium className="h-4 w-4" />
-                  )}
-                  Theme
-                </button>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Link

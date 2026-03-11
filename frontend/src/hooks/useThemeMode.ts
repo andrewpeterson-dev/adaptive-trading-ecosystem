@@ -35,21 +35,20 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>("dark");
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-    const nextTheme = stored === "light" || stored === "dark" ? stored : "dark";
-    setThemeState(nextTheme);
-    applyTheme(nextTheme);
+    localStorage.removeItem(STORAGE_KEY);
+    setThemeState("dark");
+    applyTheme("dark");
   }, []);
 
   const setTheme = useCallback((next: ThemeMode) => {
-    setThemeState(next);
-    localStorage.setItem(STORAGE_KEY, next);
-    applyTheme(next);
+    setThemeState("dark");
+    localStorage.removeItem(STORAGE_KEY);
+    applyTheme("dark");
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  }, [setTheme, theme]);
+    setTheme("dark");
+  }, [setTheme]);
 
   return React.createElement(
     ThemeModeContext.Provider,
