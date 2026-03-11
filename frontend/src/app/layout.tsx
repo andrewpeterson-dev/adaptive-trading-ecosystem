@@ -3,6 +3,20 @@ import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { Providers } from "@/components/layout/Providers";
 
+const initialThemeScript = `
+(() => {
+  try {
+    const mode = window.localStorage.getItem("trading_mode");
+    const html = document.documentElement;
+    if (mode === "live") {
+      html.classList.add("dark");
+    } else {
+      html.classList.remove("dark");
+    }
+  } catch (_) {}
+})();
+`;
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -24,8 +38,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className="font-sans">
+        <script dangerouslySetInnerHTML={{ __html: initialThemeScript }} />
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

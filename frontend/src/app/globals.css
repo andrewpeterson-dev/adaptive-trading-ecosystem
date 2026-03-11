@@ -4,38 +4,38 @@
 
 @layer base {
   :root {
-    --background: 228 29% 8%;
-    --foreground: 213 31% 95%;
-    --card: 226 24% 11%;
-    --card-foreground: 213 31% 95%;
-    --popover: 226 24% 11%;
-    --popover-foreground: 213 31% 95%;
-    --primary: 213 96% 63%;
-    --primary-foreground: 222 47% 8%;
-    --secondary: 225 17% 18%;
-    --secondary-foreground: 214 31% 92%;
-    --muted: 224 18% 15%;
-    --muted-foreground: 217 14% 68%;
-    --accent: 223 17% 17%;
-    --accent-foreground: 213 31% 95%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 214 92% 52%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 32% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 32% 95%;
+    --muted-foreground: 215 16% 38%;
+    --accent: 210 32% 94%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 0 78% 58%;
-    --destructive-foreground: 213 31% 95%;
-    --border: 222 18% 22%;
-    --input: 225 24% 11%;
-    --ring: 213 96% 63%;
-    --positive: 152 72% 45%;
-    --positive-foreground: 150 40% 95%;
-    --negative: 1 83% 63%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 24% 86%;
+    --input: 0 0% 100%;
+    --ring: 214 92% 52%;
+    --positive: 152 68% 36%;
+    --positive-foreground: 152 50% 98%;
+    --negative: 0 72% 52%;
     --negative-foreground: 0 0% 100%;
-    --warning: 39 92% 57%;
-    --warning-foreground: 225 25% 10%;
-    --info: 198 93% 60%;
-    --info-foreground: 222 47% 8%;
-    --surface-1: 228 27% 9%;
-    --surface-2: 226 23% 12%;
-    --surface-3: 224 20% 15%;
-    --surface-overlay: 228 23% 10%;
-    --shadow-color: 220 75% 2%;
+    --warning: 39 92% 52%;
+    --warning-foreground: 222 47% 11%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+    --surface-1: 210 38% 97%;
+    --surface-2: 0 0% 100%;
+    --surface-3: 210 30% 96%;
+    --surface-overlay: 210 36% 99%;
+    --shadow-color: 220 20% 70%;
     --radius: 1.125rem;
   }
 
@@ -88,9 +88,9 @@
     min-height: 100vh;
     font-variant-numeric: tabular-nums;
     background-image:
-      radial-gradient(circle at top, rgba(56, 189, 248, 0.14), transparent 34%),
-      radial-gradient(circle at 85% 12%, rgba(59, 130, 246, 0.12), transparent 26%),
-      linear-gradient(180deg, rgba(11, 18, 32, 0.98), rgba(7, 12, 24, 1));
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 34%),
+      radial-gradient(circle at 85% 12%, rgba(14, 165, 233, 0.1), transparent 28%),
+      linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 1));
     background-attachment: fixed;
   }
 
@@ -101,10 +101,10 @@
     z-index: -1;
     pointer-events: none;
     background-image:
-      linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
+      linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
     background-size: 72px 72px;
-    mask-image: linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 70%);
+    mask-image: linear-gradient(180deg, rgba(255, 255, 255, 0.48), transparent 70%);
   }
 
   html {

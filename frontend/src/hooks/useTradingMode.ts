@@ -11,6 +11,7 @@ import {
 } from "react";
 import React from "react";
 import { getServerMode, setServerMode } from "@/lib/api/mode";
+import { useThemeMode } from "@/hooks/useThemeMode";
 
 export type TradingMode = "paper" | "live";
 
@@ -26,6 +27,16 @@ const TradingModeContext = createContext<TradingModeContextValue | null>(null);
 
 const STORAGE_KEY = "trading_mode";
 
+function resolveStoredMode(): TradingMode {
+  if (typeof window === "undefined") return "paper";
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  return stored === "live" ? "live" : "paper";
+}
+
+function themeForMode(mode: TradingMode): "light" | "dark" {
+  return mode === "live" ? "dark" : "light";
+}
+
 /**
  * Broadcast a custom event so all polling hooks and components know to re-fetch.
  * Components listen via useModeResetListener().
@@ -35,35 +46,31 @@ function broadcastModeReset(): void {
 }
 
 export function TradingModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<TradingMode>("paper");
+  const [mode, setModeState] = useState<TradingMode>(resolveStoredMode);
   const [switching, setSwitching] = useState(false);
+  const { setTheme } = useThemeMode();
 
-  // On mount: fetch server-authoritative mode
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as TradingMode | null;
-    if (stored === "paper" || stored === "live") {
-      setModeState(stored);
-    }
-    // Then confirm with server (source of truth)
+    setTheme(themeForMode(mode));
+  }, [mode, setTheme]);
+
+  useEffect(() => {
     getServerMode()
       .then((serverMode) => {
         setModeState(serverMode);
-        localStorage.setItem(STORAGE_KEY, serverMode);
+        window.localStorage.setItem(STORAGE_KEY, serverMode);
       })
       .catch(() => {
-        // Not logged in yet — keep localStorage value
+        window.localStorage.setItem(STORAGE_KEY, resolveStoredMode());
       });
   }, []);
 
   const setMode = useCallback(async (next: TradingMode) => {
     setSwitching(true);
     try {
-      // 1. Tell the server first (source of truth)
       await setServerMode(next);
-      // 2. Only update client after server confirms
       setModeState(next);
-      localStorage.setItem(STORAGE_KEY, next);
-      // 3. Broadcast reset so all components re-fetch
+      window.localStorage.setItem(STORAGE_KEY, next);
       broadcastModeReset();
     } catch (err) {
       console.error("Failed to switch mode:", err);
