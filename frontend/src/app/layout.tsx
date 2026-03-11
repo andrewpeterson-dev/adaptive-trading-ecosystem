@@ -6,13 +6,16 @@ import { Providers } from "@/components/layout/Providers";
 const initialThemeScript = `
 (() => {
   try {
-    const mode = window.localStorage.getItem("trading_mode");
     const html = document.documentElement;
-    if (mode === "live") {
-      html.classList.add("dark");
-    } else {
-      html.classList.remove("dark");
-    }
+    const stored = window.localStorage.getItem("workspace_theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const theme =
+      stored === "light" || stored === "dark"
+        ? stored
+        : prefersDark
+          ? "dark"
+          : "light";
+    html.classList.toggle("dark", theme === "dark");
   } catch (_) {}
 })();
 `;

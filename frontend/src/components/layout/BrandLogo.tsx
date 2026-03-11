@@ -7,7 +7,7 @@ interface BrandLogoProps {
 }
 
 export function BrandLogo({
-  size = 36,
+  size = 44,
   className,
 }: BrandLogoProps) {
   return (

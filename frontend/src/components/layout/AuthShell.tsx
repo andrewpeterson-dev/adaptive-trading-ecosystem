@@ -39,8 +39,8 @@ export function AuthShell({
       <div className="grid w-full max-w-6xl gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <section className="hidden space-y-8 lg:block">
           <Link href="/" className="inline-flex items-center gap-3">
-            <div className="app-card flex h-14 w-14 items-center justify-center rounded-[20px]">
-              <BrandLogo className="h-9 w-9" />
+            <div className="flex h-14 w-14 items-center justify-center">
+              <BrandLogo size={48} className="h-12 w-12" />
             </div>
             <div>
               <p className="text-base font-semibold tracking-tight text-foreground">
@@ -81,8 +81,8 @@ export function AuthShell({
           <div className="app-card rounded-[28px] p-6 sm:p-8">
             <div className="mb-8 space-y-4">
               <div className="inline-flex items-center gap-3 lg:hidden">
-                <div className="app-card flex h-12 w-12 items-center justify-center rounded-[18px]">
-                  <BrandLogo size={30} className="h-[30px] w-[30px]" />
+                <div className="flex h-12 w-12 items-center justify-center">
+                  <BrandLogo size={40} className="h-10 w-10" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">

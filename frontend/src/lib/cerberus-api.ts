@@ -131,6 +131,7 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
   return apiFetch('/api/ai/chat', {
     method: 'POST',
     body: JSON.stringify(request),
+    timeoutMs: 120_000,
   });
 }
 
@@ -167,6 +168,7 @@ export async function generateStrategyWithAI(prompt: string): Promise<GeneratedS
   return apiFetch('/api/ai/tools/generate-strategy', {
     method: 'POST',
     body: JSON.stringify({ prompt }),
+    timeoutMs: 120_000,
   });
 }
 

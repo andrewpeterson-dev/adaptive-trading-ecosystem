@@ -11,7 +11,6 @@ import {
 } from "react";
 import React from "react";
 import { getServerMode, setServerMode } from "@/lib/api/mode";
-import { useThemeMode } from "@/hooks/useThemeMode";
 
 export type TradingMode = "paper" | "live";
 
@@ -33,10 +32,6 @@ function resolveStoredMode(): TradingMode {
   return stored === "live" ? "live" : "paper";
 }
 
-function themeForMode(mode: TradingMode): "light" | "dark" {
-  return mode === "live" ? "dark" : "light";
-}
-
 /**
  * Broadcast a custom event so all polling hooks and components know to re-fetch.
  * Components listen via useModeResetListener().
@@ -48,11 +43,6 @@ function broadcastModeReset(): void {
 export function TradingModeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<TradingMode>(resolveStoredMode);
   const [switching, setSwitching] = useState(false);
-  const { setTheme } = useThemeMode();
-
-  useEffect(() => {
-    setTheme(themeForMode(mode));
-  }, [mode, setTheme]);
 
   useEffect(() => {
     getServerMode()

@@ -6,11 +6,14 @@ import { usePathname } from "next/navigation";
 import {
   LogOut,
   Menu,
+  Moon,
   Settings,
   ShieldAlert,
+  Sun,
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useThemeMode } from "@/hooks/useThemeMode";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
@@ -47,8 +50,11 @@ export function NavHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmLiveOpen, setConfirmLiveOpen] = useState(false);
   const { mode, setMode, switching } = useTradingMode();
+  const { theme, toggleTheme } = useThemeMode();
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const nextTheme = theme === "dark" ? "light" : "dark";
+  const ThemeIcon = theme === "dark" ? Sun : Moon;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -92,8 +98,8 @@ export function NavHeader() {
           <div className="app-panel px-4 py-3 sm:px-5">
             <div className="flex flex-wrap items-center gap-4 xl:flex-nowrap">
               <Link href="/" className="flex min-w-0 items-center gap-3">
-                <div className="app-card flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px]">
-                  <BrandLogo className="h-9 w-9" />
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center">
+                  <BrandLogo size={48} className="h-12 w-12" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -177,6 +183,21 @@ export function NavHeader() {
                     <span className="block truncate font-mono">{user.email}</span>
                   </div>
                 )}
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      aria-label={`Switch to ${nextTheme} theme`}
+                      className="app-button-secondary hidden px-4 md:inline-flex"
+                    >
+                      <ThemeIcon className="h-4 w-4" />
+                      <span>Theme</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Switch to {nextTheme} theme</TooltipContent>
+                </Tooltip>
 
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -286,7 +307,15 @@ export function NavHeader() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className="app-button-secondary justify-center px-4 py-2 text-xs"
+                  >
+                    <ThemeIcon className="h-4 w-4" />
+                    Theme
+                  </button>
                   <Link
                     href="/settings"
                     className="app-button-secondary justify-center px-4 py-2 text-xs"
