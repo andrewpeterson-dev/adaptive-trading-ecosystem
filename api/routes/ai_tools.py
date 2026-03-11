@@ -282,6 +282,7 @@ def _legacy_strategy_to_record(strategy: Strategy) -> dict[str, Any]:
 
 
 async def _load_strategy_record(session, user_id: int, strategy_id: int) -> dict[str, Any] | None:
+    # Try StrategyInstance first (new schema)
     instance_result = await session.execute(
         select(StrategyInstance)
         .options(selectinload(StrategyInstance.template))
@@ -290,13 +291,21 @@ async def _load_strategy_record(session, user_id: int, strategy_id: int) -> dict
     instance = instance_result.scalar_one_or_none()
     if instance and instance.template:
         return _strategy_instance_to_record(instance)
+    if instance and not instance.template:
+        logger.warning("strategy_instance_missing_template", id=strategy_id, template_id=instance.template_id)
 
+    # Fallback: legacy Strategy table (match by user_id OR user_id is NULL for seed data)
     legacy_result = await session.execute(
-        select(Strategy).where(Strategy.id == strategy_id, Strategy.user_id == user_id)
+        select(Strategy).where(
+            Strategy.id == strategy_id,
+            (Strategy.user_id == user_id) | (Strategy.user_id.is_(None)),
+        )
     )
     legacy = legacy_result.scalar_one_or_none()
     if legacy:
         return _legacy_strategy_to_record(legacy)
+
+    logger.warning("strategy_not_found", strategy_id=strategy_id, user_id=user_id)
     return None
 
 
