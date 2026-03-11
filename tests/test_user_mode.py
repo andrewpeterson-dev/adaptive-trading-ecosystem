@@ -19,6 +19,7 @@ def _mock_session(scalar_return=None):
     result = MagicMock()
     result.scalar_one_or_none.return_value = scalar_return
     db.execute = AsyncMock(return_value=result)
+    db.add = MagicMock()
     db.__aenter__ = AsyncMock(return_value=db)
     db.__aexit__ = AsyncMock(return_value=False)
     return db

@@ -5,13 +5,25 @@ from typing import Optional
 
 import jwt
 import structlog
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field, field_validator
 
 from config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
+_MAX_THREAD_LIMIT = 100
+_MAX_MESSAGE_LIMIT = 200
+_ALLOWED_CHAT_MODES = {
+    "chat",
+    "analysis",
+    "trade",
+    "backtest",
+    "build",
+    "portfolio",
+    "research",
+    "strategy",
+}
 
 _controller = None
 
@@ -46,11 +58,32 @@ def _get_websocket_user_id(websocket: WebSocket) -> Optional[int]:
 class ChatRequest(BaseModel):
     threadId: Optional[str] = None
     mode: str = "chat"
-    message: str
+    message: str = Field(min_length=1, max_length=20_000)
     pageContext: Optional[dict] = None
     attachments: Optional[list[str]] = None
     selectedAccountId: Optional[str] = None
     allowSlowExpertMode: bool = False
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in _ALLOWED_CHAT_MODES:
+            raise ValueError(f"Unsupported mode: {value}")
+        return normalized
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def normalize_message(cls, value):
+        return str(value).strip()
+
+    @field_validator("attachments")
+    @classmethod
+    def normalize_attachments(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        normalized = [str(attachment).strip() for attachment in value if str(attachment).strip()]
+        return normalized or None
 
 
 class ChatResponse(BaseModel):
@@ -64,17 +97,24 @@ async def chat(request: Request, body: ChatRequest):
     """Initiate a Cerberus chat turn. Returns thread ID and stream channel."""
     user_id = request.state.user_id
     controller = _get_controller()
+    message = body.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message is required")
 
-    result = await controller.handle_turn(
-        user_id=user_id,
-        message=body.message,
-        thread_id=body.threadId,
-        mode=body.mode,
-        page_context=body.pageContext,
-        attachments=body.attachments,
-        selected_account_id=body.selectedAccountId,
-        allow_slow_expert=body.allowSlowExpertMode,
-    )
+    try:
+        result = await controller.handle_turn(
+            user_id=user_id,
+            message=message,
+            thread_id=body.threadId,
+            mode=body.mode,
+            page_context=body.pageContext,
+            attachments=body.attachments,
+            selected_account_id=body.selectedAccountId,
+            allow_slow_expert=body.allowSlowExpertMode,
+        )
+    except LookupError as exc:
+        logger.warning("chat_thread_not_found", user_id=user_id, thread_id=body.threadId)
+        raise HTTPException(status_code=404, detail=str(exc))
 
     return {
         "threadId": result.thread_id,
@@ -99,28 +139,38 @@ async def stream(websocket: WebSocket, thread_id: str):
             # Receive chat request from WebSocket
             data = await websocket.receive_json()
 
-            message = data.get("message", "")
+            message = str(data.get("message", "")).strip()
             if not message:
                 await websocket.send_json(
                     {"type": "error", "data": {"message": "Missing message"}}
                 )
                 continue
 
-            mode = data.get("mode", "chat")
+            mode = str(data.get("mode", "chat")).strip().lower()
+            if mode not in _ALLOWED_CHAT_MODES:
+                await websocket.send_json(
+                    {"type": "error", "data": {"message": "Unsupported mode"}}
+                )
+                continue
             page_context = data.get("pageContext")
             attachments = data.get("attachments")
 
             controller = _get_controller()
 
-            async for event in controller.stream_turn(
-                user_id=user_id,
-                message=message,
-                thread_id=thread_id,
-                mode=mode,
-                page_context=page_context,
-                attachments=attachments,
-            ):
-                await websocket.send_json(event)
+            try:
+                async for event in controller.stream_turn(
+                    user_id=user_id,
+                    message=message,
+                    thread_id=thread_id,
+                    mode=mode,
+                    page_context=page_context,
+                    attachments=attachments,
+                ):
+                    await websocket.send_json(event)
+            except LookupError:
+                await websocket.send_json(
+                    {"type": "error", "data": {"message": "Thread not found"}}
+                )
 
     except WebSocketDisconnect:
         logger.info("websocket_disconnected", thread_id=thread_id)
@@ -135,7 +185,10 @@ async def stream(websocket: WebSocket, thread_id: str):
 
 
 @router.get("/threads")
-async def list_threads(request: Request, limit: int = 20):
+async def list_threads(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=_MAX_THREAD_LIMIT),
+):
     """List conversation threads for the current user."""
     from db.database import get_session
     from db.cerberus_models import CerberusConversationThread
@@ -167,7 +220,11 @@ async def list_threads(request: Request, limit: int = 20):
 
 
 @router.get("/threads/{thread_id}/messages")
-async def get_thread_messages(request: Request, thread_id: str, limit: int = 50):
+async def get_thread_messages(
+    request: Request,
+    thread_id: str,
+    limit: int = Query(default=50, ge=1, le=_MAX_MESSAGE_LIMIT),
+):
     """Get messages for a conversation thread."""
     from db.database import get_session
     from db.cerberus_models import CerberusConversationMessage

@@ -28,9 +28,9 @@ class TestIsAvailable:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_ctx = AsyncMock()
+            mock_ctx.is_closed = False
             mock_ctx.get = AsyncMock(return_value=mock_response)
-            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_ctx
 
             result = await client.is_available()
             assert result is True
@@ -48,9 +48,9 @@ class TestIsAvailable:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_ctx = AsyncMock()
+            mock_ctx.is_closed = False
             mock_ctx.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
-            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_ctx
 
             result = await client.is_available()
             assert result is False
@@ -75,9 +75,9 @@ class TestGenerate:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_ctx = AsyncMock()
+            mock_ctx.is_closed = False
             mock_ctx.post = AsyncMock(return_value=mock_response)
-            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_ctx
 
             result = await client.generate("Analyze AAPL")
             assert result == "AAPL looks bullish"
@@ -96,9 +96,9 @@ class TestGenerate:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_ctx = AsyncMock()
+            mock_ctx.is_closed = False
             mock_ctx.post = AsyncMock(side_effect=httpx.ReadTimeout("Timeout"))
-            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_ctx
 
             with pytest.raises(httpx.ReadTimeout):
                 await client.generate("Analyze AAPL")
@@ -124,9 +124,9 @@ class TestStats:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_ctx = AsyncMock()
+            mock_ctx.is_closed = False
             mock_ctx.post = AsyncMock(return_value=mock_response)
-            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_ctx
 
             await client.generate("prompt1")
             await client.generate("prompt2")

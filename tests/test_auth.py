@@ -1,75 +1,113 @@
-"""Tests for the authentication module."""
+"""Focused tests for the current FastAPI auth helpers and profile route."""
 
-import sys
-from unittest.mock import MagicMock
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
-# The import chain is:
-#   dashboard.auth -> streamlit, config.settings.get_settings, sqlalchemy, db.models
-#   db.models -> db.database -> config.settings.get_settings, create_async_engine
-#
-# All of these execute at module level. To test the pure functions
-# (hash_password, verify_password, is_valid_email) we mock the heavy deps
-# before importing dashboard.auth.
+from api.routes.auth import (
+    ProfileUpdateRequest,
+    _check_password,
+    _hash_password,
+    _validate_email,
+    _validate_password,
+    update_profile,
+)
 
-# 1) Mock streamlit
-sys.modules.setdefault("streamlit", MagicMock())
 
-# 2) Mock db.database so db.models can import Base without hitting a real DB
-_mock_database = MagicMock()
-_mock_database.Base = type("FakeBase", (), {})  # minimal declarative base stand-in
-sys.modules["db.database"] = _mock_database
+def _make_request(user_id: int = 1):
+    req = MagicMock()
+    req.state.user_id = user_id
+    return req
 
-# 3) Mock db.models (User, EmailVerification)
-_mock_models = MagicMock()
-sys.modules["db.models"] = _mock_models
 
-# 4) Mock config.settings.get_settings so module-level settings = get_settings() works
-_mock_settings_obj = MagicMock()
-_mock_settings_obj.database_url_sync = "sqlite://"
-_mock_settings_obj.smtp_user = ""
-_mock_settings_obj.smtp_password = ""
-# Risk-management fields (prevent MagicMock leaking into RiskManager)
-_mock_settings_obj.max_position_size_pct = 0.10
-_mock_settings_obj.max_portfolio_exposure_pct = 0.80
-_mock_settings_obj.max_drawdown_pct = 0.15
-_mock_settings_obj.stop_loss_pct = 0.03
-_mock_settings_obj.max_trades_per_hour = 20
-_mock_settings_obj.initial_capital = 100_000.0
-_mock_settings_obj.trading_mode.value = "paper"
-
-_mock_settings_mod = MagicMock()
-_mock_settings_mod.get_settings = MagicMock(return_value=_mock_settings_obj)
-sys.modules.setdefault("config.settings", _mock_settings_mod)
-
-# Now import the auth module -- only bcrypt and re are real
-from dashboard.auth import hash_password, verify_password, is_valid_email
+def _mock_session(user):
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    db.execute = AsyncMock(return_value=result)
+    db.__aenter__ = AsyncMock(return_value=db)
+    db.__aexit__ = AsyncMock(return_value=False)
+    return db
 
 
 def test_hash_password_returns_bcrypt_string():
-    hashed = hash_password("testpassword")
-    assert hashed.startswith("$2b$")
+    hashed = _hash_password("testpassword")
+    assert hashed.startswith("$2")
     assert len(hashed) > 50
 
 
-def test_verify_password_correct():
-    hashed = hash_password("mypassword")
-    assert verify_password("mypassword", hashed) is True
+def test_check_password_correct():
+    hashed = _hash_password("mypassword")
+    assert _check_password("mypassword", hashed) is True
 
 
-def test_verify_password_incorrect():
-    hashed = hash_password("mypassword")
-    assert verify_password("wrongpassword", hashed) is False
+def test_check_password_incorrect():
+    hashed = _hash_password("mypassword")
+    assert _check_password("wrongpassword", hashed) is False
 
 
-def test_is_valid_email_accepts_valid():
-    assert is_valid_email("user@example.com") is True
-    assert is_valid_email("first.last@company.co.uk") is True
+def test_validate_email_normalizes_case():
+    assert _validate_email(" User@Example.com ") == "user@example.com"
 
 
-def test_is_valid_email_rejects_invalid():
-    assert is_valid_email("not-an-email") is False
-    assert is_valid_email("@missing.com") is False
-    assert is_valid_email("user@") is False
-    assert is_valid_email("") is False
+def test_validate_email_rejects_invalid():
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_email("not-an-email")
+    assert exc_info.value.status_code == 400
+
+
+def test_validate_password_rejects_short_values():
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_password("short")
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_update_profile_requires_current_password_for_password_change():
+    user = MagicMock()
+    user.id = 1
+    user.email = "user@example.com"
+    user.display_name = "User"
+    user.is_admin = False
+    user.email_verified = True
+    user.password_hash = _hash_password("current-password")
+
+    db = _mock_session(user)
+    with (
+        patch("api.routes.auth.get_session", return_value=db),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await update_profile(
+            ProfileUpdateRequest(password="new-password"),
+            _make_request(),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "Current password is required" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_update_profile_changes_password_with_current_password():
+    user = MagicMock()
+    user.id = 1
+    user.email = "user@example.com"
+    user.display_name = "User"
+    user.is_admin = False
+    user.email_verified = True
+    user.password_hash = _hash_password("current-password")
+
+    db = _mock_session(user)
+    with patch("api.routes.auth.get_session", return_value=db):
+        response = await update_profile(
+            ProfileUpdateRequest(
+                current_password="current-password",
+                new_password="new-password",
+            ),
+            _make_request(),
+        )
+
+    assert response["success"] is True
+    assert _check_password("new-password", user.password_hash) is True

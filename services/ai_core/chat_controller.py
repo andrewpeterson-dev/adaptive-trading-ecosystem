@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import AsyncIterator, Optional
 
 import structlog
+from sqlalchemy import select
 
 from config.settings import get_settings
 from db.database import get_session
@@ -365,11 +366,27 @@ class ChatController:
         self, user_id: int, thread_id: Optional[str], mode: str,
     ) -> str:
         if thread_id:
-            return thread_id
+            async with get_session() as session:
+                result = await session.execute(
+                    select(CerberusConversationThread).where(
+                        CerberusConversationThread.id == thread_id,
+                        CerberusConversationThread.user_id == user_id,
+                    )
+                )
+                existing_thread = result.scalar_one_or_none()
+            if not existing_thread:
+                raise LookupError(f"Thread {thread_id} not found")
+            return existing_thread.id
+
+        try:
+            thread_mode = ConversationMode(mode)
+        except ValueError:
+            thread_mode = ConversationMode.CHAT
+
         new_id = str(uuid.uuid4())
         async with get_session() as session:
             thread = CerberusConversationThread(
-                id=new_id, user_id=user_id, mode=mode,
+                id=new_id, user_id=user_id, mode=thread_mode,
             )
             session.add(thread)
         return new_id
@@ -401,6 +418,15 @@ class ChatController:
                 tool_calls_json=tool_calls_json,
             )
             session.add(msg)
+            result = await session.execute(
+                select(CerberusConversationThread).where(
+                    CerberusConversationThread.id == thread_id,
+                    CerberusConversationThread.user_id == user_id,
+                )
+            )
+            thread = result.scalar_one_or_none()
+            if thread:
+                thread.updated_at = datetime.utcnow()
         return msg_id
 
     async def _store_page_context(

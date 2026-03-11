@@ -11,13 +11,21 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-def _require_admin(request: Request) -> int:
-    """Return user_id if caller is admin, else raise 403."""
+async def _require_admin(request: Request) -> int:
+    """Return user_id if caller is an active admin, else raise."""
     user_id = getattr(request.state, "user_id", None)
-    is_admin = getattr(request.state, "is_admin", False)
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    if not is_admin:
+
+    async with get_session() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        logger.warning("admin_access_denied", user_id=user_id, reason="inactive_or_missing")
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if not user.is_admin:
+        logger.warning("admin_access_denied", user_id=user_id, reason="not_admin")
         raise HTTPException(status_code=403, detail="Admin access required")
     return user_id
 
@@ -25,7 +33,7 @@ def _require_admin(request: Request) -> int:
 @router.get("/users")
 async def list_users(request: Request):
     """Return all users. Admin only."""
-    _require_admin(request)
+    await _require_admin(request)
 
     async with get_session() as db:
         result = await db.execute(select(User).order_by(User.id))

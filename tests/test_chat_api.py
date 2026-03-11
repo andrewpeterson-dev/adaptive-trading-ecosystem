@@ -195,6 +195,47 @@ class TestChatEndpoint:
         assert call_kwargs.kwargs["message"] == "What is my portfolio?"
         assert call_kwargs.kwargs["mode"] == "chat"
 
+    @pytest.mark.asyncio
+    async def test_chat_returns_404_for_unknown_thread(self, session_factory):
+        mock_controller = MagicMock()
+        mock_controller.handle_turn = AsyncMock(side_effect=LookupError("Thread missing"))
+
+        app, _mock_get_session = _build_app(session_factory)
+        client = TestClient(app)
+
+        with patch("api.routes.ai_chat._get_controller", return_value=mock_controller):
+            response = client.post(
+                "/api/ai/chat",
+                json={
+                    "threadId": str(uuid.uuid4()),
+                    "message": "Resume this thread",
+                    "mode": "chat",
+                },
+            )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Thread missing"
+
+    @pytest.mark.asyncio
+    async def test_chat_rejects_invalid_mode(self, session_factory):
+        mock_controller = MagicMock()
+        mock_controller.handle_turn = AsyncMock()
+
+        app, _mock_get_session = _build_app(session_factory)
+        client = TestClient(app)
+
+        with patch("api.routes.ai_chat._get_controller", return_value=mock_controller):
+            response = client.post(
+                "/api/ai/chat",
+                json={
+                    "message": "Hello",
+                    "mode": "unsupported-mode",
+                },
+            )
+
+        assert response.status_code == 422
+        mock_controller.handle_turn.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Threads listing tests

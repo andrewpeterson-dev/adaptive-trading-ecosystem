@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Trading endpoints — execute signals, manage positions, view orders.
 
@@ -5,6 +7,7 @@ Routes delegate to the user's Webull client when Webull credentials exist,
 otherwise fall back to the Alpaca-based ExecutionEngine.
 """
 
+import asyncio
 import json
 from datetime import datetime, timedelta
 from typing import Optional
@@ -27,6 +30,8 @@ from risk.manager import RiskManager
 from services.event_logger import log_event
 from services.indicator_engine import IndicatorEngine
 from services.options_data import fetch_options_chain, parse_occ_contract_symbol
+from data.market_data import market_data
+from news.ingestion import NewsIngestion
 
 # Webull per-user client loader (from our webull routes)
 from api.routes.webull import _get_user_clients as _get_user_webull_client
@@ -42,6 +47,7 @@ router = APIRouter()
 
 _risk_manager = RiskManager()
 _executor = None
+_news_ingestion = NewsIngestion()
 
 
 def _get_executor():
@@ -294,6 +300,177 @@ def _normalize_cerberus_trade(cerberus_trade) -> dict:
         "bot_explanation": _extract_bot_explanation(cerberus_trade),
     }
 
+
+def _dict_or_none(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _read_value(source, *keys):
+    if source is None:
+        return None
+    if isinstance(source, dict):
+        for key in keys:
+            if key in source and source[key] is not None:
+                return source[key]
+        return None
+
+    for key in keys:
+        value = getattr(source, key, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _normalize_percent(value) -> float | None:
+    if value is None:
+        return None
+    numeric = float(value)
+    if abs(numeric) <= 1:
+        return round(numeric * 100, 4)
+    return round(numeric, 4)
+
+
+def _normalize_iso_timestamp(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        if value > 10_000_000_000:
+            value = value / 1000.0
+        return datetime.utcfromtimestamp(value).isoformat() + "Z"
+    if isinstance(value, str):
+        return value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return None
+
+
+async def _fetch_symbol_snapshot_payload(symbol: str) -> dict:
+    import yfinance as yf
+
+    def _fetch() -> dict:
+        ticker = yf.Ticker(symbol.upper())
+        fast_info = _dict_or_none(getattr(ticker, "fast_info", None))
+        info = _dict_or_none(getattr(ticker, "info", None))
+
+        name = info.get("shortName") or info.get("longName") or symbol.upper()
+        exchange = info.get("fullExchangeName") or info.get("exchange")
+        price = (
+            _read_value(fast_info, "lastPrice", "last_price")
+            or info.get("currentPrice")
+            or info.get("regularMarketPrice")
+            or info.get("ask")
+            or 0
+        )
+        prev_close = (
+            _read_value(fast_info, "previousClose", "previous_close")
+            or info.get("regularMarketPreviousClose")
+            or info.get("previousClose")
+            or price
+        )
+        change = float(price or 0) - float(prev_close or 0)
+        change_pct = (change / float(prev_close)) * 100 if prev_close else 0.0
+        dividend_yield = info.get("dividendYield")
+        if dividend_yield is not None and abs(float(dividend_yield)) <= 1:
+            dividend_yield = float(dividend_yield) * 100
+
+        return {
+            "symbol": symbol.upper(),
+            "name": name,
+            "exchange": exchange,
+            "price": round(float(price or 0), 4),
+            "bid": _read_value(fast_info, "bid") or info.get("bid"),
+            "ask": _read_value(fast_info, "ask") or info.get("ask"),
+            "last": round(float(price or 0), 4),
+            "change": round(float(change), 4),
+            "change_pct": round(float(change_pct), 4),
+            "volume": int(
+                float(
+                    _read_value(fast_info, "lastVolume", "last_volume")
+                    or info.get("regularMarketVolume")
+                    or info.get("volume")
+                    or 0
+                )
+            ),
+            "high": _read_value(fast_info, "dayHigh", "day_high") or info.get("dayHigh"),
+            "low": _read_value(fast_info, "dayLow", "day_low") or info.get("dayLow"),
+            "open": info.get("open"),
+            "prev_close": round(float(prev_close or 0), 4),
+            "market_cap": _read_value(fast_info, "marketCap", "market_cap") or info.get("marketCap"),
+            "pe_ratio": info.get("trailingPE") or info.get("forwardPE"),
+            "week52_high": _read_value(fast_info, "yearHigh", "fiftyTwoWeekHigh")
+            or info.get("fiftyTwoWeekHigh"),
+            "week52_low": _read_value(fast_info, "yearLow", "fiftyTwoWeekLow")
+            or info.get("fiftyTwoWeekLow"),
+            "dividend_yield": round(float(dividend_yield), 4) if dividend_yield is not None else None,
+            "average_volume": _read_value(
+                fast_info,
+                "threeMonthAverageVolume",
+                "tenDayAverageVolume",
+                "three_month_average_volume",
+            )
+            or info.get("averageVolume"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "company_summary": info.get("longBusinessSummary"),
+            "currency": info.get("currency") or "USD",
+            "market_status": info.get("marketState"),
+            "source": "yfinance",
+        }
+
+    return await asyncio.to_thread(_fetch)
+
+
+async def _fetch_snapshot_details(symbol: str) -> dict:
+    try:
+        import yfinance as yf
+
+        def _load() -> dict:
+            ticker = yf.Ticker(symbol.upper())
+            fast_info = ticker.fast_info or {}
+            info = ticker.info or {}
+            return {
+                "name": info.get("shortName") or info.get("longName"),
+                "exchange": info.get("fullExchangeName") or info.get("exchange"),
+                "market_cap": fast_info.get("market_cap") or info.get("marketCap"),
+                "pe_ratio": info.get("trailingPE") or info.get("forwardPE"),
+                "fifty_two_week_low": fast_info.get("year_low") or info.get("fiftyTwoWeekLow"),
+                "fifty_two_week_high": fast_info.get("year_high") or info.get("fiftyTwoWeekHigh"),
+                "dividend_yield": info.get("dividendYield"),
+                "avg_volume": fast_info.get("three_month_average_volume")
+                or info.get("averageVolume"),
+                "currency": info.get("currency") or "USD",
+                "market_state": info.get("marketState") or fast_info.get("market_state"),
+            }
+
+        return await asyncio.to_thread(_load)
+    except Exception as exc:
+        logger.warning("symbol_snapshot_details_failed", symbol=symbol, error=str(exc))
+        return {}
+
+
+def _connected_status(message: str, source: str | None = None) -> dict:
+    return {
+        "status": "connected",
+        "message": message,
+        "source": source,
+    }
+
+
+def _warning_status(message: str, source: str | None = None) -> dict:
+    return {
+        "status": "warning",
+        "message": message,
+        "source": source,
+    }
+
+
+def _disconnected_status(message: str, source: str | None = None) -> dict:
+    return {
+        "status": "disconnected",
+        "message": message,
+        "source": source,
+    }
+
 class ExecuteSignalRequest(BaseModel):
     symbol: str
     direction: str  # "long", "short", "flat" or "BUY", "SELL"
@@ -414,7 +591,8 @@ async def get_account(request: Request):
 
     try:
         return _get_executor().get_account()
-    except Exception:
+    except Exception as exc:
+        logger.warning("get_account_failed", user_id=user_id, mode=mode.value, error=str(exc))
         raise HTTPException(status_code=503, detail="No broker connected")
 
 
@@ -466,7 +644,8 @@ async def get_positions(request: Request):
 
     try:
         return _get_executor().get_positions()
-    except Exception:
+    except Exception as exc:
+        logger.warning("get_positions_failed", user_id=user_id, mode=mode.value, error=str(exc))
         raise HTTPException(status_code=503, detail="No broker connected")
 
 
@@ -564,11 +743,109 @@ async def get_quotes(
 @router.get("/quote")
 async def get_single_quote(request: Request, symbol: str = Query(...)):
     """Get a single stock quote (used by the order form)."""
-    result = await get_quotes(request, symbols=symbol)
-    quotes = result.get("quotes", [])
-    if quotes:
-        return quotes[0]
-    return {"symbol": symbol, "price": 0}
+    try:
+        return await _fetch_symbol_snapshot_payload(symbol)
+    except Exception as exc:
+        logger.warning("single_quote_snapshot_failed", symbol=symbol, error=str(exc))
+        result = await get_quotes(request, symbols=symbol)
+        quotes = result.get("quotes", [])
+        if quotes:
+            return quotes[0]
+        return {"symbol": symbol.upper(), "price": 0}
+
+
+@router.get("/snapshot")
+async def get_symbol_snapshot(request: Request, symbol: str = Query(...)):
+    quote = await get_single_quote(request, symbol=symbol)
+    return {
+        "symbol": symbol.upper(),
+        "name": quote.get("name"),
+        "exchange": quote.get("exchange"),
+        "price": float(quote.get("price") or quote.get("last") or 0),
+        "bid": quote.get("bid"),
+        "ask": quote.get("ask"),
+        "last": quote.get("last") or quote.get("price"),
+        "change": quote.get("change"),
+        "change_pct": quote.get("change_pct"),
+        "volume": quote.get("volume"),
+        "market_cap": quote.get("market_cap"),
+        "pe_ratio": quote.get("pe_ratio"),
+        "fifty_two_week_low": quote.get("week52_low"),
+        "fifty_two_week_high": quote.get("week52_high"),
+        "dividend_yield": quote.get("dividend_yield"),
+        "avg_volume": quote.get("average_volume"),
+        "market_state": quote.get("market_status"),
+        "currency": quote.get("currency") or "USD",
+        "source": quote.get("source"),
+        "sector": quote.get("sector"),
+        "industry": quote.get("industry"),
+        "description": quote.get("company_summary"),
+    }
+
+
+@router.get("/news")
+async def get_symbol_news(symbol: str = Query(...), limit: int = Query(6, ge=1, le=20)):
+    articles = await asyncio.to_thread(_news_ingestion.fetch_news, [symbol.upper()], limit)
+    normalized = [
+        {
+            "title": article.get("title", ""),
+            "url": article.get("url", ""),
+            "source": article.get("source", ""),
+            "published_at": article.get("published_at"),
+            "summary": article.get("summary", ""),
+            "symbols": article.get("symbols", []),
+        }
+        for article in articles
+    ]
+    return {"symbol": symbol.upper(), "articles": normalized}
+
+
+@router.get("/status")
+async def get_trading_status(request: Request, symbol: str = Query("SPY")):
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+    account = await get_account(request)
+    quote = await market_data.get_quote(symbol.upper())
+
+    if quote and float(quote.get("price") or 0) > 0:
+        market_status = _connected_status(
+            f"Streaming {symbol.upper()} pricing is available",
+            quote.get("source"),
+        )
+    else:
+        market_status = _disconnected_status(
+            f"Could not refresh {symbol.upper()} market data",
+            None,
+        )
+
+    broker = account.get("broker")
+    if mode == TradingModeEnum.LIVE:
+        if account.get("not_configured") or broker in {None, "none"}:
+            order_status = _disconnected_status(
+                "Live order routing is not configured",
+                broker,
+            )
+        else:
+            order_status = _warning_status(
+                f"Orders will route to {broker}",
+                broker,
+            )
+    elif broker in {"paper", "webull", "alpaca"}:
+        order_status = _connected_status(
+            f"Orders are staged through {broker}",
+            broker,
+        )
+    else:
+        order_status = _warning_status(
+            "Paper routing is available but no external broker is attached",
+            broker,
+        )
+
+    return {
+        "mode": mode.value,
+        "broker": broker,
+        "market_data": market_status,
+        "order_routing": order_status,
+    }
 
 
 @router.post("/execute")
@@ -650,6 +927,7 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                 "executed": True,
                 "mode": "live",
                 "success": True,
+                "status": "pending",
                 "order_id": order_result.order_id,
                 "client_order_id": order_result.client_order_id,
                 "resolved_quantity": resolved_quantity,
@@ -689,6 +967,7 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
         if isinstance(result, dict):
             result["mode"] = mode.value
             result["resolved_quantity"] = actual_quantity
+            result.setdefault("status", "filled")
         return result
 
     # Last resort: Alpaca executor (no user context)
@@ -845,12 +1124,18 @@ async def get_risk_summary(request: Request):
             settings = get_settings()
             return {
                 "is_halted": False,
+                "halt_reason": None,
                 "current_drawdown_pct": 0.0,
+                "max_drawdown_limit": settings.max_drawdown_pct,
                 "max_drawdown_limit_pct": settings.max_drawdown_pct,
                 "current_exposure_pct": 0.0,
                 "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
+                "trades_last_hour": 0,
                 "trades_this_hour": 0,
                 "max_trades_per_hour": settings.max_trades_per_hour,
+                "peak_equity": equity,
+                "open_positions": 0,
+                "recent_risk_events": 0,
                 "equity": equity,
                 "mode": "live",
             }
@@ -880,7 +1165,7 @@ async def get_risk_summary(request: Request):
 
 
 @router.get("/trade-log")
-async def get_trade_log(request: Request, limit: int = 100):
+async def get_trade_log(request: Request, limit: int = Query(default=100, ge=1, le=500)):
     """Get execution audit trail — filtered by active trading mode."""
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
@@ -1002,8 +1287,16 @@ async def get_trade_log(request: Request, limit: int = 100):
 
 
 @router.post("/switch-mode")
-async def switch_mode(req: SwitchModeRequest):
+async def switch_mode(req: SwitchModeRequest, request: Request):
     """Switch trading mode (paper/live)."""
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is not None:
+        from api.routes.user_mode import SetModeRequest as UserSetModeRequest
+        from api.routes.user_mode import set_mode as set_user_mode
+
+        result = await set_user_mode(UserSetModeRequest(mode=req.mode), request)
+        return {"status": "switched", "mode": result["mode"], "previous": result["previous"]}
+
     try:
         mode = TradingMode(req.mode)
     except ValueError:
@@ -1013,7 +1306,7 @@ async def switch_mode(req: SwitchModeRequest):
 
 
 @router.get("/risk-events")
-async def get_risk_events(request: Request, limit: int = 50):
+async def get_risk_events(request: Request, limit: int = Query(default=50, ge=1, le=200)):
     """Get recent risk events filtered by current trading mode."""
     mode = getattr(request.state, "trading_mode", None)
     events = _risk_manager.get_risk_events(limit=limit)
@@ -1038,11 +1331,17 @@ async def verify_transactions():
         report = verifier.verify_execution(_executor)
         return report
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Verification failed: {str(e)}")
+        logger.exception("transaction_verification_failed", error=str(e))
+        raise HTTPException(status_code=503, detail="Verification failed")
 
 
 @router.get("/bars")
-async def get_bars(symbol: str, timeframe: str = "1D", limit: int = 300, request: Request = None):
+async def get_bars(
+    symbol: str = Query(..., min_length=1, max_length=32),
+    timeframe: str = Query(default="1D", min_length=1, max_length=8),
+    limit: int = Query(default=300, ge=50, le=1000),
+    request: Request = None,
+):
     """OHLCV bar data plus normalized indicator series for a symbol."""
     try:
         import pandas as pd
@@ -1095,7 +1394,7 @@ async def get_bars(symbol: str, timeframe: str = "1D", limit: int = 300, request
             if hist.empty:
                 return {"symbol": symbol, "bars": []}
 
-        safe_limit = max(50, min(int(limit or 300), 1000))
+        safe_limit = int(limit or 300)
 
         def _serialize_time(ts) -> int:
             return int(pd.Timestamp(ts).timestamp())
@@ -1143,7 +1442,8 @@ async def get_bars(symbol: str, timeframe: str = "1D", limit: int = 300, request
         }
         return {"symbol": symbol.upper(), "timeframe": canonical_tf, "bars": bars, "indicators": indicators}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("bars_fetch_failed", symbol=symbol.upper(), timeframe=timeframe, error=str(e))
+        raise HTTPException(status_code=500, detail="Unable to load bar data")
 
 
 @router.get("/portfolio-analytics")

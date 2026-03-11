@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from config.settings import get_settings
 from db.database import get_session
@@ -92,6 +92,12 @@ class DocumentIngestionService:
 
             # 6. Store chunks
             async with get_session() as session:
+                await session.execute(
+                    delete(CerberusDocumentChunk).where(
+                        CerberusDocumentChunk.document_id == document_id,
+                        CerberusDocumentChunk.user_id == user_id,
+                    )
+                )
                 for chunk_data, embedding in zip(chunks, embeddings):
                     chunk_record = CerberusDocumentChunk(
                         id=str(uuid.uuid4()),
