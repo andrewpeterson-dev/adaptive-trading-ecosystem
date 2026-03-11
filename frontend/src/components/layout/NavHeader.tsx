@@ -96,7 +96,7 @@ export function NavHeader() {
                 </div>
               </Link>
 
-              <nav className="hidden min-w-0 flex-1 xl:flex">
+              <nav className="hidden min-w-0 flex-1 lg:flex">
                 <div className="flex w-full flex-wrap items-center justify-center gap-1.5 rounded-[24px] border border-border/65 bg-muted/24 px-3 py-2">
                   {NAV_ITEMS.map((item) => (
                     <Link
@@ -116,7 +116,7 @@ export function NavHeader() {
               </nav>
 
               <div className="ml-auto flex items-center gap-2">
-                <div className="hidden items-center gap-2 rounded-[22px] border border-border/60 bg-muted/30 px-2 py-1.5 lg:flex">
+                <div className="hidden items-center gap-2 rounded-[22px] border border-border/60 bg-muted/30 px-2 py-1.5 xl:flex">
                   <div className="px-2">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Live Trading
@@ -195,7 +195,7 @@ export function NavHeader() {
                 <button
                   onClick={() => setMenuOpen((open) => !open)}
                   aria-label={menuOpen ? "Close menu" : "Open menu"}
-                  className="app-button-icon xl:hidden"
+                  className="app-button-icon lg:hidden"
                 >
                   {menuOpen ? (
                     <X className="h-4.5 w-4.5" />
@@ -208,7 +208,7 @@ export function NavHeader() {
           </div>
 
           {menuOpen && (
-            <div className="app-panel mt-3 p-3 xl:hidden">
+            <div className="app-panel mt-3 p-3 lg:hidden">
               <nav className="grid gap-2">
                 {NAV_ITEMS.map((item) => (
                   <Link
