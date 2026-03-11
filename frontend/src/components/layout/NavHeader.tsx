@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -28,6 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { BrandLogo } from "./BrandLogo";
 
 const NAV_ITEMS = [
   { href: "/", label: "Builder" },
@@ -93,14 +93,7 @@ export function NavHeader() {
             <div className="flex flex-wrap items-center gap-4 xl:flex-nowrap">
               <Link href="/" className="flex min-w-0 items-center gap-3">
                 <div className="app-card flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px]">
-                  <Image
-                    src="/logo.svg"
-                    alt="Adaptive Trading"
-                    width={36}
-                    height={36}
-                    className="h-9 w-9 object-contain"
-                    priority
-                  />
+                  <BrandLogo className="h-9 w-9" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

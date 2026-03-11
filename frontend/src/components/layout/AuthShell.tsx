@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { BrandLogo } from "./BrandLogo";
 
 const HIGHLIGHTS = [
   {
@@ -40,14 +40,7 @@ export function AuthShell({
         <section className="hidden space-y-8 lg:block">
           <Link href="/" className="inline-flex items-center gap-3">
             <div className="app-card flex h-14 w-14 items-center justify-center rounded-[20px]">
-              <Image
-                src="/logo.svg"
-                alt="Adaptive Trading"
-                width={36}
-                height={36}
-                className="h-9 w-9 object-contain"
-                priority
-              />
+              <BrandLogo className="h-9 w-9" />
             </div>
             <div>
               <p className="text-base font-semibold tracking-tight text-foreground">
@@ -89,14 +82,7 @@ export function AuthShell({
             <div className="mb-8 space-y-4">
               <div className="inline-flex items-center gap-3 lg:hidden">
                 <div className="app-card flex h-12 w-12 items-center justify-center rounded-[18px]">
-                  <Image
-                    src="/logo.svg"
-                    alt="Adaptive Trading"
-                    width={30}
-                    height={30}
-                    className="h-[30px] w-[30px] object-contain"
-                    priority
-                  />
+                  <BrandLogo size={30} className="h-[30px] w-[30px]" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">
