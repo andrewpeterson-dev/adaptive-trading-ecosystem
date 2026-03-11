@@ -46,6 +46,14 @@ const VALID_ACTIONS: Action[] = ["BUY", "SELL"];
 const VALID_TIMEFRAMES = ["1m", "5m", "15m", "1H", "4H", "1D", "1W"];
 const VALID_OPERATORS: Operator[] = [">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"];
 
+function stringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 /**
  * Extract a JSON object from a text response.
  * Handles both fenced code blocks and raw JSON.
@@ -135,6 +143,44 @@ export function parseStrategySpec(text: string): ParseResult {
     entryConditions: obj.entryConditions as SpecCondition[],
     exitConditions: Array.isArray(obj.exitConditions) ? obj.exitConditions as SpecCondition[] : [],
   };
+
+  const symbols = stringList(obj.symbols);
+  if (symbols) {
+    spec.symbols = symbols.map((symbol) => symbol.toUpperCase());
+  }
+
+  if (
+    typeof obj.strategyType === "string" &&
+    ["manual", "ai_generated", "custom"].includes(obj.strategyType)
+  ) {
+    spec.strategyType = obj.strategyType as StrategyType;
+  }
+
+  if (typeof obj.sourcePrompt === "string") {
+    spec.sourcePrompt = obj.sourcePrompt;
+  }
+
+  if (typeof obj.overview === "string") {
+    spec.overview = obj.overview;
+  }
+
+  const featureSignals = stringList(obj.featureSignals);
+  if (featureSignals) {
+    spec.featureSignals = featureSignals;
+  }
+
+  const assumptions = stringList(obj.assumptions);
+  if (assumptions) {
+    spec.assumptions = assumptions;
+  }
+
+  if (
+    typeof obj.learningPlan === "object" &&
+    obj.learningPlan !== null &&
+    !Array.isArray(obj.learningPlan)
+  ) {
+    spec.learningPlan = obj.learningPlan as Record<string, unknown>;
+  }
 
   return { ok: true, spec };
 }

@@ -102,6 +102,36 @@ describe("parseStrategySpec — valid JSON", () => {
       expect(result.ok).toBe(true);
     }
   });
+
+  it("preserves optional AI metadata fields", () => {
+    const spec = {
+      ...VALID_SPEC,
+      symbols: ["spy", "qqq"],
+      strategyType: "ai_generated",
+      sourcePrompt: "Build a Cerberus momentum bot",
+      overview: "A momentum strategy for broad index ETFs.",
+      featureSignals: ["rsi", "macd"],
+      assumptions: ["Uses liquid ETFs only", "Assumes normal market hours"],
+      learningPlan: { cadence_minutes: 240, methods: ["bayesian_tuning"] },
+    };
+    const result = parseStrategySpec(JSON.stringify(spec));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.spec.symbols).toEqual(["SPY", "QQQ"]);
+    expect(result.spec.strategyType).toBe("ai_generated");
+    expect(result.spec.sourcePrompt).toBe("Build a Cerberus momentum bot");
+    expect(result.spec.overview).toBe("A momentum strategy for broad index ETFs.");
+    expect(result.spec.featureSignals).toEqual(["rsi", "macd"]);
+    expect(result.spec.assumptions).toEqual([
+      "Uses liquid ETFs only",
+      "Assumes normal market hours",
+    ]);
+    expect(result.spec.learningPlan).toEqual({
+      cadence_minutes: 240,
+      methods: ["bayesian_tuning"],
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

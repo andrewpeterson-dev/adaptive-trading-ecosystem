@@ -758,7 +758,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         description={
           mode === "edit"
             ? `Refine strategy #${initialStrategy?.id}, inspect its AI metadata, and keep the underlying builder in control of execution.`
-            : "Use AI to generate an autonomous bot spec from plain language, then inspect and refine the same executable logic in the manual builder."
+            : "Use Cerberus to interview the strategy idea, translate it into executable logic, and hand you a builder-ready draft before anything is saved or deployed."
         }
         meta={
           <>
@@ -770,7 +770,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             )}
             <span className="app-pill font-mono tracking-normal">
               {strategyType === "ai_generated"
-                ? "AI Generated"
+                ? "Cerberus Generated"
                 : strategyType === "custom"
                   ? "Custom"
                   : "Manual"}
@@ -785,7 +785,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             className="app-button-primary"
           >
             <BrainCircuit className="h-3.5 w-3.5" />
-            Generate Strategy with AI
+            Build with Cerberus
           </button>
           <button
             type="button"
@@ -940,7 +940,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 ))}
               </div>
               <p className="mt-3 text-sm leading-6 text-foreground">
-                {aiContext.overview || description || "AI-generated strategy ready for inspection."}
+                {aiContext.overview || description || "Cerberus-generated strategy ready for inspection."}
               </p>
               {sourcePrompt && (
                 <div className="mt-3 rounded-2xl bg-background/60 px-3 py-2 text-xs text-muted-foreground">

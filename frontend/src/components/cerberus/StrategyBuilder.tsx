@@ -1,33 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCerberusStore } from '@/stores/cerberus-store';
 import { sendChatMessage, createBot } from '@/lib/cerberus-api';
 import { useUIContextStore } from '@/stores/ui-context-store';
+import { parseStrategySpec, specToBuilderFields, type StrategySpec } from '@/lib/strategy-spec';
+import { useStrategyBuilderStore } from '@/stores/strategy-builder-store';
 import { Bot, Download } from 'lucide-react';
 
-function extractStrategyJson(markdown: string): { name: string; spec: object } | null {
-  const codeBlockPattern = /```json\s*([\s\S]*?)\s*```/g;
-  let match;
-  while ((match = codeBlockPattern.exec(markdown)) !== null) {
-    try {
-      const parsed = JSON.parse(match[1]);
-      if (parsed && parsed.action && Array.isArray(parsed.entryConditions)) {
-        return { name: parsed.name || 'AI Strategy', spec: parsed };
-      }
-    } catch { /* skip invalid JSON */ }
-  }
-  return null;
-}
-
 export function StrategyBuilder() {
+  const router = useRouter();
   const [strategyPrompt, setStrategyPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedStrategy, setGeneratedStrategy] = useState<{ name: string; spec: object } | null>(null);
+  const [generatedStrategy, setGeneratedStrategy] = useState<{ name: string; spec: StrategySpec } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isSendingToBuilder, setIsSendingToBuilder] = useState(false);
   const [importedBotId, setImportedBotId] = useState<string | null>(null);
   const { addMessage, activeThreadId, setActiveThread, setActiveTab } = useCerberusStore();
   const { pageContext } = useUIContextStore();
+  const setPendingSpec = useStrategyBuilderStore((state) => state.setPendingSpec);
 
   const handleGenerate = async () => {
     if (!strategyPrompt.trim() || isGenerating) return;
@@ -66,9 +58,9 @@ export function StrategyBuilder() {
           toolCalls: [],
           createdAt: new Date().toISOString(),
         });
-        const parsed = extractStrategyJson(markdown);
-        if (parsed) {
-          setGeneratedStrategy(parsed);
+        const parsed = parseStrategySpec(markdown);
+        if (parsed.ok) {
+          setGeneratedStrategy({ name: parsed.spec.name || 'AI Strategy', spec: parsed.spec });
         } else {
           // No JSON extracted — switch to chat so user sees the full response
           setActiveTab('chat');
@@ -79,6 +71,17 @@ export function StrategyBuilder() {
     } finally {
       setIsGenerating(false);
       setStrategyPrompt('');
+    }
+  };
+
+  const handleSendToBuilder = async () => {
+    if (!generatedStrategy || isSendingToBuilder) return;
+    setIsSendingToBuilder(true);
+    try {
+      setPendingSpec(specToBuilderFields(generatedStrategy.spec));
+      router.push('/');
+    } finally {
+      setIsSendingToBuilder(false);
     }
   };
 
@@ -140,6 +143,14 @@ export function StrategyBuilder() {
             <span className="text-xs font-medium text-foreground">Strategy ready</span>
             <span className="text-xs text-muted-foreground truncate">{generatedStrategy.name}</span>
           </div>
+          <button
+            onClick={handleSendToBuilder}
+            disabled={isSendingToBuilder}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/40 disabled:opacity-50 transition-colors"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            {isSendingToBuilder ? 'Opening builder...' : 'Open in Builder'}
+          </button>
           <button
             onClick={handleImportBot}
             disabled={isImporting}
