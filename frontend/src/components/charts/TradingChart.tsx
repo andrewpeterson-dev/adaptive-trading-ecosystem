@@ -69,6 +69,49 @@ const ALL_INDICATORS: ChartIndicator[] = ["sma20", "sma50", "ema9", "vwap", "vol
 // ---------------------------------------------------------------------------
 
 type PointData = { time: string | number; value: number };
+type HistogramPointData = PointData & { color?: string };
+
+interface BarsResponse {
+  bars: CandleData[];
+  indicators?: {
+    rsi?: Array<{ time: string | number; value: number }>;
+    macd?: {
+      macd?: Array<{ time: string | number; value: number }>;
+      macdLine?: Array<{ time: string | number; value: number }>;
+      macd_line?: Array<{ time: string | number; value: number }>;
+      signal?: Array<{ time: string | number; value: number }>;
+      signalLine?: Array<{ time: string | number; value: number }>;
+      signal_line?: Array<{ time: string | number; value: number }>;
+      histogram?: Array<{
+        time: string | number;
+        value: number;
+        color?: string;
+      }>;
+    };
+  };
+}
+
+function normalizeLineSeries(points: Array<{ time: string | number; value: number }> | undefined): PointData[] {
+  if (!points) return [];
+  return points
+    .filter((point) => Number.isFinite(point?.value))
+    .map((point) => ({ time: point.time, value: Number(point.value) }));
+}
+
+function normalizeHistogramSeries(
+  points:
+    | Array<{ time: string | number; value: number; color?: string }>
+    | undefined
+): HistogramPointData[] {
+  if (!points) return [];
+  return points
+    .filter((point) => Number.isFinite(point?.value))
+    .map((point) => ({
+      time: point.time,
+      value: Number(point.value),
+      color: point.color,
+    }));
+}
 
 function computeSMA(data: CandleData[], period: number): PointData[] {
   const result: PointData[] = [];
@@ -155,6 +198,42 @@ interface MACDResult {
   macdLine: PointData[];
   signalLine: PointData[];
   histogram: { time: string | number; value: number; color: string }[];
+}
+
+function normalizeMACDSeries(
+  macd:
+    | {
+        macd?: Array<{ time: string | number; value: number }>;
+        macdLine?: Array<{ time: string | number; value: number }>;
+        macd_line?: Array<{ time: string | number; value: number }>;
+        signal?: Array<{ time: string | number; value: number }>;
+        signalLine?: Array<{ time: string | number; value: number }>;
+        signal_line?: Array<{ time: string | number; value: number }>;
+        histogram?: Array<{
+          time: string | number;
+          value: number;
+          color?: string;
+        }>;
+      }
+    | undefined
+): MACDResult | null {
+  if (!macd) return null;
+
+  const macdLine = normalizeLineSeries(macd.macdLine ?? macd.macd_line ?? macd.macd);
+  const signalLine = normalizeLineSeries(macd.signalLine ?? macd.signal_line ?? macd.signal);
+  const histogram = normalizeHistogramSeries(macd.histogram).map((point) => ({
+    time: point.time,
+    value: point.value,
+    color:
+      point.color ??
+      (point.value >= 0 ? CHART_COLORS.up + "b0" : CHART_COLORS.down + "b0"),
+  }));
+
+  if (macdLine.length === 0 || signalLine.length === 0 || histogram.length === 0) {
+    return null;
+  }
+
+  return { macdLine, signalLine, histogram };
 }
 
 function computeMACD(data: CandleData[], fast = 12, slow = 26, signal = 9): MACDResult {
@@ -410,10 +489,11 @@ export function TradingChart({
 
       try {
         const res = await fetch(
-          `/api/trading/bars?symbol=${encodeURIComponent(symbol)}&timeframe=${tf}`,
+          `/api/trading/bars?symbol=${encodeURIComponent(symbol)}&timeframe=${tf}&limit=300`,
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const { bars } = (await res.json()) as { bars: CandleData[] };
+        const payload = (await res.json()) as BarsResponse;
+        const { bars } = payload;
 
         if (!bars || bars.length === 0) {
           setError(`No data available for ${symbol}`);
@@ -464,7 +544,10 @@ export function TradingChart({
 
         // --- RSI ---
         if (rsiSeriesRef.current) {
-          const rsiData = computeRSI(bars, 14);
+          const rsiData =
+            normalizeLineSeries(payload.indicators?.rsi).length > 0
+              ? normalizeLineSeries(payload.indicators?.rsi)
+              : computeRSI(bars, 14);
           rsiSeriesRef.current.setData(
             rsiData.map((s) => ({ time: s.time as Time, value: s.value })),
           );
@@ -472,7 +555,7 @@ export function TradingChart({
 
         // --- MACD ---
         if (macdLineSeriesRef.current && macdSignalSeriesRef.current && macdHistSeriesRef.current) {
-          const macd = computeMACD(bars, 12, 26, 9);
+          const macd = normalizeMACDSeries(payload.indicators?.macd) ?? computeMACD(bars, 12, 26, 9);
           macdLineSeriesRef.current.setData(
             macd.macdLine.map((s) => ({ time: s.time as Time, value: s.value })),
           );

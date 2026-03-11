@@ -6,6 +6,7 @@ otherwise fall back to the Alpaca-based ExecutionEngine.
 """
 
 import json
+from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
@@ -18,12 +19,14 @@ from sqlalchemy import select
 from config.settings import get_settings, TradingMode
 from db.database import get_session
 from db.models import (
-    PaperPortfolio, PaperPosition, Trade, TradeDirection, TradeStatus, TradingModeEnum, TradingModel, SystemEventType,
+    PaperPortfolio, PaperPosition, PaperTrade, Trade, TradeDirection, TradeStatus, TradingModeEnum, TradingModel, SystemEventType,
     UserApiConnection, ApiProvider,
 )
 from db.encryption import decrypt_value
 from risk.manager import RiskManager
 from services.event_logger import log_event
+from services.indicator_engine import IndicatorEngine
+from services.options_data import fetch_options_chain, parse_occ_contract_symbol
 
 # Webull per-user client loader (from our webull routes)
 from api.routes.webull import _get_user_clients as _get_user_webull_client
@@ -154,19 +157,169 @@ async def _persist_legacy_trade_submission(
         )
 
 
+def _position_multiplier(symbol: str) -> int:
+    return 100 if parse_occ_contract_symbol(symbol) else 1
+
+
+def _normalize_unrealized_pnl_pct(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    numeric = float(value)
+    if abs(numeric) > 2:
+        return numeric / 100.0
+    return numeric
+
+
+async def _resolve_reference_price(
+    request: Request,
+    symbol: str,
+    direction: str,
+    limit_price: float | None = None,
+    stop_price: float | None = None,
+) -> float:
+    if limit_price and limit_price > 0:
+        return limit_price
+    if stop_price and stop_price > 0:
+        return stop_price
+
+    quote = await get_single_quote(request, symbol=symbol)
+    is_buy = direction.strip().lower() in {"long", "buy"}
+    price = quote.get("ask") if is_buy else quote.get("bid")
+    price = price or quote.get("price") or quote.get("last")
+    if not price:
+        raise HTTPException(status_code=400, detail=f"Could not price {symbol.upper()}")
+    return float(price)
+
+
+def _paper_trade_sort_key(trade: dict) -> str:
+    return trade.get("filled_at") or trade.get("submitted_at") or ""
+
+
+def _extract_bot_explanation(cerberus_trade) -> str | None:
+    payload = cerberus_trade.payload_json or {}
+    explanation = payload.get("bot_explanation") or payload.get("explanation")
+    if isinstance(explanation, str) and explanation.strip():
+        return explanation.strip()
+
+    reasons = payload.get("reasons")
+    if isinstance(reasons, list):
+        joined = "; ".join(str(reason).strip() for reason in reasons if str(reason).strip())
+        if joined:
+            return joined
+
+    notes = (cerberus_trade.notes or "").strip()
+    if notes:
+        return notes
+
+    if cerberus_trade.strategy_tag:
+        return f"Executed by {cerberus_trade.strategy_tag}"
+
+    return None
+
+
+def _normalize_paper_trade(paper_trade) -> dict:
+    contract_meta = parse_occ_contract_symbol(paper_trade.symbol)
+    is_option = contract_meta is not None
+    filled_price = paper_trade.exit_price or paper_trade.entry_price
+    filled_at = paper_trade.exit_time or paper_trade.entry_time
+    direction = "buy" if str(paper_trade.direction).lower().endswith("long") else "sell"
+    status_value = paper_trade.status.value if hasattr(paper_trade.status, "value") else str(paper_trade.status)
+
+    if is_option:
+        if direction == "buy":
+            order_type = "buy_to_open" if status_value == "open" else "buy_to_close"
+        else:
+            order_type = "sell_to_open" if status_value == "open" else "sell_to_close"
+    else:
+        order_type = "market"
+
+    normalized = {
+        "id": str(paper_trade.id),
+        "symbol": contract_meta["underlying"] if contract_meta else paper_trade.symbol,
+        "asset_type": "option" if is_option else "stock",
+        "direction": direction,
+        "quantity": paper_trade.quantity,
+        "order_type": order_type,
+        "status": "filled",
+        "filled_price": filled_price,
+        "entry_price": paper_trade.entry_price,
+        "limit_price": None,
+        "stop_price": None,
+        "submitted_at": paper_trade.entry_time.isoformat() if paper_trade.entry_time else None,
+        "filled_at": filled_at.isoformat() if filled_at else None,
+        "pnl": paper_trade.pnl,
+        "total_value": abs(float(paper_trade.quantity or 0)) * float(filled_price or 0) * _position_multiplier(paper_trade.symbol),
+        "source": "manual",
+        "bot_name": None,
+        "bot_explanation": None,
+    }
+
+    if contract_meta:
+        normalized.update(
+            {
+                "contract_symbol": paper_trade.symbol,
+                "underlying": contract_meta["underlying"],
+                "expiration": contract_meta["expiration"],
+                "strike": contract_meta["strike"],
+                "option_type": contract_meta["option_type"],
+            }
+        )
+
+    return normalized
+
+
+def _normalize_cerberus_trade(cerberus_trade) -> dict:
+    payload = cerberus_trade.payload_json or {}
+    filled_price = cerberus_trade.exit_price or cerberus_trade.entry_price
+    filled_at = cerberus_trade.exit_ts or cerberus_trade.entry_ts or cerberus_trade.created_at
+    direction = (cerberus_trade.side or "buy").lower()
+    return {
+        "id": str(cerberus_trade.id),
+        "symbol": cerberus_trade.symbol,
+        "asset_type": cerberus_trade.asset_type or "stock",
+        "direction": direction,
+        "quantity": cerberus_trade.quantity,
+        "order_type": payload.get("order_type") or "market",
+        "status": "filled",
+        "filled_price": filled_price,
+        "entry_price": cerberus_trade.entry_price,
+        "limit_price": payload.get("limit_price"),
+        "stop_price": payload.get("stop_price"),
+        "submitted_at": (cerberus_trade.entry_ts or cerberus_trade.created_at).isoformat() if (cerberus_trade.entry_ts or cerberus_trade.created_at) else None,
+        "filled_at": filled_at.isoformat() if filled_at else None,
+        "pnl": cerberus_trade.net_pnl if cerberus_trade.net_pnl is not None else cerberus_trade.gross_pnl,
+        "total_value": abs(float(cerberus_trade.quantity or 0)) * float(filled_price or 0) * _position_multiplier(cerberus_trade.symbol),
+        "source": "bot" if cerberus_trade.bot_id or cerberus_trade.strategy_tag else "manual",
+        "bot_name": cerberus_trade.strategy_tag,
+        "bot_explanation": _extract_bot_explanation(cerberus_trade),
+    }
+
 class ExecuteSignalRequest(BaseModel):
     symbol: str
     direction: str  # "long", "short", "flat" or "BUY", "SELL"
     strength: float = 1.0
     quantity: float = 10.0
+    dollar_amount: Optional[float] = None
     model_name: str = "manual"
     order_type: str = "market"
     limit_price: Optional[float] = None
+    stop_price: Optional[float] = None
     user_confirmed: bool = False
 
 
 class SwitchModeRequest(BaseModel):
     mode: str  # "paper", "live", "backtest"
+
+
+class ExecuteOptionRequest(BaseModel):
+    contract_symbol: Optional[str] = None
+    underlying: str
+    expiration: str
+    strike: float
+    option_type: str
+    direction: str
+    quantity: int = 1
+    user_confirmed: bool = False
 
 
 # ── Core trading routes (Webull-aware) ───────────────────────────────────
@@ -246,7 +399,8 @@ async def get_account(request: Request):
             )
             positions = pos_result.scalars().all()
             positions_value = sum(
-                (p.current_price or p.avg_entry_price) * p.quantity for p in positions
+                (p.current_price or p.avg_entry_price) * p.quantity * _position_multiplier(p.symbol)
+                for p in positions
             )
 
             return {
@@ -277,14 +431,28 @@ async def get_positions(request: Request):
             raw = wb.account.get_positions()
             positions = []
             for p in raw:
+                raw_symbol = p.get("symbol", "")
+                contract_meta = parse_occ_contract_symbol(raw_symbol)
+                quantity = float(p.get("quantity", 0) or 0)
+                avg_entry_price = float(p.get("avg_cost", p.get("cost_price", 0)) or 0)
+                current_price = float(p.get("last_price", p.get("market_price", 0)) or 0)
                 positions.append({
-                    "symbol": p.get("symbol", ""),
-                    "quantity": p.get("quantity", 0),
-                    "avg_entry_price": p.get("avg_cost", p.get("cost_price", 0)),
-                    "current_price": p.get("last_price", p.get("market_price", 0)),
-                    "market_value": p.get("market_value", 0),
-                    "unrealized_pnl": p.get("unrealized_pnl", 0),
-                    "unrealized_pnl_pct": p.get("unrealized_pnl_pct", 0),
+                    "symbol": contract_meta["underlying"] if contract_meta else raw_symbol,
+                    "quantity": quantity,
+                    "avg_entry_price": avg_entry_price,
+                    "current_price": current_price,
+                    "market_value": float(p.get("market_value", 0) or 0),
+                    "unrealized_pnl": float(p.get("unrealized_pnl", 0) or 0),
+                    "unrealized_pnl_pct": _normalize_unrealized_pnl_pct(p.get("unrealized_pnl_pct")),
+                    "side": "short" if quantity < 0 else "long",
+                    "asset_type": "option" if contract_meta else "stock",
+                    "contract_symbol": raw_symbol if contract_meta else None,
+                    "underlying": contract_meta["underlying"] if contract_meta else None,
+                    "expiration": contract_meta["expiration"] if contract_meta else None,
+                    "strike": contract_meta["strike"] if contract_meta else None,
+                    "option_type": contract_meta["option_type"] if contract_meta else None,
+                    "avg_premium": avg_entry_price if contract_meta else None,
+                    "current_mark": current_price if contract_meta else None,
                 })
             return {"positions": positions, "mode": mode.value}
 
@@ -408,6 +576,22 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
     """Execute a trade — routes by active trading mode."""
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+    resolved_quantity = req.quantity
+
+    if req.dollar_amount is not None:
+        reference_price = await _resolve_reference_price(
+            request,
+            req.symbol,
+            req.direction,
+            limit_price=req.limit_price,
+            stop_price=req.stop_price,
+        )
+        resolved_quantity = int(req.dollar_amount / reference_price)
+        if resolved_quantity < 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Dollar amount ${req.dollar_amount:,.2f} is too small for one share of {req.symbol.upper()}",
+            )
 
     if user_id and mode == TradingModeEnum.LIVE:
         # Live mode — route to Webull
@@ -421,14 +605,21 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
             elif side in ("SHORT", "SELL", "FLAT"):
                 side = "SELL"
 
-            order_type = "MKT" if req.order_type.lower() == "market" else "LMT"
+            order_type_map = {
+                "market": "MKT",
+                "limit": "LMT",
+                "stop": "STP",
+                "stop_limit": "STP_LMT",
+            }
+            order_type = order_type_map.get(req.order_type.lower(), "MKT")
 
             wb_req = WBOrderRequest(
                 symbol=req.symbol.upper(),
                 side=side,
-                qty=int(req.quantity),
+                qty=int(resolved_quantity),
                 order_type=order_type,
                 limit_price=req.limit_price,
+                stop_price=req.stop_price,
             )
             order_result = wb.trading.place_order(wb_req, user_confirmed=req.user_confirmed)
 
@@ -453,7 +644,7 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                 user_id=user_id,
                 event_type=SystemEventType.TRADE_EXECUTED,
                 mode=TradingModeEnum.LIVE,
-                description=f"LIVE {side} {int(req.quantity)} {req.symbol.upper()}",
+                description=f"LIVE {side} {int(resolved_quantity)} {req.symbol.upper()}",
             )
             return {
                 "executed": True,
@@ -461,6 +652,7 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                 "success": True,
                 "order_id": order_result.order_id,
                 "client_order_id": order_result.client_order_id,
+                "resolved_quantity": resolved_quantity,
             }
 
     # Paper mode — route through paper trading for authenticated users
@@ -476,20 +668,27 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
         paper_req = PaperTradeRequest(
             symbol=req.symbol,
             side=side,
-            quantity=req.quantity,
+            quantity=resolved_quantity,
+            notional=req.dollar_amount,
             user_confirmed=req.user_confirmed,
         )
         result = await execute_paper_trade(request, paper_req)
+        actual_quantity = (
+            float(result.get("quantity"))
+            if isinstance(result, dict) and result.get("quantity") is not None
+            else resolved_quantity
+        )
 
         await log_event(
             user_id=user_id,
             event_type=SystemEventType.TRADE_EXECUTED,
             mode=mode,
-            description=f"PAPER {side} {int(req.quantity)} {req.symbol.upper()}",
+            description=f"PAPER {side} {int(actual_quantity)} {req.symbol.upper()}",
         )
 
         if isinstance(result, dict):
             result["mode"] = mode.value
+            result["resolved_quantity"] = actual_quantity
         return result
 
     # Last resort: Alpaca executor (no user context)
@@ -512,13 +711,21 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
     positions = _get_executor().get_positions()
     current_exposure = sum(abs(float(p["market_value"])) for p in positions)
 
-    current_price = req.limit_price or 0
+    current_price = req.limit_price or req.stop_price or 0
+    if current_price == 0 and req.dollar_amount is not None:
+        current_price = await _resolve_reference_price(
+            request,
+            req.symbol,
+            req.direction,
+            limit_price=req.limit_price,
+            stop_price=req.stop_price,
+        )
     if current_price == 0:
         raise HTTPException(status_code=400, detail="Price required for execution")
 
     result = _get_executor().execute_signal(
         signal=signal,
-        quantity=req.quantity,
+        quantity=resolved_quantity,
         current_price=current_price,
         current_equity=current_equity,
         current_exposure=current_exposure,
@@ -547,6 +754,78 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
             )
 
     return result
+
+
+@router.get("/options-chain")
+async def get_options_chain_data(
+    symbol: str = Query(...),
+    expiration: Optional[str] = Query(default=None),
+):
+    """Get normalized options chain data via market-data fallback."""
+    chain = await fetch_options_chain(symbol, expiration=expiration)
+    return {
+        "symbol": chain.get("symbol", symbol.upper()),
+        "expirations": chain.get("expirations", []),
+        "selected_expiration": chain.get("selected_expiration"),
+        "contracts": chain.get("contracts", []),
+        "strikes": chain.get("strikes", []),
+    }
+
+
+@router.post("/execute-option")
+async def execute_option(request: Request, req: ExecuteOptionRequest):
+    """Execute a paper options trade using normalized contract metadata."""
+    user_id = getattr(request.state, "user_id", None)
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    if user_id and mode in (TradingModeEnum.PAPER, TradingModeEnum.BACKTEST):
+        from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
+
+        direction = req.direction.lower()
+        if direction in ("buy_to_open", "buy_to_close"):
+            side = "BUY"
+        elif direction in ("sell_to_open", "sell_to_close"):
+            side = "SELL"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported option direction: {req.direction}")
+
+        paper_req = PaperTradeRequest(
+            symbol=req.underlying,
+            side=side,
+            quantity=req.quantity,
+            user_confirmed=req.user_confirmed,
+            instrument_type="option",
+            contract_symbol=req.contract_symbol,
+            option_type=req.option_type,
+            strike=req.strike,
+            expiry=req.expiration,
+        )
+        result = await execute_paper_trade(request, paper_req)
+
+        await log_event(
+            user_id=user_id,
+            event_type=SystemEventType.TRADE_EXECUTED,
+            mode=mode,
+            description=f"PAPER OPTION {direction.upper()} {req.quantity} {req.underlying.upper()} {req.expiration} {req.strike}{req.option_type[:1].upper()}",
+        )
+
+        if isinstance(result, dict):
+            result.update(
+                {
+                    "mode": mode.value,
+                    "underlying": req.underlying.upper(),
+                    "expiration": req.expiration,
+                    "strike": req.strike,
+                    "option_type": req.option_type,
+                    "direction": direction,
+                }
+            )
+        return result
+
+    raise HTTPException(
+        status_code=422,
+        detail="Options execution is currently supported in paper mode only",
+    )
 
 
 # ── Risk & utility routes ────────────────────────────────────────────────
@@ -606,8 +885,70 @@ async def get_trade_log(request: Request, limit: int = 100):
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
-    # Try database Trade records first (mode-scoped)
     async with get_session() as session:
+        if user_id and mode in (TradingModeEnum.PAPER, TradingModeEnum.BACKTEST):
+            from db.cerberus_models import CerberusTrade
+
+            paper_result = await session.execute(
+                select(PaperTrade)
+                .where(PaperTrade.user_id == user_id)
+                .order_by(PaperTrade.entry_time.desc())
+                .limit(max(limit * 3, 200))
+            )
+            normalized_trades = [_normalize_paper_trade(trade) for trade in paper_result.scalars().all()]
+
+            cerberus_result = await session.execute(
+                select(CerberusTrade)
+                .where(CerberusTrade.user_id == user_id)
+                .order_by(CerberusTrade.created_at.desc())
+                .limit(max(limit * 3, 100))
+            )
+            cerberus_trades = cerberus_result.scalars().all()
+
+            unmatched_cerberus: list[dict] = []
+            for cerberus_trade in cerberus_trades:
+                cerberus_time = cerberus_trade.entry_ts or cerberus_trade.created_at
+                best_match_idx = None
+                best_delta = None
+
+                for idx, trade in enumerate(normalized_trades):
+                    if trade.get("asset_type") != "stock":
+                        continue
+                    if trade.get("symbol", "").upper() != (cerberus_trade.symbol or "").upper():
+                        continue
+                    if trade.get("direction") != (cerberus_trade.side or "").lower():
+                        continue
+                    if abs(float(trade.get("quantity") or 0) - float(cerberus_trade.quantity or 0)) > 1e-6:
+                        continue
+
+                    trade_time_raw = trade.get("filled_at") or trade.get("submitted_at")
+                    if not trade_time_raw or not cerberus_time:
+                        continue
+
+                    try:
+                        trade_time = datetime.fromisoformat(str(trade_time_raw))
+                    except ValueError:
+                        continue
+
+                    delta_seconds = abs((trade_time - cerberus_time).total_seconds())
+                    if delta_seconds > 120:
+                        continue
+
+                    if best_delta is None or delta_seconds < best_delta:
+                        best_match_idx = idx
+                        best_delta = delta_seconds
+
+                if best_match_idx is not None:
+                    normalized_trades[best_match_idx]["source"] = "bot"
+                    normalized_trades[best_match_idx]["bot_name"] = cerberus_trade.strategy_tag
+                    normalized_trades[best_match_idx]["bot_explanation"] = _extract_bot_explanation(cerberus_trade)
+                else:
+                    unmatched_cerberus.append(_normalize_cerberus_trade(cerberus_trade))
+
+            trades = normalized_trades + unmatched_cerberus
+            trades.sort(key=_paper_trade_sort_key, reverse=True)
+            return {"trades": trades[:limit], "mode": mode.value}
+
         stmt = (
             select(Trade)
             .where(Trade.mode == mode)
@@ -626,17 +967,24 @@ async def get_trade_log(request: Request, limit: int = 100):
             return {
                 "trades": [
                     {
-                        "id": t.id,
+                        "id": str(t.id),
                         "symbol": t.symbol,
-                        "direction": t.direction.value if hasattr(t.direction, "value") else str(t.direction),
+                        "asset_type": "stock",
+                        "direction": "buy" if str(t.direction).lower().endswith("long") else "sell",
                         "quantity": t.quantity,
+                        "order_type": "market",
+                        "status": "filled" if (t.entry_time or t.exit_time) else "pending",
+                        "filled_price": t.exit_price or t.entry_price,
                         "entry_price": t.entry_price,
-                        "exit_price": t.exit_price,
+                        "limit_price": None,
+                        "stop_price": None,
+                        "submitted_at": t.entry_time.isoformat() if t.entry_time else None,
+                        "filled_at": (t.exit_time or t.entry_time).isoformat() if (t.exit_time or t.entry_time) else None,
                         "pnl": t.pnl,
-                        "pnl_pct": t.pnl_pct,
-                        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
-                        "entry_time": t.entry_time.isoformat() if t.entry_time else None,
-                        "exit_time": t.exit_time.isoformat() if t.exit_time else None,
+                        "total_value": abs(float(t.quantity or 0)) * float(t.exit_price or t.entry_price or 0),
+                        "source": "manual",
+                        "bot_name": None,
+                        "bot_explanation": None,
                     }
                     for t in trades
                 ],
@@ -694,29 +1042,106 @@ async def verify_transactions():
 
 
 @router.get("/bars")
-async def get_bars(symbol: str, timeframe: str = "1D", limit: int = 100, request: Request = None):
-    """OHLCV bar data for a symbol. Returns yfinance data as fallback when broker unavailable."""
+async def get_bars(symbol: str, timeframe: str = "1D", limit: int = 300, request: Request = None):
+    """OHLCV bar data plus normalized indicator series for a symbol."""
     try:
+        import pandas as pd
         import yfinance as yf
-        period_map = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo", "1D": "1y", "1W": "5y"}
-        interval_map = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h", "1D": "1d", "1W": "1wk"}
-        period = period_map.get(timeframe, "1y")
-        interval = interval_map.get(timeframe, "1d")
-        ticker = yf.Ticker(symbol)
+
+        normalized_tf = (timeframe or "1D").strip()
+        tf_aliases = {
+            "1m": "1m",
+            "m1": "1m",
+            "5m": "5m",
+            "m5": "5m",
+            "15m": "15m",
+            "m15": "15m",
+            "1H": "1H",
+            "1h": "1H",
+            "h1": "1H",
+            "4H": "4H",
+            "4h": "4H",
+            "h4": "4H",
+            "1D": "1D",
+            "1d": "1D",
+            "d1": "1D",
+            "1W": "1W",
+            "1w": "1W",
+            "w1": "1W",
+        }
+        canonical_tf = tf_aliases.get(normalized_tf, "1D")
+        period_map = {"1m": "2d", "5m": "10d", "15m": "30d", "1H": "90d", "4H": "180d", "1D": "2y", "1W": "5y"}
+        interval_map = {"1m": "1m", "5m": "5m", "15m": "15m", "1H": "60m", "4H": "60m", "1D": "1d", "1W": "1wk"}
+        period = period_map[canonical_tf]
+        interval = interval_map[canonical_tf]
+        ticker = yf.Ticker(symbol.upper())
         hist = ticker.history(period=period, interval=interval)
         if hist.empty:
             return {"symbol": symbol, "bars": []}
+
+        if canonical_tf == "4H":
+            hist = (
+                hist[["Open", "High", "Low", "Close", "Volume"]]
+                .resample("4H")
+                .agg({
+                    "Open": "first",
+                    "High": "max",
+                    "Low": "min",
+                    "Close": "last",
+                    "Volume": "sum",
+                })
+                .dropna()
+            )
+            if hist.empty:
+                return {"symbol": symbol, "bars": []}
+
+        safe_limit = max(50, min(int(limit or 300), 1000))
+
+        def _serialize_time(ts) -> int:
+            return int(pd.Timestamp(ts).timestamp())
+
         bars = []
         for ts, row in hist.iterrows():
+            volume_value = row["Volume"]
             bars.append({
-                "time": int(ts.timestamp()),
+                "time": _serialize_time(ts),
                 "open": round(float(row["Open"]), 4),
                 "high": round(float(row["High"]), 4),
                 "low": round(float(row["Low"]), 4),
                 "close": round(float(row["Close"]), 4),
-                "volume": int(row["Volume"]),
+                "volume": int(float(0 if pd.isna(volume_value) else volume_value)),
             })
-        return {"symbol": symbol, "timeframe": timeframe, "bars": bars[-limit:]}
+
+        bars = bars[-safe_limit:]
+        allowed_times = {bar["time"] for bar in bars}
+
+        close_series = hist["Close"]
+        rsi_series = IndicatorEngine.rsi(close_series, length=14)
+        macd_series = IndicatorEngine.macd(close_series, fast=12, slow=26, signal=9)
+
+        def _line_points(series) -> list[dict]:
+            points: list[dict] = []
+            for ts, value in series.items():
+                if pd.isna(value):
+                    continue
+                time_value = _serialize_time(ts)
+                if time_value not in allowed_times:
+                    continue
+                points.append({
+                    "time": time_value,
+                    "value": round(float(value), 4),
+                })
+            return points
+
+        indicators = {
+            "rsi": _line_points(rsi_series),
+            "macd": {
+                "macd": _line_points(macd_series["macd"]),
+                "signal": _line_points(macd_series["signal"]),
+                "histogram": _line_points(macd_series["histogram"]),
+            },
+        }
+        return {"symbol": symbol.upper(), "timeframe": canonical_tf, "bars": bars, "indicators": indicators}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

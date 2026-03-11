@@ -251,10 +251,14 @@ class CerberusBot(Base):
         default=BotStatus.DRAFT,
     )
     current_version_id = Column(String(36), nullable=True)
+    learning_enabled = Column(Boolean, default=True)
+    learning_status_json = Column(JSON, default=dict)
+    last_optimization_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     versions = relationship("CerberusBotVersion", back_populates="bot", order_by="CerberusBotVersion.version_number")
+    optimization_runs = relationship("CerberusBotOptimizationRun", back_populates="bot", order_by="CerberusBotOptimizationRun.created_at")
 
     __table_args__ = (
         Index("ix_cerberus_bot_user", "user_id"),
@@ -284,6 +288,29 @@ class CerberusBotVersion(Base):
     __table_args__ = (
         Index("ix_cerberus_botver_bot", "bot_id"),
         Index("ix_cerberus_botver_bot_num", "bot_id", "version_number", unique=True),
+    )
+
+
+class CerberusBotOptimizationRun(Base):
+    """Optimization and learning history for autonomous bot tuning."""
+    __tablename__ = "cerberus_bot_optimization_runs"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
+    source_version_id = Column(String(36), ForeignKey("cerberus_bot_versions.id"), nullable=True)
+    result_version_id = Column(String(36), ForeignKey("cerberus_bot_versions.id"), nullable=True)
+    method = Column(String(64), nullable=False, default="parameter_optimization")
+    status = Column(String(32), nullable=False, default="completed")
+    metrics_json = Column(JSON, default=dict)
+    adjustments_json = Column(JSON, default=dict)
+    summary = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    bot = relationship("CerberusBot", back_populates="optimization_runs")
+
+    __table_args__ = (
+        Index("ix_cerberus_botopt_bot", "bot_id"),
+        Index("ix_cerberus_botopt_created", "created_at"),
     )
 
 

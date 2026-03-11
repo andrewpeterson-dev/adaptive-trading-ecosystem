@@ -1,6 +1,8 @@
 import { apiFetch } from "./client";
 import type {
+  StrategyAiContext,
   StrategyRecord,
+  StrategyType,
   DiagnosticReport,
   StrategyExplanation,
 } from "@/types/strategy";
@@ -22,6 +24,9 @@ interface CreateStrategyData {
   take_profit_pct?: number;
   position_size_pct?: number;
   timeframe?: string;
+  strategy_type?: StrategyType;
+  source_prompt?: string | null;
+  ai_context?: StrategyAiContext;
 }
 
 type UpdateStrategyData = Partial<CreateStrategyData>;

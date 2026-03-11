@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { Action, StrategyCondition } from "@/types/strategy";
+import type {
+  Action,
+  ConditionGroup,
+  StrategyAiContext,
+  StrategyCondition,
+  StrategyType,
+} from "@/types/strategy";
 
 interface PendingStrategy {
   name: string;
@@ -10,6 +16,11 @@ interface PendingStrategy {
   positionSize: number;
   timeframe: string;
   conditions: StrategyCondition[];
+  conditionGroups?: ConditionGroup[];
+  symbols?: string[];
+  strategyType?: StrategyType;
+  sourcePrompt?: string;
+  aiContext?: StrategyAiContext;
 }
 
 interface StrategyBuilderState {

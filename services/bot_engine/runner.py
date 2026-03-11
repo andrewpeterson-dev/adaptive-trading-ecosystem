@@ -179,7 +179,12 @@ class BotRunner:
                 reasons=reasons,
             )
             await self._execute_trade(
-                bot, symbol, action, position_size_pct, bars[-1].get("close", 0)
+                bot,
+                symbol,
+                action,
+                position_size_pct,
+                bars[-1].get("close", 0),
+                reasons=reasons,
             )
         else:
             logger.debug(
@@ -236,6 +241,7 @@ class BotRunner:
         action: str,
         position_size_pct: float,
         current_price: float,
+        reasons: list[str] | None = None,
     ) -> None:
         """Execute a trade for a bot via paper trading."""
         from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
@@ -306,6 +312,7 @@ class BotRunner:
 
             # Record in CerberusTrade with bot_id for audit trail
             async with get_session() as session:
+                explanation = "; ".join(reason.strip() for reason in (reasons or []) if reason.strip()) or None
                 trade = CerberusTrade(
                     id=str(uuid.uuid4()),
                     user_id=user_id,
@@ -315,6 +322,8 @@ class BotRunner:
                     quantity=quantity,
                     entry_price=current_price,
                     strategy_tag=bot.name,
+                    notes=explanation,
+                    payload_json={"reasons": reasons or [], "bot_explanation": explanation},
                     created_at=datetime.utcnow(),
                 )
                 session.add(trade)

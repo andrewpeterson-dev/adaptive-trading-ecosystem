@@ -5,6 +5,7 @@ Provides portfolio management, trade execution, position tracking, and trade
 history using the PaperPortfolio / PaperPosition / PaperTrade DB models.
 """
 
+import math
 from datetime import datetime
 from typing import Optional
 
@@ -21,6 +22,7 @@ from db.models import (
     PaperTradeStatus,
     TradeDirection,
 )
+from services.options_data import fetch_option_snapshot, parse_occ_contract_symbol
 
 logger = structlog.get_logger(__name__)
 
@@ -35,10 +37,12 @@ class PaperTradeRequest(BaseModel):
     side: Optional[str] = None      # "BUY" or "SELL"
     direction: Optional[str] = None  # alias for side (frontend uses this name)
     quantity: float
+    notional: Optional[float] = None
     price: Optional[float] = None   # ignored — server fetches live price
     user_confirmed: bool = True     # default true; UI submit is the gate
     # Options fields (only needed for options orders)
     instrument_type: str = "stock"      # "stock" | "option"
+    contract_symbol: Optional[str] = None
     option_type: Optional[str] = None   # "call" | "put"
     strike: Optional[float] = None
     expiry: Optional[str] = None        # "YYYY-MM-DD"
@@ -56,6 +60,69 @@ def _require_user(request: Request) -> int:
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user_id
+
+
+def _position_multiplier(symbol: str) -> int:
+    return 100 if parse_occ_contract_symbol(symbol) else 1
+
+
+def _position_market_value(symbol: str, price: float, quantity: float) -> float:
+    return price * quantity * _position_multiplier(symbol)
+
+
+def _position_unrealized_pnl(symbol: str, entry_price: float, current_price: float, quantity: float) -> float:
+    return (current_price - entry_price) * quantity * _position_multiplier(symbol)
+
+
+def _position_unrealized_pnl_pct(symbol: str, entry_price: float, current_price: float, quantity: float) -> float:
+    basis = abs(entry_price * quantity * _position_multiplier(symbol))
+    if basis <= 0:
+        return 0.0
+    pnl = _position_unrealized_pnl(symbol, entry_price, current_price, quantity)
+    return pnl / basis
+
+
+def _option_mark(snapshot: dict) -> float | None:
+    bid = snapshot.get("bid")
+    ask = snapshot.get("ask")
+    last = snapshot.get("last")
+    if bid is not None and ask is not None and bid > 0 and ask > 0:
+        return (bid + ask) / 2
+    if last is not None and last > 0:
+        return float(last)
+    if ask is not None and ask > 0:
+        return float(ask)
+    if bid is not None and bid > 0:
+        return float(bid)
+    return None
+
+
+async def _fetch_option_price(
+    *,
+    contract_symbol: str | None,
+    underlying: str,
+    expiry: str,
+    strike: float,
+    option_type: str,
+) -> tuple[str, float]:
+    snapshot = await fetch_option_snapshot(
+        underlying=underlying,
+        expiration=expiry,
+        strike=strike,
+        option_type=option_type,
+        contract_symbol=contract_symbol,
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Option contract not found")
+
+    mark = _option_mark(snapshot)
+    if mark is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not price option contract {snapshot.get('symbol') or contract_symbol or underlying}",
+        )
+
+    return str(snapshot["symbol"]), float(mark)
 
 
 async def _get_or_create_portfolio(user_id: int) -> dict:
@@ -82,7 +149,12 @@ async def _get_or_create_portfolio(user_id: int) -> dict:
         positions = pos_result.scalars().all()
 
         positions_value = sum(
-            (p.current_price or p.avg_entry_price) * p.quantity for p in positions
+            _position_market_value(
+                p.symbol,
+                p.current_price or p.avg_entry_price,
+                p.quantity,
+            )
+            for p in positions
         )
 
         return {
@@ -100,7 +172,11 @@ async def _get_or_create_portfolio(user_id: int) -> dict:
                     "avg_entry_price": p.avg_entry_price,
                     "current_price": p.current_price or p.avg_entry_price,
                     "unrealized_pnl": p.unrealized_pnl or 0.0,
-                    "market_value": (p.current_price or p.avg_entry_price) * p.quantity,
+                    "market_value": _position_market_value(
+                        p.symbol,
+                        p.current_price or p.avg_entry_price,
+                        p.quantity,
+                    ),
                 }
                 for p in positions
             ],
@@ -148,92 +224,35 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
     side = raw_side
     if side not in ("BUY", "SELL"):
         raise HTTPException(status_code=400, detail="side must be BUY or SELL")
+    is_option_trade = req.instrument_type == "option"
+
+    if is_option_trade:
+        contract_symbol = (req.contract_symbol or "").strip().upper() or None
+        parsed_contract = parse_occ_contract_symbol(contract_symbol) if contract_symbol else None
+        underlying = symbol
+        expiry = req.expiry or (parsed_contract or {}).get("expiration")
+        option_type = req.option_type or (parsed_contract or {}).get("option_type")
+        strike = req.strike if req.strike is not None else (parsed_contract or {}).get("strike")
+        if not expiry or not option_type or strike is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Option trades require contract_symbol or expiration, strike, and option_type",
+            )
+
+        symbol, current_price = await _fetch_option_price(
+            contract_symbol=contract_symbol,
+            underlying=underlying,
+            expiry=expiry,
+            strike=float(strike),
+            option_type=option_type,
+        )
+    else:
+        current_price = await _fetch_current_price(symbol)
+        if req.notional is not None:
+            qty = math.floor(req.notional / current_price)
+
     if qty <= 0:
         raise HTTPException(status_code=400, detail="quantity must be positive")
-
-    # ── Options routing check ─────────────────────────────────────────────
-    if req.instrument_type == "option":
-        from db.models import UserApiConnection, ApiProvider
-        from services.order_router import (
-            OrderRequest as RouterOrderRequest,
-            resolve_route,
-            OptionsNotSupportedError,
-        )
-        from services.api_connection_manager import api_connection_manager as conn_manager
-        from sqlalchemy import select
-
-        routing_settings = await conn_manager.get_or_create_settings(user_id)
-        active_conn = None
-        options_conn = None
-
-        if routing_settings.active_equity_broker_id:
-            async with get_session() as _db:
-                _r = await _db.execute(
-                    select(UserApiConnection).join(ApiProvider)
-                    .where(UserApiConnection.id == routing_settings.active_equity_broker_id)
-                )
-                active_conn = _r.scalar_one_or_none()
-
-        if getattr(routing_settings, "options_provider_connection_id", None):
-            async with get_session() as _db:
-                _r = await _db.execute(
-                    select(UserApiConnection).join(ApiProvider)
-                    .where(UserApiConnection.id == routing_settings.options_provider_connection_id)
-                )
-                options_conn = _r.scalar_one_or_none()
-
-        if active_conn:
-            router_req = RouterOrderRequest(
-                symbol=req.symbol.upper(),
-                side=req.side or req.direction or "BUY",
-                qty=int(req.quantity),
-                instrument_type=req.instrument_type,
-                option_type=req.option_type,
-                strike=req.strike,
-                expiry=req.expiry,
-            )
-            try:
-                route = resolve_route(
-                    router_req,
-                    active_connection=active_conn,
-                    settings=routing_settings,
-                    options_connection=options_conn,
-                )
-            except OptionsNotSupportedError as e:
-                raise HTTPException(
-                    status_code=422,
-                    detail={
-                        "code": "OPTIONS_NOT_SUPPORTED",
-                        "message": str(e),
-                        "active_broker": e.active_broker_name,
-                    },
-                )
-
-            if route.is_options_sim:
-                from db.models import OptionSimTrade
-                import datetime as dt
-                sim_trade = OptionSimTrade(
-                    user_id=user_id,
-                    connection_id=options_conn.id,
-                    symbol=req.symbol.upper(),
-                    option_type=req.option_type,
-                    strike=req.strike,
-                    expiry=dt.date.fromisoformat(req.expiry),
-                    qty=int(req.quantity),
-                    status="pending",
-                )
-                async with get_session() as _db:
-                    _db.add(sim_trade)
-                    await _db.commit()
-                    await _db.refresh(sim_trade)
-                return {
-                    "status": "options_sim_pending",
-                    "sim_trade_id": sim_trade.id,
-                    "message": f"Options order queued for {options_conn.provider.name} paper ({req.option_type} {req.strike} {req.expiry})",
-                }
-
-    # Get current price
-    current_price = await _fetch_current_price(symbol)
 
     async with get_session() as session:
         # Load portfolio
@@ -243,45 +262,97 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
         portfolio = result.scalar_one_or_none()
 
         if not portfolio:
-            portfolio = PaperPortfolio(
-                user_id=user_id,
-                cash=1_000_000.0,
-                initial_capital=1_000_000.0,
+                portfolio = PaperPortfolio(
+                    user_id=user_id,
+                    cash=1_000_000.0,
+                    initial_capital=1_000_000.0,
+                )
+                session.add(portfolio)
+                await session.flush()
+
+        multiplier = _position_multiplier(symbol)
+        trade_value = current_price * qty * multiplier
+
+        pos_result = await session.execute(
+            select(PaperPosition).where(
+                PaperPosition.portfolio_id == portfolio.id,
+                PaperPosition.symbol == symbol,
             )
-            session.add(portfolio)
-            await session.flush()
+        )
+        position = pos_result.scalar_one_or_none()
 
         if side == "BUY":
-            cost = current_price * qty
-            if cost > portfolio.cash:
+            if trade_value > portfolio.cash:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Insufficient cash. Need ${cost:,.2f}, have ${portfolio.cash:,.2f}",
+                    detail=f"Insufficient cash. Need ${trade_value:,.2f}, have ${portfolio.cash:,.2f}",
                 )
 
-            # Deduct cash
-            portfolio.cash -= cost
+            portfolio.cash -= trade_value
 
-            # Check for existing position
-            pos_result = await session.execute(
-                select(PaperPosition).where(
-                    PaperPosition.portfolio_id == portfolio.id,
-                    PaperPosition.symbol == symbol,
+            if position and position.quantity < 0:
+                held_short = abs(position.quantity)
+                if held_short < qty:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Insufficient short position. Want to buy {qty}, short {held_short}",
+                    )
+
+                avg_credit = position.avg_entry_price
+                pnl = (avg_credit - current_price) * qty * multiplier
+                position.quantity += qty
+                if abs(position.quantity) <= 0.0001:
+                    await session.delete(position)
+                else:
+                    position.current_price = current_price
+                    position.unrealized_pnl = _position_unrealized_pnl(
+                        symbol,
+                        position.avg_entry_price,
+                        current_price,
+                        position.quantity,
+                    )
+
+                trade = PaperTrade(
+                    portfolio_id=portfolio.id,
+                    user_id=user_id,
+                    symbol=symbol,
+                    direction=TradeDirection.LONG,
+                    quantity=qty,
+                    entry_price=avg_credit,
+                    exit_price=current_price,
+                    pnl=pnl,
+                    status=PaperTradeStatus.CLOSED,
+                    exit_time=datetime.utcnow(),
                 )
-            )
-            position = pos_result.scalar_one_or_none()
+                session.add(trade)
 
-            if position:
-                # Average into existing position
-                total_cost = (position.avg_entry_price * position.quantity) + cost
+                await session.flush()
+                await session.refresh(trade)
+                return {
+                    "executed": True,
+                    "id": trade.id,
+                    "symbol": symbol,
+                    "direction": "BUY",
+                    "quantity": qty,
+                    "price": current_price,
+                    "timestamp": trade.exit_time.isoformat() if trade.exit_time else datetime.utcnow().isoformat(),
+                    "pnl": pnl,
+                    "cost": trade_value,
+                    "remaining_cash": portfolio.cash,
+                }
+
+            if position and position.quantity > 0:
+                total_cost = (position.avg_entry_price * position.quantity) + (current_price * qty)
                 position.quantity += qty
                 position.avg_entry_price = total_cost / position.quantity
                 position.current_price = current_price
-                position.unrealized_pnl = (
-                    (current_price - position.avg_entry_price) * position.quantity
+                position.unrealized_pnl = _position_unrealized_pnl(
+                    symbol,
+                    position.avg_entry_price,
+                    current_price,
+                    position.quantity,
                 )
             else:
-                # New position
                 position = PaperPosition(
                     portfolio_id=portfolio.id,
                     user_id=user_id,
@@ -293,7 +364,6 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
                 )
                 session.add(position)
 
-            # Record the trade (OPEN — buy side)
             trade = PaperTrade(
                 portfolio_id=portfolio.id,
                 user_id=user_id,
@@ -316,57 +386,96 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
                 "price": current_price,
                 "timestamp": trade.entry_time.isoformat() if trade.entry_time else datetime.utcnow().isoformat(),
                 "pnl": None,
-                "cost": cost,
+                "cost": trade_value,
                 "remaining_cash": portfolio.cash,
             }
 
         else:  # SELL
-            # Find existing position
-            pos_result = await session.execute(
-                select(PaperPosition).where(
-                    PaperPosition.portfolio_id == portfolio.id,
-                    PaperPosition.symbol == symbol,
+            if position and position.quantity > 0:
+                if position.quantity < qty:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Insufficient shares. Want to sell {qty}, hold {position.quantity}",
+                    )
+
+                avg_cost = position.avg_entry_price
+                pnl = (current_price - avg_cost) * qty * multiplier
+                portfolio.cash += trade_value
+                position.quantity -= qty
+                if position.quantity <= 0.0001:
+                    await session.delete(position)
+                else:
+                    position.current_price = current_price
+                    position.unrealized_pnl = _position_unrealized_pnl(
+                        symbol,
+                        position.avg_entry_price,
+                        current_price,
+                        position.quantity,
+                    )
+
+                trade = PaperTrade(
+                    portfolio_id=portfolio.id,
+                    user_id=user_id,
+                    symbol=symbol,
+                    direction=TradeDirection.SHORT,
+                    quantity=qty,
+                    entry_price=avg_cost,
+                    exit_price=current_price,
+                    pnl=pnl,
+                    status=PaperTradeStatus.CLOSED,
+                    exit_time=datetime.utcnow(),
                 )
-            )
-            position = pos_result.scalar_one_or_none()
+                session.add(trade)
 
-            if not position or position.quantity < qty:
-                held = position.quantity if position else 0
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Insufficient shares. Want to sell {qty}, hold {held}",
-                )
+                await session.flush()
+                await session.refresh(trade)
+                return {
+                    "executed": True,
+                    "id": trade.id,
+                    "symbol": symbol,
+                    "direction": "SELL",
+                    "quantity": qty,
+                    "price": current_price,
+                    "timestamp": trade.exit_time.isoformat() if trade.exit_time else datetime.utcnow().isoformat(),
+                    "pnl": pnl,
+                    "proceeds": trade_value,
+                    "remaining_cash": portfolio.cash,
+                }
 
-            # Calculate P&L
-            proceeds = current_price * qty
-            cost_basis = position.avg_entry_price * qty
-            pnl = proceeds - cost_basis
+            portfolio.cash += trade_value
 
-            # Add proceeds to cash
-            portfolio.cash += proceeds
-
-            # Update or remove position
-            position.quantity -= qty
-            if position.quantity <= 0.0001:  # effectively zero
-                await session.delete(position)
-            else:
+            if position and position.quantity < 0:
+                total_credit = (position.avg_entry_price * abs(position.quantity)) + (current_price * qty)
+                new_short_qty = abs(position.quantity) + qty
+                position.quantity = -new_short_qty
+                position.avg_entry_price = total_credit / new_short_qty
                 position.current_price = current_price
-                position.unrealized_pnl = (
-                    (current_price - position.avg_entry_price) * position.quantity
+                position.unrealized_pnl = _position_unrealized_pnl(
+                    symbol,
+                    position.avg_entry_price,
+                    current_price,
+                    position.quantity,
                 )
+            else:
+                position = PaperPosition(
+                    portfolio_id=portfolio.id,
+                    user_id=user_id,
+                    symbol=symbol,
+                    quantity=-qty,
+                    avg_entry_price=current_price,
+                    current_price=current_price,
+                    unrealized_pnl=0.0,
+                )
+                session.add(position)
 
-            # Record the closed trade
             trade = PaperTrade(
                 portfolio_id=portfolio.id,
                 user_id=user_id,
                 symbol=symbol,
                 direction=TradeDirection.SHORT,
                 quantity=qty,
-                entry_price=position.avg_entry_price,
-                exit_price=current_price,
-                pnl=pnl,
-                status=PaperTradeStatus.CLOSED,
-                exit_time=datetime.utcnow(),
+                entry_price=current_price,
+                status=PaperTradeStatus.OPEN,
             )
             session.add(trade)
 
@@ -380,8 +489,8 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
                 "quantity": qty,
                 "price": current_price,
                 "timestamp": trade.entry_time.isoformat() if trade.entry_time else datetime.utcnow().isoformat(),
-                "pnl": pnl,
-                "proceeds": proceeds,
+                "pnl": None,
+                "proceeds": trade_value,
                 "remaining_cash": portfolio.cash,
             }
 
@@ -408,29 +517,66 @@ async def get_paper_positions(request: Request):
         # Refresh current prices
         position_list = []
         for p in positions:
+            contract_meta = parse_occ_contract_symbol(p.symbol)
             try:
-                current = await _fetch_current_price(p.symbol)
+                if contract_meta:
+                    snapshot = await fetch_option_snapshot(
+                        underlying=contract_meta["underlying"],
+                        expiration=contract_meta["expiration"],
+                        strike=float(contract_meta["strike"]),
+                        option_type=contract_meta["option_type"],
+                        contract_symbol=p.symbol,
+                    )
+                    current = _option_mark(snapshot or {})
+                    if current is None:
+                        raise ValueError("option mark unavailable")
+                else:
+                    current = await _fetch_current_price(p.symbol)
                 p.current_price = current
-                p.unrealized_pnl = (current - p.avg_entry_price) * p.quantity
+                p.unrealized_pnl = _position_unrealized_pnl(
+                    p.symbol,
+                    p.avg_entry_price,
+                    current,
+                    p.quantity,
+                )
             except Exception:
                 # Keep stale price if refresh fails
                 pass
 
-            position_list.append({
-                "symbol": p.symbol,
+            current_price = p.current_price or p.avg_entry_price
+            payload = {
+                "symbol": contract_meta["underlying"] if contract_meta else p.symbol,
                 "quantity": p.quantity,
                 "avg_entry_price": p.avg_entry_price,
-                "current_price": p.current_price or p.avg_entry_price,
-                "market_value": (p.current_price or p.avg_entry_price) * p.quantity,
+                "current_price": current_price,
+                "market_value": _position_market_value(p.symbol, current_price, p.quantity),
                 "unrealized_pnl": p.unrealized_pnl or 0.0,
-                "unrealized_pnl_pct": (
-                    ((p.current_price or p.avg_entry_price) - p.avg_entry_price)
-                    / p.avg_entry_price
-                    * 100
-                    if p.avg_entry_price
-                    else 0.0
+                "unrealized_pnl_pct": _position_unrealized_pnl_pct(
+                    p.symbol,
+                    p.avg_entry_price,
+                    current_price,
+                    p.quantity,
                 ),
-            })
+                "side": "short" if p.quantity < 0 else "long",
+            }
+
+            if contract_meta:
+                payload.update(
+                    {
+                        "asset_type": "option",
+                        "contract_symbol": p.symbol,
+                        "underlying": contract_meta["underlying"],
+                        "expiration": contract_meta["expiration"],
+                        "strike": contract_meta["strike"],
+                        "option_type": contract_meta["option_type"],
+                        "avg_premium": p.avg_entry_price,
+                        "current_mark": current_price,
+                    }
+                )
+            else:
+                payload["asset_type"] = "stock"
+
+            position_list.append(payload)
 
         return {"positions": position_list}
 

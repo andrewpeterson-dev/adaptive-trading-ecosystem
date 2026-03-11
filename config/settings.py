@@ -106,6 +106,8 @@ class Settings(BaseSettings):
     retrain_interval_hours: int = 24
     walk_forward_window_days: int = 252
     performance_decay_threshold: float = 0.3
+    strategy_learning_interval_seconds: int = 900
+    strategy_learning_min_trades: int = 5
 
     # --- Capital ---
     initial_capital: float = 100_000.0

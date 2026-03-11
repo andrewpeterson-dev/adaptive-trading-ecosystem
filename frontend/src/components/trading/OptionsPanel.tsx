@@ -23,6 +23,8 @@ interface OptionsChainResponse {
   expirations: string[];
   strikes: number[];
   contracts: OptionContract[];
+  selected_expiration?: string;
+  selectedExpiration?: string;
 }
 
 type OptionDirection =
@@ -123,10 +125,12 @@ function OptionsNoData({ symbol }: { symbol: string }) {
           <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
           <div>
             <p className="text-xs font-medium text-foreground mb-1">
-              Options data requires broker connection
+              No live options chain available
             </p>
             <p className="text-[11px] text-muted-foreground mb-2">
-              Once connected, you&apos;ll see:
+              When the market data API returns contracts for{" "}
+              <span className="font-medium text-foreground">{symbol}</span>,
+              this panel will show:
             </p>
           </div>
         </div>
@@ -648,33 +652,46 @@ export function OptionsPanel() {
   const [error, setError] = useState<string | null>(null);
 
   /* ---- Fetch options chain ---- */
-  const fetchChain = useCallback(async () => {
+  const fetchChain = useCallback(async (expiration?: string) => {
     setChainLoading(true);
-    setHasOptionsData(false);
-    setChainData(null);
     setError(null);
     setSelectedStrike(null);
-    setSelectedExpiration("");
 
     try {
+      const query = new URLSearchParams({ symbol });
+      if (expiration) {
+        query.set("expiration", expiration);
+      }
+
       const data = await apiFetch<OptionsChainResponse>(
-        `/api/trading/options-chain?symbol=${encodeURIComponent(symbol)}`
+        `/api/trading/options-chain?${query.toString()}`
       );
       if (data && data.expirations && data.expirations.length > 0) {
         setChainData(data);
         setHasOptionsData(true);
-        setSelectedExpiration(data.expirations[0]);
+        setSelectedExpiration(
+          data.selected_expiration ??
+            data.selectedExpiration ??
+            expiration ??
+            data.expirations[0]
+        );
       } else {
         setHasOptionsData(false);
+        setChainData(null);
       }
-    } catch {
+    } catch (err) {
       setHasOptionsData(false);
+      setChainData(null);
+      setError(err instanceof Error ? err.message : "Failed to load options chain");
     } finally {
       setChainLoading(false);
     }
   }, [symbol]);
 
   useEffect(() => {
+    setHasOptionsData(false);
+    setChainData(null);
+    setSelectedExpiration("");
     fetchChain();
   }, [fetchChain]);
 
@@ -683,12 +700,26 @@ export function OptionsPanel() {
     setSelectedStrike(null);
   }, [selectedExpiration]);
 
+  useEffect(() => {
+    if (!selectedExpiration) return;
+    if (
+      chainData?.selected_expiration === selectedExpiration ||
+      chainData?.selectedExpiration === selectedExpiration
+    ) {
+      return;
+    }
+    fetchChain(selectedExpiration);
+  }, [
+    chainData?.selected_expiration,
+    chainData?.selectedExpiration,
+    fetchChain,
+    selectedExpiration,
+  ]);
+
   /* ---- Derived data ---- */
   const contracts = useMemo(
     () =>
-      chainData?.contracts.filter(
-        (c) => c.expiration === selectedExpiration
-      ) ?? [],
+      chainData?.contracts.filter((c) => c.expiration === selectedExpiration) ?? [],
     [chainData, selectedExpiration]
   );
 

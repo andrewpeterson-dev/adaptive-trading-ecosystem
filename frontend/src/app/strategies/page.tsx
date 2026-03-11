@@ -139,6 +139,9 @@ export default function StrategiesPage() {
           max_trades_per_day: s.max_trades_per_day,
           max_exposure_pct: s.max_exposure_pct,
           max_loss_pct: s.max_loss_pct,
+          strategy_type: s.strategy_type,
+          source_prompt: s.source_prompt,
+          ai_context: s.ai_context,
         }),
       });
       // Replace optimistic with real
@@ -199,6 +202,13 @@ export default function StrategiesPage() {
                   </span>
                   <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                     {s.timeframe}
+                  </span>
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">
+                    {s.strategy_type === "ai_generated"
+                      ? "AI"
+                      : s.strategy_type === "custom"
+                        ? "Custom"
+                        : "Manual"}
                   </span>
                   {s.id > 0 && (
                     <span className="text-xs text-muted-foreground/50 font-mono">#{s.id}</span>

@@ -3,7 +3,14 @@
  * Maps the spec to Strategy Builder fields.
  */
 
-import type { Action, Operator, StrategyCondition } from "@/types/strategy";
+import type {
+  Action,
+  ConditionGroup,
+  Operator,
+  StrategyAiContext,
+  StrategyCondition,
+  StrategyType,
+} from "@/types/strategy";
 
 export interface StrategySpec {
   name: string;
@@ -15,6 +22,13 @@ export interface StrategySpec {
   timeframe: string;
   entryConditions: SpecCondition[];
   exitConditions?: SpecCondition[];
+  symbols?: string[];
+  strategyType?: StrategyType;
+  sourcePrompt?: string;
+  overview?: string;
+  featureSignals?: string[];
+  assumptions?: string[];
+  learningPlan?: Record<string, unknown>;
 }
 
 export interface SpecCondition {
@@ -24,6 +38,8 @@ export interface SpecCondition {
   operator?: string;
   value?: number;
   signal?: string;
+  field?: string;
+  compare_to?: string;
 }
 
 const VALID_ACTIONS: Action[] = ["BUY", "SELL"];
@@ -135,6 +151,11 @@ export function specToBuilderFields(spec: StrategySpec): {
   positionSize: number;
   timeframe: string;
   conditions: StrategyCondition[];
+  conditionGroups: ConditionGroup[];
+  symbols?: string[];
+  strategyType?: StrategyType;
+  sourcePrompt?: string;
+  aiContext?: StrategyAiContext;
 } {
   let condId = 0;
   const conditions: StrategyCondition[] = spec.entryConditions.map((c) => {
@@ -151,10 +172,27 @@ export function specToBuilderFields(spec: StrategySpec): {
       indicator: c.indicator.toLowerCase(),
       operator,
       value,
+      compare_to: c.compare_to,
+      field: c.field,
       params: c.params || {},
       action: spec.action,
     };
   });
+
+  const conditionGroups = conditions.reduce<ConditionGroup[]>((groups, condition, index) => {
+    const raw = spec.entryConditions[index];
+    if (raw.logic === "OR" || groups.length === 0) {
+      groups.push({
+        id: `group_${Date.now()}_${groups.length + 1}`,
+        label: `Group ${String.fromCharCode(65 + groups.length)}`,
+        conditions: [condition],
+      });
+      return groups;
+    }
+
+    groups[groups.length - 1].conditions.push(condition);
+    return groups;
+  }, []);
 
   return {
     name: spec.name,
@@ -165,5 +203,16 @@ export function specToBuilderFields(spec: StrategySpec): {
     positionSize: spec.positionPct,
     timeframe: spec.timeframe,
     conditions,
+    conditionGroups,
+    symbols: spec.symbols,
+    strategyType: spec.strategyType,
+    sourcePrompt: spec.sourcePrompt,
+    aiContext: {
+      overview: spec.overview,
+      feature_signals: spec.featureSignals,
+      assumptions: spec.assumptions,
+      learning_plan: spec.learningPlan,
+      exit_conditions: spec.exitConditions as Array<Record<string, unknown>> | undefined,
+    },
   };
 }

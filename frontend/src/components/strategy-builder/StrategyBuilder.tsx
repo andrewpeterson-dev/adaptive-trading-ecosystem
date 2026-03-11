@@ -1,25 +1,29 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
-import { Plus, Play, Save, RotateCcw, Zap } from "lucide-react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { BrainCircuit, Plus, Play, Save, RotateCcw, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api/client";
 import { ConditionGroup as ConditionGroupComponent } from "./ConditionGroup";
 import { AccordionSection } from "./AccordionSection";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { ExplainerPanel } from "./ExplainerPanel";
+import { AIStrategyGeneratorDialog } from "./AIStrategyGeneratorDialog";
 import { IndicatorChart } from "@/components/charts/IndicatorChart";
 import { PageHeader } from "@/components/layout/PageHeader";
 import type {
   ConditionGroup,
   StrategyCondition,
   Strategy,
+  StrategyAiContext,
   StrategyRecord,
   DiagnosticReport,
   StrategyExplanation,
   Action,
+  StrategyType,
 } from "@/types/strategy";
 import { useStrategyBuilderStore } from "@/stores/strategy-builder-store";
+import type { GeneratedStrategyResponse } from "@/lib/cerberus-api";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -47,8 +51,10 @@ function buildLogicString(groups: ConditionGroup[], action: Action): string {
         .map((c) => {
           const paramStr = Object.values(c.params).join(",");
           const ind = c.indicator.toUpperCase().replace(/_/g, " ");
-          const indFmt = paramStr ? `${ind}(${paramStr})` : ind;
-          return `${indFmt} ${c.operator} ${c.value}`;
+          const fieldSuffix = c.field ? `.${String(c.field).toUpperCase()}` : "";
+          const indFmt = paramStr ? `${ind}(${paramStr})${fieldSuffix}` : `${ind}${fieldSuffix}`;
+          const target = c.compare_to ? String(c.compare_to).replace(/_/g, " ") : c.value;
+          return `${indFmt} ${c.operator} ${target}`;
         });
       if (condParts.length === 0) return null;
       return condParts.length === 1 ? condParts[0] : `(${condParts.join(" AND ")})`;
@@ -75,6 +81,10 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   const [description, setDescription] = useState("");
   const [action, setAction] = useState<Action>("BUY");
   const [timeframe, setTimeframe] = useState("1D");
+  const [strategyType, setStrategyType] = useState<StrategyType>("manual");
+  const [sourcePrompt, setSourcePrompt] = useState("");
+  const [aiContext, setAiContext] = useState<StrategyAiContext>({});
+  const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
 
   // Condition groups (primary state — replaces flat conditions[])
   const [conditionGroups, setConditionGroups] = useState<ConditionGroup[]>([emptyGroup(0)]);
@@ -111,9 +121,75 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   const [indicatorPreviews, setIndicatorPreviews] = useState<
     Record<string, { values?: number[]; components?: Record<string, number[]> }>
   >({});
+  const aiBaselineRef = useRef<string | null>(null);
 
   // ── Draft persistence (create mode only) ────────────────────────────────
   const DRAFT_KEY = "strategy_builder_draft";
+  const buildFingerprint = useCallback((draft?: {
+    name: string;
+    description: string;
+    action: Action;
+    timeframe: string;
+    conditionGroups: ConditionGroup[];
+    stopLoss: number;
+    takeProfit: number;
+    positionSize: number;
+    symbols: string[];
+    commissionPct: number;
+    slippagePct: number;
+    trailingStopEnabled: boolean;
+    trailingStop: number;
+    exitAfterBarsEnabled: boolean;
+    exitAfterBars: number;
+    cooldownBars: number;
+    maxTradesPerDay: number;
+    maxExposurePct: number;
+    maxLossPct: number;
+  }) => JSON.stringify(
+    draft ?? {
+      name,
+      description,
+      action,
+      timeframe,
+      conditionGroups,
+      stopLoss,
+      takeProfit,
+      positionSize,
+      symbols,
+      commissionPct,
+      slippagePct,
+      trailingStopEnabled,
+      trailingStop,
+      exitAfterBarsEnabled,
+      exitAfterBars,
+      cooldownBars,
+      maxTradesPerDay,
+      maxExposurePct,
+      maxLossPct,
+    }
+  ), [
+    action,
+    commissionPct,
+    conditionGroups,
+    cooldownBars,
+    description,
+    exitAfterBars,
+    exitAfterBarsEnabled,
+    maxExposurePct,
+    maxLossPct,
+    maxTradesPerDay,
+    name,
+    positionSize,
+    slippagePct,
+    stopLoss,
+    symbols,
+    takeProfit,
+    timeframe,
+    trailingStop,
+    trailingStopEnabled,
+  ]);
+  const featureSignals = aiContext.feature_signals ?? [];
+  const learningMethods = aiContext.learning_plan?.methods ?? [];
 
   useEffect(() => {
     if (mode !== "create") return;
@@ -125,6 +201,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       if (d.description) setDescription(d.description);
       if (d.action) setAction(d.action);
       if (d.timeframe) setTimeframe(d.timeframe);
+      if (d.strategyType) setStrategyType(d.strategyType);
+      if (d.sourcePrompt) setSourcePrompt(d.sourcePrompt);
+      if (d.aiContext) setAiContext(d.aiContext);
       if (d.conditionGroups?.length) setConditionGroups(d.conditionGroups);
       if (d.stopLoss != null) setStopLoss(d.stopLoss);
       if (d.takeProfit != null) setTakeProfit(d.takeProfit);
@@ -154,6 +233,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         exitAfterBarsEnabled, exitAfterBars,
         symbols, commissionPct, slippagePct,
         cooldownBars, maxTradesPerDay, maxExposurePct, maxLossPct,
+        strategyType, sourcePrompt, aiContext,
       }));
     } catch { /* ignore */ }
   }, [
@@ -163,6 +243,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     exitAfterBarsEnabled, exitAfterBars,
     symbols, commissionPct, slippagePct,
     cooldownBars, maxTradesPerDay, maxExposurePct, maxLossPct,
+    strategyType, sourcePrompt, aiContext,
   ]);
 
   // ── Consume pending spec from Cerberus chat ────────────────────────────
@@ -178,13 +259,48 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setTakeProfit(spec.takeProfit);
     setPositionSize(spec.positionSize);
     setTimeframe(spec.timeframe);
-    if (spec.conditions.length > 0) {
+    setStrategyType(spec.strategyType ?? "ai_generated");
+    setSourcePrompt(spec.sourcePrompt ?? "");
+    setAiContext(spec.aiContext ?? {});
+    if (spec.symbols?.length) {
+      setSymbols(spec.symbols);
+    }
+    if (spec.conditionGroups?.length) {
+      setConditionGroups(spec.conditionGroups);
+    } else if (spec.conditions.length > 0) {
       setConditionGroups([{
         id: genId(),
         label: "Group A",
         conditions: spec.conditions,
       }]);
     }
+    aiBaselineRef.current = buildFingerprint({
+      name: spec.name,
+      description: spec.description,
+      action: spec.action,
+      timeframe: spec.timeframe,
+      conditionGroups: spec.conditionGroups?.length
+        ? spec.conditionGroups
+        : [{
+            id: genId(),
+            label: "Group A",
+            conditions: spec.conditions,
+          }],
+      stopLoss: spec.stopLoss,
+      takeProfit: spec.takeProfit,
+      positionSize: spec.positionSize,
+      symbols: spec.symbols?.length ? spec.symbols : ["SPY"],
+      commissionPct,
+      slippagePct,
+      trailingStopEnabled: false,
+      trailingStop,
+      exitAfterBarsEnabled: false,
+      exitAfterBars,
+      cooldownBars,
+      maxTradesPerDay,
+      maxExposurePct,
+      maxLossPct,
+    });
     localStorage.removeItem(DRAFT_KEY);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -196,6 +312,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setName(initialStrategy.name);
     setDescription(initialStrategy.description || "");
     setAction(initialStrategy.action as Action);
+    setStrategyType(initialStrategy.strategy_type ?? "manual");
+    setSourcePrompt(initialStrategy.source_prompt ?? "");
+    setAiContext(initialStrategy.ai_context ?? {});
     setStopLoss((initialStrategy.stop_loss_pct || 0.02) * 100);
     setTakeProfit((initialStrategy.take_profit_pct || 0.05) * 100);
     setPositionSize((initialStrategy.position_size_pct || 0.1) * 100);
@@ -253,7 +372,67 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     if (initialStrategy.diagnostics) {
       setDiagnostics(initialStrategy.diagnostics as DiagnosticReport);
     }
+    if ((initialStrategy.strategy_type ?? "manual") !== "manual") {
+      aiBaselineRef.current = buildFingerprint({
+        name: initialStrategy.name,
+        description: initialStrategy.description || "",
+        action: initialStrategy.action as Action,
+        timeframe: initialStrategy.timeframe || "1D",
+        conditionGroups: initialStrategy.condition_groups?.length
+          ? initialStrategy.condition_groups.map((g, gi) => ({
+              id: g.id ?? `initial_${gi}`,
+              label: g.label ?? `Group ${String.fromCharCode(65 + gi)}`,
+              conditions: g.conditions.map((c, ci) => ({
+                id: `${g.id ?? gi}_${ci}`,
+                indicator: c.indicator,
+                operator: c.operator as StrategyCondition["operator"],
+                value: c.value,
+                compare_to: c.compare_to,
+                field: c.field,
+                params: c.params || {},
+                action: (c.action as Action) || (initialStrategy.action as Action),
+              })),
+            }))
+          : [{
+              id: "initial_group",
+              label: "Group A",
+              conditions: (initialStrategy.conditions || []).map((c, ci) => ({
+                id: `initial_${ci}`,
+                indicator: c.indicator,
+                operator: c.operator as StrategyCondition["operator"],
+                value: c.value,
+                compare_to: c.compare_to,
+                field: c.field,
+                params: c.params || {},
+                action: (c.action as Action) || (initialStrategy.action as Action),
+              })),
+            }],
+        stopLoss: (initialStrategy.stop_loss_pct || 0.02) * 100,
+        takeProfit: (initialStrategy.take_profit_pct || 0.05) * 100,
+        positionSize: (initialStrategy.position_size_pct || 0.1) * 100,
+        symbols: initialStrategy.symbols?.length ? initialStrategy.symbols : ["SPY"],
+        commissionPct: (initialStrategy.commission_pct ?? 0.001) * 100,
+        slippagePct: (initialStrategy.slippage_pct ?? 0.0005) * 100,
+        trailingStopEnabled: initialStrategy.trailing_stop_pct != null,
+        trailingStop: (initialStrategy.trailing_stop_pct ?? 0) * 100,
+        exitAfterBarsEnabled: initialStrategy.exit_after_bars != null,
+        exitAfterBars: initialStrategy.exit_after_bars ?? 10,
+        cooldownBars: initialStrategy.cooldown_bars ?? 0,
+        maxTradesPerDay: initialStrategy.max_trades_per_day ?? 0,
+        maxExposurePct: (initialStrategy.max_exposure_pct ?? 1.0) * 100,
+        maxLossPct: (initialStrategy.max_loss_pct ?? 0) * 100,
+      });
+    } else {
+      aiBaselineRef.current = null;
+    }
   }, [initialStrategy]);
+
+  useEffect(() => {
+    if (strategyType !== "ai_generated" || !aiBaselineRef.current) return;
+    if (buildFingerprint() !== aiBaselineRef.current) {
+      setStrategyType("custom");
+    }
+  }, [buildFingerprint, strategyType]);
 
   // ── Group / condition handlers ─────────────────────────────────────────
 
@@ -312,6 +491,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setExplanation(null);
     setName("My Strategy");
     setDescription("");
+    setStrategyType("manual");
+    setSourcePrompt("");
+    setAiContext({});
     setSaveStatus("idle");
     setIndicatorPreviews({});
     setSymbols(["SPY"]);
@@ -320,6 +502,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setPositionSize(10);
     setTrailingStopEnabled(false);
     setExitAfterBarsEnabled(false);
+    aiBaselineRef.current = null;
   }, []);
 
   // ── Symbol tag input ────────────────────────────────────────────────────
@@ -425,6 +608,66 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     }
   };
 
+  const applyGeneratedStrategy = useCallback((result: GeneratedStrategyResponse) => {
+    const draft = result.builder_draft;
+    const groups = (draft.conditionGroups as unknown as ConditionGroup[] | undefined)
+      ?? [{
+        id: genId(),
+        label: "Group A",
+        conditions: (draft.conditions as unknown as StrategyCondition[] | undefined) ?? [],
+      }];
+
+    setName(draft.name);
+    setDescription(draft.description);
+    setAction(draft.action);
+    setStopLoss(draft.stopLoss);
+    setTakeProfit(draft.takeProfit);
+    setPositionSize(draft.positionSize);
+    setTimeframe(draft.timeframe);
+    setConditionGroups(groups);
+    setSymbols(draft.symbols?.length ? draft.symbols : ["SPY"]);
+    setStrategyType(draft.strategyType ?? "ai_generated");
+    setSourcePrompt(draft.sourcePrompt ?? result.prompt);
+    setAiContext(draft.aiContext ?? {});
+    setSaveStatus("idle");
+    setExplanation(null);
+    setDiagnostics(null);
+    aiBaselineRef.current = buildFingerprint({
+      name: draft.name,
+      description: draft.description,
+      action: draft.action,
+      timeframe: draft.timeframe,
+      conditionGroups: groups,
+      stopLoss: draft.stopLoss,
+      takeProfit: draft.takeProfit,
+      positionSize: draft.positionSize,
+      symbols: draft.symbols?.length ? draft.symbols : ["SPY"],
+      commissionPct,
+      slippagePct,
+      trailingStopEnabled,
+      trailingStop,
+      exitAfterBarsEnabled,
+      exitAfterBars,
+      cooldownBars,
+      maxTradesPerDay,
+      maxExposurePct,
+      maxLossPct,
+    });
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+  }, [
+    buildFingerprint,
+    commissionPct,
+    cooldownBars,
+    exitAfterBars,
+    exitAfterBarsEnabled,
+    maxExposurePct,
+    maxLossPct,
+    maxTradesPerDay,
+    slippagePct,
+    trailingStop,
+    trailingStopEnabled,
+  ]);
+
   // ── Save / Update ────────────────────────────────────────────────────────
 
   const saveStrategy = async () => {
@@ -448,6 +691,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       max_trades_per_day: maxTradesPerDay,
       max_exposure_pct: maxExposurePct / 100,
       max_loss_pct: maxLossPct / 100,
+      strategy_type: strategyType,
+      source_prompt: sourcePrompt || null,
+      ai_context: aiContext,
     };
 
     try {
@@ -501,24 +747,46 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
   return (
     <div className="app-page">
+      <AIStrategyGeneratorDialog
+        open={isAIGeneratorOpen}
+        onOpenChange={setIsAIGeneratorOpen}
+        onApplyDraft={applyGeneratedStrategy}
+      />
       <PageHeader
         eyebrow="Builder"
         title={mode === "edit" ? "Edit Strategy" : "Strategy Builder"}
         description={
           mode === "edit"
-            ? `Refine strategy #${initialStrategy?.id} with diagnostics, AI explanation, and execution controls.`
-            : "Design entry logic, evaluate diagnostics in real time, and shape the strategy before it reaches execution."
+            ? `Refine strategy #${initialStrategy?.id}, inspect its AI metadata, and keep the underlying builder in control of execution.`
+            : "Use AI to generate an autonomous bot spec from plain language, then inspect and refine the same executable logic in the manual builder."
         }
         meta={
-          allValidConditions.length > 0 ? (
+          <>
+            {allValidConditions.length > 0 && (
+              <span className="app-pill font-mono tracking-normal">
+                {allValidConditions.length} active condition
+                {allValidConditions.length !== 1 ? "s" : ""}
+              </span>
+            )}
             <span className="app-pill font-mono tracking-normal">
-              {allValidConditions.length} active condition
-              {allValidConditions.length !== 1 ? "s" : ""}
+              {strategyType === "ai_generated"
+                ? "AI Generated"
+                : strategyType === "custom"
+                  ? "Custom"
+                  : "Manual"}
             </span>
-          ) : undefined
+          </>
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsAIGeneratorOpen(true)}
+            className="app-button-primary"
+          >
+            <BrainCircuit className="h-3.5 w-3.5" />
+            Generate Strategy with AI
+          </button>
           <button
             type="button"
             onClick={resetBuilder}
@@ -595,7 +863,29 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div>
+                <label className="app-label">
+                Strategy Type
+              </label>
+              <select
+                value={strategyType}
+                onChange={(e) => {
+                  const next = e.target.value as StrategyType;
+                  setStrategyType(next);
+                  if (next === "manual") {
+                    setSourcePrompt("");
+                    setAiContext({});
+                    aiBaselineRef.current = null;
+                  }
+                }}
+                  className="app-select mt-2 text-sm font-medium"
+              >
+                <option value="ai_generated">AI Generated</option>
+                <option value="manual">Manual</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
             <div>
                 <label className="app-label">
                 Action
@@ -636,6 +926,38 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               />
             </div>
           </div>
+
+          {(strategyType !== "manual" || sourcePrompt || aiContext.overview) && (
+            <div className="mt-5 rounded-3xl border border-sky-400/20 bg-sky-400/5 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-sky-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-400">
+                  Strategy Overview
+                </span>
+                {featureSignals.map((signal) => (
+                  <span key={signal} className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-mono text-muted-foreground">
+                    {signal}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-sm leading-6 text-foreground">
+                {aiContext.overview || description || "AI-generated strategy ready for inspection."}
+              </p>
+              {sourcePrompt && (
+                <div className="mt-3 rounded-2xl bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">Prompt:</span> {sourcePrompt}
+                </div>
+              )}
+              {learningMethods.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {learningMethods.map((method) => (
+                    <span key={method} className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
+                      {method.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           </div>
 
           <div className="app-panel p-5 sm:p-6 space-y-4">

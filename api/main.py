@@ -95,12 +95,17 @@ async def lifespan(app: FastAPI):
 
     # Start the bot execution engine (evaluates running bots every 60s)
     from services.bot_engine.runner import bot_runner
+    from services.strategy_learning_engine import StrategyLearningEngine
+
+    learning_engine = StrategyLearningEngine()
     asyncio.create_task(bot_runner.start())
+    asyncio.create_task(learning_engine.start())
 
     yield
 
     # Shutdown
     await bot_runner.stop()
+    await learning_engine.stop()
     await close_db()
     logger.info("trading_ecosystem_stopped")
 

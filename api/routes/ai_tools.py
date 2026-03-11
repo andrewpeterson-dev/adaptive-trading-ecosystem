@@ -1,11 +1,32 @@
-"""Cerberus tool endpoints -- trade proposals and confirmations."""
+"""Cerberus tool endpoints -- strategy generation, bots, and trade proposals."""
 from __future__ import annotations
 
-from typing import Optional
+import uuid
+from copy import deepcopy
+from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from config.settings import get_settings
+from db.cerberus_models import (
+    BotStatus,
+    CerberusBot,
+    CerberusBotOptimizationRun,
+    CerberusBotVersion,
+    CerberusTrade,
+)
+from db.database import get_session
+from db.models import Strategy, StrategyInstance
+from services.ai_strategy_service import AIStrategyService, strategy_record_to_bot_config
+from services.strategy_learning_engine import (
+    build_equity_curve_from_trades,
+    calculate_trade_metrics,
+    normalize_bot_config,
+)
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -13,7 +34,11 @@ router = APIRouter()
 
 class CreateBotRequest(BaseModel):
     name: str
-    strategy_json: dict
+    strategy_json: dict[str, Any]
+
+
+class GenerateStrategyRequest(BaseModel):
+    prompt: str
 
 
 class ConfirmTradeRequest(BaseModel):
@@ -25,16 +50,153 @@ class ExecuteTradeRequest(BaseModel):
     confirmationToken: str
 
 
+class DeployFromStrategyRequest(BaseModel):
+    strategy_id: int
+    name: Optional[str] = None
+
+
+def _serialize_trade(trade: CerberusTrade) -> dict[str, Any]:
+    return {
+        "id": trade.id,
+        "symbol": trade.symbol,
+        "side": trade.side,
+        "quantity": trade.quantity,
+        "entryPrice": trade.entry_price,
+        "exitPrice": trade.exit_price,
+        "grossPnl": trade.gross_pnl,
+        "netPnl": trade.net_pnl,
+        "returnPct": trade.return_pct,
+        "status": "filled",
+        "strategyTag": trade.strategy_tag,
+        "createdAt": trade.created_at.isoformat() if trade.created_at else None,
+        "entryTs": trade.entry_ts.isoformat() if trade.entry_ts else None,
+        "exitTs": trade.exit_ts.isoformat() if trade.exit_ts else None,
+    }
+
+
+def _learning_status(bot: CerberusBot, config: dict[str, Any], metrics: dict[str, Any]) -> dict[str, Any]:
+    learning = deepcopy(config.get("learning") or {})
+    stored = deepcopy(bot.learning_status_json or {})
+    last_opt = bot.last_optimization_at.isoformat() if bot.last_optimization_at else learning.get("last_optimization_at")
+    cadence = int(learning.get("cadence_minutes", 240) or 240)
+
+    return {
+        "enabled": bool(learning.get("enabled", False)),
+        "status": stored.get("status") or learning.get("status") or "monitoring",
+        "lastOptimizationAt": last_opt,
+        "nextOptimizationAt": stored.get("nextOptimizationAt"),
+        "method": stored.get("method"),
+        "summary": stored.get("summary") or learning.get("last_summary"),
+        "methods": stored.get("methods") or learning.get("methods", []),
+        "featureSignals": stored.get("featureSignals") or metrics.get("feature_signals", []),
+        "metrics": stored.get("metrics") or metrics,
+        "parameterAdjustments": stored.get("parameterAdjustments") or learning.get("parameter_adjustments", []),
+        "cadenceMinutes": cadence,
+    }
+
+
+def _version_to_dict(version: CerberusBotVersion) -> dict[str, Any]:
+    return {
+        "id": version.id,
+        "versionNumber": version.version_number,
+        "diffSummary": version.diff_summary,
+        "createdBy": version.created_by,
+        "backtestRequired": version.backtest_required,
+        "backtestId": version.backtest_id,
+        "createdAt": version.created_at.isoformat() if version.created_at else None,
+    }
+
+
+def _optimization_run_to_dict(run: CerberusBotOptimizationRun) -> dict[str, Any]:
+    return {
+        "id": run.id,
+        "method": run.method,
+        "status": run.status,
+        "summary": run.summary,
+        "metrics": run.metrics_json or {},
+        "adjustments": (run.adjustments_json or {}).get("parameter_adjustments", []),
+        "sourceVersionId": run.source_version_id,
+        "resultVersionId": run.result_version_id,
+        "createdAt": run.created_at.isoformat() if run.created_at else None,
+    }
+
+
+def _strategy_instance_to_record(strategy: StrategyInstance) -> dict[str, Any]:
+    template = strategy.template
+    return {
+        "id": strategy.id,
+        "name": template.name,
+        "description": template.description or "",
+        "conditions": template.conditions or [],
+        "condition_groups": template.condition_groups or [],
+        "action": template.action,
+        "stop_loss_pct": template.stop_loss_pct,
+        "take_profit_pct": template.take_profit_pct,
+        "position_size_pct": strategy.position_size_pct,
+        "timeframe": template.timeframe,
+        "symbols": template.symbols or ["SPY"],
+        "strategy_type": template.strategy_type or "manual",
+        "source_prompt": template.source_prompt,
+        "ai_context": template.ai_context or {},
+    }
+
+
+def _legacy_strategy_to_record(strategy: Strategy) -> dict[str, Any]:
+    return {
+        "id": strategy.id,
+        "name": strategy.name,
+        "description": strategy.description or "",
+        "conditions": strategy.conditions or [],
+        "condition_groups": strategy.condition_groups or [],
+        "action": strategy.action,
+        "stop_loss_pct": strategy.stop_loss_pct,
+        "take_profit_pct": strategy.take_profit_pct,
+        "position_size_pct": strategy.position_size_pct,
+        "timeframe": strategy.timeframe,
+        "symbols": strategy.symbols or ["SPY"],
+        "strategy_type": getattr(strategy, "strategy_type", None) or "manual",
+        "source_prompt": getattr(strategy, "source_prompt", None),
+        "ai_context": getattr(strategy, "ai_context", None) or {},
+    }
+
+
+async def _load_strategy_record(session, user_id: int, strategy_id: int) -> dict[str, Any] | None:
+    instance_result = await session.execute(
+        select(StrategyInstance)
+        .options(selectinload(StrategyInstance.template))
+        .where(StrategyInstance.id == strategy_id, StrategyInstance.user_id == user_id)
+    )
+    instance = instance_result.scalar_one_or_none()
+    if instance and instance.template:
+        return _strategy_instance_to_record(instance)
+
+    legacy_result = await session.execute(
+        select(Strategy).where(Strategy.id == strategy_id, Strategy.user_id == user_id)
+    )
+    legacy = legacy_result.scalar_one_or_none()
+    if legacy:
+        return _legacy_strategy_to_record(legacy)
+    return None
+
+
+@router.post("/generate-strategy")
+async def generate_strategy(body: GenerateStrategyRequest):
+    """Generate a structured strategy from a plain-language prompt."""
+    service = AIStrategyService()
+    try:
+        return await service.generate(body.prompt)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/create-bot")
 async def create_bot(request: Request, body: CreateBotRequest):
     """Create a trading bot from a strategy spec."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
-    import uuid
-
     user_id = request.state.user_id
     bot_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
+    config = normalize_bot_config(body.strategy_json)
+    learning = config.get("learning") or {}
 
     async with get_session() as session:
         bot = CerberusBot(
@@ -42,12 +204,23 @@ async def create_bot(request: Request, body: CreateBotRequest):
             user_id=user_id,
             name=body.name,
             status=BotStatus.DRAFT,
+            learning_enabled=bool(learning.get("enabled", True)),
+            learning_status_json={
+                "status": "monitoring" if learning.get("enabled", True) else "disabled",
+                "summary": learning.get("last_summary", "Bot created and waiting for deployment."),
+                "metrics": {},
+                "featureSignals": config.get("feature_signals", []),
+                "parameterAdjustments": [],
+                "methods": learning.get("methods", []),
+            },
         )
         version = CerberusBotVersion(
             id=version_id,
             bot_id=bot_id,
             version_number=1,
-            config_json=body.strategy_json,
+            config_json=config,
+            diff_summary="Initial version",
+            created_by="user",
         )
         bot.current_version_id = version_id
         session.add(bot)
@@ -64,111 +237,165 @@ async def create_bot(request: Request, body: CreateBotRequest):
 
 @router.get("/bots")
 async def list_bots(request: Request):
-    """List all bots for the current user."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusBot, CerberusBotVersion
-    from sqlalchemy import select
-
+    """List all bots for the current user with learning summaries."""
     user_id = request.state.user_id
 
     async with get_session() as session:
-        stmt = select(CerberusBot).where(
-            CerberusBot.user_id == user_id,
-        ).order_by(CerberusBot.created_at.desc())
-        result = await session.execute(stmt)
+        result = await session.execute(
+            select(CerberusBot)
+            .where(CerberusBot.user_id == user_id)
+            .order_by(CerberusBot.created_at.desc())
+        )
         bots = result.scalars().all()
 
-        bot_list = []
-        for b in bots:
-            # Get current version config
-            config = None
-            if b.current_version_id:
-                ver_result = await session.execute(
-                    select(CerberusBotVersion).where(CerberusBotVersion.id == b.current_version_id)
+        bot_list: list[dict[str, Any]] = []
+        for bot in bots:
+            version = None
+            config: dict[str, Any] | None = None
+            if bot.current_version_id:
+                version_result = await session.execute(
+                    select(CerberusBotVersion).where(CerberusBotVersion.id == bot.current_version_id)
                 )
-                ver = ver_result.scalar_one_or_none()
-                if ver:
-                    config = ver.config_json
-
-            bot_list.append({
-                "id": b.id,
-                "name": b.name,
-                "status": b.status.value if b.status else "draft",
-                "config": config,
-                "createdAt": b.created_at.isoformat() if b.created_at else None,
-            })
+                version = version_result.scalar_one_or_none()
+                config = normalize_bot_config(version.config_json if version else {})
+            metrics = await _fetch_bot_metrics(session, bot.id, config or {})
+            bot_list.append(
+                {
+                    "id": bot.id,
+                    "name": bot.name,
+                    "status": bot.status.value if bot.status else "draft",
+                    "createdAt": bot.created_at.isoformat() if bot.created_at else None,
+                    "config": config,
+                    "strategyId": (config or {}).get("strategy_id"),
+                    "strategyType": (config or {}).get("strategy_type", "manual"),
+                    "overview": (config or {}).get("overview") or (config or {}).get("description") or "",
+                    "primarySymbol": ((config or {}).get("symbols") or ["SPY"])[0],
+                    "performance": metrics,
+                    "learningStatus": _learning_status(bot, config or {}, metrics),
+                    "currentVersion": _version_to_dict(version) if version else None,
+                }
+            )
 
     return bot_list
-
-
-class DeployFromStrategyRequest(BaseModel):
-    strategy_id: int
-    name: Optional[str] = None
 
 
 @router.post("/bots/from-strategy")
 async def create_bot_from_strategy(request: Request, body: DeployFromStrategyRequest):
     """Create and immediately deploy a bot from a saved strategy."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
-    from db.models import Strategy
-    from sqlalchemy import select
-    import uuid
-
     user_id = request.state.user_id
 
     async with get_session() as session:
-        # Load the strategy
-        strat_result = await session.execute(
-            select(Strategy).where(Strategy.id == body.strategy_id, Strategy.user_id == user_id)
-        )
-        strategy = strat_result.scalar_one_or_none()
-        if not strategy:
-            from fastapi import HTTPException
+        strategy_record = await _load_strategy_record(session, user_id, body.strategy_id)
+        if not strategy_record:
             raise HTTPException(status_code=404, detail="Strategy not found")
 
         bot_id = str(uuid.uuid4())
         version_id = str(uuid.uuid4())
-        bot_name = body.name or strategy.name
+        bot_name = body.name or strategy_record["name"]
+        config = strategy_record_to_bot_config(strategy_record)
 
-        config = {
-            "strategy_id": strategy.id,
-            "name": strategy.name,
-            "action": strategy.action,
-            "timeframe": strategy.timeframe,
-            "stop_loss_pct": strategy.stop_loss_pct,
-            "take_profit_pct": strategy.take_profit_pct,
-            "position_size_pct": strategy.position_size_pct,
-            "symbols": strategy.symbols or [],
-            "conditions": [
-                {
-                    "indicator": c["indicator"],
-                    "operator": c["operator"],
-                    "value": c["value"],
-                    "params": c.get("params") or {},
-                    **({"compare_to": c["compare_to"]} if c.get("compare_to") else {}),
-                }
-                for c in (strategy.conditions or [])
-            ],
-        }
-
-        bot = CerberusBot(id=bot_id, user_id=user_id, name=bot_name, status=BotStatus.RUNNING)
-        version = CerberusBotVersion(id=version_id, bot_id=bot_id, version_number=1, config_json=config)
+        bot = CerberusBot(
+            id=bot_id,
+            user_id=user_id,
+            name=bot_name,
+            status=BotStatus.RUNNING,
+            learning_enabled=bool(config.get("learning", {}).get("enabled", False)),
+            learning_status_json={
+                "status": "learning" if config.get("learning", {}).get("enabled", False) else "monitoring",
+                "summary": config.get("learning", {}).get("last_summary", "Bot deployed and monitoring live performance."),
+                "metrics": {},
+                "featureSignals": config.get("feature_signals", []),
+                "parameterAdjustments": [],
+                "methods": config.get("learning", {}).get("methods", []),
+            },
+        )
+        version = CerberusBotVersion(
+            id=version_id,
+            bot_id=bot_id,
+            version_number=1,
+            config_json=config,
+            diff_summary="Initial deployment from saved strategy",
+            created_by="system",
+        )
         bot.current_version_id = version_id
         session.add(bot)
         session.add(version)
 
     logger.info("bot_deployed_from_strategy", bot_id=bot_id, strategy_id=body.strategy_id)
-    return {"bot_id": bot_id, "name": bot_name, "status": "running", "strategy_id": body.strategy_id}
+    return {
+        "bot_id": bot_id,
+        "name": bot_name,
+        "status": "running",
+        "strategy_id": body.strategy_id,
+    }
+
+
+@router.get("/bots/{bot_id}")
+async def get_bot_detail(bot_id: str, request: Request):
+    """Get a full bot detail bundle for visualization and learning status."""
+    user_id = request.state.user_id
+    settings = get_settings()
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot)
+            .where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+
+        version_result = await session.execute(
+            select(CerberusBotVersion)
+            .where(CerberusBotVersion.bot_id == bot.id)
+            .order_by(CerberusBotVersion.version_number.desc())
+        )
+        versions = list(version_result.scalars().all())
+        current_version = next((version for version in versions if version.id == bot.current_version_id), versions[0] if versions else None)
+        config = normalize_bot_config(current_version.config_json if current_version else {})
+
+        trade_result = await session.execute(
+            select(CerberusTrade)
+            .where(CerberusTrade.bot_id == bot.id, CerberusTrade.user_id == user_id)
+            .order_by(CerberusTrade.created_at.desc())
+        )
+        trades = list(trade_result.scalars().all())
+
+        optimization_result = await session.execute(
+            select(CerberusBotOptimizationRun)
+            .where(CerberusBotOptimizationRun.bot_id == bot.id)
+            .order_by(CerberusBotOptimizationRun.created_at.desc())
+            .limit(20)
+        )
+        optimization_runs = list(optimization_result.scalars().all())
+
+        metrics = calculate_trade_metrics(trades, config)
+        equity_curve = build_equity_curve_from_trades(trades, settings.initial_capital)
+
+    return {
+        "id": bot.id,
+        "name": bot.name,
+        "status": bot.status.value if bot.status else "draft",
+        "createdAt": bot.created_at.isoformat() if bot.created_at else None,
+        "currentVersion": _version_to_dict(current_version) if current_version else None,
+        "config": config,
+        "strategyId": config.get("strategy_id"),
+        "strategyType": config.get("strategy_type", "manual"),
+        "overview": config.get("overview") or config.get("description") or "",
+        "sourcePrompt": config.get("source_prompt"),
+        "primarySymbol": (config.get("symbols") or ["SPY"])[0],
+        "performance": metrics,
+        "learningStatus": _learning_status(bot, config, metrics),
+        "equityCurve": equity_curve,
+        "trades": [_serialize_trade(trade) for trade in trades[:50]],
+        "versionHistory": [_version_to_dict(version) for version in versions],
+        "optimizationHistory": [_optimization_run_to_dict(run) for run in optimization_runs],
+    }
 
 
 @router.post("/bots/{bot_id}/deploy")
 async def deploy_bot(bot_id: str, request: Request):
     """Deploy (start running) a bot."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusBot, BotStatus
-    from sqlalchemy import select
-
     user_id = request.state.user_id
     async with get_session() as session:
         result = await session.execute(
@@ -176,7 +403,6 @@ async def deploy_bot(bot_id: str, request: Request):
         )
         bot = result.scalar_one_or_none()
         if not bot:
-            from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Bot not found")
         bot.status = BotStatus.RUNNING
 
@@ -187,10 +413,6 @@ async def deploy_bot(bot_id: str, request: Request):
 @router.post("/bots/{bot_id}/stop")
 async def stop_bot(bot_id: str, request: Request):
     """Stop a running bot."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusBot, BotStatus
-    from sqlalchemy import select
-
     user_id = request.state.user_id
     async with get_session() as session:
         result = await session.execute(
@@ -198,7 +420,6 @@ async def stop_bot(bot_id: str, request: Request):
         )
         bot = result.scalar_one_or_none()
         if not bot:
-            from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Bot not found")
         bot.status = BotStatus.STOPPED
 
@@ -215,12 +436,11 @@ async def confirm_trade(request: Request, body: ConfirmTradeRequest):
     service = ConfirmationService()
 
     try:
-        result = await service.confirm_proposal(body.proposalId, user_id)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        return await service.confirm_proposal(body.proposalId, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
 
 @router.post("/execute-trade")
@@ -232,31 +452,25 @@ async def execute_trade(request: Request, body: ExecuteTradeRequest):
     service = ConfirmationService()
 
     try:
-        result = await service.execute_confirmed(
-            body.proposalId, body.confirmationToken, user_id
+        return await service.execute_confirmed(
+            body.proposalId,
+            body.confirmationToken,
+            user_id,
         )
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
 
 @router.get("/proposals")
-async def list_proposals(
-    request: Request, status: Optional[str] = None, limit: int = 20
-):
+async def list_proposals(request: Request, status: Optional[str] = None, limit: int = 20):
     """List trade proposals for the current user."""
-    from db.database import get_session
     from db.cerberus_models import CerberusTradeProposal
-    from sqlalchemy import select
 
     user_id = request.state.user_id
-
     async with get_session() as session:
-        stmt = select(CerberusTradeProposal).where(
-            CerberusTradeProposal.user_id == user_id
-        )
+        stmt = select(CerberusTradeProposal).where(CerberusTradeProposal.user_id == user_id)
         if status:
             stmt = stmt.where(CerberusTradeProposal.status == status)
         stmt = stmt.order_by(CerberusTradeProposal.created_at.desc()).limit(limit)
@@ -265,52 +479,40 @@ async def list_proposals(
 
     return [
         {
-            "id": p.id,
-            "threadId": p.thread_id,
-            "proposalJson": p.proposal_json,
-            "riskJson": p.risk_json,
-            "explanationMd": p.explanation_md,
-            "status": p.status.value if p.status else None,
-            "expiresAt": p.expires_at.isoformat() if p.expires_at else None,
-            "createdAt": p.created_at.isoformat() if p.created_at else None,
+            "id": proposal.id,
+            "threadId": proposal.thread_id,
+            "proposalJson": proposal.proposal_json,
+            "riskJson": proposal.risk_json,
+            "explanationMd": proposal.explanation_md,
+            "status": proposal.status.value if proposal.status else None,
+            "expiresAt": proposal.expires_at.isoformat() if proposal.expires_at else None,
+            "createdAt": proposal.created_at.isoformat() if proposal.created_at else None,
         }
-        for p in proposals
+        for proposal in proposals
     ]
 
 
 @router.get("/bots/{bot_id}/activity")
 async def get_bot_activity(bot_id: str, request: Request, limit: int = 50):
     """Get recent trades made by a bot."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusTrade
-    from sqlalchemy import select
-
     user_id = request.state.user_id
     async with get_session() as session:
         result = await session.execute(
             select(CerberusTrade)
-            .where(
-                CerberusTrade.bot_id == bot_id,
-                CerberusTrade.user_id == user_id,
-            )
+            .where(CerberusTrade.bot_id == bot_id, CerberusTrade.user_id == user_id)
             .order_by(CerberusTrade.created_at.desc())
             .limit(limit)
         )
         trades = result.scalars().all()
 
-    return [
-        {
-            "id": t.id,
-            "symbol": t.symbol,
-            "side": t.side,
-            "quantity": t.quantity,
-            "entryPrice": t.entry_price,
-            "exitPrice": t.exit_price,
-            "grossPnl": t.gross_pnl,
-            "netPnl": t.net_pnl,
-            "status": "filled",
-            "strategyTag": t.strategy_tag,
-            "createdAt": t.created_at.isoformat() if t.created_at else None,
-        }
-        for t in trades
-    ]
+    return [_serialize_trade(trade) for trade in trades]
+
+
+async def _fetch_bot_metrics(session, bot_id: str, config: dict[str, Any]) -> dict[str, Any]:
+    result = await session.execute(
+        select(CerberusTrade)
+        .where(CerberusTrade.bot_id == bot_id)
+        .order_by(CerberusTrade.created_at.asc())
+    )
+    trades = list(result.scalars().all())
+    return calculate_trade_metrics(trades, config)

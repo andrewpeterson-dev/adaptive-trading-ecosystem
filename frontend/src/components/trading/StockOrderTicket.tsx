@@ -177,14 +177,19 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
     }
 
     // Buying power check
+    const estimatedNotional =
+      inputMode === "dollars"
+        ? dollarAmount
+        : resolvedQuantity > 0 && effectivePrice
+          ? resolvedQuantity * effectivePrice
+          : null;
+
     if (
       direction === "buy" &&
-      resolvedQuantity > 0 &&
-      effectivePrice &&
+      estimatedNotional != null &&
       account
     ) {
-      const cost = resolvedQuantity * effectivePrice;
-      if (cost > account.buying_power) {
+      if (estimatedNotional > account.buying_power) {
         errors.buyingPower = `Insufficient buying power ($${fmt(account.buying_power)} available)`;
       }
     }
@@ -210,14 +215,20 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
   const canSubmit = useMemo(() => {
     if (submitting) return false;
     if (!symbol) return false;
-    if (resolvedQuantity <= 0) return false;
+    if (inputMode === "shares" && resolvedQuantity <= 0) return false;
+    if (inputMode === "dollars" && dollarAmount <= 0) return false;
     if (needsLimit && (!limitPrice || parseFloat(limitPrice) <= 0)) return false;
     if (needsStop && (!stopPrice || parseFloat(stopPrice) <= 0)) return false;
     if (
       direction === "buy" &&
-      effectivePrice &&
       account &&
-      resolvedQuantity * effectivePrice > account.buying_power
+      (
+        inputMode === "dollars"
+          ? dollarAmount
+          : effectivePrice != null
+            ? resolvedQuantity * effectivePrice
+            : 0
+      ) > account.buying_power
     ) {
       return false;
     }
@@ -225,6 +236,8 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
   }, [
     submitting,
     symbol,
+    inputMode,
+    dollarAmount,
     resolvedQuantity,
     needsLimit,
     needsStop,
@@ -246,9 +259,13 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
     if (!canSubmit) return;
 
     setSubmitting(true);
-    const orderQty = resolvedQuantity;
     const orderSymbol = symbol.toUpperCase();
-    const label = `${direction === "buy" ? "Buy" : "Sell"} ${orderQty} ${orderSymbol}`;
+    const orderQty = inputMode === "shares" ? resolvedQuantity : 0;
+    const orderNotional = inputMode === "dollars" ? dollarAmount : null;
+    const label =
+      inputMode === "dollars"
+        ? `${direction === "buy" ? "Buy" : "Sell"} $${fmt(dollarAmount)} ${orderSymbol}`
+        : `${direction === "buy" ? "Buy" : "Sell"} ${orderQty} ${orderSymbol}`;
 
     try {
       await apiFetch("/api/trading/execute", {
@@ -257,6 +274,7 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
           symbol: orderSymbol,
           direction: direction === "buy" ? "long" : "short",
           quantity: orderQty,
+          dollar_amount: orderNotional,
           strength: 1.0,
           model_name: "manual",
           order_type: orderType,
@@ -303,8 +321,10 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
   };
 
   const submitLabel =
-    resolvedQuantity > 0 && symbol
-      ? `${direction === "buy" ? "Buy" : "Sell"} ${resolvedQuantity} ${symbol.toUpperCase()}`
+    inputMode === "dollars" && dollarAmount > 0 && symbol
+      ? `${direction === "buy" ? "Buy" : "Sell"} $${fmt(dollarAmount)} ${symbol.toUpperCase()}`
+      : resolvedQuantity > 0 && symbol
+        ? `${direction === "buy" ? "Buy" : "Sell"} ${resolvedQuantity} ${symbol.toUpperCase()}`
       : direction === "buy"
         ? "Buy"
         : "Sell";

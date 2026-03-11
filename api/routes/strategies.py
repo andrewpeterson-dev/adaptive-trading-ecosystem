@@ -57,6 +57,9 @@ class StrategySchema(BaseModel):
     max_trades_per_day: int = 0
     max_exposure_pct: float = 1.0
     max_loss_pct: float = 0.0
+    strategy_type: str = "manual"
+    source_prompt: Optional[str] = None
+    ai_context: dict[str, Any] = Field(default_factory=dict)
 
 class StrategyUpdateSchema(BaseModel):
     name: Optional[str] = None
@@ -79,6 +82,9 @@ class StrategyUpdateSchema(BaseModel):
     max_trades_per_day: Optional[int] = None
     max_exposure_pct: Optional[float] = None
     max_loss_pct: Optional[float] = None
+    strategy_type: Optional[str] = None
+    source_prompt: Optional[str] = None
+    ai_context: Optional[dict[str, Any]] = None
 
 class StrategyResponse(BaseModel):
     id: int
@@ -147,6 +153,9 @@ def _instance_to_dict(inst: StrategyInstance) -> dict:
         "max_trades_per_day": t.max_trades_per_day or 0,
         "max_exposure_pct": t.max_exposure_pct or 1.0,
         "max_loss_pct": t.max_loss_pct or 0.0,
+        "strategy_type": t.strategy_type or "manual",
+        "source_prompt": t.source_prompt,
+        "ai_context": t.ai_context or {},
     }
 
 
@@ -175,6 +184,9 @@ def _strategy_to_dict(s) -> dict:
         "max_trades_per_day": s.max_trades_per_day or 0,
         "max_exposure_pct": s.max_exposure_pct or 1.0,
         "max_loss_pct": s.max_loss_pct or 0.0,
+        "strategy_type": s.strategy_type or "manual",
+        "source_prompt": s.source_prompt,
+        "ai_context": s.ai_context or {},
     }
 
 
@@ -223,6 +235,9 @@ async def create_strategy(strategy: StrategySchema, request: Request):
             max_trades_per_day=strategy.max_trades_per_day,
             max_exposure_pct=strategy.max_exposure_pct,
             max_loss_pct=strategy.max_loss_pct,
+            strategy_type=strategy.strategy_type,
+            source_prompt=strategy.source_prompt,
+            ai_context=strategy.ai_context,
         )
         session.add(template)
         await session.flush()
@@ -329,6 +344,7 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
             "symbols", "commission_pct", "slippage_pct",
             "trailing_stop_pct", "exit_after_bars",
             "cooldown_bars", "max_trades_per_day", "max_exposure_pct", "max_loss_pct",
+            "strategy_type", "source_prompt", "ai_context",
         }
         # Instance-level fields
         instance_fields = {"position_size_pct", "nickname", "max_position_value"}

@@ -1,6 +1,32 @@
 export type Operator = ">" | "<" | ">=" | "<=" | "==" | "crosses_above" | "crosses_below";
 
 export type Action = "BUY" | "SELL";
+export type StrategyType = "ai_generated" | "manual" | "custom";
+
+export interface StrategyLearningPlan {
+  enabled?: boolean;
+  cadence_minutes?: number;
+  methods?: string[];
+  goals?: string[];
+  status?: string;
+  last_optimization_at?: string | null;
+  last_summary?: string;
+  parameter_adjustments?: Array<Record<string, unknown>>;
+}
+
+export interface StrategyAiContext {
+  overview?: string;
+  feature_signals?: string[];
+  assumptions?: string[];
+  learning_plan?: StrategyLearningPlan;
+  exit_conditions?: Array<Record<string, unknown>>;
+  generation?: {
+    generated_at?: string;
+    provider?: string;
+    model?: string | null;
+    validated?: boolean;
+  };
+}
 
 export interface StrategyCondition {
   id: string;
@@ -8,6 +34,7 @@ export interface StrategyCondition {
   operator: Operator;
   value: number | string;
   compare_to?: string;
+  field?: string;
   params: Record<string, number>;
   action: Action;
 }
@@ -42,6 +69,9 @@ export interface Strategy {
   max_trades_per_day: number;
   max_exposure_pct: number;
   max_loss_pct: number;
+  strategy_type: StrategyType;
+  source_prompt?: string | null;
+  ai_context?: StrategyAiContext;
 }
 
 export interface Diagnostic {
@@ -77,6 +107,7 @@ export interface StrategyRecord {
     operator: string;
     value: number | string;
     compare_to?: string;
+    field?: string;
     params: Record<string, number>;
     action: string;
   }>;
@@ -114,4 +145,7 @@ export interface StrategyRecord {
   max_trades_per_day: number;
   max_exposure_pct: number;
   max_loss_pct: number;
+  strategy_type: StrategyType;
+  source_prompt?: string | null;
+  ai_context?: StrategyAiContext;
 }

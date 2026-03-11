@@ -182,7 +182,7 @@ export interface DocumentFile {
 }
 
 // Bots
-export type BotStatus = "draft" | "active" | "paused" | "stopped" | "archived";
+export type BotStatus = "draft" | "running" | "active" | "paused" | "stopped" | "error" | "archived";
 
 export interface Bot {
   id: string;

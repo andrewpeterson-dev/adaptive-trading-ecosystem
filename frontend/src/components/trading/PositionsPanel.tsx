@@ -76,6 +76,21 @@ function isOptionPosition(p: Position): boolean {
   return p.asset_type === "option" || !!p.contract_symbol;
 }
 
+function positionSide(p: Position): "long" | "short" {
+  if (p.side === "short") return "short";
+  if (p.side === "long") return "long";
+  return p.quantity < 0 ? "short" : "long";
+}
+
+function positionId(p: Position): string {
+  return p.contract_symbol || p.symbol;
+}
+
+function positionUnits(p: Position, quantity: number): string {
+  const label = isOptionPosition(p) ? "contract" : "share";
+  return `${quantity} ${label}${quantity === 1 ? "" : "s"}`;
+}
+
 // ---------------------------------------------------------------------------
 // Skeleton row
 // ---------------------------------------------------------------------------
@@ -120,13 +135,15 @@ function SourceBadge({ position }: { position: Position }) {
 // ---------------------------------------------------------------------------
 
 function ActionDropdown({
-  position,
-  closing,
+  busy,
   onClosePosition,
+  onReducePosition,
+  onReversePosition,
 }: {
-  position: Position;
-  closing: boolean;
+  busy: boolean;
   onClosePosition: () => void;
+  onReducePosition: () => void;
+  onReversePosition: () => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -135,10 +152,10 @@ function ActionDropdown({
       {/* Primary close button */}
       <button
         onClick={onClosePosition}
-        disabled={closing}
+        disabled={busy}
         className="text-xs text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50 rounded-md px-2 py-1 transition-colors flex items-center gap-1 disabled:opacity-40"
       >
-        {closing ? (
+        {busy ? (
           <Loader2 className="h-3 w-3 animate-spin" />
         ) : (
           <X className="h-3 w-3" />
@@ -149,6 +166,7 @@ function ActionDropdown({
       {/* More actions */}
       <button
         onClick={() => setOpen(!open)}
+        disabled={busy}
         className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors"
       >
         <ChevronDown className="h-3.5 w-3.5" />
@@ -164,17 +182,23 @@ function ActionDropdown({
           {/* Dropdown */}
           <div className="absolute right-0 top-full mt-1 z-20 bg-card border border-border/50 rounded-lg shadow-lg py-1 min-w-[120px]">
             <button
-              disabled
-              className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground/50 flex items-center gap-2 cursor-not-allowed"
-              title="Reduce position (coming soon)"
+              onClick={() => {
+                setOpen(false);
+                onReducePosition();
+              }}
+              disabled={busy}
+              className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-2 hover:bg-muted/40 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Scissors className="h-3 w-3" />
               Reduce
             </button>
             <button
-              disabled
-              className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground/50 flex items-center gap-2 cursor-not-allowed"
-              title="Reverse position (coming soon)"
+              onClick={() => {
+                setOpen(false);
+                onReversePosition();
+              }}
+              disabled={busy}
+              className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-2 hover:bg-muted/40 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowLeftRight className="h-3 w-3" />
               Reverse
@@ -194,11 +218,15 @@ function StockPositionRow({
   position,
   closing,
   onClose,
+  onReduce,
+  onReverse,
   onSymbolClick,
 }: {
   position: Position;
   closing: boolean;
   onClose: () => void;
+  onReduce: () => void;
+  onReverse: () => void;
   onSymbolClick: () => void;
 }) {
   const pnl = position.unrealized_pnl ?? 0;
@@ -216,7 +244,7 @@ function StockPositionRow({
         </button>
       </td>
       <td className="py-2.5 px-4 font-mono tabular-nums">
-        {position.quantity != null ? position.quantity : "\u2014"}
+        {position.quantity != null ? Math.abs(position.quantity) : "\u2014"}
       </td>
       <td className="py-2.5 px-4 font-mono tabular-nums">
         {formatCurrency(position.avg_entry_price)}
@@ -236,12 +264,12 @@ function StockPositionRow({
       <td className="py-2.5 px-4">
         <span
           className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-            position.side === "long"
+            positionSide(position) === "long"
               ? "text-emerald-400 bg-emerald-400/10"
               : "text-red-400 bg-red-400/10"
           }`}
         >
-          {position.side?.toUpperCase() || "\u2014"}
+          {positionSide(position).toUpperCase()}
         </span>
       </td>
       <td className="py-2.5 px-4">
@@ -249,9 +277,10 @@ function StockPositionRow({
       </td>
       <td className="py-2.5 px-4">
         <ActionDropdown
-          position={position}
-          closing={closing}
+          busy={closing}
           onClosePosition={onClose}
+          onReducePosition={onReduce}
+          onReversePosition={onReverse}
         />
       </td>
     </tr>
@@ -266,11 +295,15 @@ function OptionPositionRow({
   position,
   closing,
   onClose,
+  onReduce,
+  onReverse,
   onSymbolClick,
 }: {
   position: Position;
   closing: boolean;
   onClose: () => void;
+  onReduce: () => void;
+  onReverse: () => void;
   onSymbolClick: () => void;
 }) {
   const pnl = position.unrealized_pnl ?? 0;
@@ -294,7 +327,7 @@ function OptionPositionRow({
         )}
       </td>
       <td className="py-2.5 px-4 font-mono tabular-nums">
-        {position.quantity != null ? position.quantity : "\u2014"}
+        {position.quantity != null ? Math.abs(position.quantity) : "\u2014"}
       </td>
       <td className="py-2.5 px-4 font-mono tabular-nums">
         {formatCurrency(position.avg_premium ?? position.avg_entry_price)}
@@ -334,9 +367,10 @@ function OptionPositionRow({
       </td>
       <td className="py-2.5 px-4">
         <ActionDropdown
-          position={position}
-          closing={closing}
+          busy={closing}
           onClosePosition={onClose}
+          onReducePosition={onReduce}
+          onReversePosition={onReverse}
         />
       </td>
     </tr>
@@ -417,39 +451,149 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
   const showOptionHeaders = hasOptions && !hasStocks;
   const columns = showOptionHeaders ? OPTION_COLUMNS : STOCK_COLUMNS;
 
+  const executeStockAction = useCallback(
+    async (position: Position, direction: "long" | "short", quantity: number) => {
+      await apiFetch("/api/trading/execute", {
+        method: "POST",
+        body: JSON.stringify({
+          symbol: position.symbol,
+          direction,
+          quantity,
+          strength: 1.0,
+          model_name: "manual",
+          order_type: "market",
+          user_confirmed: true,
+        }),
+      });
+    },
+    []
+  );
+
+  const executeOptionAction = useCallback(
+    async (position: Position, direction: string, quantity: number) => {
+      await apiFetch("/api/trading/execute-option", {
+        method: "POST",
+        body: JSON.stringify({
+          contract_symbol: position.contract_symbol || position.symbol,
+          underlying: position.underlying || position.symbol,
+          expiration: position.expiration,
+          strike: position.strike,
+          option_type: position.option_type,
+          direction,
+          quantity,
+          user_confirmed: true,
+        }),
+      });
+    },
+    []
+  );
+
   // ---- Close position handler ----
   const handleClosePosition = useCallback(
     async (position: Position) => {
-      const posId =
-        position.contract_symbol || position.symbol;
+      const posId = positionId(position);
+      const quantity = Math.abs(position.quantity);
+      const side = positionSide(position);
       setClosingId(posId);
       try {
-        await apiFetch("/api/trading/execute", {
-          method: "POST",
-          body: JSON.stringify({
-            symbol: position.symbol,
-            direction: position.side === "long" ? "short" : "long",
-            quantity: Math.abs(position.quantity),
-            strength: 1.0,
-            model_name: "manual",
-            order_type: "market",
-            limit_price: position.current_price,
-            user_confirmed: true,
-          }),
-        });
-        toast(
-          `Closed ${position.symbol} position (${Math.abs(position.quantity)} ${
-            isOptionPosition(position) ? "contracts" : "shares"
-          })`,
-          "success"
-        );
-      } catch {
-        toast(`Failed to close ${position.symbol} position`, "error");
+        if (isOptionPosition(position)) {
+          await executeOptionAction(
+            position,
+            side === "long" ? "sell_to_close" : "buy_to_close",
+            quantity
+          );
+        } else {
+          await executeStockAction(position, side === "long" ? "short" : "long", quantity);
+        }
+
+        toast(`Closed ${position.symbol} position (${positionUnits(position, quantity)})`, "success");
+        onClose();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        toast(`Failed to close ${position.symbol} position: ${message}`, "error");
       } finally {
         setClosingId(null);
       }
     },
-    [toast]
+    [executeOptionAction, executeStockAction, onClose, toast]
+  );
+
+  const handleReducePosition = useCallback(
+    async (position: Position) => {
+      const posId = positionId(position);
+      const currentQty = Math.abs(position.quantity);
+      const reduceQty = Math.max(1, Math.floor(currentQty / 2));
+      const side = positionSide(position);
+
+      setClosingId(posId);
+      try {
+        if (isOptionPosition(position)) {
+          await executeOptionAction(
+            position,
+            side === "long" ? "sell_to_close" : "buy_to_close",
+            reduceQty
+          );
+        } else {
+          await executeStockAction(position, side === "long" ? "short" : "long", reduceQty);
+        }
+
+        toast(`Reduced ${position.symbol} by ${positionUnits(position, reduceQty)}`, "success");
+        onClose();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        toast(`Failed to reduce ${position.symbol}: ${message}`, "error");
+      } finally {
+        setClosingId(null);
+      }
+    },
+    [executeOptionAction, executeStockAction, onClose, toast]
+  );
+
+  const handleReversePosition = useCallback(
+    async (position: Position) => {
+      const posId = positionId(position);
+      const quantity = Math.abs(position.quantity);
+      const side = positionSide(position);
+      let closed = false;
+
+      setClosingId(posId);
+      try {
+        if (isOptionPosition(position)) {
+          await executeOptionAction(
+            position,
+            side === "long" ? "sell_to_close" : "buy_to_close",
+            quantity
+          );
+          closed = true;
+          await executeOptionAction(
+            position,
+            side === "long" ? "sell_to_open" : "buy_to_open",
+            quantity
+          );
+        } else {
+          await executeStockAction(position, side === "long" ? "short" : "long", quantity);
+          closed = true;
+          await executeStockAction(position, side === "long" ? "short" : "long", quantity);
+        }
+
+        toast(`Reversed ${position.symbol} position (${positionUnits(position, quantity)})`, "success");
+        onClose();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        toast(
+          closed
+            ? `Closed ${position.symbol} but failed to open the reverse side: ${message}`
+            : `Failed to reverse ${position.symbol}: ${message}`,
+          "error"
+        );
+        if (closed) {
+          onClose();
+        }
+      } finally {
+        setClosingId(null);
+      }
+    },
+    [executeOptionAction, executeStockAction, onClose, toast]
   );
 
   const isLoading = loading && positions.length === 0;
@@ -575,7 +719,7 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
           <tbody>
             {filtered.map((p) => {
               const isOption = isOptionPosition(p);
-              const posId = p.contract_symbol || p.symbol;
+              const posId = positionId(p);
               const closing = closingId === posId;
               const onSymbolClick = () =>
                 setSymbol(p.underlying || p.symbol);
@@ -587,6 +731,8 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
                     position={p}
                     closing={closing}
                     onClose={() => handleClosePosition(p)}
+                    onReduce={() => handleReducePosition(p)}
+                    onReverse={() => handleReversePosition(p)}
                     onSymbolClick={onSymbolClick}
                   />
                 );
@@ -598,6 +744,8 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
                   position={p}
                   closing={closing}
                   onClose={() => handleClosePosition(p)}
+                  onReduce={() => handleReducePosition(p)}
+                  onReverse={() => handleReversePosition(p)}
                   onSymbolClick={onSymbolClick}
                 />
               );

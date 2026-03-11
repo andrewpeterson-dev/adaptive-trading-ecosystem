@@ -1,16 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { listBots, deployBot, stopBot } from '@/lib/cerberus-api';
-import { Bot, Play, Square, RefreshCw, Rocket } from 'lucide-react';
-
-type BotEntry = {
-  id: string;
-  name: string;
-  status: string;
-  config: Record<string, unknown> | null;
-  createdAt: string | null;
-};
+import Link from 'next/link';
+import { listBots, deployBot, stopBot, type BotSummary } from '@/lib/cerberus-api';
+import { Bot, Play, Square, RefreshCw, Rocket, Activity } from 'lucide-react';
 
 const STATUS_COLOR: Record<string, string> = {
   running: 'text-emerald-400',
@@ -29,7 +22,7 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 export function BotControlPanel() {
-  const [bots, setBots] = useState<BotEntry[]>([]);
+  const [bots, setBots] = useState<BotSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [actioningId, setActioningId] = useState<string | null>(null);
 
@@ -37,7 +30,7 @@ export function BotControlPanel() {
     setIsLoading(true);
     try {
       const data = await listBots();
-      setBots(data as BotEntry[]);
+      setBots(data);
     } catch (error) {
       console.error('Failed to load bots:', error);
     } finally {
@@ -47,7 +40,7 @@ export function BotControlPanel() {
 
   useEffect(() => { fetchBots(); }, [fetchBots]);
 
-  const handleDeploy = async (bot: BotEntry) => {
+  const handleDeploy = async (bot: BotSummary) => {
     setActioningId(bot.id);
     try {
       await deployBot(bot.id);
@@ -59,7 +52,7 @@ export function BotControlPanel() {
     }
   };
 
-  const handleStop = async (bot: BotEntry) => {
+  const handleStop = async (bot: BotSummary) => {
     setActioningId(bot.id);
     try {
       await stopBot(bot.id);
@@ -133,7 +126,26 @@ export function BotControlPanel() {
                 </p>
               )}
 
-              <div className="flex gap-1.5">
+              <p className="text-[10px] leading-5 text-muted-foreground">
+                {bot.overview || 'No natural-language overview yet.'}
+              </p>
+
+              <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/20 p-2 text-[10px]">
+                <div>
+                  <div className="text-muted-foreground/70">Win Rate</div>
+                  <div className="font-mono text-foreground">{(bot.performance.win_rate * 100).toFixed(0)}%</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground/70">Sharpe</div>
+                  <div className="font-mono text-foreground">{bot.performance.sharpe_ratio.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground/70">Learning</div>
+                  <div className="font-semibold text-emerald-400">{bot.learningStatus.status}</div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
                 {(bot.status === 'draft' || bot.status === 'stopped') && (
                   <button
                     onClick={() => handleDeploy(bot)}
@@ -164,6 +176,13 @@ export function BotControlPanel() {
                     Resume
                   </button>
                 )}
+                <Link
+                  href={`/bots/${bot.id}`}
+                  className="flex items-center gap-1 rounded-md border border-sky-500/30 px-2.5 py-1 text-[10px] font-semibold text-sky-400 transition-colors hover:bg-sky-500/10"
+                >
+                  <Activity className="h-2.5 w-2.5" />
+                  View details
+                </Link>
               </div>
             </div>
           ))}

@@ -377,6 +377,9 @@ class Strategy(Base):
     max_trades_per_day = Column(Integer, default=0)
     max_exposure_pct = Column(Float, default=1.0)
     max_loss_pct = Column(Float, default=0.0)
+    strategy_type = Column(String(32), default="manual")
+    source_prompt = Column(Text, nullable=True)
+    ai_context = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -494,6 +497,9 @@ class StrategyTemplate(Base):
     max_trades_per_day = Column(Integer, default=0)
     max_exposure_pct = Column(Float, default=1.0)
     max_loss_pct = Column(Float, default=0.0)
+    strategy_type = Column(String(32), default="manual")
+    source_prompt = Column(Text, nullable=True)
+    ai_context = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

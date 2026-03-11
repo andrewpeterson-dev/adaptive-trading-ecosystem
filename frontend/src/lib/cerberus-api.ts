@@ -3,6 +3,117 @@ import type {
   ChatRequest, ChatResponse, ConversationThread,
   ConversationMessageItem, DocumentFile, TradeProposal,
 } from '@/types/cerberus';
+import type { StrategyAiContext, StrategyType } from '@/types/strategy';
+
+export interface BotPerformanceSummary {
+  trade_count: number;
+  avg_return_pct: number;
+  total_net_pnl: number;
+  total_gross_pnl: number;
+  total_volume: number;
+  win_rate: number;
+  sharpe_ratio: number;
+  max_drawdown: number;
+  feature_signals: string[];
+}
+
+export interface BotLearningStatus {
+  enabled: boolean;
+  status: string;
+  lastOptimizationAt: string | null;
+  nextOptimizationAt?: string | null;
+  method?: string | null;
+  summary?: string | null;
+  methods: string[];
+  featureSignals: string[];
+  metrics: BotPerformanceSummary;
+  parameterAdjustments: Array<Record<string, unknown>>;
+  cadenceMinutes?: number;
+}
+
+export interface BotSummary {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string | null;
+  config: Record<string, unknown> | null;
+  strategyId?: number | null;
+  strategyType: StrategyType;
+  overview: string;
+  primarySymbol: string;
+  performance: BotPerformanceSummary;
+  learningStatus: BotLearningStatus;
+  currentVersion: BotVersionSummary | null;
+}
+
+export interface BotVersionSummary {
+  id: string;
+  versionNumber: number;
+  diffSummary: string | null;
+  createdBy: string | null;
+  backtestRequired: boolean;
+  backtestId: string | null;
+  createdAt: string | null;
+}
+
+export interface BotDetail extends BotSummary {
+  sourcePrompt?: string | null;
+  equityCurve: Array<{ date: string; value: number }>;
+  trades: Array<{
+    id: string;
+    symbol: string;
+    side: string;
+    quantity: number;
+    entryPrice: number | null;
+    exitPrice: number | null;
+    grossPnl: number | null;
+    netPnl: number | null;
+    returnPct?: number | null;
+    status: string;
+    strategyTag?: string | null;
+    createdAt: string | null;
+    entryTs?: string | null;
+    exitTs?: string | null;
+  }>;
+  versionHistory: BotVersionSummary[];
+  optimizationHistory: Array<{
+    id: string;
+    method: string;
+    status: string;
+    summary: string | null;
+    metrics: Record<string, unknown>;
+    adjustments: Array<Record<string, unknown>>;
+    sourceVersionId?: string | null;
+    resultVersionId?: string | null;
+    createdAt: string | null;
+  }>;
+}
+
+export interface GeneratedStrategyResponse {
+  prompt: string;
+  strategy_spec: Record<string, unknown>;
+  builder_draft: {
+    name: string;
+    description: string;
+    action: 'BUY' | 'SELL';
+    stopLoss: number;
+    takeProfit: number;
+    positionSize: number;
+    timeframe: string;
+    conditions: Array<Record<string, unknown>>;
+    conditionGroups?: Array<Record<string, unknown>>;
+    symbols?: string[];
+    strategyType?: StrategyType;
+    sourcePrompt?: string;
+    aiContext?: StrategyAiContext;
+  };
+  compiled_strategy: Record<string, unknown>;
+  generation: {
+    provider: string;
+    model: string | null;
+    validated: boolean;
+  };
+}
 
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse & { message: any }> {
   return apiFetch('/api/ai/chat', {
@@ -40,6 +151,13 @@ export async function createBot(name: string, strategyJson: object): Promise<{ b
   });
 }
 
+export async function generateStrategyWithAI(prompt: string): Promise<GeneratedStrategyResponse> {
+  return apiFetch('/api/ai/tools/generate-strategy', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  });
+}
+
 export async function deployBotFromStrategy(strategyId: number, name?: string): Promise<{ bot_id: string; name: string; status: string }> {
   return apiFetch('/api/ai/tools/bots/from-strategy', {
     method: 'POST',
@@ -55,8 +173,12 @@ export async function stopBot(botId: string): Promise<{ bot_id: string; status: 
   return apiFetch(`/api/ai/tools/bots/${botId}/stop`, { method: 'POST' });
 }
 
-export async function listBots(): Promise<Array<{ id: string; name: string; status: string; config: object | null; createdAt: string | null }>> {
+export async function listBots(): Promise<BotSummary[]> {
   return apiFetch('/api/ai/tools/bots');
+}
+
+export async function getBotDetail(botId: string): Promise<BotDetail> {
+  return apiFetch(`/api/ai/tools/bots/${botId}`);
 }
 
 export async function listProposals(status?: string): Promise<TradeProposal[]> {

@@ -235,4 +235,33 @@ describe("specToBuilderFields", () => {
     expect(fields.conditions[0].indicator).toBe("rsi");
     expect(fields.conditions[1].indicator).toBe("macd");
   });
+
+  it("splits OR logic into multiple condition groups", () => {
+    const spec: StrategySpec = {
+      ...VALID_SPEC,
+      entryConditions: [
+        { logic: "AND" as const, indicator: "rsi", params: { period: 14 }, operator: "<", value: 30 },
+        { logic: "OR" as const, indicator: "macd", params: { fast: 12, slow: 26, signal: 9 }, operator: ">", value: 0 },
+      ],
+    };
+    const fields = specToBuilderFields(spec);
+    expect(fields.conditionGroups).toHaveLength(2);
+    expect(fields.conditionGroups[0].conditions).toHaveLength(1);
+    expect(fields.conditionGroups[1].conditions[0].indicator).toBe("macd");
+  });
+
+  it("preserves AI metadata for the builder", () => {
+    const spec: StrategySpec = {
+      ...VALID_SPEC,
+      strategyType: "ai_generated",
+      sourcePrompt: "Build a momentum bot",
+      overview: "AI-generated overview",
+      featureSignals: ["rsi", "macd"],
+    };
+    const fields = specToBuilderFields(spec);
+    expect(fields.strategyType).toBe("ai_generated");
+    expect(fields.sourcePrompt).toBe("Build a momentum bot");
+    expect(fields.aiContext?.overview).toBe("AI-generated overview");
+    expect(fields.aiContext?.feature_signals).toEqual(["rsi", "macd"]);
+  });
 });
