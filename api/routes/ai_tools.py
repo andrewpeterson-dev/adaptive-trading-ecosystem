@@ -55,22 +55,143 @@ class DeployFromStrategyRequest(BaseModel):
     name: Optional[str] = None
 
 
-def _serialize_trade(trade: CerberusTrade) -> dict[str, Any]:
+def _coerce_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_probability_score(payload: dict[str, Any]) -> float | None:
+    candidates = [
+        payload.get("probability_score"),
+        payload.get("probability"),
+        payload.get("confidence_score"),
+        payload.get("confidence"),
+        (payload.get("decision") or {}).get("confidence") if isinstance(payload.get("decision"), dict) else None,
+    ]
+    for candidate in candidates:
+        value = _coerce_float(candidate)
+        if value is not None:
+            return round(value if value <= 1 else value / 100, 4)
+    return None
+
+
+def _extract_indicator_signals(payload: dict[str, Any], config: dict[str, Any]) -> list[str]:
+    raw = (
+        payload.get("indicator_signals")
+        or payload.get("indicators_used")
+        or payload.get("signals")
+        or config.get("feature_signals")
+        or (config.get("ai_context") or {}).get("feature_signals")
+        or []
+    )
+    if not isinstance(raw, list):
+        return []
+
+    signals: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        label = None
+        if isinstance(item, str):
+            label = item
+        elif isinstance(item, dict):
+            label = item.get("indicator") or item.get("signal") or item.get("name")
+        if not label:
+            continue
+        normalized = str(label).strip().lower()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            signals.append(normalized)
+    return signals
+
+
+def _derive_risk_assessment(config: dict[str, Any]) -> str:
+    position_size = _coerce_float(config.get("position_size_pct")) or 0.0
+    stop_loss = _coerce_float(config.get("stop_loss_pct")) or 0.0
+    max_exposure = _coerce_float(config.get("max_exposure_pct")) or 0.0
+
+    score = 0
+    if position_size >= 0.15:
+        score += 2
+    elif position_size >= 0.08:
+        score += 1
+
+    if stop_loss >= 0.03:
+        score += 2
+    elif stop_loss >= 0.015:
+        score += 1
+
+    if max_exposure >= 0.75:
+        score += 2
+    elif max_exposure >= 0.4:
+        score += 1
+
+    if score <= 2:
+        return "Conservative"
+    if score <= 4:
+        return "Balanced"
+    return "Aggressive"
+
+
+def _project_trade_levels(trade: CerberusTrade, config: dict[str, Any]) -> tuple[float | None, float | None]:
+    entry_price = _coerce_float(trade.entry_price)
+    if entry_price is None:
+        return (None, None)
+
+    stop_pct = _coerce_float(config.get("stop_loss_pct"))
+    take_pct = _coerce_float(config.get("take_profit_pct"))
+    is_short = str(trade.side or "").lower().startswith("sell")
+
+    stop_loss_price = None
+    take_profit_price = None
+
+    if stop_pct and stop_pct > 0:
+        stop_loss_price = entry_price * (1 + stop_pct if is_short else 1 - stop_pct)
+    if take_pct and take_pct > 0:
+        take_profit_price = entry_price * (1 - take_pct if is_short else 1 + take_pct)
+
+    return (
+        round(stop_loss_price, 4) if stop_loss_price is not None else None,
+        round(take_profit_price, 4) if take_profit_price is not None else None,
+    )
+
+
+def _serialize_trade(trade: CerberusTrade, config: dict[str, Any]) -> dict[str, Any]:
+    payload = trade.payload_json if isinstance(trade.payload_json, dict) else {}
+    reasons = payload.get("reasons") if isinstance(payload.get("reasons"), list) else []
+    explanation = payload.get("bot_explanation") or payload.get("explanation") or trade.notes
+    stop_loss_price, take_profit_price = _project_trade_levels(trade, config)
+    side = str(trade.side or "").lower()
+    exit_action = "buy" if side.startswith("sell") else "sell"
+
     return {
         "id": trade.id,
         "symbol": trade.symbol,
-        "side": trade.side,
+        "side": side,
+        "entryAction": side,
+        "exitAction": exit_action,
         "quantity": trade.quantity,
         "entryPrice": trade.entry_price,
         "exitPrice": trade.exit_price,
         "grossPnl": trade.gross_pnl,
         "netPnl": trade.net_pnl,
         "returnPct": trade.return_pct,
-        "status": "filled",
+        "status": "closed" if trade.exit_price is not None or trade.exit_ts is not None else "open",
         "strategyTag": trade.strategy_tag,
         "createdAt": trade.created_at.isoformat() if trade.created_at else None,
         "entryTs": trade.entry_ts.isoformat() if trade.entry_ts else None,
         "exitTs": trade.exit_ts.isoformat() if trade.exit_ts else None,
+        "notes": trade.notes,
+        "reasons": [str(reason).strip() for reason in reasons if str(reason).strip()],
+        "botExplanation": explanation,
+        "probabilityScore": _extract_probability_score(payload),
+        "riskAssessment": payload.get("risk_assessment") or _derive_risk_assessment(config),
+        "indicatorSignals": _extract_indicator_signals(payload, config),
+        "stopLossPrice": stop_loss_price,
+        "takeProfitPrice": take_profit_price,
     }
 
 
@@ -387,7 +508,7 @@ async def get_bot_detail(bot_id: str, request: Request):
         "performance": metrics,
         "learningStatus": _learning_status(bot, config, metrics),
         "equityCurve": equity_curve,
-        "trades": [_serialize_trade(trade) for trade in trades[:50]],
+        "trades": [_serialize_trade(trade, config) for trade in trades[:50]],
         "versionHistory": [_version_to_dict(version) for version in versions],
         "optimizationHistory": [_optimization_run_to_dict(run) for run in optimization_runs],
     }

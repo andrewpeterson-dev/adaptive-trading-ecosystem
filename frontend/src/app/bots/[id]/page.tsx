@@ -3,76 +3,60 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  Activity,
-  ArrowLeft,
-  Bot,
-  BrainCircuit,
-  Gauge,
-  RefreshCw,
-  Sparkles,
-  TrendingUp,
-} from "lucide-react";
+import { Activity, ArrowLeft, Clock3, LineChart, Radar } from "lucide-react";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { TradingChart } from "@/components/charts/TradingChart";
+import { AIExplanationPanel } from "@/components/bots/AIExplanationPanel";
+import { BotDetailPanel } from "@/components/bots/BotDetailPanel";
+import { BotPerformanceStats } from "@/components/bots/BotPerformanceStats";
+import { BotTradeChart } from "@/components/bots/BotTradeChart";
+import { StrategyLogicViewer } from "@/components/bots/StrategyLogicViewer";
+import { TradeHistoryTable } from "@/components/bots/TradeHistoryTable";
+import { TradeTimeline } from "@/components/bots/TradeTimeline";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getBotDetail, type BotDetail } from "@/lib/cerberus-api";
-import type { TradeMarker } from "@/types/chart";
+import { getBotDetail, type BotDetail, type BotTrade } from "@/lib/cerberus-api";
+import {
+  buildTimelineBuckets,
+  filterTradesBySymbol,
+  filterTradesUntil,
+  formatDateTime,
+  formatTimeframe,
+  getAiOverview,
+  getBotConfig,
+  getTrackedSymbols,
+  getTradeById,
+  humanizeLabel,
+  summarizeRisk,
+  type TimelineGranularity,
+} from "@/lib/bot-visualization";
 
-function MetricCard({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "positive" | "warning";
-}) {
-  const toneClass =
-    tone === "positive"
-      ? "text-emerald-400"
-      : tone === "warning"
-        ? "text-amber-400"
-        : "text-foreground";
-
-  return (
-    <div className="rounded-2xl border border-border/60 bg-card/70 px-4 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </div>
-      <div className={`mt-1 text-lg font-mono font-semibold ${toneClass}`}>{value}</div>
-    </div>
-  );
-}
-
-function relativeTime(value: string | null | undefined) {
-  if (!value) return "Not yet";
-  const diffMs = Date.now() - new Date(value).getTime();
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function clampIndex(index: number, length: number) {
+  if (length <= 0) return 0;
+  return Math.min(Math.max(index, 0), length - 1);
 }
 
 export default function BotDetailPage() {
   const params = useParams();
   const botId = params.id as string;
+
   const [detail, setDetail] = useState<BotDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeSymbol, setActiveSymbol] = useState<string>("");
+  const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
+  const [hoveredTradeId, setHoveredTradeId] = useState<string | null>(null);
+  const [timelineGranularity, setTimelineGranularity] = useState<TimelineGranularity>("week");
+  const [timelineIndex, setTimelineIndex] = useState(0);
 
   useEffect(() => {
     async function load() {
       try {
         const data = await getBotDetail(botId);
         setDetail(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load bot");
+        setError(null);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Failed to load bot detail");
       } finally {
         setLoading(false);
       }
@@ -83,70 +67,117 @@ export default function BotDetailPage() {
     }
   }, [botId]);
 
-  const tradeMarkers = useMemo<TradeMarker[]>(
-    () =>
-      (detail?.trades ?? [])
-        .filter((trade) => trade.createdAt && trade.entryPrice)
-        .map((trade) => ({
-          time: trade.entryTs ? Math.floor(new Date(trade.entryTs).getTime() / 1000) : trade.createdAt!,
-          price: trade.entryPrice ?? 0,
-          side: trade.side.toLowerCase().includes("sell") ? "sell" : "buy",
-          tradeId: trade.id,
-          label: `${trade.side.toUpperCase()} ${trade.symbol}`,
-        })),
-    [detail]
+  const trackedSymbols = useMemo(
+    () => (detail ? getTrackedSymbols(detail) : []),
+    [detail],
   );
+
+  useEffect(() => {
+    if (!detail) return;
+    const fallback = detail.primarySymbol || trackedSymbols[0] || "SPY";
+    setActiveSymbol((current) => (current && trackedSymbols.includes(current) ? current : fallback));
+  }, [detail, trackedSymbols]);
+
+  const symbolTrades = useMemo(
+    () => (detail ? filterTradesBySymbol(detail.trades, activeSymbol || detail.primarySymbol || "SPY") : []),
+    [detail, activeSymbol],
+  );
+
+  const timelineBuckets = useMemo(
+    () => buildTimelineBuckets(symbolTrades, timelineGranularity),
+    [symbolTrades, timelineGranularity],
+  );
+
+  useEffect(() => {
+    setTimelineIndex((current) => clampIndex(current, timelineBuckets.length));
+  }, [timelineBuckets.length]);
+
+  useEffect(() => {
+    setTimelineIndex(Math.max(timelineBuckets.length - 1, 0));
+  }, [timelineGranularity, activeSymbol]);
+
+  const activeBucket = timelineBuckets[timelineIndex] ?? null;
+  const visibleTrades = useMemo(
+    () => filterTradesUntil(symbolTrades, activeBucket?.endMs ?? null),
+    [symbolTrades, activeBucket],
+  );
+
+  useEffect(() => {
+    if (selectedTradeId && !visibleTrades.some((trade) => trade.id === selectedTradeId)) {
+      setSelectedTradeId(null);
+    }
+  }, [selectedTradeId, visibleTrades]);
+
+  useEffect(() => {
+    if (hoveredTradeId && !visibleTrades.some((trade) => trade.id === hoveredTradeId)) {
+      setHoveredTradeId(null);
+    }
+  }, [hoveredTradeId, visibleTrades]);
+
+  const selectedTrade = useMemo(
+    () => getTradeById(visibleTrades, selectedTradeId) ?? getTradeById(symbolTrades, selectedTradeId),
+    [selectedTradeId, symbolTrades, visibleTrades],
+  );
+
+  const hoveredTrade = useMemo(
+    () => getTradeById(visibleTrades, hoveredTradeId),
+    [hoveredTradeId, visibleTrades],
+  );
+
+  const focusTrade = selectedTrade ?? hoveredTrade ?? visibleTrades[0] ?? symbolTrades[0] ?? null;
+
+  const handleSelectTrade = (trade: BotTrade) => {
+    setActiveSymbol(trade.symbol.toUpperCase());
+    setSelectedTradeId(trade.id);
+  };
 
   if (loading) {
     return (
-      <div className="app-page space-y-6">
-        <Skeleton className="h-28 rounded-[28px]" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-          {[...Array(4)].map((_, index) => <Skeleton key={index} className="h-24 rounded-2xl" />)}
+      <div className="app-page">
+        <Skeleton className="h-32 rounded-[28px]" />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-24 rounded-[22px]" />
+          ))}
         </div>
-        <Skeleton className="h-80 rounded-3xl" />
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.6fr]">
+          <Skeleton className="h-[720px] rounded-[28px]" />
+          <Skeleton className="h-[720px] rounded-[28px]" />
+        </div>
       </div>
     );
   }
 
-  if (error || !detail) {
+  if (!detail || error) {
     return (
       <div className="app-page">
-        <div className="rounded-3xl border border-red-400/20 bg-red-400/5 p-6">
-          <p className="text-red-400">{error || "Bot not found"}</p>
+        <div className="rounded-[28px] border border-rose-400/20 bg-rose-400/5 p-6 text-rose-400">
+          {error || "Bot detail is unavailable."}
         </div>
       </div>
     );
   }
 
-  const primarySymbol = detail.primarySymbol || "SPY";
-  const botConfig = (detail.config ?? {}) as {
-    condition_groups?: unknown[];
-    conditions?: unknown[];
-  };
-  const logicJson = JSON.stringify(
-    botConfig.condition_groups?.length ? botConfig.condition_groups : botConfig.conditions,
-    null,
-    2,
-  );
+  const config = getBotConfig(detail);
+  const riskSummary = summarizeRisk(config);
   const lastOptimizationAt = detail.learningStatus.lastOptimizationAt;
-  const metrics = detail.performance;
 
   return (
     <div className="app-page">
       <PageHeader
         eyebrow="Autonomous Bot"
         title={detail.name}
-        description={detail.overview || "AI-driven bot ready for inspection and iteration."}
+        description={getAiOverview(detail)}
         meta={
           <>
-            <span className="app-pill font-mono tracking-normal">{detail.strategyType.replace(/_/g, " ")}</span>
+            <span className="app-pill font-mono tracking-normal">{humanizeLabel(detail.strategyType)}</span>
             <span className="app-pill font-mono tracking-normal">{detail.status}</span>
-            <span className="app-pill font-mono tracking-normal">Primary {primarySymbol}</span>
+            <span className="app-pill font-mono tracking-normal">{formatTimeframe(config.timeframe)}</span>
+            <span className="app-pill font-mono tracking-normal">{riskSummary} risk</span>
           </>
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href="/bots" className="app-button-ghost">
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to Bots
@@ -155,202 +186,186 @@ export default function BotDetailPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <MetricCard
-          label="Win Rate"
-          value={`${(metrics.win_rate * 100).toFixed(1)}%`}
-          tone={metrics.win_rate >= 0.5 ? "positive" : "warning"}
+      <BotPerformanceStats detail={detail} />
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.88fr_1.62fr]">
+        <BotDetailPanel
+          detail={detail}
+          activeSymbol={activeSymbol}
+          onSymbolSelect={(symbol) => {
+            setActiveSymbol(symbol);
+            setSelectedTradeId(null);
+            setHoveredTradeId(null);
+          }}
+          selectedTrade={selectedTrade}
         />
-        <MetricCard
-          label="Sharpe Ratio"
-          value={metrics.sharpe_ratio.toFixed(2)}
-          tone={metrics.sharpe_ratio >= 1 ? "positive" : "warning"}
-        />
-        <MetricCard
-          label="Drawdown"
-          value={`${(metrics.max_drawdown * 100).toFixed(1)}%`}
-          tone={metrics.max_drawdown <= 0.12 ? "positive" : "warning"}
-        />
-        <MetricCard
-          label="Net P&L"
-          value={`$${metrics.total_net_pnl.toLocaleString()}`}
-          tone={metrics.total_net_pnl >= 0 ? "positive" : "warning"}
-        />
+
+        <div className="space-y-6">
+          <section className="app-panel p-5 sm:p-6">
+            <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <LineChart className="h-3.5 w-3.5 text-emerald-400" />
+                  Main Chart Visualization
+                </div>
+                <h2 className="mt-1 text-xl font-semibold text-foreground">
+                  {activeSymbol} execution map
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Entries, exits, and projected risk rails are linked to the trade log and timeline.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Timeline Window
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">
+                    {activeBucket?.label ?? "Full history"}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Last Optimization
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">
+                    {formatDateTime(lastOptimizationAt)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <BotTradeChart
+              symbol={activeSymbol}
+              trades={visibleTrades}
+              selectedTrade={selectedTrade}
+              hoveredTrade={hoveredTrade}
+              highlightedTradeId={selectedTradeId}
+              onHoverTrade={setHoveredTradeId}
+              onSelectTrade={setSelectedTradeId}
+            />
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+              <EquityCurveChart data={detail.equityCurve} initialCapital={100000} height={240} />
+              <div className="rounded-[24px] border border-border/60 bg-muted/10 p-4">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <Activity className="h-3.5 w-3.5 text-fuchsia-400" />
+                  Active Context
+                </div>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Visible trades
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-foreground">{visibleTrades.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Focus trade
+                    </div>
+                    <div className="mt-1 text-sm text-foreground">
+                      {focusTrade
+                        ? `${focusTrade.symbol} ${focusTrade.side.toUpperCase()} at ${focusTrade.entryPrice != null ? `$${focusTrade.entryPrice.toFixed(2)}` : "N/A"}`
+                        : "Select a marker or row"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Why it traded
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {focusTrade?.botExplanation || focusTrade?.reasons?.[0] || "No execution rationale captured for the current focus."}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground">
+                    Hovering markers surfaces quick trade info. Clicking a marker or log row highlights the
+                    same trade on the chart.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <AIExplanationPanel detail={detail} trade={focusTrade} />
+        </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.8fr]">
-        <div className="space-y-6">
-          <section className="app-panel p-5 sm:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-emerald-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Strategy Visualization
-              </h2>
-            </div>
-            <EquityCurveChart data={detail.equityCurve} initialCapital={100000} height={260} />
-            <div className="mt-5">
-              <TradingChart symbol={primarySymbol} height={360} trades={tradeMarkers} />
-            </div>
-          </section>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+        <TradeTimeline
+          buckets={timelineBuckets}
+          granularity={timelineGranularity}
+          onGranularityChange={setTimelineGranularity}
+          currentIndex={timelineIndex}
+          onIndexChange={(index) => setTimelineIndex(clampIndex(index, timelineBuckets.length))}
+        />
+        <StrategyLogicViewer detail={detail} />
+      </div>
 
-          <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="app-panel p-5 sm:p-6">
-              <div className="mb-3 flex items-center gap-2">
-                <BrainCircuit className="h-4 w-4 text-sky-400" />
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Strategy Overview
-                </h2>
-              </div>
-              <p className="text-sm leading-6 text-foreground">
-                {detail.overview || "No overview available."}
-              </p>
-              {detail.sourcePrompt && (
-                <div className="mt-4 rounded-2xl bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">Source prompt:</span> {detail.sourcePrompt}
-                </div>
-              )}
-              <div className="mt-4 flex flex-wrap gap-2">
-                {detail.learningStatus.featureSignals.map((signal) => (
-                  <span
-                    key={signal}
-                    className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-mono text-muted-foreground"
-                  >
-                    {signal}
-                  </span>
-                ))}
-              </div>
-            </div>
+      <TradeHistoryTable
+        trades={visibleTrades}
+        selectedTradeId={selectedTradeId}
+        onSelectTrade={handleSelectTrade}
+      />
 
-            <div className="app-panel p-5 sm:p-6">
-              <div className="mb-3 flex items-center gap-2">
-                <Gauge className="h-4 w-4 text-amber-400" />
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Learning Status
-                </h2>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <section className="app-panel p-5 sm:p-6">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <Clock3 className="h-3.5 w-3.5 text-sky-400" />
+            Version Timeline
+          </div>
+          <div className="mt-4 space-y-3">
+            {detail.versionHistory.length === 0 ? (
+              <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
+                No version history recorded for this bot yet.
               </div>
-              <div className="space-y-3 text-sm">
-                <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Last optimization</div>
-                  <div className="mt-1 text-foreground">{relativeTime(lastOptimizationAt)}</div>
-                </div>
-                <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Current summary</div>
-                  <div className="mt-1 text-foreground">{detail.learningStatus.summary || "Waiting for the first optimization cycle."}</div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {detail.learningStatus.methods.map((method) => (
-                    <span
-                      key={method}
-                      className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400"
-                    >
-                      {method.replace(/_/g, " ")}
-                    </span>
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  {(detail.learningStatus.parameterAdjustments ?? []).length === 0 ? (
-                    <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-                      No parameter changes have been applied yet.
-                    </div>
-                  ) : (
-                    detail.learningStatus.parameterAdjustments.map((adjustment, index) => (
-                      <div key={index} className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3 text-xs">
-                        <div className="font-mono text-foreground">
-                          {String(adjustment.path ?? "parameter")} {String(adjustment.old ?? "—")} → {String(adjustment.new ?? "—")}
-                        </div>
-                        {Boolean(adjustment.reason) && (
-                          <div className="mt-1 text-muted-foreground">{String(adjustment.reason)}</div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="app-panel p-5 sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Strategy Logic
-              </h2>
-            </div>
-            <pre className="overflow-x-auto rounded-2xl bg-background/70 p-4 text-xs leading-6 text-foreground">
-              <code>{logicJson}</code>
-            </pre>
-          </section>
-        </div>
-
-        <div className="space-y-6">
-          <section className="app-panel p-5 sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-sky-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Evolution Timeline
-              </h2>
-            </div>
-            <div className="space-y-3">
-              {detail.versionHistory.map((version) => (
-                <div key={version.id} className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3">
+            ) : (
+              detail.versionHistory.map((version) => (
+                <div
+                  key={version.id}
+                  className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-4"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-semibold text-foreground">v{version.versionNumber}</div>
-                    <div className="text-[10px] text-muted-foreground">{relativeTime(version.createdAt)}</div>
+                    <div className="text-sm font-semibold text-foreground">v{version.versionNumber}</div>
+                    <div className="text-xs text-muted-foreground">{formatDateTime(version.createdAt)}</div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">{version.diffSummary || "No diff summary recorded."}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="app-panel p-5 sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <Activity className="h-4 w-4 text-emerald-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Optimization Runs
-              </h2>
-            </div>
-            <div className="space-y-3">
-              {detail.optimizationHistory.length === 0 ? (
-                <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-                  Optimization history will appear here after the learning engine completes a cycle.
-                </div>
-              ) : (
-                detail.optimizationHistory.map((run) => (
-                  <div key={run.id} className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-semibold text-foreground">{run.method.replace(/_/g, " ")}</div>
-                      <div className="text-[10px] text-muted-foreground">{relativeTime(run.createdAt)}</div>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{run.summary || "No summary available."}</div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {version.diffSummary || "No diff summary stored."}
                   </div>
-                ))
-              )}
-            </div>
-          </section>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
 
-          <section className="app-panel p-5 sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <Bot className="h-4 w-4 text-sky-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Recent Trades
-              </h2>
-            </div>
-            <div className="space-y-3">
-              {detail.trades.slice(0, 8).map((trade) => (
-                <div key={trade.id} className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3 text-xs">
+        <section className="app-panel p-5 sm:p-6">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <Radar className="h-3.5 w-3.5 text-amber-400" />
+            Optimization Runs
+          </div>
+          <div className="mt-4 space-y-3">
+            {detail.optimizationHistory.length === 0 ? (
+              <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-4 text-sm text-muted-foreground">
+                The learning engine has not produced optimization runs for this bot yet.
+              </div>
+            ) : (
+              detail.optimizationHistory.map((run) => (
+                <div
+                  key={run.id}
+                  className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-4"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-semibold text-foreground">{trade.symbol}</div>
-                    <div className="font-mono text-muted-foreground">{trade.side.toUpperCase()}</div>
+                    <div className="text-sm font-semibold text-foreground">{humanizeLabel(run.method)}</div>
+                    <div className="text-xs text-muted-foreground">{formatDateTime(run.createdAt)}</div>
                   </div>
-                  <div className="mt-1 text-muted-foreground">
-                    {trade.netPnl != null ? `Net P&L $${trade.netPnl.toFixed(2)}` : "Trade open"}
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {run.summary || "No optimization summary stored."}
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        </div>
+              ))
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

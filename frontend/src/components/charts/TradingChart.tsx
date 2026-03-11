@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from "react"
 import { Loader2, AlertTriangle } from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
 import { useTradingMode } from "@/hooks/useTradingMode";
-import type { CandleData, TradeMarker, TimeFrame, ChartIndicator } from "@/types/chart";
+import type { CandleData, TradeMarker, TimeFrame, ChartIndicator, PriceLevelLine } from "@/types/chart";
 import type {
   IChartApi,
   ISeriesApi,
@@ -111,6 +111,101 @@ function normalizeHistogramSeries(
       value: Number(point.value),
       color: point.color,
     }));
+}
+
+function resolveVisibleTrades(
+  trades: TradeMarker[],
+  showAllExecutions: boolean,
+  highlightedTradeId: string | null,
+): TradeMarker[] {
+  if (!showAllExecutions && highlightedTradeId) {
+    return trades.filter((trade) => trade.tradeId === highlightedTradeId);
+  }
+  return showAllExecutions ? trades : [];
+}
+
+function normalizeTradeTime(value: unknown): string | null {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value;
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "year" in value &&
+    "month" in value &&
+    "day" in value
+  ) {
+    const businessDay = value as { year: number; month: number; day: number };
+    return `${businessDay.year}-${String(businessDay.month).padStart(2, "0")}-${String(
+      businessDay.day,
+    ).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+function toEpochMs(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value > 1_000_000_000_000 ? value : value * 1000;
+  }
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && value.trim() !== "") {
+      return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+    }
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "year" in value &&
+    "month" in value &&
+    "day" in value
+  ) {
+    const businessDay = value as { year: number; month: number; day: number };
+    return Date.UTC(businessDay.year, businessDay.month - 1, businessDay.day);
+  }
+  return null;
+}
+
+function findNearestBarTime(targetTime: unknown, bars: CandleData[]): string | number | null {
+  const targetMs = toEpochMs(targetTime);
+  if (targetMs == null || bars.length === 0) return null;
+
+  let nearestTime: string | number | null = null;
+  let bestDiff = Number.POSITIVE_INFINITY;
+
+  for (const bar of bars) {
+    const barMs = toEpochMs(bar.time);
+    if (barMs == null) continue;
+    const diff = Math.abs(barMs - targetMs);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      nearestTime = bar.time;
+    }
+  }
+
+  return nearestTime;
+}
+
+function findTradeMarkerForTime(
+  trades: TradeMarker[],
+  time: unknown,
+  highlightedTradeId: string | null,
+  bars: CandleData[],
+): TradeMarker | null {
+  const normalizedTime = normalizeTradeTime(time);
+  if (!normalizedTime) return null;
+
+  const matches = trades.filter((trade) => {
+    const nearestBarTime = findNearestBarTime(trade.time, bars);
+    return normalizeTradeTime(nearestBarTime) === normalizedTime;
+  });
+  if (matches.length === 0) return null;
+
+  return (
+    matches.find((trade) => trade.tradeId != null && trade.tradeId === highlightedTradeId) ??
+    matches[0]
+  );
 }
 
 function computeSMA(data: CandleData[], period: number): PointData[] {
@@ -283,6 +378,9 @@ interface TradingChartProps {
   showVolume?: boolean;
   trades?: TradeMarker[];
   highlightedTradeId?: string | null;
+  priceLevels?: PriceLevelLine[];
+  onTradeHover?: (tradeId: string | null) => void;
+  onTradeSelect?: (tradeId: string | null) => void;
 }
 
 function getResponsiveHeight(baseHeight: number, viewportWidth: number): number {
@@ -301,6 +399,9 @@ export function TradingChart({
   showVolume = true,
   trades = [],
   highlightedTradeId = null,
+  priceLevels = [],
+  onTradeHover,
+  onTradeSelect,
 }: TradingChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -327,6 +428,11 @@ export function TradingChart({
   const barsRef = useRef<CandleData[]>([]);
   const observerRef = useRef<ResizeObserver | null>(null);
   const initPromiseRef = useRef<Promise<void> | null>(null);
+  const tradesRef = useRef<TradeMarker[]>(trades);
+  const highlightedTradeIdRef = useRef<string | null>(highlightedTradeId);
+  const onTradeHoverRef = useRef<typeof onTradeHover>(onTradeHover);
+  const onTradeSelectRef = useRef<typeof onTradeSelect>(onTradeSelect);
+  const hoveredMarkerIdRef = useRef<string | null>(null);
 
   const [timeframe, setTimeframe] = useState<TimeFrame>("1D");
   const [loading, setLoading] = useState(true);
@@ -343,9 +449,21 @@ export function TradingChart({
   });
 
   const { quote, positions, showAllExecutions, setShowAllExecutions } = useTradeStore();
+  const showAllExecutionsRef = useRef(showAllExecutions);
 
   const hasSubIndicator = indicators.rsi || indicators.macd;
   const hasBothSub = indicators.rsi && indicators.macd;
+
+  useEffect(() => {
+    tradesRef.current = trades;
+    highlightedTradeIdRef.current = highlightedTradeId;
+    onTradeHoverRef.current = onTradeHover;
+    onTradeSelectRef.current = onTradeSelect;
+  }, [trades, highlightedTradeId, onTradeHover, onTradeSelect]);
+
+  useEffect(() => {
+    showAllExecutionsRef.current = showAllExecutions;
+  }, [showAllExecutions]);
 
   // ---------------------------------------------------------------------------
   // Toggle handler
@@ -474,7 +592,20 @@ export function TradingChart({
         priceLinesRef.current.push(tpLine);
       }
     }
-  }, [positions, symbol]);
+
+    for (const level of priceLevels) {
+      if (!candleSeriesRef.current) continue;
+      const line = candleSeriesRef.current.createPriceLine({
+        price: level.price,
+        color: level.color,
+        lineWidth: 1,
+        lineStyle: level.lineStyle ?? 2,
+        axisLabelVisible: true,
+        title: level.label,
+      });
+      priceLinesRef.current.push(line);
+    }
+  }, [positions, symbol, priceLevels]);
 
   // ---------------------------------------------------------------------------
   // Fetch and render data
@@ -593,33 +724,31 @@ export function TradingChart({
     (bars: CandleData[]) => {
       if (!candleSeriesRef.current) return;
 
-      const barTimes = new Set(bars.map((b) => String(b.time)));
-
-      let visibleTrades = trades;
-      if (!showAllExecutions && highlightedTradeId) {
-        visibleTrades = trades.filter((t) => t.tradeId === highlightedTradeId);
-      } else if (!showAllExecutions) {
-        visibleTrades = [];
-      }
+      const visibleTrades = resolveVisibleTrades(trades, showAllExecutions, highlightedTradeId);
 
       if (visibleTrades.length === 0) {
         candleSeriesRef.current.setMarkers([]);
         return;
       }
 
-      const markers: SeriesMarker<Time>[] = visibleTrades
-        .filter((t) => barTimes.has(String(t.time)))
-        .map((t) => {
+      const markers = visibleTrades.reduce<SeriesMarker<Time>[]>((acc, t) => {
+          const nearestBarTime = findNearestBarTime(t.time, bars);
+          if (nearestBarTime == null) {
+            return acc;
+          }
           const isHighlighted = highlightedTradeId != null && t.tradeId === highlightedTradeId;
-          return {
-            time: t.time as Time,
-            position: t.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const),
-            color: t.side === "buy" ? CHART_COLORS.up : CHART_COLORS.down,
-            shape: t.side === "buy" ? ("arrowUp" as const) : ("arrowDown" as const),
-            text: t.label ?? (t.side === "buy" ? "B" : "S"),
+          acc.push({
+            time: nearestBarTime as Time,
+            position:
+              t.position ?? (t.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const)),
+            color: t.color ?? (t.side === "buy" ? CHART_COLORS.up : CHART_COLORS.down),
+            shape:
+              t.shape ?? (t.side === "buy" ? ("arrowUp" as const) : ("arrowDown" as const)),
+            text: t.text ?? t.label ?? (t.side === "buy" ? "B" : "S"),
             size: isHighlighted ? 2 : 1,
-          };
-        })
+          });
+          return acc;
+        }, [])
         .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
 
       candleSeriesRef.current.setMarkers(markers);
@@ -810,6 +939,42 @@ export function TradingChart({
       });
       observer.observe(containerRef.current!);
       observerRef.current = observer;
+
+      chart.subscribeCrosshairMove((param) => {
+        const visibleTrades = resolveVisibleTrades(
+          tradesRef.current,
+          showAllExecutionsRef.current,
+          highlightedTradeIdRef.current,
+        );
+        const match = findTradeMarkerForTime(
+          visibleTrades,
+          (param as { time?: unknown } | undefined)?.time,
+          highlightedTradeIdRef.current,
+          barsRef.current,
+        );
+        const nextTradeId = match?.tradeId ?? null;
+        if (hoveredMarkerIdRef.current !== nextTradeId) {
+          hoveredMarkerIdRef.current = nextTradeId;
+          onTradeHoverRef.current?.(nextTradeId);
+        }
+      });
+
+      chart.subscribeClick((param) => {
+        const visibleTrades = resolveVisibleTrades(
+          tradesRef.current,
+          showAllExecutionsRef.current,
+          highlightedTradeIdRef.current,
+        );
+        const match = findTradeMarkerForTime(
+          visibleTrades,
+          (param as { time?: unknown } | undefined)?.time,
+          highlightedTradeIdRef.current,
+          barsRef.current,
+        );
+        if (match?.tradeId) {
+          onTradeSelectRef.current?.(match.tradeId);
+        }
+      });
 
       // Fetch initial data
       await fetchAndRender(timeframe);

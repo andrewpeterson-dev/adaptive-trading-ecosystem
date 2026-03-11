@@ -56,25 +56,37 @@ export interface BotVersionSummary {
   createdAt: string | null;
 }
 
+export interface BotTrade {
+  id: string;
+  symbol: string;
+  side: string;
+  entryAction?: string | null;
+  exitAction?: string | null;
+  quantity: number;
+  entryPrice: number | null;
+  exitPrice: number | null;
+  grossPnl: number | null;
+  netPnl: number | null;
+  returnPct?: number | null;
+  status: string;
+  strategyTag?: string | null;
+  createdAt: string | null;
+  entryTs?: string | null;
+  exitTs?: string | null;
+  notes?: string | null;
+  reasons?: string[];
+  botExplanation?: string | null;
+  probabilityScore?: number | null;
+  riskAssessment?: string | null;
+  indicatorSignals?: string[];
+  stopLossPrice?: number | null;
+  takeProfitPrice?: number | null;
+}
+
 export interface BotDetail extends BotSummary {
   sourcePrompt?: string | null;
   equityCurve: Array<{ date: string; value: number }>;
-  trades: Array<{
-    id: string;
-    symbol: string;
-    side: string;
-    quantity: number;
-    entryPrice: number | null;
-    exitPrice: number | null;
-    grossPnl: number | null;
-    netPnl: number | null;
-    returnPct?: number | null;
-    status: string;
-    strategyTag?: string | null;
-    createdAt: string | null;
-    entryTs?: string | null;
-    exitTs?: string | null;
-  }>;
+  trades: BotTrade[];
   versionHistory: BotVersionSummary[];
   optimizationHistory: Array<{
     id: string;

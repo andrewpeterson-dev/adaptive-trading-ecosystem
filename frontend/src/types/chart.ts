@@ -12,7 +12,12 @@ export interface TradeMarker {
   price: number;
   side: "buy" | "sell";
   tradeId?: string;
+  kind?: "entry" | "exit" | "stop_loss" | "take_profit";
   label?: string;
+  text?: string;
+  color?: string;
+  shape?: "circle" | "square" | "arrowUp" | "arrowDown";
+  position?: "aboveBar" | "belowBar" | "inBar";
 }
 
 export type TimeFrame = "1m" | "5m" | "15m" | "1H" | "4H" | "1D" | "1W";
