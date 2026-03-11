@@ -3,7 +3,8 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
-import { useTradingMode } from "@/hooks/useTradingMode";
+import { useThemeMode } from "@/hooks/useThemeMode";
+import { Button } from "@/components/ui/button";
 import type { CandleData, TradeMarker, TimeFrame, ChartIndicator, PriceLevelLine } from "@/types/chart";
 import type {
   IChartApi,
@@ -405,10 +406,10 @@ export function TradingChart({
 }: TradingChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const { mode } = useTradingMode();
+  const { theme } = useThemeMode();
   const chartTheme = useMemo(
-    () => (mode === "live" ? DARK_CHART_THEME : LIGHT_CHART_THEME),
-    [mode],
+    () => (theme === "dark" ? DARK_CHART_THEME : LIGHT_CHART_THEME),
+    [theme],
   );
 
   // Series refs — created once at init, visibility toggled
@@ -1162,7 +1163,24 @@ export function TradingChart({
         {error && !loading && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/80 backdrop-blur-sm">
             <AlertTriangle className="h-5 w-5 text-muted-foreground/60" />
-            <span className="text-sm text-muted-foreground">{error}</span>
+            <span className="text-sm font-semibold text-foreground">Chart data unavailable</span>
+            <span className="max-w-sm text-center text-sm text-muted-foreground">
+              {error}. The workspace is falling back to quote data while the chart feed refreshes.
+            </span>
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border/60 bg-muted/35 px-3 py-1.5">
+                Last: {lastPrice != null ? `$${lastPrice.toFixed(2)}` : "—"}
+              </span>
+              <span className="rounded-full border border-border/60 bg-muted/35 px-3 py-1.5">
+                High: {quote?.high != null ? `$${quote.high.toFixed(2)}` : "—"}
+              </span>
+              <span className="rounded-full border border-border/60 bg-muted/35 px-3 py-1.5">
+                Low: {quote?.low != null ? `$${quote.low.toFixed(2)}` : "—"}
+              </span>
+            </div>
+            <Button type="button" variant="secondary" size="sm" onClick={() => void fetchAndRender(timeframe)}>
+              Retry Chart
+            </Button>
           </div>
         )}
       </div>

@@ -34,7 +34,10 @@ from data.market_data import market_data
 from news.ingestion import NewsIngestion
 
 # Webull per-user client loader (from our webull routes)
-from api.routes.webull import _get_user_clients as _get_user_webull_client
+from api.routes.webull import (
+    _get_user_clients as _get_user_webull_client,
+    invalidate_user_client_cache,
+)
 
 
 def _wb_mode(mode: "TradingModeEnum") -> str:
@@ -516,7 +519,7 @@ async def get_account(request: Request):
     if user_id:
         wb = await _get_user_webull_client(user_id, _wb_mode(mode))
         if wb:
-            summary = wb.account.get_summary()
+            summary = await asyncio.to_thread(wb.account.get_summary)
             if summary:
                 return {
                     "equity": summary.get("net_liquidation", 0),
@@ -530,8 +533,7 @@ async def get_account(request: Request):
                     "broker": "webull",
                 }
             # Evict stale cache so next request re-authenticates with current DB credentials
-            from api.routes.webull import _client_cache
-            _client_cache.pop((user_id, _wb_mode(mode)), None)
+            invalidate_user_client_cache(user_id, _wb_mode(mode))
             logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id, mode=mode.value)
 
     # Check for connected Alpaca broker (mode-aware)
@@ -606,7 +608,7 @@ async def get_positions(request: Request):
     if user_id:
         wb = await _get_user_webull_client(user_id, _wb_mode(mode))
         if wb:
-            raw = wb.account.get_positions()
+            raw = await asyncio.to_thread(wb.account.get_positions)
             positions = []
             for p in raw:
                 raw_symbol = p.get("symbol", "")
@@ -658,7 +660,7 @@ async def get_orders(request: Request, status: str = "open"):
     if user_id:
         wb = await _get_user_webull_client(user_id, _wb_mode(mode))
         if wb:
-            raw = wb.account.get_open_orders()
+            raw = await asyncio.to_thread(wb.account.get_open_orders)
             orders = []
             for o in raw:
                 orders.append({
@@ -697,7 +699,7 @@ async def get_quotes(
         mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
         wb = await _get_user_webull_client(user_id, _wb_mode(mode))
         if wb:
-            raw = wb.market_data.get_quotes(symbol_list)
+            raw = await asyncio.to_thread(wb.market_data.get_quotes, symbol_list)
             quotes = []
             for sym in symbol_list:
                 q = raw.get(sym, {})
@@ -898,7 +900,11 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                 limit_price=req.limit_price,
                 stop_price=req.stop_price,
             )
-            order_result = wb.trading.place_order(wb_req, user_confirmed=req.user_confirmed)
+            order_result = await asyncio.to_thread(
+                wb.trading.place_order,
+                wb_req,
+                user_confirmed=req.user_confirmed,
+            )
 
             if not order_result.success and not order_result.order_id:
                 if "confirm" in (order_result.error or "").lower():
@@ -1119,7 +1125,7 @@ async def get_risk_summary(request: Request):
     if user_id and mode == TradingModeEnum.LIVE:
         wb = await _get_user_webull_client(user_id, "real")
         if wb:
-            summary = wb.account.get_summary()
+            summary = await asyncio.to_thread(wb.account.get_summary)
             equity = summary.get("net_liquidation", 0) if summary else 0
             settings = get_settings()
             return {

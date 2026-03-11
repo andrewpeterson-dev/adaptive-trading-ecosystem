@@ -50,6 +50,54 @@ export interface Order {
   asset_type?: 'stock' | 'option';
   source?: TradeSource;
   bot_name?: string | null;
+  estimated_cost?: number | null;
+}
+
+export interface NewsArticle {
+  title: string;
+  url: string;
+  source?: string;
+  published_at?: string;
+  summary?: string;
+  symbols?: string[];
+}
+
+export interface SymbolSnapshot {
+  symbol: string;
+  name?: string;
+  exchange?: string;
+  price: number;
+  bid?: number;
+  ask?: number;
+  last?: number;
+  change?: number;
+  change_pct?: number;
+  volume?: number;
+  market_cap?: number | null;
+  pe_ratio?: number | null;
+  fifty_two_week_low?: number | null;
+  fifty_two_week_high?: number | null;
+  dividend_yield?: number | null;
+  avg_volume?: number | null;
+  market_state?: string | null;
+  currency?: string | null;
+  source?: string | null;
+  sector?: string | null;
+  industry?: string | null;
+  description?: string | null;
+}
+
+export interface TradingConnectionServiceStatus {
+  status: 'connected' | 'warning' | 'disconnected';
+  message: string;
+  source?: string | null;
+}
+
+export interface TradingConnectionStatus {
+  mode: string;
+  broker?: string | null;
+  market_data: TradingConnectionServiceStatus;
+  order_routing: TradingConnectionServiceStatus;
 }
 
 export interface Trade {
@@ -99,6 +147,7 @@ export type TradeFilter = 'all' | 'stocks' | 'options' | 'buys' | 'sells' | 'man
 export interface Quote {
   symbol: string;
   name?: string;
+  exchange?: string;
   price: number;
   bid?: number;
   ask?: number;
@@ -110,6 +159,18 @@ export interface Quote {
   low?: number;
   open?: number;
   prev_close?: number;
+  market_cap?: number | null;
+  pe_ratio?: number | null;
+  week52_high?: number | null;
+  week52_low?: number | null;
+  dividend_yield?: number | null;
+  average_volume?: number | null;
+  sector?: string | null;
+  industry?: string | null;
+  company_summary?: string | null;
+  currency?: string | null;
+  market_status?: string | null;
+  source?: string | null;
 }
 
 export interface OptionContract {
@@ -142,5 +203,10 @@ export interface OptionPosition {
 export interface SymbolSearchResult {
   symbol: string;
   name: string;
+  exchange?: string;
   type: 'stock' | 'etf' | 'crypto';
+  price?: number;
+  change?: number;
+  change_pct?: number;
+  volume?: number;
 }

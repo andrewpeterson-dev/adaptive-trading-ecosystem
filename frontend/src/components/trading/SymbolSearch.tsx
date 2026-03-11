@@ -1,303 +1,260 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Search, X, Clock, TrendingUp } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Building2, Clock3, Search, TrendingUp, X } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
+import { formatCompactNumber, formatCurrency, formatPercent } from "@/lib/trading/format";
+import { getCatalogSymbol, rankSymbols } from "@/lib/trading/symbol-catalog";
+import { cn } from "@/lib/utils";
 import { useTradeStore } from "@/stores/trade-store";
-import type { SymbolSearchResult } from "@/types/trading";
+import type { Quote, SymbolSearchResult } from "@/types/trading";
 
 const RECENT_KEY = "trade_recent_symbols";
 const MAX_RECENT = 8;
 
-// Static symbol map for client-side autocomplete (replace with API later)
-const SYMBOL_MAP: SymbolSearchResult[] = [
-  { symbol: "AAPL", name: "Apple Inc.", type: "stock" },
-  { symbol: "MSFT", name: "Microsoft Corporation", type: "stock" },
-  { symbol: "GOOGL", name: "Alphabet Inc.", type: "stock" },
-  { symbol: "AMZN", name: "Amazon.com Inc.", type: "stock" },
-  { symbol: "NVDA", name: "NVIDIA Corporation", type: "stock" },
-  { symbol: "META", name: "Meta Platforms Inc.", type: "stock" },
-  { symbol: "TSLA", name: "Tesla Inc.", type: "stock" },
-  { symbol: "BRK.B", name: "Berkshire Hathaway Inc.", type: "stock" },
-  { symbol: "JPM", name: "JPMorgan Chase & Co.", type: "stock" },
-  { symbol: "V", name: "Visa Inc.", type: "stock" },
-  { symbol: "JNJ", name: "Johnson & Johnson", type: "stock" },
-  { symbol: "WMT", name: "Walmart Inc.", type: "stock" },
-  { symbol: "MA", name: "Mastercard Inc.", type: "stock" },
-  { symbol: "PG", name: "Procter & Gamble Co.", type: "stock" },
-  { symbol: "UNH", name: "UnitedHealth Group Inc.", type: "stock" },
-  { symbol: "HD", name: "The Home Depot Inc.", type: "stock" },
-  { symbol: "DIS", name: "The Walt Disney Company", type: "stock" },
-  { symbol: "BAC", name: "Bank of America Corp.", type: "stock" },
-  { symbol: "ADBE", name: "Adobe Inc.", type: "stock" },
-  { symbol: "CRM", name: "Salesforce Inc.", type: "stock" },
-  { symbol: "NFLX", name: "Netflix Inc.", type: "stock" },
-  { symbol: "AMD", name: "Advanced Micro Devices", type: "stock" },
-  { symbol: "INTC", name: "Intel Corporation", type: "stock" },
-  { symbol: "CSCO", name: "Cisco Systems Inc.", type: "stock" },
-  { symbol: "ORCL", name: "Oracle Corporation", type: "stock" },
-  { symbol: "PFE", name: "Pfizer Inc.", type: "stock" },
-  { symbol: "ABT", name: "Abbott Laboratories", type: "stock" },
-  { symbol: "KO", name: "The Coca-Cola Company", type: "stock" },
-  { symbol: "PEP", name: "PepsiCo Inc.", type: "stock" },
-  { symbol: "TMO", name: "Thermo Fisher Scientific", type: "stock" },
-  { symbol: "COST", name: "Costco Wholesale Corp.", type: "stock" },
-  { symbol: "AVGO", name: "Broadcom Inc.", type: "stock" },
-  { symbol: "MRK", name: "Merck & Co. Inc.", type: "stock" },
-  { symbol: "ABBV", name: "AbbVie Inc.", type: "stock" },
-  { symbol: "ACN", name: "Accenture plc", type: "stock" },
-  { symbol: "LLY", name: "Eli Lilly and Company", type: "stock" },
-  { symbol: "QCOM", name: "Qualcomm Inc.", type: "stock" },
-  { symbol: "NOW", name: "ServiceNow Inc.", type: "stock" },
-  { symbol: "COIN", name: "Coinbase Global Inc.", type: "stock" },
-  { symbol: "PLTR", name: "Palantir Technologies", type: "stock" },
-  { symbol: "SOFI", name: "SoFi Technologies Inc.", type: "stock" },
-  { symbol: "RIVN", name: "Rivian Automotive Inc.", type: "stock" },
-  { symbol: "SPY", name: "SPDR S&P 500 ETF Trust", type: "etf" },
-  { symbol: "QQQ", name: "Invesco QQQ Trust", type: "etf" },
-  { symbol: "IWM", name: "iShares Russell 2000 ETF", type: "etf" },
-  { symbol: "DIA", name: "SPDR Dow Jones Industrial", type: "etf" },
-  { symbol: "VTI", name: "Vanguard Total Stock Market", type: "etf" },
-  { symbol: "ARKK", name: "ARK Innovation ETF", type: "etf" },
-  { symbol: "XLF", name: "Financial Select Sector SPDR", type: "etf" },
-  { symbol: "XLE", name: "Energy Select Sector SPDR", type: "etf" },
-  { symbol: "GLD", name: "SPDR Gold Shares", type: "etf" },
-  { symbol: "TLT", name: "iShares 20+ Year Treasury", type: "etf" },
-];
-
-function getRecentSymbols(): string[] {
+function loadRecentSymbols(): string[] {
   if (typeof window === "undefined") return [];
   try {
     const stored = localStorage.getItem(RECENT_KEY);
-    return stored ? JSON.parse(stored) : [];
+    return stored ? (JSON.parse(stored) as string[]) : [];
   } catch {
     return [];
   }
 }
 
-function addRecentSymbol(symbol: string): void {
-  const recent = getRecentSymbols().filter((s) => s !== symbol);
+function storeRecentSymbol(symbol: string): void {
+  const recent = loadRecentSymbols().filter((entry) => entry !== symbol);
   recent.unshift(symbol);
-  if (recent.length > MAX_RECENT) recent.length = MAX_RECENT;
-  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
 export function SymbolSearch() {
-  const symbol = useTradeStore((s) => s.symbol);
-  const setSymbol = useTradeStore((s) => s.setSymbol);
-  const quote = useTradeStore((s) => s.quote);
+  const symbol = useTradeStore((state) => state.symbol);
+  const setSymbol = useTradeStore((state) => state.setSymbol);
 
   const [input, setInput] = useState(symbol);
-  const [focused, setFocused] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [quotesBySymbol, setQuotesBySymbol] = useState<Record<string, Quote>>({});
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const deferredInput = useDeferredValue(input.trim());
 
-  // Sync input when store symbol changes externally
   useEffect(() => {
     setInput(symbol);
   }, [symbol]);
 
-  // Load recent symbols on focus
   useEffect(() => {
-    if (focused) {
-      setRecent(getRecentSymbols());
-    }
-  }, [focused]);
+    if (!isOpen) return;
+    setRecent(loadRecentSymbols());
+  }, [isOpen]);
 
-  // Close dropdown on outside click
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setFocused(false);
+    function handlePointerDown(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
-  // Autocomplete results
-  const searchResults = useMemo(() => {
-    const q = input.trim().toUpperCase();
-    if (!q || q.length < 1) return [];
-    return SYMBOL_MAP.filter(
-      (s) =>
-        s.symbol.startsWith(q) ||
-        s.name.toUpperCase().includes(q)
-    ).slice(0, 8);
-  }, [input]);
+  const rankedResults = useMemo(() => rankSymbols(deferredInput, 8), [deferredInput]);
 
-  const commitSymbol = useCallback(
-    (sym: string) => {
-      const upper = sym.trim().toUpperCase();
-      if (!upper) return;
-      setInput(upper);
-      setSymbol(upper);
-      addRecentSymbol(upper);
-      setFocused(false);
-    },
-    [setSymbol]
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.toUpperCase();
-    setInput(val);
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const trimmed = val.trim();
-      if (trimmed && trimmed !== symbol) {
-        commitSymbol(trimmed);
+    async function loadResultQuotes(results: SymbolSearchResult[]) {
+      if (results.length === 0) {
+        if (!cancelled) setQuotesBySymbol({});
+        return;
       }
-    }, 600);
-  };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      commitSymbol(input);
-    }
-    if (e.key === "Escape") {
-      setFocused(false);
-      inputRef.current?.blur();
-    }
-  };
+      try {
+        const data = await apiFetch<{ quotes: Quote[] }>(
+          `/api/trading/quotes?symbols=${results.map((item) => item.symbol).join(",")}`,
+        );
+        if (cancelled) return;
 
-  const handleBlur = () => {
-    setTimeout(() => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      const trimmed = input.trim().toUpperCase();
-      if (trimmed && trimmed !== symbol) {
-        commitSymbol(trimmed);
+        const nextMap = (data.quotes || []).reduce<Record<string, Quote>>((acc, quote) => {
+          acc[quote.symbol] = quote;
+          return acc;
+        }, {});
+        setQuotesBySymbol(nextMap);
+      } catch {
+        if (!cancelled) setQuotesBySymbol({});
       }
-    }, 200);
-  };
+    }
 
-  const handleSelectResult = (sym: string) => {
-    commitSymbol(sym);
+    void loadResultQuotes(rankedResults);
+    return () => {
+      cancelled = true;
+    };
+  }, [rankedResults]);
+
+  const commitSymbol = (nextSymbol: string) => {
+    const upper = nextSymbol.trim().toUpperCase();
+    if (!upper) return;
+    setInput(upper);
+    setSymbol(upper);
+    storeRecentSymbol(upper);
+    setIsOpen(false);
   };
 
   const clearInput = () => {
     setInput("");
+    setQuotesBySymbol({});
     inputRef.current?.focus();
   };
 
-  const showDropdown = focused && (searchResults.length > 0 || recent.length > 0);
-  const showResults = input.trim().length > 0 && input.trim().toUpperCase() !== symbol;
-
-  // Get company name from static map
-  const companyName = useMemo(() => {
-    const match = SYMBOL_MAP.find((s) => s.symbol === symbol);
-    return quote?.name || match?.name || null;
-  }, [symbol, quote?.name]);
+  const showResults = deferredInput.length > 0;
+  const recentItems = recent
+    .map((entry) => getCatalogSymbol(entry))
+    .filter((entry): entry is SymbolSearchResult => Boolean(entry));
 
   return (
     <div ref={wrapperRef} className="relative">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <div className="rounded-[24px] border border-border/70 bg-background/80 p-3 shadow-[0_20px_45px_-38px_hsl(var(--shadow-color)/0.9)]">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Search Securities
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ranked by symbol, company, and exchange match.
+            </p>
+          </div>
+          <div className="app-pill shrink-0">
+            <span className="font-mono font-semibold text-foreground">{symbol}</span>
+          </div>
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
             value={input}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setFocused(true)}
-            onBlur={handleBlur}
-            placeholder="Search symbol or company..."
-            className="app-input pl-10 pr-9 font-mono"
+            onChange={(event) => setInput(event.target.value)}
+            onFocus={() => setIsOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitSymbol(input);
+              }
+              if (event.key === "Escape") {
+                setIsOpen(false);
+                inputRef.current?.blur();
+              }
+            }}
+            placeholder="Search by symbol or company"
+            className="app-input pl-10 pr-10 font-mono text-sm"
           />
           {input && (
             <button
               type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                clearInput();
-              }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={clearInput}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-4 w-4" />
             </button>
           )}
         </div>
-        {companyName && !focused && (
-          <div className="app-pill w-fit shrink-0">
-            <span className="font-mono font-bold text-foreground">{symbol}</span>
-            <span className="max-w-[220px] truncate tracking-normal">{companyName}</span>
-          </div>
-        )}
       </div>
 
-      {showDropdown && (
-        <div className="app-panel absolute z-30 mt-2 w-full overflow-hidden">
-          {showResults && searchResults.length > 0 && (
-            <div className="p-2">
-              <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Results
-              </div>
-              {searchResults.map((result) => (
-                <button
-                  key={result.symbol}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    handleSelectResult(result.symbol);
-                  }}
-                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
-                >
-                  <span className="font-mono font-bold text-sm text-foreground w-16 shrink-0">
-                    {result.symbol}
-                  </span>
-                  <span className="text-xs text-muted-foreground truncate flex-1">
-                    {result.name}
-                  </span>
-                  <span className="text-[10px] font-medium text-muted-foreground/60 uppercase">
-                    {result.type}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+      {isOpen && (
+        <div className="app-panel absolute left-0 right-0 z-30 mt-3 overflow-hidden p-2">
+          {showResults ? (
+            rankedResults.length > 0 ? (
+              <div className="space-y-1">
+                {rankedResults.map((result) => {
+                  const quote = quotesBySymbol[result.symbol];
+                  const isPositive = (quote?.change ?? 0) >= 0;
 
-          {/* Recent symbols */}
-          {(!showResults || searchResults.length === 0) && recent.length > 0 && (
-            <div className="p-2">
-              <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                Recent
-              </div>
-              <div className="flex flex-wrap gap-1.5 px-1">
-                {recent.map((sym) => {
-                  const info = SYMBOL_MAP.find((s) => s.symbol === sym);
                   return (
                     <button
-                      key={sym}
+                      key={result.symbol}
                       type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleSelectResult(sym);
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        commitSymbol(result.symbol);
                       }}
-                      className="group flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-mono transition-colors hover:bg-muted/80"
+                      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[20px] px-3 py-3 text-left transition-colors hover:bg-muted/45"
                     >
-                      <TrendingUp className="h-3 w-3 text-muted-foreground/50 group-hover:text-muted-foreground" />
-                      <span className="font-bold text-foreground">{sym}</span>
-                      {info && (
-                        <span className="text-muted-foreground/60 hidden sm:inline">
-                          {info.name.length > 15 ? info.name.slice(0, 15) + "…" : info.name}
-                        </span>
-                      )}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {result.symbol}
+                          </span>
+                          <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            {result.exchange}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{result.name}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="font-mono text-sm font-semibold text-foreground">
+                          {formatCurrency(quote?.price ?? null)}
+                        </div>
+                        <div
+                          className={cn(
+                            "mt-1 font-mono text-[11px] font-medium",
+                            isPositive ? "text-emerald-300" : "text-red-300",
+                          )}
+                        >
+                          {formatPercent(quote?.change_pct ?? null)}
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Vol {formatCompactNumber(quote?.volume ?? null)}
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
               </div>
+            ) : (
+              <div className="rounded-[18px] border border-dashed border-border/70 px-4 py-5 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  No ranked match for “{deferredInput.toUpperCase()}”
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Press Enter to open the symbol directly if you know the ticker.
+                </p>
+              </div>
+            )
+          ) : recentItems.length > 0 ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <Clock3 className="h-3.5 w-3.5" />
+                Recent Symbols
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recentItems.map((item) => (
+                  <button
+                    key={item.symbol}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      commitSymbol(item.symbol);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/35 px-3 py-2 text-xs transition-colors hover:bg-muted/55"
+                  >
+                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-mono font-semibold text-foreground">{item.symbol}</span>
+                    <span className="hidden text-muted-foreground sm:inline">{item.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-
-          {/* No results */}
-          {showResults && searchResults.length === 0 && (
-            <div className="p-3 text-xs text-muted-foreground text-center">
-              No matches — press Enter to search &quot;{input.trim().toUpperCase()}&quot;
+          ) : (
+            <div className="rounded-[18px] border border-dashed border-border/70 px-4 py-5 text-center">
+              <Building2 className="mx-auto h-5 w-5 text-muted-foreground" />
+              <p className="mt-2 text-sm font-medium text-foreground">
+                Start with a ticker, company name, or ETF.
+              </p>
             </div>
           )}
         </div>
