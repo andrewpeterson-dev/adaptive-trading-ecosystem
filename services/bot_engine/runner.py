@@ -164,6 +164,9 @@ class BotRunner:
         ]
         indicator_values = compute_indicators(bars, indicators_needed)
 
+        # Inject current close price so evaluator can use compare_to="PRICE"
+        indicator_values["CLOSE"] = bars[-1].get("close", 0)
+
         # Evaluate conditions
         all_passed, reasons = evaluate_conditions(conditions, indicator_values)
 

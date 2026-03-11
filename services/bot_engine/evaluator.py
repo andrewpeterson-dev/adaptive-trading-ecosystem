@@ -148,7 +148,7 @@ def evaluate_conditions(
     for cond in conditions:
         indicator_name = cond.get("indicator", "UNKNOWN")
         operator = cond.get("operator", ">")
-        threshold = float(cond.get("value", 0))
+        compare_to = cond.get("compare_to", "").upper()
 
         current, previous, key = _resolve_indicator_value(cond, indicator_values)
 
@@ -156,6 +156,14 @@ def evaluate_conditions(
             reasons.append(f"{key}: no data available")
             all_passed = False
             continue
+
+        # Resolve threshold: static value or dynamic (PRICE, another indicator)
+        if compare_to == "PRICE":
+            threshold = float(indicator_values.get("CLOSE", 0))
+        elif compare_to and compare_to in indicator_values:
+            threshold = float(indicator_values[compare_to])
+        else:
+            threshold = float(cond.get("value", 0))
 
         passed = _compare(current, operator, threshold, previous)
 

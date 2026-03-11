@@ -141,7 +141,13 @@ async def create_bot_from_strategy(request: Request, body: DeployFromStrategyReq
             "position_size_pct": strategy.position_size_pct,
             "symbols": strategy.symbols or [],
             "conditions": [
-                {"indicator": c.indicator, "operator": c.operator, "value": c.value, "params": c.params or {}}
+                {
+                    "indicator": c["indicator"],
+                    "operator": c["operator"],
+                    "value": c["value"],
+                    "params": c.get("params") or {},
+                    **({"compare_to": c["compare_to"]} if c.get("compare_to") else {}),
+                }
                 for c in (strategy.conditions or [])
             ],
         }
