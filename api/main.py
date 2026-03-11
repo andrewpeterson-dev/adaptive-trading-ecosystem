@@ -88,7 +88,15 @@ async def lifespan(app: FastAPI):
     # Non-blocking: DB init runs in background so /health responds immediately.
     # This prevents Railway's 30s healthcheck from expiring during DB connection.
     asyncio.create_task(_init_db_with_retry())
+
+    # Start the bot execution engine (evaluates running bots every 60s)
+    from services.bot_engine.runner import bot_runner
+    asyncio.create_task(bot_runner.start())
+
     yield
+
+    # Shutdown
+    await bot_runner.stop()
     await close_db()
     logger.info("trading_ecosystem_stopped")
 

@@ -270,3 +270,41 @@ async def list_proposals(
         }
         for p in proposals
     ]
+
+
+@router.get("/bots/{bot_id}/activity")
+async def get_bot_activity(bot_id: str, request: Request, limit: int = 50):
+    """Get recent trades made by a bot."""
+    from db.database import get_session
+    from db.cerberus_models import CerberusTrade
+    from sqlalchemy import select
+
+    user_id = request.state.user_id
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusTrade)
+            .where(
+                CerberusTrade.bot_id == bot_id,
+                CerberusTrade.user_id == user_id,
+            )
+            .order_by(CerberusTrade.created_at.desc())
+            .limit(limit)
+        )
+        trades = result.scalars().all()
+
+    return [
+        {
+            "id": t.id,
+            "symbol": t.symbol,
+            "side": t.side,
+            "quantity": t.quantity,
+            "entryPrice": t.entry_price,
+            "exitPrice": t.exit_price,
+            "grossPnl": t.gross_pnl,
+            "netPnl": t.net_pnl,
+            "status": "filled",
+            "strategyTag": t.strategy_tag,
+            "createdAt": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in trades
+    ]

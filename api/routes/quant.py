@@ -46,19 +46,16 @@ REGIME_COLORS = {
 }
 
 
-def _get_strategy_params(strategy) -> Dict[str, float]:
-    """Extract or estimate key strategy params."""
+def _get_strategy_params(strategy) -> Dict[str, Optional[float]]:
+    """Extract strategy params from config. No defaults — returns None if not set."""
     diag = getattr(strategy, "diagnostics", None) or {}
-    win_rate = diag.get("win_rate", 0.55)
-    avg_win = diag.get("avg_win_pct", strategy.take_profit_pct or 0.05)
-    avg_loss = diag.get("avg_loss_pct", strategy.stop_loss_pct or 0.02)
     return {
-        "win_rate": float(win_rate),
-        "avg_win": float(avg_win),
-        "avg_loss": float(avg_loss),
-        "tp_pct": float(strategy.take_profit_pct or 0.05),
-        "sl_pct": float(strategy.stop_loss_pct or 0.02),
-        "position_size": float(getattr(strategy, "position_size_pct", 0.1) or 0.1),
+        "win_rate": float(diag["win_rate"]) if "win_rate" in diag else None,
+        "avg_win": float(diag["avg_win_pct"]) if "avg_win_pct" in diag else None,
+        "avg_loss": float(diag["avg_loss_pct"]) if "avg_loss_pct" in diag else None,
+        "tp_pct": float(strategy.take_profit_pct) if strategy.take_profit_pct else None,
+        "sl_pct": float(strategy.stop_loss_pct) if strategy.stop_loss_pct else None,
+        "position_size": float(getattr(strategy, "position_size_pct", None) or 0) or None,
     }
 
 
@@ -116,21 +113,21 @@ def _compute_performance(equity_curve: List[Dict], params: Dict) -> Dict[str, An
     else:
         profit_factor = 99.0 if wins else 0.0
 
-    # Estimated num trades
-    num_trades = round(len(daily_returns) * 0.4)
+    # Trade count — only real if provided, otherwise null
+    num_trades = None
 
-    # Composite confidence
-    confidence = min(95, max(20, 50 + sharpe * 10 + (params["win_rate"] - 0.5) * 100))
+    # Confidence — not computed synthetically, only from real data
+    confidence = None
 
     return {
         "sharpe": round(sharpe, 3),
         "sortino": round(sortino, 3),
-        "win_rate": round(params["win_rate"], 3),
+        "win_rate": round(params["win_rate"], 3) if params.get("win_rate") is not None else None,
         "profit_factor": round(profit_factor, 3),
         "max_drawdown": round(max_dd, 4),
         "total_return": round(total_return, 4),
         "num_trades": num_trades,
-        "confidence": round(confidence, 1),
+        "confidence": confidence,
     }
 
 
@@ -181,7 +178,7 @@ def _monte_carlo(trade_returns: List[float], n_sims: int = 200, n_steps: int = 9
 
 
 def _feature_importance(strategy) -> List[Dict]:
-    """Compute feature importance deterministically from strategy conditions."""
+    """Compute feature importance deterministically from actual strategy conditions only."""
     conditions = []
     raw = getattr(strategy, "conditions", []) or []
     groups = getattr(strategy, "condition_groups", []) or []
@@ -192,6 +189,9 @@ def _feature_importance(strategy) -> List[Dict]:
     else:
         conditions = raw
 
+    if not conditions:
+        return []
+
     features = []
     base_importance = 1.0
     for cond in conditions:
@@ -199,15 +199,6 @@ def _feature_importance(strategy) -> List[Dict]:
         importance = base_importance
         features.append({"feature": indicator, "importance": round(importance, 3)})
         base_importance *= 0.85  # decay — first conditions matter more
-
-    # Always include some structural features
-    for name, base in [
-        ("Regime Filter", 0.45),
-        ("Volatility Context", 0.35),
-        ("Volume Confirmation", 0.30),
-        ("Time-of-Day", 0.18),
-    ]:
-        features.append({"feature": name, "importance": round(base, 3)})
 
     # Normalize so max = 1.0
     if features:
@@ -321,40 +312,40 @@ async def get_strategy_intelligence(
             "confidence": None,
         }
 
-    # Current regime
+    # Current regime — only from real data
     reg_result = await db.execute(
         select(MarketRegimeRecord).order_by(MarketRegimeRecord.timestamp.desc()).limit(1)
     )
     regime_rec = reg_result.scalar_one_or_none()
-    current_regime = regime_rec.regime.value if regime_rec else "sideways"
-    regime_conf = float(regime_rec.confidence or 0.65) if regime_rec else 0.65
+    current_regime = regime_rec.regime.value if regime_rec else None
+    regime_conf = float(regime_rec.confidence) if regime_rec and regime_rec.confidence else None
 
-    # Decision pipeline stages — based on strategy config, not fake perf numbers
+    # Decision pipeline stages — only show real data, null for stages without data
     n_conditions = len(getattr(strategy, "conditions", []) or [])
     decision_pipeline = [
         {
             "stage": "Signal Generation",
-            "passed": n_conditions > 0,
+            "passed": n_conditions > 0 if n_conditions else None,
             "reason": f"{n_conditions} conditions configured" if n_conditions > 0 else "No conditions configured",
         },
         {
             "stage": "Confidence Threshold",
-            "passed": perf["win_rate"] is not None and perf["win_rate"] > 0.5,
+            "passed": perf["win_rate"] > 0.5 if perf["win_rate"] is not None else None,
             "reason": f"Win rate {perf['win_rate'] * 100:.0f}%" if perf["win_rate"] is not None else "No data",
         },
         {
             "stage": "Regime Filter",
-            "passed": current_regime != "high_vol_bear",
-            "reason": f"Regime: {current_regime.replace('_', ' ')}",
+            "passed": current_regime != "high_vol_bear" if current_regime is not None else None,
+            "reason": f"Regime: {current_regime.replace('_', ' ')}" if current_regime else "No data",
         },
         {
             "stage": "Risk Check",
-            "passed": perf["max_drawdown"] is not None and abs(perf["max_drawdown"]) < 0.25,
+            "passed": abs(perf["max_drawdown"]) < 0.25 if perf["max_drawdown"] is not None else None,
             "reason": f"Max DD {abs(perf['max_drawdown']) * 100:.1f}%" if perf["max_drawdown"] is not None else "No data",
         },
         {
             "stage": "Ensemble Agreement",
-            "passed": perf["confidence"] is not None and perf["confidence"] > 60,
+            "passed": perf["confidence"] > 60 if perf["confidence"] is not None else None,
             "reason": f"Confidence {perf['confidence']:.0f}%" if perf["confidence"] is not None else "No data",
         },
     ]

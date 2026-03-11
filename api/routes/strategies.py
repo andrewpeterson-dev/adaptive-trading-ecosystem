@@ -255,94 +255,9 @@ async def create_strategy(strategy: StrategySchema, request: Request):
         )
 
 
-_DEMO_TEMPLATES = [
-    {
-        "name": "RSI Momentum Swing",
-        "description": (
-            "Enters long positions when RSI drops below 30 (oversold) with confirming "
-            "volume spike. Targets a 5% move with a tight 2% stop-loss. Best in "
-            "low-volatility bull regimes. Uses a 14-period RSI on daily timeframe."
-        ),
-        "action": "BUY",
-        "symbols": ["AAPL", "MSFT", "NVDA", "GOOGL"],
-        "timeframe": "1D",
-        "stop_loss_pct": 0.02,
-        "take_profit_pct": 0.05,
-        "conditions": [{"indicator": "RSI", "operator": "<", "value": 30}],
-        "diagnostics": {"win_rate": 0.61, "avg_win_pct": 0.048, "avg_loss_pct": 0.019},
-    },
-    {
-        "name": "MACD Trend Follower",
-        "description": (
-            "Follows medium-term trends using a MACD signal-line crossover with a "
-            "200-day SMA trend filter. Rides momentum with a wider stop and higher "
-            "profit target. Works well in high-volume trending markets."
-        ),
-        "action": "BUY",
-        "symbols": ["SPY", "QQQ", "IWM"],
-        "timeframe": "4H",
-        "stop_loss_pct": 0.03,
-        "take_profit_pct": 0.09,
-        "conditions": [{"indicator": "MACD", "operator": "crosses_above", "value": 0}],
-        "diagnostics": {"win_rate": 0.54, "avg_win_pct": 0.082, "avg_loss_pct": 0.028},
-    },
-    {
-        "name": "Mean Reversion Alpha",
-        "description": (
-            "Fades extended moves when RSI exceeds 72 and price touches the upper "
-            "Bollinger Band. Profits from mean-reversion in range-bound regimes. "
-            "Exits quickly — 3-day maximum hold."
-        ),
-        "action": "SELL",
-        "symbols": ["TSLA", "AMD", "META", "COIN"],
-        "timeframe": "1H",
-        "stop_loss_pct": 0.025,
-        "take_profit_pct": 0.04,
-        "conditions": [{"indicator": "RSI", "operator": ">", "value": 72}],
-        "diagnostics": {"win_rate": 0.67, "avg_win_pct": 0.036, "avg_loss_pct": 0.022},
-    },
-]
-
-
-async def _ensure_demo_strategies(user_id: int, mode: TradingModeEnum, session) -> list:
-    """Create and return demo StrategyTemplate + StrategyInstance for a user with no strategies."""
-    instances = []
-    for spec in _DEMO_TEMPLATES:
-        tmpl = StrategyTemplate(
-            user_id=user_id,
-            name=spec["name"],
-            description=spec["description"],
-            action=spec["action"],
-            symbols=spec["symbols"],
-            timeframe=spec["timeframe"],
-            stop_loss_pct=spec["stop_loss_pct"],
-            take_profit_pct=spec.get("take_profit_pct", 0.05),
-            conditions=spec["conditions"],
-            diagnostics=spec["diagnostics"],
-        )
-        session.add(tmpl)
-        await session.flush()  # get tmpl.id
-
-        inst = StrategyInstance(
-            template_id=tmpl.id,
-            user_id=user_id,
-            mode=mode,
-            position_size_pct=0.1,
-            is_active=True,
-            nickname=None,
-        )
-        session.add(inst)
-        await session.flush()
-        inst.template = tmpl
-        instances.append(inst)
-
-    return instances
-
-
 @router.get("/list")
 async def list_strategies(request: Request):
-    """List strategy instances for the current user and mode.
-    Auto-creates 3 demo strategies on first access for users with no strategies."""
+    """List strategy instances for the current user and mode."""
     user_id = request.state.user_id
     mode = request.state.trading_mode
 
@@ -358,16 +273,6 @@ async def list_strategies(request: Request):
             .order_by(StrategyInstance.created_at.desc())
         )
         instances = result.scalars().all()
-
-        # Auto-create demo strategies for users with no strategies
-        if not instances:
-            try:
-                instances = await _ensure_demo_strategies(user_id, mode, session)
-                logger.info("created_demo_strategies", user_id=user_id, count=len(instances))
-            except Exception as exc:
-                logger.error("demo_strategy_creation_failed", error=str(exc))
-                instances = []
-
         strategies = [_instance_to_dict(inst) for inst in instances]
 
     return {"strategies": strategies, "mode": mode.value}
