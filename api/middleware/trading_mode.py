@@ -1,5 +1,7 @@
 """Trading mode middleware — reads the user's active mode from DB, cached in-memory."""
 
+from __future__ import annotations
+
 import time
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
