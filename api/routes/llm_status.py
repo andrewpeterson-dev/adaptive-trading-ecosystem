@@ -32,13 +32,18 @@ async def llm_status():
     # Determine primary backend
     if settings.ollama_enabled and ollama_available:
         primary_backend = "ollama"
+        active_model = settings.ollama_model
     else:
-        primary_backend = "claude"
+        configured_backend = (settings.llm_provider or "anthropic").lower()
+        primary_backend = "openai" if configured_backend == "openai" else "claude"
+        active_model = settings.llm_model
 
     claude_available = bool(settings.anthropic_api_key)
+    openai_available = bool(settings.openai_api_key)
 
     return {
         "primary_backend": primary_backend,
+        "active_model": active_model,
         "ollama": {
             "enabled": settings.ollama_enabled,
             "available": ollama_available,
@@ -49,7 +54,11 @@ async def llm_status():
         },
         "claude": {
             "available": claude_available,
-            "model": settings.llm_model,
+            "model": settings.llm_model if primary_backend == "claude" else settings.anthropic_fallback_model,
+        },
+        "openai": {
+            "available": openai_available,
+            "model": settings.llm_model if primary_backend == "openai" else settings.openai_primary_model,
         },
         "router_stats": ollama.get_stats(),
     }

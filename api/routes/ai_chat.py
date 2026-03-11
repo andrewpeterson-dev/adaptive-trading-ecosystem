@@ -1,12 +1,14 @@
 """Cerberus chat API routes."""
 from __future__ import annotations
 
-import json
 from typing import Optional
 
+import jwt
 import structlog
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
+from config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -21,6 +23,24 @@ def _get_controller():
 
         _controller = ChatController()
     return _controller
+
+
+def _get_websocket_user_id(websocket: WebSocket) -> Optional[int]:
+    token = websocket.query_params.get("token") or websocket.cookies.get("auth_token")
+
+    auth_header = websocket.headers.get("authorization", "")
+    if not token and auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, get_settings().jwt_secret, algorithms=["HS256"])
+        user_id = payload.get("user_id")
+        return int(user_id) if user_id is not None else None
+    except (jwt.InvalidTokenError, TypeError, ValueError):
+        return None
 
 
 class ChatRequest(BaseModel):
@@ -67,6 +87,11 @@ async def chat(request: Request, body: ChatRequest):
 @router.websocket("/stream/{thread_id}")
 async def stream(websocket: WebSocket, thread_id: str):
     """WebSocket endpoint for streaming Cerberus responses."""
+    user_id = _get_websocket_user_id(websocket)
+    if user_id is None:
+        await websocket.close(code=4401)
+        return
+
     await websocket.accept()
 
     try:
@@ -74,14 +99,13 @@ async def stream(websocket: WebSocket, thread_id: str):
             # Receive chat request from WebSocket
             data = await websocket.receive_json()
 
-            user_id = data.get("userId")
-            if not user_id:
+            message = data.get("message", "")
+            if not message:
                 await websocket.send_json(
-                    {"type": "error", "data": {"message": "Missing userId"}}
+                    {"type": "error", "data": {"message": "Missing message"}}
                 )
                 continue
 
-            message = data.get("message", "")
             mode = data.get("mode", "chat")
             page_context = data.get("pageContext")
             attachments = data.get("attachments")

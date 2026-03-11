@@ -7,6 +7,16 @@ import { PlatformStats } from "@/components/admin/PlatformStats";
 import { UserTable } from "@/components/admin/UserTable";
 import type { SystemHealth } from "@/types/admin";
 
+function normalizeStatus(status?: string): SystemHealth["status"] {
+  if (status === "healthy" || status === "up" || status === "ok") {
+    return "healthy";
+  }
+  if (status === "unhealthy" || status === "down" || status === "critical") {
+    return "down";
+  }
+  return "degraded";
+}
+
 function SystemHealthIndicators() {
   const [services, setServices] = useState<SystemHealth[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +25,7 @@ function SystemHealthIndicators() {
     async function fetchHealth() {
       try {
         const [healthRes, configRes] = await Promise.allSettled([
-          apiFetch<any>("/health"),
+          apiFetch<any>("/api/system/health/detailed"),
           apiFetch<any>("/api/system/config"),
         ]);
 
@@ -25,22 +35,31 @@ function SystemHealthIndicators() {
           const data = healthRes.value;
           result.push({
             service: "API Server",
-            status: data.status === "healthy" ? "healthy" : "degraded",
-            last_check: new Date().toISOString(),
+            status: normalizeStatus(data.checks?.api?.status ?? data.status),
+            last_check: data.timestamp ?? new Date().toISOString(),
           });
           result.push({
-            service: "Trading Mode",
-            status: "healthy",
-            uptime: data.mode?.toUpperCase(),
+            service: "Database",
+            status: normalizeStatus(data.checks?.database?.status ?? data.status),
+            last_check: data.timestamp ?? new Date().toISOString(),
+          });
+          result.push({
+            service: "Redis",
+            status: normalizeStatus(data.checks?.redis?.status ?? data.status),
+            last_check: data.timestamp ?? new Date().toISOString(),
           });
         } else {
           result.push({ service: "API Server", status: "down" });
         }
 
         if (configRes.status === "fulfilled") {
-          result.push({ service: "Config", status: "healthy" });
+          result.push({
+            service: "Trading Mode",
+            status: "healthy",
+            uptime: configRes.value.trading_mode?.toUpperCase(),
+          });
         } else {
-          result.push({ service: "Config", status: "degraded" });
+          result.push({ service: "Trading Mode", status: "degraded" });
         }
 
         setServices(result);
@@ -105,8 +124,7 @@ export default function AdminPage() {
         const user = await apiFetch<any>("/api/auth/me");
         setIsAdmin(user.is_admin === true);
       } catch {
-        // Fallback: allow access when backend isn't running auth
-        setIsAdmin(true);
+        setIsAdmin(false);
       } finally {
         setLoading(false);
       }

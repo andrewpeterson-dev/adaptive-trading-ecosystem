@@ -192,7 +192,16 @@ async def update_profile(req: ProfileUpdateRequest, request: Request):
 async def save_broker_credentials(req: BrokerCredentialRequest, request: Request):
     user_id = request.state.user_id
 
-    broker_type = BrokerType.ALPACA if req.broker_type.lower() == "alpaca" else BrokerType.WEBULL
+    broker_type_value = req.broker_type.strip().lower()
+    if broker_type_value == "alpaca":
+        broker_type = BrokerType.ALPACA
+    elif broker_type_value == "webull":
+        broker_type = BrokerType.WEBULL
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid broker_type. Must be 'alpaca' or 'webull'.",
+        )
 
     async with get_session() as db:
         # Check for existing credential of same type
@@ -256,5 +265,4 @@ async def delete_broker_credentials(cred_id: int, request: Request):
 
         await db.delete(cred)
         return {"success": True}
-
 
