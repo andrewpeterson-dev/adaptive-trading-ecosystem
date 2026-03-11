@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { Settings, Menu, X, LogOut } from "lucide-react";
 import { useTradingMode } from "@/hooks/useTradingMode";
-import { logout, getCurrentUser } from "@/lib/api/auth";
+import { useAuth } from "@/hooks/useAuth";
 
 const NAV_ITEMS = [
   { href: "/", label: "Builder" },
@@ -24,13 +24,7 @@ export function NavHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const { mode, setMode, switching } = useTradingMode();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    getCurrentUser()
-      .then((u) => setUserEmail(u.email))
-      .catch(() => {});
-  }, []);
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -94,9 +88,9 @@ export function NavHeader() {
             {mode === "paper" ? "Paper" : "Live"}
           </button>
 
-          {userEmail && (
+          {user?.email && (
             <span className="hidden xl:block text-[10px] text-muted-foreground font-mono max-w-[140px] truncate px-1.5">
-              {userEmail}
+              {user.email}
             </span>
           )}
 
