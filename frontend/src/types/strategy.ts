@@ -1,4 +1,5 @@
 export type Operator = ">" | "<" | ">=" | "<=" | "==" | "crosses_above" | "crosses_below";
+export type LogicalJoiner = "AND" | "OR";
 
 export type Action = "BUY" | "SELL";
 export type StrategyType = "ai_generated" | "manual" | "custom";
@@ -20,6 +21,11 @@ export interface StrategyAiContext {
   assumptions?: string[];
   learning_plan?: StrategyLearningPlan;
   exit_conditions?: Array<Record<string, unknown>>;
+  builder_preferences?: {
+    order_type?: "market" | "limit" | "stop";
+    backtest_period?: string;
+    exit_logic?: string;
+  };
   generation?: {
     generated_at?: string;
     provider?: string;
@@ -35,6 +41,7 @@ export interface StrategyCondition {
   value: number | string;
   compare_to?: string;
   field?: string;
+  joiner?: LogicalJoiner;
   params: Record<string, number>;
   action: Action;
 }
@@ -42,6 +49,7 @@ export interface StrategyCondition {
 export interface ConditionGroup {
   id: string;
   label?: string;
+  joiner?: LogicalJoiner;
   conditions: StrategyCondition[];
 }
 

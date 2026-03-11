@@ -17,10 +17,14 @@ import {
   Rocket,
   Activity,
   Loader2,
+  ArrowRight,
+  ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useTradingMode } from "@/hooks/useTradingMode";
+import { useCerberusWorkspaceStatus } from "@/hooks/useCerberusWorkspaceStatus";
 
 const STATUS_COLOR: Record<
   string,
@@ -35,6 +39,8 @@ const STATUS_COLOR: Record<
 
 export function BotControlPanel() {
   const router = useRouter();
+  const { mode } = useTradingMode();
+  const { status } = useCerberusWorkspaceStatus(mode);
   const [bots, setBots] = useState<BotSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [actioningId, setActioningId] = useState<string | null>(null);
@@ -91,6 +97,46 @@ export function BotControlPanel() {
 
   return (
     <div className="flex h-full flex-col space-y-4 overflow-y-auto p-4 sm:p-5">
+      <div className="rounded-[24px] border border-border/60 bg-muted/20 p-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="app-label">Deploy Strategy</p>
+              <h3 className="mt-2 text-lg font-semibold text-foreground">
+                Move a saved strategy into the Cerberus bot fleet
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Deploying here creates a bot version, registers it with Cerberus, and exposes execution controls. It does not place a trade on its own.
+              </p>
+            </div>
+            <Button asChild variant="primary" size="sm">
+              <Link href="/strategies">
+                Deploy strategy
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+          <div className="grid gap-2 rounded-[20px] border border-border/60 bg-background/60 p-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="h-3.5 w-3.5 text-primary" />
+              Saved strategy
+            </div>
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className={`h-3.5 w-3.5 ${status?.marketDataConnected ? "text-emerald-400" : "text-amber-400"}`} />
+              {status?.marketDataConnected
+                ? "Market data connected"
+                : "Market data connection recommended before deploying"}
+            </div>
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className={`h-3.5 w-3.5 ${status?.portfolioConnected ? "text-emerald-400" : "text-amber-400"}`} />
+              {status?.portfolioConnected
+                ? "Broker connection available"
+                : "Broker connection required for live execution later"}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="app-label">Fleet</p>
@@ -116,7 +162,12 @@ export function BotControlPanel() {
         <EmptyState
           icon={<Bot className="h-5 w-5 text-muted-foreground" />}
           title="No bots deployed yet"
-          description="Deploy a saved strategy to create a bot with live learning telemetry and execution controls."
+          description="Deploy a saved strategy to create a bot with live learning telemetry, deployable versions, and execution controls."
+          action={
+            <Button asChild variant="primary" size="sm">
+              <Link href="/strategies">Deploy strategy</Link>
+            </Button>
+          }
         />
       )}
 

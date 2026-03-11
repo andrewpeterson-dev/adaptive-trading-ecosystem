@@ -209,6 +209,15 @@ export async function finalizeDocument(documentId: string): Promise<{ status: st
   return apiFetch(`/api/documents/${documentId}/finalize`, { method: 'POST' });
 }
 
+export async function getDocumentStatus(documentId: string): Promise<{
+  id: string;
+  filename: string;
+  status: string;
+  indexedAt: string | null;
+}> {
+  return apiFetch(`/api/documents/${documentId}/status`);
+}
+
 export async function searchDocuments(query: string, documentIds?: string[], topK = 8): Promise<{ chunks: any[] }> {
   return apiFetch('/api/documents/search', {
     method: 'POST',

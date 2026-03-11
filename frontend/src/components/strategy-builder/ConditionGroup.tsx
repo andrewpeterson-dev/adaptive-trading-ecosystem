@@ -5,6 +5,7 @@ import { Plus, X } from "lucide-react";
 import { ConditionRow } from "./ConditionRow";
 import type {
   ConditionGroup as ConditionGroupType,
+  LogicalJoiner,
   StrategyCondition,
 } from "@/types/strategy";
 
@@ -35,13 +36,19 @@ export function ConditionGroup({
   const canRemoveGroup = totalGroups > 1;
   const isLastConditionInLastGroup =
     group.conditions.length === 1 && totalGroups === 1;
+  const handleJoinerChange = (condIndex: number, joiner: LogicalJoiner) => {
+    onUpdateCondition(groupIndex, condIndex, { joiner });
+  };
 
   return (
     <div className="app-card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border/50 bg-slate-950/[0.03] px-4 py-3 dark:bg-white/[0.03]">
-        <span className="app-label">
-          Group {label}
-        </span>
+        <div>
+          <span className="app-label">Group {label}</span>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Conditions inside this group combine into a single branch of the entry logic.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => onRemoveGroup(groupIndex)}
@@ -57,12 +64,22 @@ export function ConditionGroup({
         {group.conditions.map((condition, condIndex) => (
           <React.Fragment key={condition.id}>
             {condIndex > 0 && (
-              <div className="flex items-center gap-2 px-1">
-                <div className="flex-1 h-px bg-border/30" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
-                  AND
-                </span>
-                <div className="flex-1 h-px bg-border/30" />
+              <div className="flex items-center justify-center gap-2 px-1">
+                <div className="h-px flex-1 bg-border/30" />
+                <select
+                  value={condition.joiner ?? "AND"}
+                  onChange={(event) =>
+                    handleJoinerChange(
+                      condIndex,
+                      event.target.value as LogicalJoiner
+                    )
+                  }
+                  className="app-select h-9 rounded-full px-3 py-0 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                >
+                  <option value="AND">AND</option>
+                  <option value="OR">OR</option>
+                </select>
+                <div className="h-px flex-1 bg-border/30" />
               </div>
             )}
             <ConditionRow

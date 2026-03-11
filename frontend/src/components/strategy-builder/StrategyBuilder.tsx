@@ -20,6 +20,7 @@ import type {
   DiagnosticReport,
   StrategyExplanation,
   Action,
+  LogicalJoiner,
   StrategyType,
 } from "@/types/strategy";
 import { useStrategyBuilderStore } from "@/stores/strategy-builder-store";
@@ -27,20 +28,44 @@ import type { GeneratedStrategyResponse } from "@/lib/cerberus-api";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+type ExitLogic = "stop_target" | "indicator_reversal" | "time_stop" | "hybrid";
+type OrderType = "market" | "limit" | "stop";
+type BacktestPeriod = "3M" | "6M" | "1Y" | "2Y";
+
 function genId(): string {
   return `id_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
 function emptyCondition(): StrategyCondition {
-  return { id: genId(), indicator: "", operator: "<", value: 30, params: {}, action: "BUY" };
+  return {
+    id: genId(),
+    indicator: "",
+    operator: "<",
+    value: 30,
+    params: {},
+    joiner: "AND",
+    action: "BUY",
+  };
 }
 
 function emptyGroup(index = 0): ConditionGroup {
   return {
     id: genId(),
     label: `Group ${String.fromCharCode(65 + index)}`,
+    joiner: "OR",
     conditions: [emptyCondition()],
   };
+}
+
+function describeCondition(condition: StrategyCondition): string {
+  if (!condition.indicator) return "Incomplete condition";
+  const indicator = condition.indicator.toUpperCase().replace(/_/g, " ");
+  const params = Object.values(condition.params);
+  const paramLabel = params.length > 0 ? `(${params.join(", ")})` : "";
+  const target = condition.compare_to
+    ? condition.compare_to.replace(/_/g, " ").toUpperCase()
+    : String(condition.value);
+  return `${indicator}${paramLabel} ${condition.operator} ${target}`;
 }
 
 function buildLogicString(groups: ConditionGroup[], action: Action): string {
@@ -57,11 +82,27 @@ function buildLogicString(groups: ConditionGroup[], action: Action): string {
           return `${indFmt} ${c.operator} ${target}`;
         });
       if (condParts.length === 0) return null;
-      return condParts.length === 1 ? condParts[0] : `(${condParts.join(" AND ")})`;
+      return {
+        joiner: (g.joiner ?? "OR") as LogicalJoiner,
+        logic:
+          condParts.length === 1
+            ? condParts[0]
+            : `(${condParts
+                .map((part, index) =>
+                  index === 0
+                    ? part
+                    : `${g.conditions[index].joiner ?? "AND"} ${part}`
+                )
+                .join(" ")})`,
+      };
     })
     .filter(Boolean);
   if (groupParts.length === 0) return "";
-  return `IF ${groupParts.join(" OR ")} THEN ${action}`;
+  return `IF ${groupParts
+    .map((group, index) =>
+      index === 0 ? group.logic : `${group.joiner} ${group.logic}`
+    )
+    .join(" ")} THEN ${action}`;
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -97,12 +138,15 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   const [trailingStop, setTrailingStop] = useState(1.5);
   const [exitAfterBarsEnabled, setExitAfterBarsEnabled] = useState(false);
   const [exitAfterBars, setExitAfterBars] = useState(10);
+  const [exitLogic, setExitLogic] = useState<ExitLogic>("stop_target");
 
   // Universe
   const [symbols, setSymbols] = useState<string[]>(["SPY"]);
   const [symbolInput, setSymbolInput] = useState("");
 
   // Execution
+  const [orderType, setOrderType] = useState<OrderType>("market");
+  const [backtestPeriod, setBacktestPeriod] = useState<BacktestPeriod>("1Y");
   const [commissionPct, setCommissionPct] = useState(0.1);  // display as %
   const [slippagePct, setSlippagePct] = useState(0.05);
 
@@ -135,6 +179,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     takeProfit: number;
     positionSize: number;
     symbols: string[];
+    orderType: OrderType;
+    backtestPeriod: BacktestPeriod;
+    exitLogic: ExitLogic;
     commissionPct: number;
     slippagePct: number;
     trailingStopEnabled: boolean;
@@ -156,6 +203,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       takeProfit,
       positionSize,
       symbols,
+      orderType,
+      backtestPeriod,
+      exitLogic,
       commissionPct,
       slippagePct,
       trailingStopEnabled,
@@ -169,16 +219,19 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     }
   ), [
     action,
+    backtestPeriod,
     commissionPct,
     conditionGroups,
     cooldownBars,
     description,
+    exitLogic,
     exitAfterBars,
     exitAfterBarsEnabled,
     maxExposurePct,
     maxLossPct,
     maxTradesPerDay,
     name,
+    orderType,
     positionSize,
     slippagePct,
     stopLoss,
@@ -212,7 +265,10 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       if (d.trailingStop != null) setTrailingStop(d.trailingStop);
       if (d.exitAfterBarsEnabled != null) setExitAfterBarsEnabled(d.exitAfterBarsEnabled);
       if (d.exitAfterBars != null) setExitAfterBars(d.exitAfterBars);
+      if (d.exitLogic) setExitLogic(d.exitLogic);
       if (d.symbols?.length) setSymbols(d.symbols);
+      if (d.orderType) setOrderType(d.orderType);
+      if (d.backtestPeriod) setBacktestPeriod(d.backtestPeriod);
       if (d.commissionPct != null) setCommissionPct(d.commissionPct);
       if (d.slippagePct != null) setSlippagePct(d.slippagePct);
       if (d.cooldownBars != null) setCooldownBars(d.cooldownBars);
@@ -231,6 +287,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         stopLoss, takeProfit, positionSize,
         trailingStopEnabled, trailingStop,
         exitAfterBarsEnabled, exitAfterBars,
+        exitLogic, orderType, backtestPeriod,
         symbols, commissionPct, slippagePct,
         cooldownBars, maxTradesPerDay, maxExposurePct, maxLossPct,
         strategyType, sourcePrompt, aiContext,
@@ -241,6 +298,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     stopLoss, takeProfit, positionSize,
     trailingStopEnabled, trailingStop,
     exitAfterBarsEnabled, exitAfterBars,
+    exitLogic, orderType, backtestPeriod,
     symbols, commissionPct, slippagePct,
     cooldownBars, maxTradesPerDay, maxExposurePct, maxLossPct,
     strategyType, sourcePrompt, aiContext,
@@ -252,6 +310,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     if (mode !== "create") return;
     const spec = useStrategyBuilderStore.getState().consumePendingSpec();
     if (!spec) return;
+    const builderPreferences = spec.aiContext?.builder_preferences;
     setName(spec.name);
     setDescription(spec.description);
     setAction(spec.action);
@@ -262,6 +321,13 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setStrategyType(spec.strategyType ?? "ai_generated");
     setSourcePrompt(spec.sourcePrompt ?? "");
     setAiContext(spec.aiContext ?? {});
+    setOrderType((builderPreferences?.order_type as OrderType | undefined) ?? "market");
+    setBacktestPeriod(
+      (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y"
+    );
+    setExitLogic(
+      (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "stop_target"
+    );
     if (spec.symbols?.length) {
       setSymbols(spec.symbols);
     }
@@ -290,6 +356,11 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       takeProfit: spec.takeProfit,
       positionSize: spec.positionSize,
       symbols: spec.symbols?.length ? spec.symbols : ["SPY"],
+      orderType: (builderPreferences?.order_type as OrderType | undefined) ?? "market",
+      backtestPeriod:
+        (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y",
+      exitLogic:
+        (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "stop_target",
       commissionPct,
       slippagePct,
       trailingStopEnabled: false,
@@ -309,6 +380,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
   useEffect(() => {
     if (!initialStrategy) return;
+    const builderPreferences = initialStrategy.ai_context?.builder_preferences;
     setName(initialStrategy.name);
     setDescription(initialStrategy.description || "");
     setAction(initialStrategy.action as Action);
@@ -320,6 +392,13 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setPositionSize((initialStrategy.position_size_pct || 0.1) * 100);
     setTimeframe(initialStrategy.timeframe || "1D");
     setSymbols(initialStrategy.symbols?.length ? initialStrategy.symbols : ["SPY"]);
+    setOrderType((builderPreferences?.order_type as OrderType | undefined) ?? "market");
+    setBacktestPeriod(
+      (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y"
+    );
+    setExitLogic(
+      (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "stop_target"
+    );
     setCommissionPct((initialStrategy.commission_pct ?? 0.001) * 100);
     setSlippagePct((initialStrategy.slippage_pct ?? 0.0005) * 100);
     if (initialStrategy.trailing_stop_pct != null) {
@@ -411,6 +490,11 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         takeProfit: (initialStrategy.take_profit_pct || 0.05) * 100,
         positionSize: (initialStrategy.position_size_pct || 0.1) * 100,
         symbols: initialStrategy.symbols?.length ? initialStrategy.symbols : ["SPY"],
+        orderType: (builderPreferences?.order_type as OrderType | undefined) ?? "market",
+        backtestPeriod:
+          (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y",
+        exitLogic:
+          (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "stop_target",
         commissionPct: (initialStrategy.commission_pct ?? 0.001) * 100,
         slippagePct: (initialStrategy.slippage_pct ?? 0.0005) * 100,
         trailingStopEnabled: initialStrategy.trailing_stop_pct != null,
@@ -440,8 +524,22 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setConditionGroups((prev) => [...prev, emptyGroup(prev.length)]);
   }, []);
 
+  const updateGroupJoiner = useCallback((groupIndex: number, joiner: LogicalJoiner) => {
+    setConditionGroups((prev) =>
+      prev.map((group, index) =>
+        index === groupIndex ? { ...group, joiner } : group
+      )
+    );
+  }, []);
+
   const removeGroup = useCallback((groupIndex: number) => {
-    setConditionGroups((prev) => prev.filter((_, i) => i !== groupIndex));
+    setConditionGroups((prev) =>
+      prev
+        .filter((_, i) => i !== groupIndex)
+        .map((group, index) =>
+          index === 0 ? { ...group, joiner: "OR" } : group
+        )
+    );
   }, []);
 
   const addCondition = useCallback((groupIndex: number) => {
@@ -500,6 +598,9 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setStopLoss(2);
     setTakeProfit(5);
     setPositionSize(10);
+    setOrderType("market");
+    setBacktestPeriod("1Y");
+    setExitLogic("stop_target");
     setTrailingStopEnabled(false);
     setExitAfterBarsEnabled(false);
     aiBaselineRef.current = null;
@@ -518,12 +619,17 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   const allValidConditions = conditionGroups
     .flatMap((g) => g.conditions)
     .filter((c) => c.indicator);
+  const allConditionGroupsWithRules = conditionGroups.filter((group) =>
+    group.conditions.some((condition) => condition.indicator)
+  );
 
   // ── Auto-diagnostics (debounced, uses apiFetch for auth) ───────────────
 
   const conditionKey = conditionGroups
     .flatMap((g) => g.conditions)
-    .map((c) => `${c.indicator}:${c.operator}:${c.value}:${JSON.stringify(c.params)}`)
+    .map((c) =>
+      `${c.indicator}:${c.operator}:${c.value}:${c.compare_to ?? ""}:${c.joiner ?? "AND"}:${JSON.stringify(c.params)}`
+    )
     .join("|");
 
   useEffect(() => {
@@ -610,6 +716,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
   const applyGeneratedStrategy = useCallback((result: GeneratedStrategyResponse) => {
     const draft = result.builder_draft;
+    const builderPreferences = draft.aiContext?.builder_preferences;
     const groups = (draft.conditionGroups as unknown as ConditionGroup[] | undefined)
       ?? [{
         id: genId(),
@@ -626,6 +733,13 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setTimeframe(draft.timeframe);
     setConditionGroups(groups);
     setSymbols(draft.symbols?.length ? draft.symbols : ["SPY"]);
+    setOrderType((builderPreferences?.order_type as OrderType | undefined) ?? "market");
+    setBacktestPeriod(
+      (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y"
+    );
+    setExitLogic(
+      (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "stop_target"
+    );
     setStrategyType(draft.strategyType ?? "ai_generated");
     setSourcePrompt(draft.sourcePrompt ?? result.prompt);
     setAiContext(draft.aiContext ?? {});
@@ -642,6 +756,11 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       takeProfit: draft.takeProfit,
       positionSize: draft.positionSize,
       symbols: draft.symbols?.length ? draft.symbols : ["SPY"],
+      orderType: (builderPreferences?.order_type as OrderType | undefined) ?? "market",
+      backtestPeriod:
+        (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y",
+      exitLogic:
+        (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "stop_target",
       commissionPct,
       slippagePct,
       trailingStopEnabled,
@@ -671,6 +790,19 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   // ── Save / Update ────────────────────────────────────────────────────────
 
   const saveStrategy = async () => {
+    if (!canSave) {
+      setSaveStatus("error");
+      return;
+    }
+    const nextAiContext: StrategyAiContext = {
+      ...aiContext,
+      builder_preferences: {
+        order_type: orderType,
+        backtest_period: backtestPeriod,
+        exit_logic: exitLogic,
+      },
+    };
+
     setSaveStatus("saving");
     const payload: Strategy = {
       name,
@@ -693,7 +825,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       max_loss_pct: maxLossPct / 100,
       strategy_type: strategyType,
       source_prompt: sourcePrompt || null,
-      ai_context: aiContext,
+      ai_context: nextAiContext,
     };
 
     try {
@@ -714,6 +846,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         setTimeout(() => router.push(`/edit/${created.id}`), 1200);
         return;
       }
+      setAiContext(nextAiContext);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 3000);
     } catch {
@@ -724,6 +857,33 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   // ── Derived state ────────────────────────────────────────────────────────
 
   const logicString = buildLogicString(conditionGroups, action);
+  const validationIssues = [
+    !name.trim() ? "Name is required." : null,
+    symbols.length === 0 ? "Add at least one symbol or universe member." : null,
+    stopLoss <= 0 ? "Stop loss must be greater than 0%." : null,
+    takeProfit <= 0 ? "Take profit must be greater than 0%." : null,
+    positionSize < 0 || positionSize > 100
+      ? "Position size must stay between 0% and 100%."
+      : null,
+    !orderType ? "Choose an order type." : null,
+    !backtestPeriod ? "Choose a backtest period." : null,
+    !exitLogic ? "Choose an exit logic profile." : null,
+    allValidConditions.length === 0
+      ? "Add at least one complete entry condition."
+      : null,
+  ].filter(Boolean) as string[];
+  const canSave = validationIssues.length === 0 && saveStatus !== "saving";
+  const builderHint =
+    validationIssues.length > 0
+      ? `Finish the required builder inputs before saving: ${validationIssues.join(" ")}`
+      : "Builder state is complete. Review the logic tree, run diagnostics, then save or backtest.";
+  const exitLogicLabel = {
+    stop_target: "Stops + targets",
+    indicator_reversal: "Indicator reversal",
+    time_stop: "Time stop",
+    hybrid: "Hybrid exit",
+  }[exitLogic];
+  const orderTypeLabel = orderType.toUpperCase();
 
   const getCategory = (indicator: string) => {
     const cats: Record<string, string> = {
@@ -779,57 +939,57 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsAIGeneratorOpen(true)}
-            className="app-button-primary"
-          >
-            <BrainCircuit className="h-3.5 w-3.5" />
-            Build with Cerberus
-          </button>
-          <button
-            type="button"
-            onClick={resetBuilder}
-            className="app-button-ghost"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reset
-          </button>
-          <button
-            type="button"
-            onClick={runExplainer}
-            disabled={allValidConditions.length === 0 || explainLoading}
-            className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Zap className="h-3.5 w-3.5" />
-            {explainLoading ? "Analyzing…" : "Analyze"}
-          </button>
-          {mode === "edit" && initialStrategy && (
             <button
-              onClick={() => router.push(`/backtest/${initialStrategy.id}`)}
-              className="app-button-secondary text-amber-500"
+              type="button"
+              onClick={() => setIsAIGeneratorOpen(true)}
+              className="app-button-primary"
             >
-              <Play className="h-3.5 w-3.5" />
-              Backtest
+              <BrainCircuit className="h-3.5 w-3.5" />
+              Build with Cerberus
             </button>
-          )}
-          <button
-            type="button"
-            onClick={saveStrategy}
-            disabled={allValidConditions.length === 0 || saveStatus === "saving"}
-            className="app-button-primary disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-40"
-          >
-            <Save className="h-3.5 w-3.5" />
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "saved"
-                ? "Saved ✓"
-                : saveStatus === "error"
-                  ? "Failed — Retry"
-                  : mode === "edit"
-                    ? "Update Strategy"
-                    : "Save"}
-          </button>
+            <button
+              type="button"
+              onClick={resetBuilder}
+              className="app-button-ghost"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={runExplainer}
+              disabled={allValidConditions.length === 0 || explainLoading}
+              className="app-button-ghost disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              {explainLoading ? "Analyzing…" : "Analyze"}
+            </button>
+            {mode === "edit" && initialStrategy && (
+              <button
+                onClick={() => router.push(`/backtest/${initialStrategy.id}`)}
+                className="app-button-ghost text-amber-500"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Backtest
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={saveStrategy}
+              disabled={!canSave}
+              className="app-button-secondary disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-40"
+            >
+              <Save className="h-3.5 w-3.5" />
+              {saveStatus === "saving"
+                ? "Saving..."
+                : saveStatus === "saved"
+                  ? "Saved ✓"
+                  : saveStatus === "error"
+                    ? "Failed — Retry"
+                    : mode === "edit"
+                      ? "Update Strategy"
+                      : "Save"}
+            </button>
           </div>
         }
       />
@@ -838,126 +998,254 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         <div className="lg:col-span-2 space-y-4">
           <div className="app-panel p-5 sm:p-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
+              <div>
                 <label className="app-label">
-                Strategy Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                  Strategy Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   className="app-input mt-2"
-              />
-            </div>
-            <div>
+                />
+              </div>
+              <div className="md:col-span-1">
                 <label className="app-label">
-                Description
-              </label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description..."
-                  className="app-input mt-2"
-              />
+                  Description
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe the strategy, setup quality, and why the edge should persist."
+                  rows={4}
+                  className="app-input mt-2 min-h-[112px] resize-y py-3"
+                />
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-4">
-            <div>
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+              <div>
                 <label className="app-label">
-                Strategy Type
-              </label>
-              <select
-                value={strategyType}
-                onChange={(e) => {
-                  const next = e.target.value as StrategyType;
-                  setStrategyType(next);
-                  if (next === "manual") {
-                    setSourcePrompt("");
-                    setAiContext({});
-                    aiBaselineRef.current = null;
-                  }
-                }}
+                  Strategy Type
+                </label>
+                <select
+                  value={strategyType}
+                  onChange={(e) => {
+                    const next = e.target.value as StrategyType;
+                    setStrategyType(next);
+                    if (next === "manual") {
+                      setSourcePrompt("");
+                      setAiContext({});
+                      aiBaselineRef.current = null;
+                    }
+                  }}
                   className="app-select mt-2 text-sm font-medium"
-              >
-                <option value="ai_generated">AI Generated</option>
-                <option value="manual">Manual</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            <div>
+                >
+                  <option value="ai_generated">AI Generated</option>
+                  <option value="manual">Manual</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              <div>
                 <label className="app-label">
-                Action
-              </label>
-              <select
-                value={action}
-                onChange={(e) => setAction(e.target.value as Action)}
+                  Action
+                </label>
+                <select
+                  value={action}
+                  onChange={(e) => setAction(e.target.value as Action)}
                   className="app-select mt-2 text-sm font-medium"
-              >
-                <option value="BUY">BUY</option>
-                <option value="SELL">SELL</option>
-              </select>
-            </div>
-            <div>
+                >
+                  <option value="BUY">BUY</option>
+                  <option value="SELL">SELL</option>
+                </select>
+              </div>
+              <div>
                 <label className="app-label">
-                Timeframe
-              </label>
-              <select
-                value={timeframe}
-                onChange={(e) => setTimeframe(e.target.value)}
+                  Timeframe
+                </label>
+                <select
+                  value={timeframe}
+                  onChange={(e) => setTimeframe(e.target.value)}
                   className="app-select mt-2 text-sm"
-              >
-                {["1m", "5m", "15m", "1H", "4H", "1D", "1W"].map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-                <label className="app-label">
-                Position %
-              </label>
-              <input
-                type="number"
-                value={positionSize}
-                onChange={(e) => setPositionSize(parseFloat(e.target.value) || 0)}
-                min={1} max={100} step={1}
-                  className="app-input mt-2 font-mono text-right"
-              />
-            </div>
-          </div>
-
-          {(strategyType !== "manual" || sourcePrompt || aiContext.overview) && (
-            <div className="mt-5 rounded-3xl border border-sky-400/20 bg-sky-400/5 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-sky-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-400">
-                  Strategy Overview
-                </span>
-                {featureSignals.map((signal) => (
-                  <span key={signal} className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-mono text-muted-foreground">
-                    {signal}
-                  </span>
-                ))}
+                >
+                  {["1m", "5m", "15m", "1H", "4H", "1D", "1W"].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
-              <p className="mt-3 text-sm leading-6 text-foreground">
-                {aiContext.overview || description || "Cerberus-generated strategy ready for inspection."}
-              </p>
-              {sourcePrompt && (
-                <div className="mt-3 rounded-2xl bg-background/60 px-3 py-2 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">Prompt:</span> {sourcePrompt}
+              <div>
+                <label className="app-label">
+                  Position %
+                </label>
+                <input
+                  type="number"
+                  value={positionSize}
+                  onChange={(e) => setPositionSize(parseFloat(e.target.value) || 0)}
+                  min={0} max={100} step={1}
+                  className="app-input mt-2 font-mono text-right"
+                />
+              </div>
+              <div>
+                <label className="app-label">
+                  Order Type
+                </label>
+                <select
+                  value={orderType}
+                  onChange={(e) => setOrderType(e.target.value as OrderType)}
+                  className="app-select mt-2 text-sm"
+                >
+                  <option value="market">Market</option>
+                  <option value="limit">Limit</option>
+                  <option value="stop">Stop</option>
+                </select>
+              </div>
+              <div>
+                <label className="app-label">
+                  Backtest Period
+                </label>
+                <select
+                  value={backtestPeriod}
+                  onChange={(e) => setBacktestPeriod(e.target.value as BacktestPeriod)}
+                  className="app-select mt-2 text-sm"
+                >
+                  <option value="3M">3M</option>
+                  <option value="6M">6M</option>
+                  <option value="1Y">1Y</option>
+                  <option value="2Y">2Y</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+              <div className="rounded-[24px] border border-border/60 bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="app-label">Symbol / Universe</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Required. The first symbol anchors diagnostics and backtests.
+                    </p>
+                  </div>
+                  <span className="app-pill font-mono tracking-normal">
+                    {symbols.length} symbol{symbols.length === 1 ? "" : "s"}
+                  </span>
                 </div>
-              )}
-              {learningMethods.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {learningMethods.map((method) => (
-                    <span key={method} className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
-                      {method.replace(/_/g, " ")}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {symbols.map((symbol) => (
+                    <span
+                      key={symbol}
+                      className="app-pill items-center gap-1 px-2.5 py-1 text-xs font-mono tracking-normal"
+                    >
+                      {symbol}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSymbols((prev) => prev.filter((value) => value !== symbol))
+                        }
+                        className="ml-0.5 text-muted-foreground transition-colors hover:text-red-400"
+                      >
+                        ×
+                      </button>
                     </span>
                   ))}
                 </div>
-              )}
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={symbolInput}
+                    onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addSymbol(symbolInput);
+                      }
+                    }}
+                    placeholder="Add symbol (Enter)"
+                    className="app-input flex-1 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addSymbol(symbolInput)}
+                    className="app-button-secondary h-11 px-5"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-border/60 bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="app-label">Exit Profile</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Required. Define how the strategy gets out, not just how it gets in.
+                    </p>
+                  </div>
+                  <span className="app-pill font-mono tracking-normal">
+                    {exitLogicLabel}
+                  </span>
+                </div>
+                <select
+                  value={exitLogic}
+                  onChange={(e) => setExitLogic(e.target.value as ExitLogic)}
+                  className="app-select mt-3 text-sm"
+                >
+                  <option value="stop_target">Stops + targets</option>
+                  <option value="indicator_reversal">Indicator reversal</option>
+                  <option value="time_stop">Time stop</option>
+                  <option value="hybrid">Hybrid exit</option>
+                </select>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                    Stop Loss: <span className="font-mono text-foreground">{stopLoss}%</span>
+                  </div>
+                  <div className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2">
+                    Take Profit: <span className="font-mono text-foreground">{takeProfit}%</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+
+            <div className="mt-5 rounded-[24px] border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              {builderHint}
+            </div>
+
+            {(strategyType !== "manual" || sourcePrompt || aiContext.overview) && (
+              <div className="mt-5 rounded-3xl border border-sky-400/20 bg-sky-400/5 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-sky-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-400">
+                    Strategy Overview
+                  </span>
+                  {featureSignals.map((signal) => (
+                    <span key={signal} className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-mono text-muted-foreground">
+                      {signal}
+                    </span>
+                  ))}
+                  <span className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-mono text-muted-foreground">
+                    {orderTypeLabel}
+                  </span>
+                  <span className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-mono text-muted-foreground">
+                    {backtestPeriod}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-foreground">
+                  {aiContext.overview || description || "Cerberus-generated strategy ready for inspection."}
+                </p>
+                {sourcePrompt && (
+                  <div className="mt-3 rounded-2xl bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Prompt:</span> {sourcePrompt}
+                  </div>
+                )}
+                {learningMethods.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {learningMethods.map((method) => (
+                      <span key={method} className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
+                        {method.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="app-panel p-5 sm:p-6 space-y-4">
@@ -970,8 +1258,26 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               </span>
             </div>
 
+            <div className="rounded-[22px] border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              Define the entry tree one branch at a time: each branch can mix AND/OR rules internally, then you can join branches with their own AND/OR operator.
+            </div>
+
             {conditionGroups.map((group, gi) => (
               <React.Fragment key={group.id}>
+                {gi > 0 && (
+                  <div className="flex items-center justify-center">
+                    <select
+                      value={group.joiner ?? "OR"}
+                      onChange={(event) =>
+                        updateGroupJoiner(gi, event.target.value as LogicalJoiner)
+                      }
+                      className="app-select h-10 rounded-full px-4 py-0 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                    >
+                      <option value="AND">AND</option>
+                      <option value="OR">OR</option>
+                    </select>
+                  </div>
+                )}
                 <ConditionGroupComponent
                   group={group}
                   groupIndex={gi}
@@ -981,13 +1287,6 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                   onUpdateCondition={updateCondition}
                   onRemoveGroup={removeGroup}
                 />
-                {gi < conditionGroups.length - 1 && (
-                  <div className="flex items-center justify-center">
-                    <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 uppercase tracking-widest">
-                      OR
-                    </span>
-                  </div>
-                )}
               </React.Fragment>
             ))}
 
@@ -996,18 +1295,65 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               className="app-inset flex w-full items-center justify-center gap-1.5 py-4 text-sm text-muted-foreground hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add OR Group
+              Add Group
             </button>
           </div>
 
-          {logicString && (
-            <div className="app-inset p-4">
-              <div className="app-label mb-2">
-                Strategy Logic
+          <div className="app-panel space-y-4 p-5 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="app-label">Logic Preview</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Review the readable DSL and the branch tree before you save.
+                </p>
               </div>
-              <code className="text-sm font-mono text-primary break-all">{logicString}</code>
+              <span className="app-pill font-mono tracking-normal">DSL</span>
             </div>
-          )}
+
+            <div className="rounded-[22px] border border-border/60 bg-background/60 p-4">
+              <code className="break-all text-sm font-mono text-primary">
+                {logicString || "IF [build at least one entry rule] THEN BUY"}
+              </code>
+            </div>
+
+            {allConditionGroupsWithRules.length > 0 && (
+              <div className="space-y-3">
+                {allConditionGroupsWithRules.map((group, groupIndex) => (
+                  <React.Fragment key={group.id}>
+                    {groupIndex > 0 && (
+                      <div className="flex items-center justify-center">
+                        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-400">
+                          {group.joiner ?? "OR"}
+                        </span>
+                      </div>
+                    )}
+                    <div className="rounded-[22px] border border-border/60 bg-muted/20 p-4">
+                      <p className="app-label">
+                        {group.label ?? `Group ${String.fromCharCode(65 + groupIndex)}`}
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {group.conditions
+                          .filter((condition) => condition.indicator)
+                          .map((condition, conditionIndex) => (
+                            <div
+                              key={condition.id}
+                              className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2 text-sm text-foreground"
+                            >
+                              {conditionIndex > 0 && (
+                                <span className="mr-2 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                                  {condition.joiner ?? "AND"}
+                                </span>
+                              )}
+                              {describeCondition(condition)}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+          </div>
 
           {allValidConditions.length > 0 && Object.keys(indicatorPreviews).length > 0 && (
             <div className="app-panel space-y-3 p-5 sm:p-6">
@@ -1036,7 +1382,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           )}
 
-          <AccordionSection title="Exit Conditions" defaultOpen>
+          <AccordionSection title="Exit Conditions" defaultOpen badge={exitLogicLabel}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1091,45 +1437,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           </AccordionSection>
 
-          <AccordionSection
-            title="Symbol Universe"
-            badge={symbols.length > 0 ? symbols[0] : undefined}
-          >
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {symbols.map((s) => (
-                <span key={s}
-                  className="app-pill items-center gap-1 px-2.5 py-1 text-xs font-mono tracking-normal">
-                  {s}
-                  <button type="button" onClick={() => setSymbols((prev) => prev.filter((x) => x !== s))}
-                    className="text-muted-foreground hover:text-red-400 transition-colors ml-0.5">×</button>
-                </span>
-              ))}
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                value={symbolInput}
-                onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === ",") {
-                    e.preventDefault();
-                    addSymbol(symbolInput);
-                  }
-                }}
-                placeholder="Add symbol (Enter)"
-                className="app-input flex-1 font-mono"
-              />
-              <button type="button" onClick={() => addSymbol(symbolInput)}
-                className="app-button-secondary h-11 px-5">
-                Add
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              First symbol is used as default for backtesting.
-            </p>
-          </AccordionSection>
-
-          <AccordionSection title="Execution Settings">
+          <AccordionSection title="Execution Settings" badge={orderTypeLabel}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1148,6 +1456,22 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                   onChange={(e) => setSlippagePct(parseFloat(e.target.value) || 0)}
                   min={0} max={5} step={0.01}
                   className="app-input mt-2 font-mono text-right" />
+              </div>
+              <div>
+                <label className="app-label">
+                  Order Type
+                </label>
+                <div className="mt-2 rounded-2xl border border-border/60 bg-background/60 px-3 py-3 text-sm text-foreground">
+                  {orderTypeLabel}
+                </div>
+              </div>
+              <div>
+                <label className="app-label">
+                  Backtest Period
+                </label>
+                <div className="mt-2 rounded-2xl border border-border/60 bg-background/60 px-3 py-3 text-sm text-foreground">
+                  {backtestPeriod}
+                </div>
               </div>
             </div>
           </AccordionSection>

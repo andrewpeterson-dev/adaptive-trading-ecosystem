@@ -25,15 +25,6 @@ const TradingModeContext = createContext<TradingModeContextValue | null>(null);
 
 const STORAGE_KEY = "trading_mode";
 
-function applyTheme(m: TradingMode): void {
-  const html = document.documentElement;
-  if (m === "live") {
-    html.classList.add("dark");
-  } else {
-    html.classList.remove("dark");
-  }
-}
-
 /**
  * Broadcast a custom event so all polling hooks and components know to re-fetch.
  * Components listen via useModeResetListener().
@@ -51,14 +42,12 @@ export function TradingModeProvider({ children }: { children: ReactNode }) {
     const stored = localStorage.getItem(STORAGE_KEY) as TradingMode | null;
     if (stored === "paper" || stored === "live") {
       setModeState(stored);
-      applyTheme(stored);
     }
     // Then confirm with server (source of truth)
     getServerMode()
       .then((serverMode) => {
         setModeState(serverMode);
         localStorage.setItem(STORAGE_KEY, serverMode);
-        applyTheme(serverMode);
       })
       .catch(() => {
         // Not logged in yet — keep localStorage value
@@ -73,7 +62,6 @@ export function TradingModeProvider({ children }: { children: ReactNode }) {
       // 2. Only update client after server confirms
       setModeState(next);
       localStorage.setItem(STORAGE_KEY, next);
-      applyTheme(next);
       // 3. Broadcast reset so all components re-fetch
       broadcastModeReset();
     } catch (err) {

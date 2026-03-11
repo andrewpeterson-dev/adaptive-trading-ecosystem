@@ -1,22 +1,47 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
+import { LineChart, PlugZap, ShieldCheck } from 'lucide-react';
 import { sendChatMessage } from '@/lib/cerberus-api';
 import { useCerberusStore } from '@/stores/cerberus-store';
 import { useUIContextStore } from '@/stores/ui-context-store';
+import { useTradingMode } from '@/hooks/useTradingMode';
+import { useCerberusWorkspaceStatus } from '@/hooks/useCerberusWorkspaceStatus';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export function PortfolioAnalysis() {
   const [isLoading, setIsLoading] = useState(false);
   const { addMessage, activeThreadId, setActiveThread, setActiveTab } = useCerberusStore();
   const { pageContext } = useUIContextStore();
+  const { mode } = useTradingMode();
+  const { status, loading } = useCerberusWorkspaceStatus(mode);
 
   const quickActions = [
-    { label: 'Portfolio Risk', prompt: 'Analyze my portfolio risk including VaR, drawdown, and concentration' },
-    { label: 'Best Trades', prompt: 'Show me my best performing trades' },
-    { label: 'Worst Trades', prompt: 'Show me my worst trades and what went wrong' },
-    { label: 'Exposure', prompt: 'What is my current portfolio exposure by sector and asset type?' },
-    { label: 'Performance', prompt: 'Compare my strategy performance across all strategies' },
-    { label: 'Holdings', prompt: 'Show my current positions and unrealized P&L' },
+    {
+      label: 'Portfolio Risk',
+      prompt: 'Analyze my portfolio risk including VaR, drawdown, and concentration',
+    },
+    {
+      label: 'Best Trades',
+      prompt: 'Show me my best performing trades',
+    },
+    {
+      label: 'Worst Trades',
+      prompt: 'Show me my worst trades and what went wrong',
+    },
+    {
+      label: 'Exposure',
+      prompt: 'What is my current portfolio exposure by sector and asset type?',
+    },
+    {
+      label: 'Performance',
+      prompt: 'Compare my strategy performance across all strategies',
+    },
+    {
+      label: 'Holdings',
+      prompt: 'Show my current positions and unrealized P&L',
+    },
   ];
 
   const handleAction = async (prompt: string) => {
@@ -34,7 +59,6 @@ export function PortfolioAnalysis() {
       createdAt: new Date().toISOString(),
     });
 
-    // Switch to chat tab so user sees the response
     setActiveTab('chat');
 
     try {
@@ -65,31 +89,65 @@ export function PortfolioAnalysis() {
   };
 
   return (
-    <div className="flex flex-col h-full p-4 space-y-4">
+    <div className="flex h-full flex-col overflow-y-auto p-4 space-y-4">
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-1">Portfolio Analysis</h3>
-        <p className="text-xs text-muted-foreground">Quick AI-powered insights into your portfolio.</p>
+        <p className="text-xs text-muted-foreground">
+          Cerberus can review holdings, exposure, and realized trade quality once a broker is connected.
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {quickActions.map((action) => (
-          <button
-            key={action.label}
-            onClick={() => handleAction(action.prompt)}
-            disabled={isLoading}
-            className="text-left px-3 py-2.5 rounded-lg border border-border hover:bg-muted hover:border-primary/30 transition-all text-xs font-medium text-foreground disabled:opacity-50"
-          >
-            {action.label}
-          </button>
-        ))}
-      </div>
+      {!loading && !status?.portfolioConnected && (
+        <EmptyState
+          icon={<PlugZap className="h-5 w-5 text-muted-foreground" />}
+          title="Portfolio connection required"
+          description={status?.connectedData.find((item) => item.key === 'portfolio_holdings')?.detail}
+          action={
+            <Link href="/settings" className="app-button-primary">
+              Connect data
+            </Link>
+          }
+        />
+      )}
+
+      {status?.portfolioConnected && (
+        <>
+          <div className="grid gap-3 rounded-[22px] border border-border/60 bg-muted/20 p-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-400" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Portfolio data is connected</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Cerberus can use current holdings and connected risk inputs instead of generic “need data” prompts.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {quickActions.map((action) => (
+              <button
+                key={action.label}
+                onClick={() => handleAction(action.prompt)}
+                disabled={isLoading}
+                className="rounded-xl border border-border bg-background/60 px-3 py-3 text-left text-xs font-medium text-foreground transition-all hover:border-primary/30 hover:bg-muted disabled:opacity-50"
+              >
+                <span className="flex items-center gap-2">
+                  <LineChart className="h-3.5 w-3.5 text-primary" />
+                  {action.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-4">
           <div className="flex space-x-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
           </div>
         </div>
       )}
