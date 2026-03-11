@@ -159,6 +159,28 @@ async def _finnhub_quote(symbol: str) -> Optional[QuoteDict]:
 
 async def _yf_bars(symbol: str, timeframe: str = "1D", limit: int = 100) -> Optional[list]:
     """Fetch OHLCV bars via yFinance. timeframe: 1m, 5m, 15m, 1h, 1D."""
+    timeframe = {
+        "1m": "1m",
+        "m1": "1m",
+        "5m": "5m",
+        "m5": "5m",
+        "15m": "15m",
+        "m15": "15m",
+        "30m": "30m",
+        "m30": "30m",
+        "1h": "1h",
+        "1H": "1h",
+        "h1": "1h",
+        "4h": "1h",
+        "4H": "1h",
+        "h4": "1h",
+        "1d": "1D",
+        "1D": "1D",
+        "d1": "1D",
+        "1w": "1W",
+        "1W": "1W",
+        "w1": "1W",
+    }.get(timeframe, timeframe)
     _tf_map = {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
                "1h": "1h", "4h": "1h", "1D": "1d", "1W": "1wk"}
     yf_interval = _tf_map.get(timeframe, "1d")
@@ -267,7 +289,7 @@ class MarketDataService:
         self, symbol: str, timeframe: str = "1D", limit: int = 100
     ) -> Optional[list]:
         symbol = symbol.upper()
-        cache_key = f"market:bars:{symbol}:{timeframe}"
+        cache_key = f"market:bars:{symbol}:{timeframe}:{int(limit)}"
         cached = await self._get_cache(cache_key)
         if cached:
             return cached

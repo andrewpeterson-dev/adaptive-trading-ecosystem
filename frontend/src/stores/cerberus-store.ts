@@ -31,6 +31,7 @@ interface CerberusState {
 
   // Proposals
   pendingProposal: TradeProposal | null;
+  strategySeedPrompt: string | null;
 
   // Actions
   openCerberus: () => void;
@@ -58,6 +59,8 @@ interface CerberusState {
 
   // Proposals
   setPendingProposal: (proposal: TradeProposal | null) => void;
+  setStrategySeedPrompt: (prompt: string | null) => void;
+  consumeStrategySeedPrompt: () => string | null;
 }
 
 export const useCerberusStore = create<CerberusState>()(persist((set) => ({
@@ -72,6 +75,7 @@ export const useCerberusStore = create<CerberusState>()(persist((set) => ({
   mode: 'chat',
   activeToolCalls: [],
   pendingProposal: null,
+  strategySeedPrompt: null,
 
   // Panel actions
   openCerberus: () => set({ isOpen: true }),
@@ -103,11 +107,21 @@ export const useCerberusStore = create<CerberusState>()(persist((set) => ({
 
   // Proposals
   setPendingProposal: (proposal) => set({ pendingProposal: proposal }),
+  setStrategySeedPrompt: (prompt) => set({ strategySeedPrompt: prompt }),
+  consumeStrategySeedPrompt: () => {
+    let prompt: string | null = null;
+    set((state) => {
+      prompt = state.strategySeedPrompt;
+      return { strategySeedPrompt: null };
+    });
+    return prompt;
+  },
 }), {
   name: 'cerberus-store',
   partialize: (state) => ({
     activeThreadId: state.activeThreadId,
     activeTab: state.activeTab,
     mode: state.mode,
+    strategySeedPrompt: state.strategySeedPrompt,
   }),
 }));

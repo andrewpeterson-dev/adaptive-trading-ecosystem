@@ -71,9 +71,8 @@ function describeCondition(condition: StrategyCondition): string {
 function buildLogicString(groups: ConditionGroup[], action: Action): string {
   const groupParts = groups
     .map((g) => {
-      const condParts = g.conditions
-        .filter((c) => c.indicator)
-        .map((c) => {
+      const activeConditions = g.conditions.filter((c) => c.indicator);
+      const condParts = activeConditions.map((c) => {
           const paramStr = Object.values(c.params).join(",");
           const ind = c.indicator.toUpperCase().replace(/_/g, " ");
           const fieldSuffix = c.field ? `.${String(c.field).toUpperCase()}` : "";
@@ -91,18 +90,18 @@ function buildLogicString(groups: ConditionGroup[], action: Action): string {
                 .map((part, index) =>
                   index === 0
                     ? part
-                    : `${g.conditions[index].joiner ?? "AND"} ${part}`
+                    : `${activeConditions[index].joiner ?? "AND"} ${part}`
                 )
                 .join(" ")})`,
       };
     })
-    .filter(Boolean);
+    .filter((group): group is { joiner: LogicalJoiner; logic: string } => Boolean(group));
   if (groupParts.length === 0) return "";
-  return `IF ${groupParts
-    .map((group, index) =>
-      index === 0 ? group.logic : `${group.joiner} ${group.logic}`
-    )
-    .join(" ")} THEN ${action}`;
+  const [firstGroup, ...remainingGroups] = groupParts;
+  return `IF ${[
+    firstGroup.logic,
+    ...remainingGroups.map((group) => `${group.joiner} ${group.logic}`),
+  ].join(" ")} THEN ${action}`;
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -420,12 +419,14 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         initialStrategy.condition_groups.map((g, gi) => ({
           id: genId(),
           label: g.label ?? `Group ${String.fromCharCode(65 + gi)}`,
+          joiner: (g as ConditionGroup).joiner ?? "OR",
           conditions: g.conditions.map((c) => ({
             id: genId(),
             indicator: c.indicator,
             operator: c.operator as StrategyCondition["operator"],
             value: c.value,
             compare_to: c.compare_to,
+            joiner: (c as StrategyCondition).joiner ?? "AND",
             params: c.params || {},
             action: (c.action as Action) || (initialStrategy.action as Action),
           })),
@@ -442,6 +443,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             operator: c.operator as StrategyCondition["operator"],
             value: c.value,
             compare_to: c.compare_to,
+            joiner: (c as StrategyCondition).joiner ?? "AND",
             params: c.params || {},
             action: (c.action as Action) || (initialStrategy.action as Action),
           })),
@@ -461,6 +463,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           ? initialStrategy.condition_groups.map((g, gi) => ({
               id: g.id ?? `initial_${gi}`,
               label: g.label ?? `Group ${String.fromCharCode(65 + gi)}`,
+              joiner: (g as ConditionGroup).joiner ?? "OR",
               conditions: g.conditions.map((c, ci) => ({
                 id: `${g.id ?? gi}_${ci}`,
                 indicator: c.indicator,
@@ -468,6 +471,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 value: c.value,
                 compare_to: c.compare_to,
                 field: c.field,
+                joiner: (c as StrategyCondition).joiner ?? "AND",
                 params: c.params || {},
                 action: (c.action as Action) || (initialStrategy.action as Action),
               })),
@@ -482,6 +486,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 value: c.value,
                 compare_to: c.compare_to,
                 field: c.field,
+                joiner: (c as StrategyCondition).joiner ?? "AND",
                 params: c.params || {},
                 action: (c.action as Action) || (initialStrategy.action as Action),
               })),

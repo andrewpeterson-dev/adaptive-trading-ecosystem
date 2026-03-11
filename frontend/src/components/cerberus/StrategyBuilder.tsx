@@ -1,13 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCerberusStore } from '@/stores/cerberus-store';
-import { sendChatMessage, createBot } from '@/lib/cerberus-api';
-import { useUIContextStore } from '@/stores/ui-context-store';
+import { ArrowRight, Bot, Download, Sparkles } from 'lucide-react';
+import { createBot, sendChatMessage } from '@/lib/cerberus-api';
 import { parseStrategySpec, specToBuilderFields, type StrategySpec } from '@/lib/strategy-spec';
 import { useStrategyBuilderStore } from '@/stores/strategy-builder-store';
-import { Bot, Download } from 'lucide-react';
+import { useCerberusStore } from '@/stores/cerberus-store';
+import { useUIContextStore } from '@/stores/ui-context-store';
+
+const SAMPLE_PROMPTS = [
+  'Covered call on NVDA with assignment risk controls.',
+  'Momentum scalper for liquid tech names after opening range break.',
+  'Mean reversion on SPY with RSI exhaustion and VWAP reclaim.',
+  'Iron condor strategy around implied volatility crush after earnings.',
+];
 
 export function StrategyBuilder() {
   const router = useRouter();
@@ -17,12 +24,28 @@ export function StrategyBuilder() {
   const [isImporting, setIsImporting] = useState(false);
   const [isSendingToBuilder, setIsSendingToBuilder] = useState(false);
   const [importedBotId, setImportedBotId] = useState<string | null>(null);
-  const { addMessage, activeThreadId, setActiveThread, setActiveTab } = useCerberusStore();
+  const {
+    addMessage,
+    activeThreadId,
+    setActiveThread,
+    setActiveTab,
+    consumeStrategySeedPrompt,
+  } = useCerberusStore();
   const { pageContext } = useUIContextStore();
   const setPendingSpec = useStrategyBuilderStore((state) => state.setPendingSpec);
 
-  const handleGenerate = async () => {
-    if (!strategyPrompt.trim() || isGenerating) return;
+  useEffect(() => {
+    const seededPrompt = consumeStrategySeedPrompt();
+    if (seededPrompt) {
+      setStrategyPrompt(seededPrompt);
+    }
+  }, [consumeStrategySeedPrompt]);
+
+  const runPrompt = async (
+    prompt: string,
+    options?: { sendToBuilderAfterParse?: boolean }
+  ) => {
+    if (!prompt.trim() || isGenerating) return;
     setIsGenerating(true);
     setGeneratedStrategy(null);
     setImportedBotId(null);
@@ -30,7 +53,7 @@ export function StrategyBuilder() {
     addMessage({
       id: `user-${Date.now()}`,
       role: 'user',
-      contentMd: strategyPrompt,
+      contentMd: prompt,
       structuredJson: null,
       modelName: null,
       citations: [],
@@ -42,7 +65,7 @@ export function StrategyBuilder() {
       const response = await sendChatMessage({
         threadId: activeThreadId || undefined,
         mode: 'strategy',
-        message: strategyPrompt,
+        message: prompt,
         pageContext,
       });
       if (!activeThreadId) setActiveThread(response.threadId);
@@ -60,9 +83,16 @@ export function StrategyBuilder() {
         });
         const parsed = parseStrategySpec(markdown);
         if (parsed.ok) {
-          setGeneratedStrategy({ name: parsed.spec.name || 'AI Strategy', spec: parsed.spec });
+          const nextStrategy = {
+            name: parsed.spec.name || 'AI Strategy',
+            spec: parsed.spec,
+          };
+          setGeneratedStrategy(nextStrategy);
+          if (options?.sendToBuilderAfterParse) {
+            setPendingSpec(specToBuilderFields(nextStrategy.spec));
+            router.push('/');
+          }
         } else {
-          // No JSON extracted — switch to chat so user sees the full response
           setActiveTab('chat');
         }
       }
@@ -100,22 +130,41 @@ export function StrategyBuilder() {
   };
 
   return (
-    <div className="flex flex-col h-full p-4 space-y-4">
+    <div className="flex h-full flex-col space-y-4 overflow-y-auto p-4">
       <div>
-        <h3 className="text-sm font-semibold text-foreground mb-1">AI Strategy Builder</h3>
-        <p className="text-xs text-muted-foreground">Describe a trading strategy and the AI will build, test, and deploy it.</p>
+        <h3 className="text-sm font-semibold text-foreground mb-1">Cerberus Strategy Drafting</h3>
+        <p className="text-xs text-muted-foreground">
+          Cerberus turns plain-language ideas into a builder-ready spec, then you decide whether to send it into the main builder or import it as a bot.
+        </p>
       </div>
 
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          {['Covered call on NVDA', 'Momentum scalper', 'Mean reversion on SPY', 'Iron condor strategy'].map((preset) => (
-            <button
+        <div className="grid gap-2">
+          {SAMPLE_PROMPTS.map((preset) => (
+            <div
               key={preset}
-              onClick={() => setStrategyPrompt(preset)}
-              className="text-xs px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors text-left text-muted-foreground"
+              className="rounded-xl border border-border bg-background/60 p-3"
             >
-              {preset}
-            </button>
+              <p className="text-xs text-foreground">{preset}</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => setStrategyPrompt(preset)}
+                  className="rounded-full border border-border px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Use prompt
+                </button>
+                <button
+                  onClick={() => void runPrompt(preset, { sendToBuilderAfterParse: true })}
+                  disabled={isGenerating}
+                  className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <ArrowRight className="h-3 w-3" />
+                    Send to builder
+                  </span>
+                </button>
+              </div>
+            </div>
           ))}
         </div>
 
@@ -128,36 +177,36 @@ export function StrategyBuilder() {
         />
 
         <button
-          onClick={handleGenerate}
+          onClick={() => void runPrompt(strategyPrompt)}
           disabled={!strategyPrompt.trim() || isGenerating}
-          className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
         >
           {isGenerating ? 'Building strategy...' : 'Build Strategy'}
         </button>
       </div>
 
       {generatedStrategy && !importedBotId && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
           <div className="flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary" />
+            <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium text-foreground">Strategy ready</span>
-            <span className="text-xs text-muted-foreground truncate">{generatedStrategy.name}</span>
+            <span className="truncate text-xs text-muted-foreground">{generatedStrategy.name}</span>
           </div>
           <button
             onClick={handleSendToBuilder}
             disabled={isSendingToBuilder}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/40 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 disabled:opacity-50"
           >
             <Bot className="h-3.5 w-3.5" />
-            {isSendingToBuilder ? 'Opening builder...' : 'Open in Builder'}
+            {isSendingToBuilder ? 'Opening builder...' : 'Send to builder'}
           </button>
           <button
             onClick={handleImportBot}
             disabled={isImporting}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
           >
             <Download className="h-3.5 w-3.5" />
-            {isImporting ? 'Creating bot...' : 'Import Strategy as Bot'}
+            {isImporting ? 'Creating bot...' : 'Import strategy as bot'}
           </button>
         </div>
       )}
@@ -165,7 +214,7 @@ export function StrategyBuilder() {
       {importedBotId && (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-center">
           <p className="text-xs font-medium text-emerald-400">Bot created</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Opening Bots tab...</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Opening Bots tab...</p>
         </div>
       )}
     </div>

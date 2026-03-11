@@ -199,10 +199,19 @@ export async function listProposals(status?: string): Promise<TradeProposal[]> {
 }
 
 export async function uploadDocument(filename: string, mimeType: string): Promise<{ documentId: string; uploadUrl: string }> {
-  return apiFetch('/api/documents/upload', {
+  const response = await apiFetch<{
+    documentId?: string;
+    uploadUrl?: string;
+    document_id?: string;
+    upload_url?: string;
+  }>('/api/documents/upload', {
     method: 'POST',
     body: JSON.stringify({ filename, mimeType }),
   });
+  return {
+    documentId: response.documentId ?? response.document_id ?? '',
+    uploadUrl: response.uploadUrl ?? response.upload_url ?? '',
+  };
 }
 
 export async function finalizeDocument(documentId: string): Promise<{ status: string }> {

@@ -13,6 +13,7 @@ import structlog
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from data.market_data import market_data
 from db.database import get_session
 from db.models import (
     StrategyTemplate,
@@ -103,6 +104,7 @@ class ComputeRequest(BaseModel):
     indicator: str
     params: dict[str, Any] = Field(default_factory=dict)
     symbol: str = "SPY"
+    timeframe: str = "1D"
     bars: int = 200
 
 class DiagnoseRequest(BaseModel):
@@ -189,6 +191,110 @@ def _strategy_to_dict(s) -> dict:
         "source_prompt": s.source_prompt,
         "ai_context": s.ai_context or {},
     }
+
+
+def _normalize_timeframe(value: str | None) -> str:
+    aliases = {
+        "1m": "1m",
+        "m1": "1m",
+        "5m": "5m",
+        "m5": "5m",
+        "15m": "15m",
+        "m15": "15m",
+        "1h": "1H",
+        "1H": "1H",
+        "h1": "1H",
+        "4h": "4H",
+        "4H": "4H",
+        "h4": "4H",
+        "1d": "1D",
+        "1D": "1D",
+        "d1": "1D",
+        "1w": "1W",
+        "1W": "1W",
+        "w1": "1W",
+    }
+    return aliases.get((value or "1D").strip(), "1D")
+
+
+def _estimate_bar_limit(timeframe: str, lookback_days: int, warmup_bars: int = 120) -> int:
+    tf = _normalize_timeframe(timeframe)
+    bars_per_day = {
+        "1m": 390,
+        "5m": 78,
+        "15m": 26,
+        "1H": 7,
+        "4H": 2,
+        "1D": 1,
+        "1W": 0.2,
+    }
+    estimated = int(lookback_days * bars_per_day.get(tf, 1))
+    return max(estimated + warmup_bars, warmup_bars + 50)
+
+
+async def _load_market_frame(symbol: str, timeframe: str, limit: int):
+    import pandas as pd
+
+    tf = _normalize_timeframe(timeframe)
+    service_tf = {
+        "1m": "1m",
+        "5m": "5m",
+        "15m": "15m",
+        "1H": "1h",
+        "4H": "1h",
+        "1D": "1D",
+        "1W": "1W",
+    }[tf]
+    raw_limit = min(max(int(limit), 50), 5000)
+    if tf == "4H":
+        raw_limit = min(max(raw_limit * 4, 200), 5000)
+
+    bars = await market_data.get_bars(symbol.upper(), service_tf, raw_limit)
+    if not bars:
+        raise HTTPException(status_code=503, detail=f"No historical bar data available for {symbol.upper()}")
+
+    df = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.to_datetime(bar["t"], unit="s", utc=True),
+                "open": float(bar["o"]),
+                "high": float(bar["h"]),
+                "low": float(bar["l"]),
+                "close": float(bar["c"]),
+                "volume": float(bar["v"]),
+            }
+            for bar in bars
+        ]
+    )
+    if df.empty:
+        raise HTTPException(status_code=503, detail=f"No historical bar data available for {symbol.upper()}")
+
+    df = df.sort_values("timestamp").drop_duplicates(subset="timestamp", keep="last")
+    df.set_index("timestamp", inplace=True)
+
+    if tf == "4H":
+        df = (
+            df.resample("4h")
+            .agg(
+                {
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "sum",
+                }
+            )
+            .dropna()
+        )
+
+    if len(df) < 20:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Insufficient historical bar data available for {symbol.upper()} on timeframe {tf}",
+        )
+
+    df = df.tail(limit).reset_index()
+    return df, tf
 
 
 # ── Routes ───────────────────────────────────────────────────────────────

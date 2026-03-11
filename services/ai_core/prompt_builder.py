@@ -112,6 +112,28 @@ class PromptBuilder:
         elif flags.get("paper_trade_proposals") and not flags.get("live_trade_proposals"):
             parts.append("\nOnly paper trade proposals are enabled. Live trading proposals are disabled.")
 
+        connected_data = context.system_context.get("connected_data", {})
+        if connected_data:
+            parts.append("\nConnected data status:")
+            for key, label in [
+                ("portfolio_holdings", "Portfolio holdings"),
+                ("market_data", "Market data"),
+                ("risk_analytics", "Risk analytics"),
+                ("bot_registry", "Bot registry"),
+            ]:
+                item = connected_data.get(key)
+                if not item:
+                    continue
+                parts.append(
+                    f"- {label}: {item.get('state', 'unknown')} ({item.get('detail', 'no detail')})"
+                )
+            parts.append(
+                "Connection handling rules:\n"
+                "- Do not say you need data if the relevant capability above is connected.\n"
+                "- Only ask the user to connect or authorize a tool when that specific capability is marked not_connected or error.\n"
+                "- Do not repeat missing-data warnings if the status has already been established in this thread."
+            )
+
         # Add user context
         user = context.user_context
         if user.get("display_name"):

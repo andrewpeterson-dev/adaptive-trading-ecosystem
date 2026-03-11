@@ -68,6 +68,7 @@ class ContextAssembler:
             },
             "mode": mode,
         }
+        ctx.system_context["connected_data"] = await self._get_data_access_context(user_id)
 
         # 2. User context
         ctx.user_context = await self._get_user_context(user_id)
@@ -273,3 +274,115 @@ class ContextAssembler:
             "max_drawdown_pct": settings.max_drawdown_pct,
             "live_trading_enabled": settings.live_trading_enabled,
         }
+
+    async def _get_data_access_context(self, user_id: int) -> dict:
+        """Summarize Cerberus data/tool connectivity for prompt conditioning."""
+        try:
+            from sqlalchemy import func, select
+
+            from db.cerberus_models import CerberusBot
+            from db.database import get_session
+            from db.models import ApiProvider, UserApiConnection, UserApiSettings
+
+            async with get_session() as session:
+                conn_result = await session.execute(
+                    select(UserApiConnection, ApiProvider)
+                    .join(ApiProvider, UserApiConnection.provider_id == ApiProvider.id)
+                    .where(UserApiConnection.user_id == user_id)
+                )
+                connection_rows = conn_result.all()
+
+                settings_result = await session.execute(
+                    select(UserApiSettings).where(UserApiSettings.user_id == user_id)
+                )
+                settings = settings_result.scalar_one_or_none()
+
+                bot_count_result = await session.execute(
+                    select(func.count(CerberusBot.id)).where(CerberusBot.user_id == user_id)
+                )
+                bot_count = int(bot_count_result.scalar() or 0)
+
+            connections = [
+                {
+                    "provider": provider.name,
+                    "api_type": provider.api_type.value
+                    if hasattr(provider.api_type, "value")
+                    else str(provider.api_type),
+                    "status": connection.status,
+                    "id": connection.id,
+                }
+                for connection, provider in connection_rows
+            ]
+
+            def derive_state(connected_count: int, error_count: int) -> str:
+                if connected_count > 0:
+                    return "connected"
+                if error_count > 0:
+                    return "error"
+                return "not_connected"
+
+            connected_brokers = [
+                c for c in connections
+                if c["status"] == "connected" and c["api_type"] in {"brokerage", "crypto_broker"}
+            ]
+            errored_brokers = [
+                c for c in connections
+                if c["status"] == "error" and c["api_type"] in {"brokerage", "crypto_broker"}
+            ]
+            connected_market = [
+                c for c in connections
+                if c["status"] == "connected"
+                and c["api_type"] in {"market_data", "brokerage", "crypto_broker"}
+            ]
+            errored_market = [
+                c for c in connections
+                if c["status"] == "error"
+                and c["api_type"] in {"market_data", "brokerage", "crypto_broker"}
+            ]
+
+            portfolio_state = derive_state(len(connected_brokers), len(errored_brokers))
+            market_state = derive_state(len(connected_market), len(errored_market))
+            risk_state = (
+                "connected"
+                if portfolio_state == "connected"
+                else "error" if portfolio_state == "error" else "not_connected"
+            )
+
+            active_broker_id = getattr(settings, "active_equity_broker_id", None)
+            primary_market_data_id = getattr(settings, "primary_market_data_id", None)
+            active_broker = next(
+                (c for c in connections if c["id"] == active_broker_id),
+                connected_brokers[0] if connected_brokers else None,
+            )
+            active_market_data = next(
+                (c for c in connections if c["id"] == primary_market_data_id),
+                connected_market[0] if connected_market else None,
+            )
+
+            return {
+                "portfolio_holdings": {
+                    "state": portfolio_state,
+                    "detail": active_broker["provider"] if active_broker else "No connected broker",
+                },
+                "market_data": {
+                    "state": market_state,
+                    "detail": active_market_data["provider"]
+                    if active_market_data
+                    else "No connected market data source",
+                },
+                "risk_analytics": {
+                    "state": risk_state,
+                    "detail": "Portfolio-driven risk analysis"
+                    if risk_state == "connected"
+                    else "Risk analytics depend on holdings connectivity",
+                },
+                "bot_registry": {
+                    "state": "connected",
+                    "detail": f"{bot_count} bot(s) in registry",
+                },
+                "trade_proposals_enabled": portfolio_state == "connected"
+                and market_state == "connected",
+            }
+        except Exception as e:
+            logger.warning("data_access_context_error", error=str(e))
+            return {}
