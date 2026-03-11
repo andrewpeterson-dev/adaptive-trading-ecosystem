@@ -189,6 +189,7 @@ class ContextAssembler:
                 msgs_result = await session.execute(
                     select(CerberusConversationMessage).where(
                         CerberusConversationMessage.thread_id == thread_id,
+                        CerberusConversationMessage.user_id == user_id,
                     ).order_by(CerberusConversationMessage.created_at.desc()).limit(20)
                 )
                 messages = msgs_result.scalars().all()

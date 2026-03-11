@@ -1,12 +1,155 @@
 """Risk analysis tools for the Cerberus."""
 from __future__ import annotations
 
+import asyncio
+import math
+from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
 import structlog
 
+from data.market_data import market_data
+from risk.analytics import HAS_SCIPY, PortfolioRiskAnalyzer
 from services.ai_core.tools.base import ToolDefinition, ToolCategory, ToolSideEffect
 from services.ai_core.tools.registry import get_registry
 
 logger = structlog.get_logger(__name__)
+
+_risk_analyzer = PortfolioRiskAnalyzer()
+
+
+def _z_score(confidence: float) -> float:
+    if HAS_SCIPY:
+        from scipy import stats as scipy_stats
+
+        return float(scipy_stats.norm.ppf(1 - confidence))
+    z_table = {0.90: -1.2816, 0.95: -1.6449, 0.99: -2.3263}
+    return z_table.get(round(confidence, 2), -1.6449)
+
+
+def _horizon_returns(returns: pd.Series, horizon_days: int) -> pd.Series:
+    clean = returns.dropna()
+    if horizon_days <= 1 or clean.empty:
+        return clean
+    return ((1 + clean).rolling(horizon_days).apply(np.prod, raw=True) - 1).dropna()
+
+
+def _monte_carlo_var(returns: pd.Series, confidence: float, horizon_days: int, simulations: int = 5000) -> float:
+    clean = returns.dropna()
+    if clean.empty or len(clean) < 2:
+        return 0.0
+    sampled = np.random.choice(clean.to_numpy(), size=(simulations, max(horizon_days, 1)), replace=True)
+    compounded = np.prod(1 + sampled, axis=1) - 1
+    return float(np.percentile(compounded, (1 - confidence) * 100))
+
+
+async def _portfolio_returns_from_snapshots(user_id: int, lookback_days: int = 365) -> tuple[pd.Series, dict]:
+    from db.database import get_session
+    from db.cerberus_models import CerberusPortfolioSnapshot
+    from sqlalchemy import select
+
+    cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+
+    async with get_session() as session:
+        stmt = (
+            select(CerberusPortfolioSnapshot)
+            .where(
+                CerberusPortfolioSnapshot.user_id == user_id,
+                CerberusPortfolioSnapshot.snapshot_ts >= cutoff,
+            )
+            .order_by(CerberusPortfolioSnapshot.snapshot_ts.asc())
+        )
+        result = await session.execute(stmt)
+        snapshots = result.scalars().all()
+
+    rows = [
+        {"date": pd.Timestamp(s.snapshot_ts).normalize(), "equity": float(s.equity or 0)}
+        for s in snapshots
+        if s.snapshot_ts and s.equity
+    ]
+    if len(rows) < 20:
+        return pd.Series(dtype=float), {"source": "portfolio_snapshots", "observations": 0}
+
+    frame = pd.DataFrame(rows)
+    grouped = frame.groupby("date", as_index=True)["equity"].sum().sort_index()
+    returns = grouped.pct_change().dropna()
+    return returns, {
+        "source": "portfolio_snapshots",
+        "observations": int(len(returns)),
+        "window_start": grouped.index.min().date().isoformat() if not grouped.empty else None,
+        "window_end": grouped.index.max().date().isoformat() if not grouped.empty else None,
+    }
+
+
+async def _load_positions(user_id: int) -> list:
+    from db.database import get_session
+    from db.cerberus_models import CerberusPosition
+    from sqlalchemy import select
+
+    async with get_session() as session:
+        stmt = select(CerberusPosition).where(CerberusPosition.user_id == user_id)
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
+
+async def _portfolio_returns_from_positions(positions: list, lookback_bars: int = 260) -> tuple[pd.Series, dict]:
+    tradable_positions = [p for p in positions if p.symbol and float(p.market_value or 0)]
+    if not tradable_positions:
+        return pd.Series(dtype=float), {"source": "position_price_history", "observations": 0}
+
+    symbols = sorted({p.symbol.upper() for p in tradable_positions})
+    bars_list = await asyncio.gather(
+        *[market_data.get_bars(symbol, timeframe="1D", limit=lookback_bars) for symbol in symbols],
+        return_exceptions=True,
+    )
+
+    price_series: dict[str, pd.Series] = {}
+    for symbol, bars in zip(symbols, bars_list):
+        if isinstance(bars, Exception) or not bars:
+            continue
+        series = pd.Series(
+            {pd.to_datetime(int(bar["t"]), unit="s"): float(bar["c"]) for bar in bars if bar.get("c") is not None}
+        ).sort_index()
+        if len(series) >= 20:
+            price_series[symbol] = series
+
+    if not price_series:
+        return pd.Series(dtype=float), {"source": "position_price_history", "observations": 0}
+
+    price_frame = pd.DataFrame(price_series).sort_index().ffill().dropna(how="all")
+    returns_frame = price_frame.pct_change().dropna(how="all")
+    if returns_frame.empty:
+        return pd.Series(dtype=float), {"source": "position_price_history", "observations": 0}
+
+    total_value = sum(abs(float(p.market_value or 0)) for p in tradable_positions)
+    weights: dict[str, float] = {}
+    for position in tradable_positions:
+        symbol = position.symbol.upper()
+        if symbol in returns_frame.columns and symbol not in weights:
+            weights[symbol] = abs(float(position.market_value or 0)) / total_value if total_value else 0.0
+
+    portfolio_returns = pd.Series(0.0, index=returns_frame.index)
+    for symbol, weight in weights.items():
+        portfolio_returns += returns_frame[symbol].fillna(0.0) * weight
+
+    return portfolio_returns.dropna(), {
+        "source": "position_price_history",
+        "observations": int(len(portfolio_returns.dropna())),
+        "symbols": sorted(weights.keys()),
+    }
+
+
+async def _load_portfolio_returns(user_id: int) -> tuple[pd.Series, float, dict]:
+    positions = await _load_positions(user_id)
+    total_value = sum(abs(float(p.market_value or 0)) for p in positions)
+
+    returns, metadata = await _portfolio_returns_from_snapshots(user_id)
+    if len(returns) >= 20:
+        return returns, total_value, metadata
+
+    returns, price_metadata = await _portfolio_returns_from_positions(positions)
+    return returns, total_value, price_metadata
 
 
 # ---------------------------------------------------------------------------
@@ -20,43 +163,55 @@ async def _calculate_var(
     method: str = "historical",
 ) -> dict:
     """Calculate Value at Risk for the current portfolio."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusPosition
-    from sqlalchemy import select
+    confidence = float(confidence or 0.95)
+    horizon_days = max(int(horizon_days or 1), 1)
+    method = (method or "historical").lower()
 
-    async with get_session() as session:
-        stmt = select(CerberusPosition).where(CerberusPosition.user_id == user_id)
-        result = await session.execute(stmt)
-        positions = result.scalars().all()
-
-    if not positions:
+    returns, total_value, metadata = await _load_portfolio_returns(user_id)
+    if total_value <= 0:
         return {"var": 0, "confidence": confidence, "horizon_days": horizon_days, "message": "No positions found"}
 
-    total_value = sum(float(p.market_value or 0) for p in positions)
+    if returns.empty or len(returns) < 2:
+        return {
+            "var": 0,
+            "var_pct": 0,
+            "confidence": confidence,
+            "horizon_days": horizon_days,
+            "method": method,
+            "total_portfolio_value": round(total_value, 2),
+            "message": "Insufficient historical returns to calculate VaR",
+            "data_source": metadata.get("source"),
+        }
 
-    # TODO: Replace with proper VaR calculation using historical returns
-    # For now, use a simplified parametric estimate (assume ~1.5% daily vol)
-    import math
-    from scipy.stats import norm
+    if method == "historical":
+        var_return = _risk_analyzer.calculate_var(_horizon_returns(returns, horizon_days), confidence=confidence, method="historical")
+    elif method == "parametric":
+        mu = float(returns.mean()) * horizon_days
+        sigma = float(returns.std()) * math.sqrt(horizon_days)
+        var_return = mu + _z_score(confidence) * sigma if sigma else 0.0
+    elif method == "monte_carlo":
+        var_return = _monte_carlo_var(returns, confidence=confidence, horizon_days=horizon_days)
+    else:
+        raise ValueError(f"Unsupported VaR method: {method}")
 
-    z_score = norm.ppf(confidence)
-    daily_vol_estimate = 0.015  # 1.5% placeholder
-    var_estimate = total_value * z_score * daily_vol_estimate * math.sqrt(horizon_days)
+    var_amount = abs(var_return) * total_value
 
     return {
-        "var": round(var_estimate, 2),
-        "var_pct": round(z_score * daily_vol_estimate * math.sqrt(horizon_days) * 100, 4),
+        "var": round(var_amount, 2),
+        "var_pct": round(abs(var_return) * 100, 4),
+        "portfolio_return_var": round(var_return, 6),
         "confidence": confidence,
         "horizon_days": horizon_days,
         "method": method,
         "total_portfolio_value": round(total_value, 2),
-        "note": "Simplified parametric VaR; replace with historical returns model",
+        "observations": metadata.get("observations", int(len(returns))),
+        "data_source": metadata.get("source"),
+        "symbols": metadata.get("symbols"),
     }
 
 
 async def _calculate_drawdown(user_id: int, days: int = 30) -> dict:
     """Calculate max drawdown over a period using portfolio snapshots."""
-    from datetime import datetime, timedelta
     from db.database import get_session
     from db.cerberus_models import CerberusPortfolioSnapshot
     from sqlalchemy import select

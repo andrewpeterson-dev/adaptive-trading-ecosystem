@@ -30,9 +30,29 @@ class NewsIngestion:
         self._last_request_time: float = 0
         self._min_request_interval = 1.0  # seconds between API calls
 
+    async def fetch_news_async(self, symbols: list[str], limit: int = 10) -> list[dict]:
+        """Async version of fetch_news — use this from async contexts to avoid blocking."""
+        valid_symbols = [s.upper().strip() for s in symbols if self._validator.is_valid(s)]
+        if not valid_symbols:
+            logger.warning("no_valid_symbols", requested=symbols)
+            return []
+
+        cache_key = ",".join(sorted(valid_symbols))
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached[:limit]
+
+        articles = await self._fetch_alphavantage_async(valid_symbols, limit)
+        if not articles:
+            articles = await self._fetch_finnhub_async(valid_symbols, limit)
+
+        self._cache[cache_key] = (articles, time.time())
+        return articles[:limit]
+
     def fetch_news(self, symbols: list[str], limit: int = 10) -> list[dict]:
         """
-        Fetch recent news for given ticker symbols.
+        Fetch recent news for given ticker symbols (sync).
+        Prefer fetch_news_async from async contexts.
         Returns list of article dicts with keys:
             title, url, source, published_at, summary, symbols
         """
@@ -70,8 +90,16 @@ class NewsIngestion:
         # Filter to only validated tickers to avoid false positives
         return [t for t in candidates if self._validator.is_valid(t)]
 
+    async def _rate_limit_async(self):
+        """Enforce minimum interval between API requests (async-safe)."""
+        import asyncio
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self._min_request_interval:
+            await asyncio.sleep(self._min_request_interval - elapsed)
+        self._last_request_time = time.time()
+
     def _rate_limit(self):
-        """Enforce minimum interval between API requests."""
+        """Enforce minimum interval between API requests (sync fallback)."""
         elapsed = time.time() - self._last_request_time
         if elapsed < self._min_request_interval:
             time.sleep(self._min_request_interval - elapsed)
@@ -189,4 +217,110 @@ class NewsIngestion:
                 })
 
         logger.info("finnhub_fetched", count=len(articles), symbols=symbols)
+        return articles
+
+    # ── Async fetch implementations (non-blocking) ────────────────────────────
+
+    async def _fetch_alphavantage_async(self, symbols: list[str], limit: int) -> list[dict]:
+        """Async Alpha Vantage fetch — non-blocking for event loop."""
+        api_key = self.settings.alphavantage_api_key if hasattr(self.settings, "alphavantage_api_key") else ""
+        if not api_key:
+            return []
+
+        tickers = ",".join(symbols)
+        params = {
+            "function": "NEWS_SENTIMENT",
+            "tickers": tickers,
+            "limit": min(limit * 2, 50),
+            "apikey": api_key,
+        }
+
+        await self._rate_limit_async()
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get("https://www.alphavantage.co/query", params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as e:
+            logger.warning("alphavantage_async_fetch_failed", error=str(e))
+            return []
+
+        if "feed" not in data:
+            return []
+
+        articles = []
+        for item in data["feed"]:
+            item_tickers = [
+                ts["ticker"] for ts in item.get("ticker_sentiment", [])
+                if ts["ticker"] in symbols
+            ]
+            if not item_tickers:
+                item_tickers = symbols
+
+            published = item.get("time_published", "")
+            try:
+                dt = datetime.strptime(published, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+                published_iso = dt.isoformat()
+            except (ValueError, TypeError):
+                published_iso = published
+
+            articles.append({
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "source": item.get("source", ""),
+                "published_at": published_iso,
+                "summary": item.get("summary", ""),
+                "symbols": item_tickers,
+            })
+
+        logger.info("alphavantage_async_fetched", count=len(articles), symbols=symbols)
+        return articles
+
+    async def _fetch_finnhub_async(self, symbols: list[str], limit: int) -> list[dict]:
+        """Async Finnhub fetch — non-blocking for event loop."""
+        api_key = self.settings.finnhub_api_key if hasattr(self.settings, "finnhub_api_key") else ""
+        if not api_key:
+            return []
+
+        articles = []
+        now = datetime.now(timezone.utc)
+        from_date = now.strftime("%Y-%m-%d")
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            for symbol in symbols[:5]:
+                params = {
+                    "symbol": symbol,
+                    "from": from_date,
+                    "to": from_date,
+                    "token": api_key,
+                }
+                await self._rate_limit_async()
+                try:
+                    resp = await client.get("https://finnhub.io/api/v1/company-news", params=params)
+                    if resp.status_code == 429:
+                        logger.warning("finnhub_news_rate_limited", symbol=symbol)
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception as e:
+                    logger.warning("finnhub_async_fetch_failed", symbol=symbol, error=str(e))
+                    continue
+
+                for item in data[:limit]:
+                    published = item.get("datetime", 0)
+                    try:
+                        published_iso = datetime.fromtimestamp(published, tz=timezone.utc).isoformat()
+                    except (ValueError, TypeError, OSError):
+                        published_iso = str(published)
+
+                    articles.append({
+                        "title": item.get("headline", ""),
+                        "url": item.get("url", ""),
+                        "source": item.get("source", ""),
+                        "published_at": published_iso,
+                        "summary": item.get("summary", ""),
+                        "symbols": [symbol],
+                    })
+
+        logger.info("finnhub_async_fetched", count=len(articles), symbols=symbols)
         return articles

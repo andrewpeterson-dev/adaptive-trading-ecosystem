@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
-import jwt
 import structlog
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -18,6 +17,7 @@ from config.settings import get_settings
 from db.database import get_session
 from db.encryption import encrypt_value, decrypt_value
 from db.models import User, BrokerCredential, BrokerType
+from services.security.jwt_utils import JWTConfigurationError, encode_jwt
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -37,12 +37,29 @@ def _check_rate_limit(ip: str) -> None:
         raise HTTPException(status_code=429, detail="Too many attempts. Try again in a few minutes.")
     _login_attempts[ip].append(now)
 
-def _hash_password(password: str) -> str:
+
+def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
+def verify_password(password: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode(), hashed.encode())
+    except ValueError:
+        return False
+
+
+def is_valid_email(email: str) -> bool:
+    normalized = _normalize_email(email)
+    return bool(normalized and len(normalized) <= 255 and _EMAIL_RE.match(normalized))
+
+
+def _hash_password(password: str) -> str:
+    return hash_password(password)
+
+
 def _check_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+    return verify_password(password, hashed)
 
 
 def _normalize_email(email: str) -> str:
@@ -51,7 +68,7 @@ def _normalize_email(email: str) -> str:
 
 def _validate_email(email: str) -> str:
     normalized = _normalize_email(email)
-    if not normalized or len(normalized) > 255 or not _EMAIL_RE.match(normalized):
+    if not is_valid_email(normalized):
         raise HTTPException(status_code=400, detail="Invalid email address")
     return normalized
 
@@ -83,7 +100,14 @@ def _create_token(user_id: int, email: str, is_admin: bool) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(days=settings.jwt_expiry_days),
         "iat": datetime.now(timezone.utc),
     }
-    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+    try:
+        return encode_jwt(payload, settings)
+    except JWTConfigurationError as exc:
+        logger.error("jwt_secret_missing_for_token_issue")
+        raise HTTPException(
+            status_code=503,
+            detail="Authentication is temporarily unavailable",
+        ) from exc
 
 
 def _user_dict(user: User) -> dict:
@@ -298,11 +322,19 @@ async def save_broker_credentials(req: BrokerCredentialRequest, request: Request
         logger.info("broker_credentials_saved", user_id=user_id, broker=req.broker_type)
 
         # Invalidate cached Webull client so the new credentials are picked up immediately
-        try:
-            from api.routes.webull import _client_cache
-            _client_cache.pop(user_id, None)
-        except Exception as exc:
-            logger.warning("broker_cache_invalidation_failed", user_id=user_id, error=str(exc))
+        if broker_type == BrokerType.WEBULL:
+            try:
+                from api.routes.webull import invalidate_user_client_cache
+
+                invalidated = invalidate_user_client_cache(user_id)
+                logger.info(
+                    "webull_cache_invalidated",
+                    user_id=user_id,
+                    invalidated=invalidated,
+                    source="broker_credentials",
+                )
+            except Exception as exc:
+                logger.warning("broker_cache_invalidation_failed", user_id=user_id, error=str(exc))
 
         return {"success": True, "broker_type": req.broker_type}
 
@@ -327,5 +359,21 @@ async def delete_broker_credentials(cred_id: int, request: Request):
         if not cred:
             raise HTTPException(status_code=404, detail="Credential not found")
 
+        should_invalidate_webull = cred.broker_type == BrokerType.WEBULL
         await db.delete(cred)
-        return {"success": True}
+
+    if should_invalidate_webull:
+        try:
+            from api.routes.webull import invalidate_user_client_cache
+
+            invalidated = invalidate_user_client_cache(user_id)
+            logger.info(
+                "webull_cache_invalidated",
+                user_id=user_id,
+                invalidated=invalidated,
+                source="broker_credential_delete",
+            )
+        except Exception as exc:
+            logger.warning("broker_cache_invalidation_failed", user_id=user_id, error=str(exc))
+
+    return {"success": True}

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI, Request
@@ -48,6 +48,26 @@ async def _seed_user(session: AsyncSession) -> int:
     session.add(user)
     await session.flush()
     return user.id
+
+
+def _fake_market_bars(count: int = 600) -> list[dict]:
+    import math
+
+    bars: list[dict] = []
+    base_ts = 1_700_000_000
+    for index in range(count):
+        close = 100 + (index * 0.08) + (math.sin(index / 5) * 4.5)
+        bars.append(
+            {
+                "t": base_ts + (index * 86_400),
+                "o": close - 0.35,
+                "h": close + 0.85,
+                "l": close - 0.85,
+                "c": close,
+                "v": 1_000_000 + (index * 1000),
+            }
+        )
+    return bars
 
 
 def _build_app(session_factory, user_id: int) -> tuple[FastAPI, object]:
@@ -337,11 +357,12 @@ class TestBacktestFromSavedStrategy:
 
         app, mock_get_session = _build_strategies_app(session_factory, user_id)
         with patch("api.routes.strategies.get_session", mock_get_session):
-            client = TestClient(app)
-            response = client.post(
-                "/api/strategies/backtest",
-                json={"strategy_id": instance.id, "lookback_days": 90, "initial_capital": 100000},
-            )
+            with patch("api.routes.strategies.market_data.get_bars", AsyncMock(return_value=_fake_market_bars())):
+                client = TestClient(app)
+                response = client.post(
+                    "/api/strategies/backtest",
+                    json={"strategy_id": instance.id, "lookback_days": 90, "initial_capital": 100000},
+                )
 
         assert response.status_code == 200
         payload = response.json()
@@ -357,23 +378,24 @@ class TestBacktestFromSavedStrategy:
         app, mock_get_session = _build_strategies_app(session_factory, user_id)
 
         with patch("api.routes.strategies.get_session", mock_get_session):
-            client = TestClient(app)
-            response = client.post(
-                "/api/strategies/backtest",
-                json={
-                    "conditions": [
-                        {
-                            "indicator": "rsi",
-                            "operator": "<",
-                            "value": 101,
-                            "params": {"period": 14},
-                            "action": "SELL",
-                        }
-                    ],
-                    "lookback_days": 90,
-                    "initial_capital": 100000,
-                },
-            )
+            with patch("api.routes.strategies.market_data.get_bars", AsyncMock(return_value=_fake_market_bars())):
+                client = TestClient(app)
+                response = client.post(
+                    "/api/strategies/backtest",
+                    json={
+                        "conditions": [
+                            {
+                                "indicator": "rsi",
+                                "operator": "<",
+                                "value": 101,
+                                "params": {"period": 14},
+                                "action": "SELL",
+                            }
+                        ],
+                        "lookback_days": 90,
+                        "initial_capital": 100000,
+                    },
+                )
 
         assert response.status_code == 200
         payload = response.json()
@@ -389,31 +411,32 @@ class TestBacktestFromSavedStrategy:
         app, mock_get_session = _build_strategies_app(session_factory, user_id)
 
         with patch("api.routes.strategies.get_session", mock_get_session):
-            with patch("services.indicator_engine.IndicatorEngine.compute", wraps=IndicatorEngine.compute) as mock_compute:
-                client = TestClient(app)
-                response = client.post(
-                    "/api/strategies/backtest",
-                    json={
-                        "conditions": [
-                            {
-                                "indicator": "rsi",
-                                "operator": ">",
-                                "value": 55,
-                                "params": {"period": 7},
-                                "action": "BUY",
-                            },
-                            {
-                                "indicator": "rsi",
-                                "operator": "<",
-                                "value": 80,
-                                "params": {"period": 14},
-                                "action": "BUY",
-                            },
-                        ],
-                        "lookback_days": 90,
-                        "initial_capital": 100000,
-                    },
-                )
+            with patch("api.routes.strategies.market_data.get_bars", AsyncMock(return_value=_fake_market_bars())):
+                with patch("services.indicator_engine.IndicatorEngine.compute", wraps=IndicatorEngine.compute) as mock_compute:
+                    client = TestClient(app)
+                    response = client.post(
+                        "/api/strategies/backtest",
+                        json={
+                            "conditions": [
+                                {
+                                    "indicator": "rsi",
+                                    "operator": ">",
+                                    "value": 55,
+                                    "params": {"period": 7},
+                                    "action": "BUY",
+                                },
+                                {
+                                    "indicator": "rsi",
+                                    "operator": "<",
+                                    "value": 80,
+                                    "params": {"period": 14},
+                                    "action": "BUY",
+                                },
+                            ],
+                            "lookback_days": 90,
+                            "initial_capital": 100000,
+                        },
+                    )
 
         assert response.status_code == 200
         requested_periods = sorted(
@@ -435,28 +458,58 @@ class TestBacktestFromSavedStrategy:
             return pd.Series([50.0] * len(df))
 
         with patch("api.routes.strategies.get_session", mock_get_session):
-            with patch("services.indicator_engine.IndicatorEngine.compute", side_effect=fake_compute):
+            with patch("api.routes.strategies.market_data.get_bars", AsyncMock(return_value=_fake_market_bars())):
+                with patch("services.indicator_engine.IndicatorEngine.compute", side_effect=fake_compute):
+                    client = TestClient(app)
+                    response = client.post(
+                        "/api/strategies/backtest",
+                        json={
+                            "conditions": [
+                                {
+                                    "indicator": "rsi",
+                                    "operator": "<",
+                                    "value": 0,
+                                    "compare_to": "PRICE",
+                                    "params": {"period": 14},
+                                    "action": "BUY",
+                                }
+                            ],
+                            "lookback_days": 40,
+                            "initial_capital": 100000,
+                        },
+                    )
+
+        assert response.status_code == 200
+        assert response.json()["trades"]
+
+
+class TestRealIndicatorCompute:
+    @pytest.mark.anyio
+    async def test_compute_indicator_uses_real_market_bars(self, session, session_factory):
+        user_id = await _seed_user(session)
+        await session.commit()
+        app, mock_get_session = _build_strategies_app(session_factory, user_id)
+
+        with patch("api.routes.strategies.get_session", mock_get_session):
+            with patch("api.routes.strategies.market_data.get_bars", AsyncMock(return_value=_fake_market_bars(260))):
                 client = TestClient(app)
                 response = client.post(
-                    "/api/strategies/backtest",
+                    "/api/strategies/compute-indicator",
                     json={
-                        "conditions": [
-                            {
-                                "indicator": "rsi",
-                                "operator": "<",
-                                "value": 0,
-                                "compare_to": "PRICE",
-                                "params": {"period": 14},
-                                "action": "BUY",
-                            }
-                        ],
-                        "lookback_days": 40,
-                        "initial_capital": 100000,
+                        "indicator": "rsi",
+                        "params": {"period": 14},
+                        "symbol": "QQQ",
+                        "timeframe": "1D",
+                        "bars": 120,
                     },
                 )
 
         assert response.status_code == 200
-        assert response.json()["trades"]
+        payload = response.json()
+        assert payload["symbol"] == "QQQ"
+        assert payload["timeframe"] == "1D"
+        assert "values" in payload
+        assert "synthetic_data" not in payload
 
     @pytest.mark.anyio
     async def test_backtest_supports_composite_indicator_fields(self, session, session_factory):
@@ -476,25 +529,26 @@ class TestBacktestFromSavedStrategy:
             raise AssertionError(f"Unexpected indicator: {indicator_name}")
 
         with patch("api.routes.strategies.get_session", mock_get_session):
-            with patch("services.indicator_engine.IndicatorEngine.compute", side_effect=fake_compute):
-                client = TestClient(app)
-                response = client.post(
-                    "/api/strategies/backtest",
-                    json={
-                        "conditions": [
-                            {
-                                "indicator": "macd",
-                                "field": "histogram",
-                                "operator": ">",
-                                "value": 0,
-                                "params": {},
-                                "action": "BUY",
-                            }
-                        ],
-                        "lookback_days": 40,
-                        "initial_capital": 100000,
-                    },
-                )
+            with patch("api.routes.strategies.market_data.get_bars", AsyncMock(return_value=_fake_market_bars())):
+                with patch("services.indicator_engine.IndicatorEngine.compute", side_effect=fake_compute):
+                    client = TestClient(app)
+                    response = client.post(
+                        "/api/strategies/backtest",
+                        json={
+                            "conditions": [
+                                {
+                                    "indicator": "macd",
+                                    "field": "histogram",
+                                    "operator": ">",
+                                    "value": 0,
+                                    "params": {},
+                                    "action": "BUY",
+                                }
+                            ],
+                            "lookback_days": 40,
+                            "initial_capital": 100000,
+                        },
+                    )
 
         assert response.status_code == 200
         assert response.json()["trades"]

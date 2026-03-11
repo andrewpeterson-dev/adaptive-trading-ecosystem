@@ -110,6 +110,11 @@
   html {
     transition: background-color 0.2s ease, color 0.2s ease;
     background-color: hsl(var(--background));
+    overflow-x: hidden;
+  }
+
+  body {
+    overflow-x: hidden;
   }
 
   .dark body {
@@ -459,6 +464,20 @@
       linear-gradient(90deg, hsl(var(--surface-3) / 0.8) 0%, hsl(var(--surface-2) / 1) 50%, hsl(var(--surface-3) / 0.8) 100%);
     background-size: 240px 100%;
     animation: app-shimmer 1.6s linear infinite;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-section-header {
+    @apply flex-col items-start;
+  }
+
+  .app-table thead th {
+    @apply px-3 py-2.5 text-[10px];
+  }
+
+  .app-table tbody td {
+    @apply px-3 py-2.5;
   }
 }
 

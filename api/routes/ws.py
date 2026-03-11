@@ -13,31 +13,39 @@ Protocol:
 On connect, the server immediately fetches quotes for subscribed symbols
 then streams Redis pub/sub updates as they arrive.
 """
+from __future__ import annotations
 
 import asyncio
 import json
 from typing import Optional
 
-import jwt
-import redis.asyncio as aioredis
 import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
+try:
+    import redis.asyncio as aioredis
+except ImportError:  # pragma: no cover - optional dependency in test/dev
+    aioredis = None
+
 from config.settings import get_settings
 from data.market_data import market_data
+from services.security.jwt_utils import JWTConfigurationError, decode_jwt
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 # Active subscriptions: ws_id -> set of symbols
-_subscriptions: dict[int, set] = {}
+_subscriptions: dict[int, set[str]] = {}
 
 
 def _decode_token(token: str) -> Optional[int]:
     try:
-        settings = get_settings()
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
-        return payload.get("user_id")
+        payload = decode_jwt(token, get_settings())
+        user_id = payload.get("user_id")
+        return int(user_id) if user_id is not None else None
+    except JWTConfigurationError:
+        logger.error("ws_auth_unavailable")
+        return None
     except Exception:
         return None
 
@@ -56,12 +64,16 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
     _subscriptions[ws_id] = subscribed
     settings = get_settings()
     stop_event = asyncio.Event()
+    listener_task: Optional[asyncio.Task] = None
+    poll_task: Optional[asyncio.Task] = None
 
     await websocket.send_json({"type": "connected", "message": "Market data stream ready"})
     logger.info("ws_client_connected", user_id=user_id)
 
     async def redis_listener():
         """Subscribe to Redis market:price_updates and forward to this WebSocket."""
+        if aioredis is None:
+            return
         r = None
         pubsub = None
         try:
@@ -151,7 +163,11 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
     finally:
         stop_event.set()
         for task in (listener_task, poll_task):
-            task.cancel()
-        await asyncio.gather(listener_task, poll_task, return_exceptions=True)
+            if task is not None:
+                task.cancel()
+        await asyncio.gather(
+            *(task for task in (listener_task, poll_task) if task is not None),
+            return_exceptions=True,
+        )
         _subscriptions.pop(ws_id, None)
         logger.info("ws_client_disconnected", user_id=user_id)

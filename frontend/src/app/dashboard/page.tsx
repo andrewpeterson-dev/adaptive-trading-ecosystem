@@ -224,18 +224,18 @@ export default function DashboardPage() {
                 {formatCurrency(account.equity)}
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="app-inset p-3">
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Cash</div>
-                <div className="text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.cash)}</div>
+                <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.cash)}</div>
               </div>
-              <div>
+              <div className="app-inset p-3">
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Buying Power</div>
-                <div className="text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.buying_power)}</div>
+                <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.buying_power)}</div>
               </div>
-              <div>
+              <div className="app-inset p-3">
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Portfolio</div>
-                <div className="text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.portfolio_value)}</div>
+                <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.portfolio_value)}</div>
               </div>
             </div>
           </div>

@@ -4,6 +4,7 @@ Paper trading routes — simulated trading for users without broker credentials.
 Provides portfolio management, trade execution, position tracking, and trade
 history using the PaperPortfolio / PaperPosition / PaperTrade DB models.
 """
+from __future__ import annotations
 
 import math
 from datetime import datetime
@@ -27,6 +28,7 @@ from services.options_data import fetch_option_snapshot, parse_occ_contract_symb
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+INITIAL_CAPITAL = 1_000_000.0
 
 
 # ── Request / Response schemas ────────────────────────────────────────────
@@ -49,7 +51,7 @@ class PaperTradeRequest(BaseModel):
 
 
 class ResetRequest(BaseModel):
-    initial_capital: Optional[float] = 1_000_000.0
+    initial_capital: Optional[float] = INITIAL_CAPITAL
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -136,8 +138,8 @@ async def _get_or_create_portfolio(user_id: int) -> dict:
         if not portfolio:
             portfolio = PaperPortfolio(
                 user_id=user_id,
-                cash=1_000_000.0,
-                initial_capital=1_000_000.0,
+                cash=INITIAL_CAPITAL,
+                initial_capital=INITIAL_CAPITAL,
             )
             session.add(portfolio)
             await session.flush()
@@ -262,13 +264,13 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
         portfolio = result.scalar_one_or_none()
 
         if not portfolio:
-                portfolio = PaperPortfolio(
-                    user_id=user_id,
-                    cash=1_000_000.0,
-                    initial_capital=1_000_000.0,
-                )
-                session.add(portfolio)
-                await session.flush()
+            portfolio = PaperPortfolio(
+                user_id=user_id,
+                cash=INITIAL_CAPITAL,
+                initial_capital=INITIAL_CAPITAL,
+            )
+            session.add(portfolio)
+            await session.flush()
 
         multiplier = _position_multiplier(symbol)
         trade_value = current_price * qty * multiplier
@@ -618,7 +620,7 @@ async def get_trade_history(request: Request, limit: int = 100):
 async def reset_portfolio(request: Request, req: Optional[ResetRequest] = None):
     """Reset paper portfolio to initial capital. Deletes all positions and trades."""
     user_id = _require_user(request)
-    initial_capital = req.initial_capital if req else 1_000_000.0
+    initial_capital = req.initial_capital if req else INITIAL_CAPITAL
 
     async with get_session() as session:
         result = await session.execute(

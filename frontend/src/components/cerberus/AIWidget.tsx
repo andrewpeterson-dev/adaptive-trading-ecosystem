@@ -20,11 +20,13 @@ import {
 import { getThreadMessages } from '@/lib/cerberus-api';
 import { useCerberusStore } from '@/stores/cerberus-store';
 import { useUIContextStore } from '@/stores/ui-context-store';
-import { BotControlPanel } from './BotControlPanel';
-import { ChatPanel } from './ChatPanel';
-import { PortfolioAnalysis } from './PortfolioAnalysis';
-import { ResearchPanel } from './ResearchPanel';
-import { StrategyBuilder } from './StrategyBuilder';
+import dynamic from 'next/dynamic';
+
+const ChatPanel = dynamic(() => import('./ChatPanel').then((m) => m.ChatPanel), { ssr: false });
+const StrategyBuilder = dynamic(() => import('./StrategyBuilder').then((m) => m.StrategyBuilder), { ssr: false });
+const PortfolioAnalysis = dynamic(() => import('./PortfolioAnalysis').then((m) => m.PortfolioAnalysis), { ssr: false });
+const BotControlPanel = dynamic(() => import('./BotControlPanel').then((m) => m.BotControlPanel), { ssr: false });
+const ResearchPanel = dynamic(() => import('./ResearchPanel').then((m) => m.ResearchPanel), { ssr: false });
 
 const TABS = [
   { id: 'chat' as const, label: 'Chat', icon: MessageSquareText },
@@ -42,6 +44,12 @@ const MODE_BY_TAB = {
   research: 'research',
 } as const;
 
+const BUBBLE_SIZE = 56;
+const MOBILE_BREAKPOINT = 640;
+const MOBILE_INSET = 16;
+const DESKTOP_INSET = 24;
+const VIEWPORT_MARGIN = 16;
+
 function stateBadgeClass(state: ConnectedDataStatus['state']): string {
   if (state === 'connected') {
     return 'border-emerald-500/25 bg-emerald-500/12 text-emerald-300';
@@ -56,6 +64,24 @@ function stateBadgeLabel(state: ConnectedDataStatus['state']): string {
   if (state === 'connected') return 'Connected';
   if (state === 'error') return 'Error';
   return 'Not Connected';
+}
+
+function clampBubblePosition(position: { x: number; y: number }) {
+  if (typeof window === 'undefined') {
+    return position;
+  }
+
+  const inset =
+    window.innerWidth < MOBILE_BREAKPOINT ? MOBILE_INSET : DESKTOP_INSET;
+  const minX = VIEWPORT_MARGIN - (window.innerWidth - inset - BUBBLE_SIZE);
+  const maxX = inset - VIEWPORT_MARGIN;
+  const minY = VIEWPORT_MARGIN - (window.innerHeight - inset - BUBBLE_SIZE);
+  const maxY = inset - VIEWPORT_MARGIN;
+
+  return {
+    x: Math.min(maxX, Math.max(minX, position.x)),
+    y: Math.min(maxY, Math.max(minY, position.y)),
+  };
 }
 
 export function AIWidget() {
@@ -81,7 +107,7 @@ export function AIWidget() {
     const saved = localStorage.getItem('cerberus_position');
     if (saved) {
       try {
-        setPosition(JSON.parse(saved));
+        setPosition(clampBubblePosition(JSON.parse(saved)));
       } catch {
         // ignore invalid local storage
       }
@@ -93,6 +119,16 @@ export function AIWidget() {
       localStorage.setItem('cerberus_position', JSON.stringify(position));
     }
   }, [position]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition((current) => clampBubblePosition(current));
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (isOpen && activeThreadId && messages.length === 0) {
@@ -127,15 +163,17 @@ export function AIWidget() {
             onDragStart={() => setIsDragging(true)}
             onDragEnd={(_, info) => {
               setIsDragging(false);
-              setPosition((prev) => ({
-                x: prev.x + info.offset.x,
-                y: prev.y + info.offset.y,
-              }));
+              setPosition((prev) =>
+                clampBubblePosition({
+                  x: prev.x + info.offset.x,
+                  y: prev.y + info.offset.y,
+                })
+              );
             }}
             onClick={() => {
               if (!isDragging) openCerberus();
             }}
-            className="fixed bottom-6 right-6 z-50 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30 transition-transform hover:scale-110 active:scale-95"
+            className="fixed bottom-4 right-4 z-50 flex h-14 w-14 touch-none cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30 transition-transform hover:scale-110 active:scale-95 sm:bottom-6 sm:right-6"
             style={{ x: position.x, y: position.y }}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -154,9 +192,9 @@ export function AIWidget() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 z-50 flex h-full w-full flex-col border-l border-border/50 bg-background/95 shadow-2xl shadow-black/20 backdrop-blur-xl sm:w-[460px]"
+            className="fixed inset-0 z-50 flex h-[100dvh] w-full min-w-0 flex-col border-l border-border/50 bg-background/95 shadow-2xl shadow-black/20 backdrop-blur-xl sm:left-auto sm:w-[460px]"
           >
-            <div className="border-b border-border/50 bg-gradient-to-r from-primary/6 via-transparent to-transparent px-4 py-3">
+            <div className="max-h-[40vh] overflow-y-auto border-b border-border/50 bg-gradient-to-r from-primary/6 via-transparent to-transparent px-4 py-3 sm:max-h-[45vh]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2.5">
@@ -233,7 +271,7 @@ export function AIWidget() {
                         className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2"
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground">{item.label}</p>
                             <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
                               {item.detail}
@@ -253,7 +291,7 @@ export function AIWidget() {
                   <Activity className="h-4 w-4 text-primary" />
                   <p className="app-label">State Table</p>
                 </div>
-                <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[11px]">
+                <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-[11px]">
                   <span className="text-muted-foreground">Mode</span>
                   <span className="font-medium text-foreground">{mode.toUpperCase()}</span>
                   <span className="text-muted-foreground">Selected symbol</span>
@@ -265,19 +303,19 @@ export function AIWidget() {
                   <span className="text-muted-foreground">Bot registry</span>
                   <span className="font-medium text-foreground">{status?.botRegistryLabel ?? 'Loading...'}</span>
                   <span className="text-muted-foreground">Thread</span>
-                  <span className="font-medium text-foreground">{activeThreadId ?? 'New session'}</span>
+                  <span className="break-all font-medium text-foreground">{activeThreadId ?? 'New session'}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex border-b border-border/50 bg-muted/20">
+            <div className="flex overflow-x-auto border-b border-border/50 bg-muted/20">
               {TABS.map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => handleTabChange(tab.id)}
-                    className={`relative flex-1 min-w-0 px-1 py-2.5 text-[11px] font-medium transition-all ${
+                    className={`relative min-w-[76px] flex-1 px-2 py-2.5 text-[11px] font-medium transition-all sm:min-w-0 ${
                       activeTab === tab.id
                         ? 'text-primary'
                         : 'text-muted-foreground hover:text-foreground'

@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import React from "react";
@@ -73,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authApi.logout();
   }, []);
 
-  const value: AuthContextValue = {
+  const value: AuthContextValue = useMemo(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
@@ -81,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     register,
     logout,
-  };
+  }), [user, isLoading, login, register, logout]);
 
   return React.createElement(AuthContext.Provider, { value }, children);
 }

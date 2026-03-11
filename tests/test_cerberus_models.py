@@ -97,7 +97,7 @@ class TestEnums:
         assert {s.value for s in BotStatus} == expected
 
     def test_conversation_mode_values(self):
-        expected = {"chat", "analysis", "trade", "backtest", "build"}
+        expected = {"chat", "analysis", "trade", "backtest", "build", "portfolio", "research", "strategy"}
         assert {m.value for m in ConversationMode} == expected
 
     def test_message_role_values(self):

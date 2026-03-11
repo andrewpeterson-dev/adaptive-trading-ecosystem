@@ -60,6 +60,8 @@ class Settings(BaseSettings):
             if "+asyncpg" in raw:
                 return raw.replace("+asyncpg", "+psycopg2")
             return raw
+        if self.use_sqlite:
+            return "sqlite:///trading_ecosystem.db"
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

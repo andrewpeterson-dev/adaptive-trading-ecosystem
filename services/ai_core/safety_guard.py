@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections import defaultdict, deque
 import re
+import time
 from typing import Optional
 
 import structlog
@@ -21,6 +23,17 @@ class SafetyViolation(Exception):
 
 class SafetyGuard:
     """Enforces safety rules for Cerberus."""
+
+    RATE_LIMITS = {
+        "chat": (20, 60),
+        "analysis": (15, 60),
+        "research": (8, 60),
+        "strategy": (12, 60),
+        "trade": (10, 60),
+        "bot_control": (12, 60),
+        "default": (20, 60),
+    }
+    _local_rate_buckets: dict[tuple[int, str], deque[float]] = defaultdict(deque)
 
     # Patterns that should never appear in model outputs sent to the browser
     DANGEROUS_OUTPUT_PATTERNS = [
@@ -125,9 +138,21 @@ class SafetyGuard:
         return validated
 
     def check_rate_limit(self, user_id: int, action: str = "chat") -> None:
-        """Check rate limits. For now, a simple in-memory check (upgrade to Redis later)."""
-        # TODO: Implement Redis-backed rate limiting
-        pass
+        """Check local per-user rate limits."""
+        max_requests, window_s = self.RATE_LIMITS.get(action, self.RATE_LIMITS["default"])
+        bucket = self._local_rate_buckets[(user_id, action)]
+        now = time.monotonic()
+
+        while bucket and now - bucket[0] > window_s:
+            bucket.popleft()
+
+        if len(bucket) >= max_requests:
+            raise SafetyViolation(
+                f"Rate limit exceeded for {action}: max {max_requests} requests per {window_s} seconds",
+                violation_type="rate_limited",
+            )
+
+        bucket.append(now)
 
     def validate_message_input(self, message: str) -> str:
         """Validate and sanitize user message input."""

@@ -17,11 +17,11 @@ export function TradeMarkerOverlay({
   hovered,
 }: TradeMarkerOverlayProps) {
   return (
-    <div className="pointer-events-none absolute right-4 top-4 z-10 max-w-[320px] rounded-[22px] border border-white/15 bg-slate-950/88 p-4 text-white shadow-[0_28px_80px_-38px_rgba(15,23,42,0.9)] backdrop-blur-xl">
+    <div className="pointer-events-none absolute left-4 right-4 top-4 z-10 rounded-[22px] border border-white/15 bg-slate-950/88 p-4 text-white shadow-[0_28px_80px_-38px_rgba(15,23,42,0.9)] backdrop-blur-xl sm:left-auto sm:max-w-[320px]">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Trade Marker Overlay
+            Trade Detail
           </div>
           <div className="mt-1 text-sm font-semibold text-white">
             {trade ? `${trade.symbol} ${trade.side.toUpperCase()}` : "Hover a marker"}
@@ -36,7 +36,7 @@ export function TradeMarkerOverlay({
 
       {trade ? (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+          <div className="mt-4 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
             <div>
               <div className="text-slate-400">Entry</div>
               <div className="mt-1 font-mono text-white">{formatCurrency(trade.entryPrice)}</div>

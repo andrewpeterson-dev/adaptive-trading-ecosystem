@@ -1,16 +1,22 @@
 import { useCerberusStore } from '@/stores/cerberus-store';
 import type { StreamEvent, AssistantMessage } from '@/types/cerberus';
 
+const MAX_RECONNECT_ATTEMPTS = 5;
+const BASE_RECONNECT_DELAY_MS = 1000;
+
 export class CerberusWebSocket {
   private ws: WebSocket | null = null;
   private threadId: string;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private intentionalClose = false;
 
   constructor(threadId: string) {
     this.threadId = threadId;
   }
 
   connect(): void {
+    this.intentionalClose = false;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.hostname;
     const wsUrl = `${protocol}//${host}:8000/api/ai/stream/${this.threadId}`;
@@ -18,6 +24,7 @@ export class CerberusWebSocket {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
+      this.reconnectAttempts = 0;
       console.log('[CerberusWS] Connected', this.threadId);
     };
 
@@ -30,14 +37,38 @@ export class CerberusWebSocket {
       }
     };
 
-    this.ws.onclose = () => {
-      console.log('[CerberusWS] Disconnected');
-      this.reconnectTimeout = setTimeout(() => this.connect(), 3000);
+    this.ws.onclose = (event) => {
+      console.log('[CerberusWS] Disconnected', event.code, event.reason);
+      this.ws = null;
+
+      // Don't reconnect if intentionally closed or stream completed normally
+      if (this.intentionalClose) return;
+
+      // Normal closure (1000) or going away (1001) after done event — no reconnect
+      if (event.code === 1000 || event.code === 1001) return;
+
+      this.scheduleReconnect();
     };
 
     this.ws.onerror = (error) => {
       console.error('[CerberusWS] Error', error);
+      // Close the socket so onclose fires and handles reconnection
+      this.ws?.close();
     };
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.warn('[CerberusWS] Max reconnect attempts reached');
+      const store = useCerberusStore.getState();
+      store.setStreaming(false);
+      return;
+    }
+
+    const delay = BASE_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts;
+    this.reconnectAttempts++;
+    console.log(`[CerberusWS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    this.reconnectTimeout = setTimeout(() => this.connect(), delay);
   }
 
   send(data: Record<string, unknown>): void {
@@ -47,8 +78,9 @@ export class CerberusWebSocket {
   }
 
   disconnect(): void {
+    this.intentionalClose = true;
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.ws?.close();
+    this.ws?.close(1000, 'Client disconnect');
     this.ws = null;
   }
 
@@ -114,6 +146,9 @@ export class CerberusWebSocket {
       case 'done':
         store.setStreaming(false);
         store.clearToolCalls();
+        // Stream complete — close cleanly (no reconnect needed)
+        this.intentionalClose = true;
+        this.ws?.close(1000, 'Stream complete');
         break;
     }
   }

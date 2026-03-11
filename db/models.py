@@ -204,6 +204,7 @@ class PortfolioSnapshot(Base):
 
     __table_args__ = (
         Index("ix_portfolio_time", "timestamp"),
+        Index("ix_portfolio_mode_time", "mode", "timestamp"),
     )
 
 

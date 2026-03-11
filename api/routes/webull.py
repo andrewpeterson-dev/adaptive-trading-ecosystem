@@ -10,6 +10,7 @@ UserApiConnection (new api-connections system) as fallback.
 For unified_mode providers, the same credentials serve both paper and live.
 """
 
+import asyncio
 import json
 import structlog
 from typing import Optional
@@ -31,6 +32,17 @@ router = APIRouter()
 _client_cache: dict[tuple[int, str], WebullClients] = {}
 
 
+def invalidate_user_client_cache(user_id: int, mode: Optional[str] = None) -> int:
+    """Drop cached Webull clients for a user so fresh credentials are loaded."""
+    if mode is not None:
+        return int(_client_cache.pop((user_id, mode), None) is not None)
+
+    stale_keys = [cache_key for cache_key in _client_cache if cache_key[0] == user_id]
+    for cache_key in stale_keys:
+        _client_cache.pop(cache_key, None)
+    return len(stale_keys)
+
+
 async def _get_user_clients(user_id: int, mode: str = "paper") -> Optional[WebullClients]:
     """
     Load or return cached WebullClients for a user and mode.
@@ -46,6 +58,8 @@ async def _get_user_clients(user_id: int, mode: str = "paper") -> Optional[Webul
     cached = _client_cache.get(cache_key)
     if cached and cached.account._h.connected:
         return cached
+    if cached:
+        _client_cache.pop(cache_key, None)
 
     app_key: Optional[str] = None
     app_secret: Optional[str] = None
@@ -139,7 +153,7 @@ async def webull_status(request: Request):
     if not clients:
         return {"connected": False}
 
-    result = clients.account._h.connect()
+    result = await asyncio.to_thread(clients.account._h.connect)
     if not result.get("success"):
         return {"connected": False, "error": result.get("error")}
 
@@ -157,8 +171,9 @@ async def webull_account(request: Request):
     if not clients:
         return {"connected": False, "error": "No Webull credentials configured"}
 
-    summary = clients.account.get_summary()
+    summary = await asyncio.to_thread(clients.account.get_summary)
     if not summary:
+        invalidate_user_client_cache(request.state.user_id, _mode_str(request))
         return {"connected": True, "error": "Could not fetch account data"}
     return {"connected": True, **summary}
 
@@ -170,7 +185,8 @@ async def webull_positions(request: Request):
     if not clients:
         return {"connected": False, "positions": []}
 
-    return {"connected": True, "positions": clients.account.get_positions()}
+    positions = await asyncio.to_thread(clients.account.get_positions)
+    return {"connected": True, "positions": positions}
 
 
 @router.get("/orders")
@@ -180,7 +196,8 @@ async def webull_orders(request: Request):
     if not clients:
         return {"connected": False, "orders": []}
 
-    return {"connected": True, "orders": clients.account.get_open_orders()}
+    orders = await asyncio.to_thread(clients.account.get_open_orders)
+    return {"connected": True, "orders": orders}
 
 
 @router.get("/quotes")
@@ -196,28 +213,33 @@ async def webull_quotes(
     clients     = await _get_user_clients(request.state.user_id, _mode_str(request))
 
     if clients:
-        quotes = clients.market_data.get_quotes(symbol_list)
+        quotes = await asyncio.to_thread(clients.market_data.get_quotes, symbol_list)
         return {"connected": True, "quotes": quotes}
 
     # Fallback: unofficial SDK (no auth required for US equity quotes)
     try:
-        from webull import webull
-        wb     = webull()
-        quotes = {}
-        for sym in symbol_list:
-            raw = wb.get_quote(sym)
-            if raw:
-                quotes[sym] = {
-                    "symbol":     sym,
-                    "price":      float(raw.get("close", 0)),
-                    "change":     float(raw.get("change", 0)),
-                    "change_pct": float(raw.get("changeRatio", 0)) * 100,
-                    "volume":     int(float(raw.get("volume", 0))),
-                    "open":       float(raw.get("open", 0)),
-                    "high":       float(raw.get("high", 0)),
-                    "low":        float(raw.get("low", 0)),
-                    "prev_close": float(raw.get("preClose", 0)),
-                }
+        def _fetch_public_quotes() -> dict[str, dict]:
+            from webull import webull
+
+            wb = webull()
+            quotes: dict[str, dict] = {}
+            for sym in symbol_list:
+                raw = wb.get_quote(sym)
+                if raw:
+                    quotes[sym] = {
+                        "symbol": sym,
+                        "price": float(raw.get("close", 0)),
+                        "change": float(raw.get("change", 0)),
+                        "change_pct": float(raw.get("changeRatio", 0)) * 100,
+                        "volume": int(float(raw.get("volume", 0))),
+                        "open": float(raw.get("open", 0)),
+                        "high": float(raw.get("high", 0)),
+                        "low": float(raw.get("low", 0)),
+                        "prev_close": float(raw.get("preClose", 0)),
+                    }
+            return quotes
+
+        quotes = await asyncio.to_thread(_fetch_public_quotes)
         return {"connected": False, "quotes": quotes}
     except Exception as exc:
         logger.warning("quote_fallback_failed", error=str(exc))
@@ -241,7 +263,11 @@ async def webull_place_order(req: PlaceOrderRequest, request: Request):
         tif=req.tif.upper(),
     )
 
-    result = clients.trading.place_order(wb_req, user_confirmed=req.user_confirmed)
+    result = await asyncio.to_thread(
+        clients.trading.place_order,
+        wb_req,
+        user_confirmed=req.user_confirmed,
+    )
 
     if result.success:
         logger.info(

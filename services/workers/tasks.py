@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+
 import structlog
 
 from services.workers.celery_app import app
@@ -16,6 +17,20 @@ def _run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+async def _execute_backtest(backtest_id: str, user_id: int) -> dict:
+    """Execute a stored Cerberus backtest using the real strategy backtester."""
+    from services.workers.job_runners import execute_backtest_job
+
+    return await execute_backtest_job(backtest_id, user_id)
+
+
+async def _execute_research_job(query: str, user_id: int, document_ids: list[str] | None = None) -> dict:
+    """Execute a real research session and return the assembled output."""
+    from services.workers.job_runners import execute_research_job
+
+    return await execute_research_job(query, user_id, document_ids)
 
 
 @app.task(bind=True, name="services.workers.tasks.ingest_document", max_retries=3)
@@ -37,30 +52,9 @@ def run_backtest(self, backtest_id: str, user_id: int):
     """Run a strategy backtest."""
     logger.info("task_run_backtest", backtest_id=backtest_id, user_id=user_id)
     try:
-        from db.database import get_session
-        from db.cerberus_models import CerberusBacktest
-        from sqlalchemy import select
-        from datetime import datetime
-
-        async def _run():
-            async with get_session() as session:
-                result = await session.execute(
-                    select(CerberusBacktest).where(CerberusBacktest.id == backtest_id)
-                )
-                bt = result.scalar_one_or_none()
-                if not bt:
-                    raise ValueError(f"Backtest {backtest_id} not found")
-
-                # TODO: Integrate with engine/backtester.py for actual execution
-                bt.status = "completed"
-                bt.completed_at = datetime.utcnow()
-                bt.metrics_json = {
-                    "status": "stub",
-                    "message": "Backtest execution pending full integration",
-                }
-
-        _run_async(_run())
+        result = _run_async(_execute_backtest(backtest_id, user_id))
         logger.info("task_backtest_complete", backtest_id=backtest_id)
+        return result
     except Exception as exc:
         logger.error("task_backtest_failed", backtest_id=backtest_id, error=str(exc))
         raise self.retry(exc=exc, countdown=60)
@@ -95,5 +89,16 @@ def summarize_thread(thread_id: str, user_id: int):
 def run_research_job(query: str, user_id: int, document_ids: list[str] | None = None):
     """Run a long research job (Perplexity deep research + document analysis)."""
     logger.info("task_research_job", query=query, user_id=user_id)
-    # TODO: Implement deep research pipeline
-    logger.info("task_research_stub", message="Deep research pending implementation")
+    try:
+        result = _run_async(_execute_research_job(query, user_id, document_ids))
+        logger.info(
+            "task_research_complete",
+            user_id=user_id,
+            query=query,
+            symbols=result.get("symbols", []),
+            news_results=len(result.get("news_results", [])),
+        )
+        return result
+    except Exception as exc:
+        logger.error("task_research_failed", query=query, user_id=user_id, error=str(exc))
+        raise

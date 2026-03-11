@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from config.settings import get_settings
 from db.database import get_session
+from services.security.jwt_utils import JWTConfigurationError, decode_jwt, encode_jwt
 
 logger = structlog.get_logger(__name__)
 
@@ -116,21 +117,27 @@ class DocumentUploadService:
         return await ingestion.ingest(document_id, user_id)
 
     def _generate_local_upload_url(self, *, document_id: str, user_id: int) -> str:
-        token = jwt.encode(
-            {
-                "sub": "document-upload",
-                "document_id": document_id,
-                "user_id": user_id,
-                "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            },
-            self._settings.jwt_secret,
-            algorithm="HS256",
-        )
+        try:
+            token = encode_jwt(
+                {
+                    "sub": "document-upload",
+                    "document_id": document_id,
+                    "user_id": user_id,
+                    "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+                },
+                self._settings,
+            )
+        except JWTConfigurationError as exc:
+            raise RuntimeError(
+                "Document upload tokens are unavailable until JWT_SECRET is configured"
+            ) from exc
         return f"/api/documents/upload/{document_id}/content?token={token}"
 
     def verify_local_upload_token(self, *, document_id: str, token: str) -> int:
         try:
-            payload = jwt.decode(token, self._settings.jwt_secret, algorithms=["HS256"])
+            payload = decode_jwt(token, self._settings)
+        except JWTConfigurationError as exc:
+            raise ValueError("Upload authentication is not configured") from exc
         except jwt.PyJWTError as exc:
             raise ValueError("Invalid upload token") from exc
 

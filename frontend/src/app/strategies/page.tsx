@@ -21,6 +21,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 
 function ScoreBadge({ score }: { score: number }) {
   if (score >= 80) return <Badge variant="success">Score {score}</Badge>;
@@ -81,6 +82,7 @@ export default function StrategiesPage() {
   const [cloningId, setCloningId] = useState<number | null>(null);
   const [deployingId, setDeployingId] = useState<number | null>(null);
   const [deployedIds, setDeployedIds] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
 
   const fetchStrategies = useCallback(async () => {
     try {
@@ -112,6 +114,10 @@ export default function StrategiesPage() {
     try {
       await deployBotFromStrategy(strategy.id, strategy.name);
       setDeployedIds((prev) => new Set(prev).add(strategy.id));
+      toast(`"${strategy.name}" deployed as bot`, "success");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to deploy bot";
+      toast(msg, "error");
     } finally {
       setDeployingId(null);
     }

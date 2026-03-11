@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useCerberusStore } from '@/stores/cerberus-store';
 import { useUIContextStore } from '@/stores/ui-context-store';
 import { sendChatMessage } from '@/lib/cerberus-api';
@@ -8,12 +9,21 @@ import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 
 export function ChatPanel() {
-  const {
-    messages, activeThreadId, isStreaming, streamingContent,
-    mode, setActiveThread, addMessage, setStreaming,
-    clearStreamContent,
-  } = useCerberusStore();
-  const { pageContext } = useUIContextStore();
+  // Select only the slices we need — prevents re-render when unrelated store fields change
+  const { messages, activeThreadId, isStreaming, streamingContent, mode } =
+    useCerberusStore(useShallow((s) => ({
+      messages: s.messages,
+      activeThreadId: s.activeThreadId,
+      isStreaming: s.isStreaming,
+      streamingContent: s.streamingContent,
+      mode: s.mode,
+    })));
+  // Stable action references don't need shallow — they never change
+  const setActiveThread = useCerberusStore((s) => s.setActiveThread);
+  const addMessage = useCerberusStore((s) => s.addMessage);
+  const setStreaming = useCerberusStore((s) => s.setStreaming);
+  const clearStreamContent = useCerberusStore((s) => s.clearStreamContent);
+  const pageContext = useUIContextStore((s) => s.pageContext);
 
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;

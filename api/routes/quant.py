@@ -18,8 +18,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import get_db
@@ -242,7 +242,7 @@ def _profit_heatmap(trades: List[Dict]) -> Dict:
     return {"data": data, "days": days, "hours": hours}
 
 
-async def _load_strategy(strategy_id: int, db: AsyncSession):
+async def _load_strategy(strategy_id: int, user_id: int, db: AsyncSession):
     """Load strategy by ID.
 
     Resolution order (matches how frontend references strategies):
@@ -258,14 +258,22 @@ async def _load_strategy(strategy_id: int, db: AsyncSession):
     inst_result = await db.execute(
         select(StrategyInstance)
         .options(_selectinload(StrategyInstance.template))
-        .where(StrategyInstance.id == strategy_id)
+        .where(
+            StrategyInstance.id == strategy_id,
+            StrategyInstance.user_id == user_id,
+        )
     )
     inst = inst_result.scalar_one_or_none()
     if inst and inst.template:
         return inst.template
 
     # 2. Fall back to legacy/demo Strategy table
-    result = await db.execute(select(Strategy).where(Strategy.id == strategy_id))
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.id == strategy_id,
+            or_(Strategy.user_id == user_id, Strategy.user_id.is_(None)),
+        )
+    )
     return result.scalar_one_or_none()
 
 
@@ -275,10 +283,11 @@ async def _load_strategy(strategy_id: int, db: AsyncSession):
 @router.get("/strategy/{strategy_id}")
 async def get_strategy_intelligence(
     strategy_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Full intelligence bundle — metadata, performance, equity curve, regime, decision pipeline."""
-    strategy = await _load_strategy(strategy_id, db)
+    strategy = await _load_strategy(strategy_id, request.state.user_id, db)
     if not strategy:
         raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -376,10 +385,11 @@ async def get_strategy_intelligence(
 async def get_strategy_trades(
     strategy_id: int,
     limit: int = Query(50, ge=1, le=200),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Trades with AI decision metadata (signals, confidence, regime, reasoning)."""
-    strategy = await _load_strategy(strategy_id, db)
+    strategy = await _load_strategy(strategy_id, request.state.user_id, db)
     if not strategy:
         raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -423,10 +433,11 @@ async def get_strategy_trades(
 async def get_reasoning_logs(
     strategy_id: int,
     limit: int = Query(20, ge=1, le=100),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ):
     """AI reasoning log entries — one entry per signal evaluation."""
-    strategy = await _load_strategy(strategy_id, db)
+    strategy = await _load_strategy(strategy_id, request.state.user_id, db)
     if not strategy:
         raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -440,10 +451,11 @@ async def get_monte_carlo(
     strategy_id: int,
     n_sims: int = Query(200, ge=50, le=1000),
     horizon_days: int = Query(90, ge=30, le=365),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Monte Carlo simulation by resampling historical trade returns."""
-    strategy = await _load_strategy(strategy_id, db)
+    strategy = await _load_strategy(strategy_id, request.state.user_id, db)
     if not strategy:
         raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -465,10 +477,11 @@ async def get_monte_carlo(
 @router.get("/strategy/{strategy_id}/feature-importance")
 async def get_feature_importance(
     strategy_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Feature/condition importance scores."""
-    strategy = await _load_strategy(strategy_id, db)
+    strategy = await _load_strategy(strategy_id, request.state.user_id, db)
     if not strategy:
         raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -479,10 +492,11 @@ async def get_feature_importance(
 @router.get("/strategy/{strategy_id}/heatmap")
 async def get_profit_heatmap(
     strategy_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Profit heatmap — average PnL% by hour × day-of-week."""
-    strategy = await _load_strategy(strategy_id, db)
+    strategy = await _load_strategy(strategy_id, request.state.user_id, db)
     if not strategy:
         raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -512,6 +526,7 @@ async def get_profit_heatmap(
 @router.get("/compare")
 async def compare_strategies(
     ids: str = Query(..., description="Comma-separated strategy IDs"),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Side-by-side comparison of multiple strategies."""
@@ -525,7 +540,7 @@ async def compare_strategies(
 
     results = []
     for sid in id_list:
-        strategy = await _load_strategy(sid, db)
+        strategy = await _load_strategy(sid, request.state.user_id, db)
         if not strategy:
             continue
 

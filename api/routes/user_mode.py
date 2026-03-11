@@ -19,10 +19,17 @@ class SetModeRequest(BaseModel):
     mode: str  # "paper" or "live"
 
 
+def _require_user(request: Request) -> int:
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user_id
+
+
 @router.get("/mode")
 async def get_mode(request: Request):
     """Return the user's current server-side trading mode."""
-    user_id = request.state.user_id
+    user_id = _require_user(request)
     async with get_session() as db:
         result = await db.execute(
             select(UserTradingSession).where(UserTradingSession.user_id == user_id)
@@ -36,7 +43,7 @@ async def get_mode(request: Request):
 @router.post("/set-mode")
 async def set_mode(req: SetModeRequest, request: Request):
     """Switch the user's active trading mode. Server-authoritative."""
-    user_id = request.state.user_id
+    user_id = _require_user(request)
 
     # Validate
     try:

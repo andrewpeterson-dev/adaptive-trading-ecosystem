@@ -6,7 +6,6 @@ Live trade execution requires explicit user confirmation via the proposal flow.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
 
 import structlog
 
@@ -152,11 +151,13 @@ async def _backtest_strategy(
     bot_id: str = None,
     bot_version_id: str = None,
 ) -> dict:
-    """Enqueue a backtest run."""
+    """Create and execute or queue a real backtest run."""
     from db.database import get_session
     from db.cerberus_models import CerberusBacktest
+    from services.workers.job_runners import execute_backtest_job
 
     backtest_id = str(uuid.uuid4())
+    params_payload = params or {}
 
     async with get_session() as session:
         bt = CerberusBacktest(
@@ -165,16 +166,29 @@ async def _backtest_strategy(
             bot_id=bot_id,
             bot_version_id=bot_version_id,
             strategy_name=strategy_name,
-            params_json=params or {},
+            params_json=params_payload,
             status="pending",
         )
         session.add(bt)
 
+    inline_result = None
+    execution_mode = "queued"
+    try:
+        from services.workers.tasks import run_backtest as run_backtest_task
+
+        run_backtest_task.delay(backtest_id, user_id)
+    except Exception as exc:
+        logger.warning("backtest_queue_failed_falling_back_inline", backtest_id=backtest_id, error=str(exc))
+        inline_result = await execute_backtest_job(backtest_id, user_id)
+        execution_mode = "inline"
+
     return {
         "backtest_id": backtest_id,
         "strategy_name": strategy_name,
-        "status": "pending",
-        "message": "Backtest queued. Results will be available once processing completes.",
+        "status": "completed" if inline_result else "pending",
+        "execution_mode": execution_mode,
+        "message": "Backtest completed" if inline_result else "Backtest queued. Results will be available once processing completes.",
+        "metrics": inline_result.get("metrics", {}) if inline_result else {},
     }
 
 
@@ -189,38 +203,40 @@ async def _create_trade_proposal(
     thread_id: str = None,
 ) -> dict:
     """Create a trade proposal (draft). Does NOT execute."""
-    from db.database import get_session
-    from db.cerberus_models import CerberusTradeProposal, ProposalStatus
+    from data.market_data import market_data
+    from services.ai_core.proposals.trade_proposal_service import TradeProposalService
 
-    proposal_id = str(uuid.uuid4())
+    normalized_symbol = symbol.upper()
+    estimated_price = float(limit_price) if limit_price is not None else None
+    if estimated_price is None:
+        quote = await market_data.get_quote(normalized_symbol)
+        if quote and quote.get("price") is not None:
+            estimated_price = float(quote["price"])
+
     proposal_json = {
-        "symbol": symbol.upper(),
+        "symbol": normalized_symbol,
         "side": side,
         "quantity": quantity,
         "order_type": order_type,
         "limit_price": limit_price,
+        "estimated_price": estimated_price,
     }
 
-    async with get_session() as session:
-        proposal = CerberusTradeProposal(
-            id=proposal_id,
-            user_id=user_id,
-            thread_id=thread_id,
-            proposal_json=proposal_json,
-            risk_json={},  # TODO: populate with pre-trade risk check
-            explanation_md=explanation,
-            status=ProposalStatus.PENDING,
-            expires_at=datetime.utcnow() + timedelta(minutes=15),
-        )
-        session.add(proposal)
+    result = await TradeProposalService().create_proposal(
+        user_id=user_id,
+        thread_id=thread_id,
+        proposal_data=proposal_json,
+        explanation=explanation or "",
+    )
 
-    return {
-        "proposal_id": proposal_id,
-        "proposal": proposal_json,
-        "status": "pending",
-        "expires_in_minutes": 15,
-        "message": "Trade proposal created. User must confirm before execution.",
-    }
+    result.setdefault("proposal", proposal_json)
+    if result.get("status") == "blocked":
+        result["message"] = "Trade proposal blocked by pre-trade risk checks."
+        return result
+
+    result["expires_in_minutes"] = 5
+    result["message"] = "Trade proposal created. User must confirm before execution."
+    return result
 
 
 # ---------------------------------------------------------------------------

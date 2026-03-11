@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from inspect import isawaitable
 from typing import Optional
 
 import structlog
@@ -22,7 +23,7 @@ async def log_event(
     """Write a system event to the database. Fire-and-forget safe."""
     try:
         async with get_session() as db:
-            db.add(SystemEvent(
+            maybe_result = db.add(SystemEvent(
                 user_id=user_id,
                 event_type=event_type,
                 mode=mode,
@@ -30,6 +31,8 @@ async def log_event(
                 description=description,
                 metadata_json=metadata or {},
             ))
+            if isawaitable(maybe_result):
+                await maybe_result
         logger.info("system_event_logged", event_type=event_type.value, user_id=user_id)
     except Exception as exc:
         # Never let event logging crash the caller

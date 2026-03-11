@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import React from "react";
@@ -71,13 +72,13 @@ export function TradingModeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value: TradingModeContextValue = {
+  const value: TradingModeContextValue = useMemo(() => ({
     mode,
     setMode,
     isPaper: mode === "paper",
     isLive: mode === "live",
     switching,
-  };
+  }), [mode, setMode, switching]);
 
   return React.createElement(TradingModeContext.Provider, { value }, children);
 }

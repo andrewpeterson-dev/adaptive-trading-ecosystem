@@ -63,38 +63,35 @@ const PROCESS_STEPS = [
   },
 ];
 
-const EXAMPLES: Array<{
+const BRIEF_TEMPLATES: Array<{
   label: string;
   input: Partial<CerberusStrategyInput>;
 }> = [
   {
-    label: "SPY breakout",
+    label: "Breakout",
     input: {
-      objective: "Build a volatility breakout bot for SPY that only trades when momentum confirms the move.",
-      instrumentFocus: "options",
-      symbols: "SPY",
+      objective: "Build a breakout bot that waits for compression, expansion, and momentum confirmation before entering.",
+      instrumentFocus: "stocks",
       timeframe: "1H",
       holdingStyle: "swing",
       directionBias: "two-sided",
     },
   },
   {
-    label: "NVDA trend",
+    label: "Trend Following",
     input: {
-      objective: "Design a trend-following bot for NVDA that adds only when strength persists and avoids chop.",
+      objective: "Design a trend-following bot that adds only when strength persists and the tape stays orderly.",
       instrumentFocus: "stocks",
-      symbols: "NVDA",
       timeframe: "1D",
       holdingStyle: "position",
       directionBias: "long-only",
     },
   },
   {
-    label: "ETF mean reversion",
+    label: "Mean Reversion",
     input: {
-      objective: "Create a mean-reversion bot for liquid index ETFs that buys oversold pullbacks in uptrends.",
+      objective: "Create a mean-reversion bot that buys oversold pullbacks inside established uptrends and exits into strength.",
       instrumentFocus: "stocks",
-      symbols: "SPY, QQQ, IWM",
       timeframe: "4H",
       holdingStyle: "swing",
       directionBias: "long-only",
@@ -294,7 +291,7 @@ export function AIStrategyGeneratorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl overflow-hidden border border-border/70 bg-card p-0">
+      <DialogContent className="max-w-6xl border border-border/70 bg-card p-0">
         <div className="border-b border-border/60 bg-[linear-gradient(135deg,rgba(14,165,233,0.12),rgba(249,115,22,0.06),rgba(16,185,129,0.08))] px-6 py-6">
           <DialogHeader className="p-0">
             <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-400">
@@ -312,7 +309,7 @@ export function AIStrategyGeneratorDialog({
           </DialogHeader>
         </div>
 
-        <div className="grid gap-0 lg:grid-cols-[1.35fr,0.95fr]">
+        <div className="grid gap-0 xl:grid-cols-[1.35fr,0.95fr]">
           <div className="space-y-5 p-6">
             <div className="space-y-2">
               <label className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -329,10 +326,10 @@ export function AIStrategyGeneratorDialog({
 
             <div className="space-y-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Example Briefs
+                Starter Templates
               </div>
               <div className="flex flex-wrap gap-2">
-                {EXAMPLES.map((example) => (
+                {BRIEF_TEMPLATES.map((example) => (
                   <button
                     key={example.label}
                     type="button"
@@ -463,7 +460,7 @@ export function AIStrategyGeneratorDialog({
             </div>
           </div>
 
-          <div className="border-l border-border/60 bg-muted/10 p-6">
+          <div className="border-t xl:border-t-0 xl:border-l border-border/60 bg-muted/10 p-6">
             <div className="rounded-3xl border border-border/60 bg-card/80 p-5">
               <div className="mb-4 flex items-center gap-2">
                 <Bot className="h-4 w-4 text-primary" />
@@ -532,7 +529,7 @@ export function AIStrategyGeneratorDialog({
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl border border-border/50 bg-muted/15 p-3">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Action

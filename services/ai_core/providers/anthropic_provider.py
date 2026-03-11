@@ -1,6 +1,8 @@
 """Anthropic provider using native Claude API (not OpenAI compatibility layer)."""
 from __future__ import annotations
 
+import asyncio
+import json
 from typing import AsyncIterator
 
 import structlog
@@ -12,6 +14,9 @@ from .base import (
 )
 
 logger = structlog.get_logger(__name__)
+
+# Retryable error types from the Anthropic SDK
+_RETRYABLE_ERRORS = ("overloaded_error", "rate_limit_error", "api_error")
 
 
 class AnthropicProvider(BaseProvider):
@@ -84,7 +89,26 @@ class AnthropicProvider(BaseProvider):
             params["tools"] = self._format_tools(tools)
 
         logger.info("anthropic_complete", model=model)
-        response = await client.messages.create(**params)
+        settings = get_settings()
+        max_retries = settings.llm_max_retries
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                response = await client.messages.create(**params)
+                break
+            except Exception as e:
+                last_exc = e
+                err_type = getattr(e, "type", "") or ""
+                if err_type not in _RETRYABLE_ERRORS and "overloaded" not in str(e).lower():
+                    raise
+                if attempt < max_retries:
+                    delay = 2 ** attempt
+                    logger.warning("anthropic_retry", attempt=attempt + 1, delay=delay, error=str(e))
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        else:
+            raise last_exc  # type: ignore[misc]
 
         content = ""
         tool_calls = []
@@ -94,7 +118,7 @@ class AnthropicProvider(BaseProvider):
             elif block.type == "tool_use":
                 tool_calls.append({
                     "id": block.id,
-                    "function": {"name": block.name, "arguments": str(block.input)},
+                    "function": {"name": block.name, "arguments": json.dumps(block.input)},
                 })
 
         return ProviderResponse(
@@ -132,15 +156,44 @@ class AnthropicProvider(BaseProvider):
             params["tools"] = self._format_tools(tools)
 
         logger.info("anthropic_stream", model=model)
-        async with client.messages.stream(**params) as stream:
-            async for event in stream:
-                if event.type == "content_block_delta":
-                    if hasattr(event.delta, "text"):
-                        yield StreamChunk(delta_text=event.delta.text)
-                elif event.type == "message_stop":
-                    msg = stream.current_message_snapshot
-                    yield StreamChunk(
-                        finish_reason="end_turn",
-                        usage={"input_tokens": msg.usage.input_tokens, "output_tokens": msg.usage.output_tokens} if msg.usage else None,
-                        provider_request_id=msg.id,
-                    )
+        settings = get_settings()
+        max_retries = settings.llm_max_retries
+        last_exc: Exception | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                async with client.messages.stream(**params) as stream:
+                    async for event in stream:
+                        if event.type == "content_block_delta":
+                            if hasattr(event.delta, "text"):
+                                yield StreamChunk(delta_text=event.delta.text)
+                            elif hasattr(event.delta, "partial_json"):
+                                yield StreamChunk(
+                                    delta_tool_calls=[{"partial_json": event.delta.partial_json}]
+                                )
+                        elif event.type == "content_block_start":
+                            if hasattr(event.content_block, "type") and event.content_block.type == "tool_use":
+                                yield StreamChunk(
+                                    delta_tool_calls=[{
+                                        "id": event.content_block.id,
+                                        "function": {"name": event.content_block.name},
+                                    }]
+                                )
+                        elif event.type == "message_stop":
+                            msg = stream.current_message_snapshot
+                            yield StreamChunk(
+                                finish_reason="end_turn",
+                                usage={"input_tokens": msg.usage.input_tokens, "output_tokens": msg.usage.output_tokens} if msg.usage else None,
+                                provider_request_id=msg.id,
+                            )
+                return  # Success — exit retry loop
+            except Exception as e:
+                last_exc = e
+                err_type = getattr(e, "type", "") or ""
+                if err_type not in _RETRYABLE_ERRORS and "overloaded" not in str(e).lower():
+                    raise
+                if attempt < max_retries:
+                    delay = 2 ** attempt
+                    logger.warning("anthropic_stream_retry", attempt=attempt + 1, delay=delay, error=str(e))
+                    await asyncio.sleep(delay)
+                else:
+                    raise

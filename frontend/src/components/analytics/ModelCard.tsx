@@ -36,7 +36,7 @@ export function ModelCard({
   retrainAvailable = false,
 }: {
   model: ModelDetail;
-  onRetrain: (name: string) => void;
+  onRetrain: (name: string) => void | Promise<void>;
   retrainAvailable?: boolean;
 }) {
   const [retraining, setRetraining] = useState(false);
@@ -62,8 +62,8 @@ export function ModelCard({
   return (
     <div className="app-panel p-5">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
             <span
               className={`inline-block h-2.5 w-2.5 rounded-full ${
                 model.is_active
@@ -71,15 +71,15 @@ export function ModelCard({
                   : "bg-muted-foreground/40"
               }`}
             />
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">{model.name}</h3>
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-semibold text-foreground">{model.name}</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {model.is_active ? "Active in production" : "Inactive model"}
               </p>
             </div>
           </div>
           <span
-            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${typeClass}`}
+            className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${typeClass}`}
           >
             {model.model_type.replace("Model", "")}
           </span>
@@ -167,26 +167,31 @@ export function ModelCard({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Badge variant={model.is_active ? "positive" : "neutral"}>
             <Activity className="h-3.5 w-3.5" />
             {model.is_active ? "Enabled" : "Disabled"}
           </Badge>
-          <Button
-            onClick={handleRetrain}
-            disabled={!retrainAvailable || retraining}
-            title={retrainAvailable ? undefined : "Retrain not available"}
-            variant="secondary"
-            size="sm"
-            className="h-9 px-4 text-xs"
-          >
-            {retraining ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <RotateCcw className="h-3 w-3" />
-            )}
-            {retraining ? "Retraining..." : retrainAvailable ? "Retrain" : "Retrain unavailable"}
-          </Button>
+          {retrainAvailable ? (
+            <Button
+              onClick={handleRetrain}
+              disabled={retraining}
+              variant="secondary"
+              size="sm"
+              className="h-9 px-4 text-xs"
+            >
+              {retraining ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3 w-3" />
+              )}
+              {retraining ? "Retraining..." : "Queue Retrain"}
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Retraining controls are unavailable in this environment.
+            </p>
+          )}
         </div>
       </div>
     </div>

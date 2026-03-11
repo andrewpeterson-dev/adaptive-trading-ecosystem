@@ -1,6 +1,7 @@
 """OpenAI provider using the Responses API."""
 from __future__ import annotations
 
+import asyncio
 from typing import AsyncIterator
 
 import httpx
@@ -13,6 +14,8 @@ from .base import (
 )
 
 logger = structlog.get_logger(__name__)
+
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 529}
 
 
 class OpenAIProvider(BaseProvider):
@@ -84,7 +87,26 @@ class OpenAIProvider(BaseProvider):
             params["text"] = {"format": response_format}
 
         logger.info("openai_complete", model=model, store=store)
-        response = await client.responses.create(**params)
+        settings = get_settings()
+        max_retries = settings.llm_max_retries
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                response = await client.responses.create(**params)
+                break
+            except Exception as e:
+                last_exc = e
+                status = getattr(e, "status_code", 0) or 0
+                if status not in _RETRYABLE_STATUS_CODES and "rate" not in str(e).lower():
+                    raise
+                if attempt < max_retries:
+                    delay = 2 ** attempt
+                    logger.warning("openai_retry", attempt=attempt + 1, delay=delay, error=str(e))
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        else:
+            raise last_exc  # type: ignore[misc]
 
         content = ""
         tool_calls = []

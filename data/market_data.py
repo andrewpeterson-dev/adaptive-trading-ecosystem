@@ -15,8 +15,11 @@ import json
 import time
 from typing import Optional
 
-import redis.asyncio as aioredis
 import structlog
+try:
+    import redis.asyncio as aioredis
+except ImportError:  # pragma: no cover - optional dependency in test/dev
+    aioredis = None
 
 from config.settings import get_settings
 
@@ -27,6 +30,8 @@ QuoteDict = dict  # {symbol, price, bid, ask, volume, change, change_pct, timest
 
 
 def _redis_client():
+    if aioredis is None:
+        return None
     settings = get_settings()
     return aioredis.from_url(settings.redis_url, decode_responses=True)
 
@@ -148,6 +153,12 @@ async def _finnhub_quote(symbol: str) -> Optional[QuoteDict]:
                 "https://finnhub.io/api/v1/quote",
                 params={"symbol": symbol, "token": settings.finnhub_api_key},
             )
+            if resp.status_code == 429:
+                logger.warning("finnhub_rate_limited", symbol=symbol)
+                return None
+            if resp.status_code != 200:
+                logger.debug("finnhub_bad_status", symbol=symbol, status=resp.status_code)
+                return None
             data = resp.json()
         if not data.get("c"):
             return None
@@ -324,6 +335,8 @@ class MarketDataService:
     async def _get_cache(self, key: str):
         try:
             r = await self._get_redis()
+            if r is None:
+                return None
             val = await r.get(key)
             return json.loads(val) if val else None
         except Exception:
@@ -333,6 +346,8 @@ class MarketDataService:
     async def _set_cache(self, key: str, value, ttl: int = 5):
         try:
             r = await self._get_redis()
+            if r is None:
+                return
             await r.setex(key, ttl, json.dumps(value))
         except Exception:
             await self._reset_redis()
@@ -341,6 +356,8 @@ class MarketDataService:
     async def _publish(self, quote: QuoteDict):
         try:
             r = await self._get_redis()
+            if r is None:
+                return
             await r.publish("market:price_updates", json.dumps(quote))
         except Exception:
             await self._reset_redis()

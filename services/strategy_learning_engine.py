@@ -247,9 +247,10 @@ class StrategyLearningEngine:
             trades_result = await session.execute(
                 select(CerberusTrade)
                 .where(CerberusTrade.bot_id == bot.id)
-                .order_by(CerberusTrade.created_at.asc())
+                .order_by(CerberusTrade.created_at.desc())
+                .limit(500)
             )
-            trades = list(trades_result.scalars().all())
+            trades = list(reversed(trades_result.scalars().all()))
             metrics = calculate_trade_metrics(trades, config)
 
             adjustments, method, summary = self._propose_adjustments(config, metrics)

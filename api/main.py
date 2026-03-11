@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.routes import trading, models as models_routes, dashboard, system, strategies, explainer, news
 from api.routes import auth as auth_routes, webull as webull_routes
@@ -30,6 +31,29 @@ from config.settings import get_settings
 from db.database import init_db, close_db
 
 logger = structlog.get_logger(__name__)
+_db_init_state = {"ready": False, "failed": False}
+
+
+def _spawn_background_task(
+    tasks: set[asyncio.Task],
+    *,
+    coro,
+    name: str,
+) -> asyncio.Task:
+    task = asyncio.create_task(coro, name=name)
+    tasks.add(task)
+
+    def _on_done(done_task: asyncio.Task) -> None:
+        tasks.discard(done_task)
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            logger.info("background_task_cancelled", task=name)
+        except Exception as exc:  # pragma: no cover - defensive background logging
+            logger.exception("background_task_failed", task=name, error=str(exc))
+
+    task.add_done_callback(_on_done)
+    return task
 
 
 def _validate_env(settings) -> None:
@@ -67,15 +91,21 @@ def _validate_env(settings) -> None:
 
 async def _init_db_with_retry() -> None:
     """Initialize DB in the background with retries so startup never blocks the healthcheck."""
+    _db_init_state["ready"] = False
+    _db_init_state["failed"] = False
     for attempt in range(10):
         try:
             await init_db()
+            _db_init_state["ready"] = True
+            _db_init_state["failed"] = False
             logger.info("db_initialized", attempt=attempt + 1)
             return
         except Exception as exc:
+            _db_init_state["ready"] = False
             wait = min(5 * (attempt + 1), 30)
             logger.warning("db_init_retry", attempt=attempt + 1, error=str(exc), retry_in=wait)
             await asyncio.sleep(wait)
+    _db_init_state["failed"] = True
     logger.error("db_init_failed_permanently")
 
 
@@ -83,11 +113,14 @@ async def _init_db_with_retry() -> None:
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
     settings = get_settings()
+    background_tasks: set[asyncio.Task] = set()
+    _db_init_state["ready"] = False
+    _db_init_state["failed"] = False
     _validate_env(settings)
     logger.info("starting_trading_ecosystem", mode=settings.trading_mode.value)
     # Non-blocking: DB init runs in background so /health responds immediately.
     # This prevents Railway's 30s healthcheck from expiring during DB connection.
-    asyncio.create_task(_init_db_with_retry())
+    _spawn_background_task(background_tasks, coro=_init_db_with_retry(), name="db_init_with_retry")
 
     # Register all Cerberus AI tools so the chat controller can use them
     from services.ai_core.tools.register_all import register_all_tools
@@ -98,14 +131,16 @@ async def lifespan(app: FastAPI):
     from services.strategy_learning_engine import StrategyLearningEngine
 
     learning_engine = StrategyLearningEngine()
-    asyncio.create_task(bot_runner.start())
-    asyncio.create_task(learning_engine.start())
+    _spawn_background_task(background_tasks, coro=bot_runner.start(), name="bot_runner")
+    _spawn_background_task(background_tasks, coro=learning_engine.start(), name="strategy_learning_engine")
 
     yield
 
     # Shutdown
     await bot_runner.stop()
     await learning_engine.stop()
+    if background_tasks:
+        await asyncio.gather(*background_tasks, return_exceptions=True)
     await close_db()
     logger.info("trading_ecosystem_stopped")
 
@@ -162,7 +197,25 @@ app.include_router(quant_routes.router, prefix="/api/quant", tags=["Quant Intell
 @app.get("/health")
 async def health_check():
     """Lightweight liveness probe — always returns 200 if the app is running."""
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "ready": _db_init_state["ready"],
+        "database": "ready" if _db_init_state["ready"] else ("failed" if _db_init_state["failed"] else "starting"),
+    }
+
+
+@app.get("/health/ready")
+async def readiness_check():
+    """Readiness probe — returns 503 until critical startup tasks are complete."""
+    if _db_init_state["ready"]:
+        return {"status": "ready", "database": "ready"}
+    return JSONResponse(
+        status_code=503,
+        content={
+            "status": "not_ready",
+            "database": "failed" if _db_init_state["failed"] else "starting",
+        },
+    )
 
 
 @app.get("/health/detailed")

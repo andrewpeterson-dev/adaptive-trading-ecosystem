@@ -101,14 +101,14 @@ export function ConditionRow({
         </div>
 
         <div className="flex-1 space-y-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
             <div>
               <label className="app-label">1. Signal</label>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <select
                   value={condition.indicator}
                   onChange={(event) => handleIndicatorChange(event.target.value)}
-                  className="app-select h-11 min-w-[220px] rounded-2xl px-3 py-0 text-sm font-medium"
+                  className="app-select h-11 w-full rounded-2xl px-3 py-0 text-sm font-medium sm:min-w-[220px] sm:w-auto"
                 >
                   <option value="">Select indicator...</option>
                   {allIndicators.map((indicator) => (
@@ -174,7 +174,7 @@ export function ConditionRow({
                     });
                   }}
                   disabled={!condition.indicator}
-                  className="app-select h-11 rounded-2xl px-3 py-0 text-sm disabled:opacity-50"
+                  className="app-select h-11 w-full rounded-2xl px-3 py-0 text-sm disabled:opacity-50"
                 >
                   {COMPARISON_TARGETS.map((target) => (
                     <option key={target.value} value={target.value}>
@@ -202,7 +202,7 @@ export function ConditionRow({
                     }
                     aria-label="Threshold value"
                     disabled={!condition.indicator}
-                    className="app-input h-11 rounded-2xl px-3 py-0 text-right font-mono disabled:opacity-50"
+                    className="app-input h-11 w-full rounded-2xl px-3 py-0 text-right font-mono disabled:opacity-50"
                     step="any"
                   />
                 )}

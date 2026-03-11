@@ -32,7 +32,7 @@ class HealthChecker:
         checks["api"] = self._check_api()
         checks["database"] = await self._check_database()
         checks["redis"] = await self._check_redis()
-        checks["broker"] = self._check_broker()
+        checks["broker"] = await self._check_broker()
         checks["disk"] = self._check_disk()
         checks["memory"] = self._check_memory()
 
@@ -102,21 +102,21 @@ class HealthChecker:
         except Exception as e:
             return {"status": "down", "error": str(e)}
 
-    def _check_broker(self) -> dict:
-        """Check broker API connectivity."""
+    async def _check_broker(self) -> dict:
+        """Check broker API connectivity (async to avoid blocking event loop)."""
         mode = self.settings.trading_mode.value
         if not self.settings.alpaca_api_key:
             return {"status": "down", "error": "no API key configured", "mode": mode}
 
         try:
-            resp = httpx.get(
-                f"{self.settings.alpaca_base_url}/v2/account",
-                headers={
-                    "APCA-API-KEY-ID": self.settings.alpaca_api_key,
-                    "APCA-API-SECRET-KEY": self.settings.alpaca_secret_key,
-                },
-                timeout=5,
-            )
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{self.settings.alpaca_base_url}/v2/account",
+                    headers={
+                        "APCA-API-KEY-ID": self.settings.alpaca_api_key,
+                        "APCA-API-SECRET-KEY": self.settings.alpaca_secret_key,
+                    },
+                )
             if resp.status_code == 200:
                 return {"status": "up", "mode": mode}
             return {"status": "down", "error": f"HTTP {resp.status_code}", "mode": mode}

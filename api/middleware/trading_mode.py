@@ -1,5 +1,6 @@
-"""Trading mode middleware — reads the user's active mode from DB on every request."""
+"""Trading mode middleware — reads the user's active mode from DB, cached in-memory."""
 
+import time
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -15,6 +16,18 @@ logger = structlog.get_logger(__name__)
 _SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 _SKIP_PREFIXES = ("/api/auth/",)
 
+# In-memory cache: user_id → (expires_at, mode)
+_MODE_CACHE: dict[int, tuple[float, TradingModeEnum]] = {}
+_CACHE_TTL = 15  # seconds
+
+
+def invalidate_mode_cache(user_id: int | None = None) -> None:
+    """Call this when user switches trading mode to bust the cache."""
+    if user_id is None:
+        _MODE_CACHE.clear()
+    else:
+        _MODE_CACHE.pop(user_id, None)
+
 
 class TradingModeMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -28,7 +41,14 @@ class TradingModeMiddleware(BaseHTTPMiddleware):
         if user_id is None:
             return await call_next(request)
 
-        # Look up server-side mode
+        # Check in-memory cache first
+        now = time.monotonic()
+        cached = _MODE_CACHE.get(user_id)
+        if cached and cached[0] > now:
+            request.state.trading_mode = cached[1]
+            return await call_next(request)
+
+        # Cache miss — query DB
         try:
             async with get_session() as db:
                 result = await db.execute(
@@ -38,9 +58,9 @@ class TradingModeMiddleware(BaseHTTPMiddleware):
                 )
                 session = result.scalar_one_or_none()
 
-            request.state.trading_mode = (
-                session.active_mode if session else TradingModeEnum.PAPER
-            )
+            mode = session.active_mode if session else TradingModeEnum.PAPER
+            _MODE_CACHE[user_id] = (now + _CACHE_TTL, mode)
+            request.state.trading_mode = mode
         except Exception as exc:
             logger.warning("trading_mode_middleware_error", error=str(exc))
             request.state.trading_mode = TradingModeEnum.PAPER

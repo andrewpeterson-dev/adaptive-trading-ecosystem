@@ -28,15 +28,16 @@ def _get_engine():
     if _engine is None:
         from sqlalchemy.ext.asyncio import create_async_engine
 
-        from sqlalchemy.pool import NullPool, QueuePool
+        from sqlalchemy.pool import NullPool, QueuePool, StaticPool
 
         settings = get_settings()
         kwargs = dict(echo=False)
         if settings.use_sqlite:
-            # NullPool: new connection per request — always reads fresh data from disk.
-            # StaticPool caused stale reads when the DB was written by another connection.
+            # StaticPool: reuse a single connection across requests. Combined with
+            # WAL journal mode (set in init_db), this avoids the overhead of opening
+            # a new connection per request (NullPool) while preventing stale reads.
             kwargs["connect_args"] = {"check_same_thread": False}
-            kwargs["poolclass"] = NullPool
+            kwargs["poolclass"] = StaticPool
         else:
             kwargs["pool_size"] = 20
             kwargs["max_overflow"] = 10
@@ -83,7 +84,13 @@ async def get_db():
 
 
 async def init_db():
+    settings = get_settings()
     async with _get_engine().begin() as conn:
+        # Enable WAL journal mode for SQLite — allows concurrent reads while writing
+        # and prevents stale reads with StaticPool.
+        if settings.use_sqlite:
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            await conn.execute(text("PRAGMA synchronous=NORMAL"))
         await conn.run_sync(Base.metadata.create_all)
     # Compatibility shim for local/dev startups that call create_all directly
     # instead of running Alembic migrations against an existing database.

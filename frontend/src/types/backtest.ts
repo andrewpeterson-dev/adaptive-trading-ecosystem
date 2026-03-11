@@ -21,14 +21,14 @@ export interface BacktestTrade {
 }
 
 export interface BacktestResult {
+  symbol?: string;
+  timeframe?: string;
   metrics: BacktestMetrics;
   equity_curve: { date: string; value: number }[];
   benchmark_equity_curve: { date: string; value: number }[];
   trades: BacktestTrade[];
   commission_pct: number;
   slippage_pct: number;
-  synthetic_data?: boolean;
-  data_warning?: string;
 }
 
 export interface BacktestRequest {
@@ -37,6 +37,8 @@ export interface BacktestRequest {
     indicator: string;
     operator: string;
     value: number | string;
+    compare_to?: string;
+    field?: string;
     params: Record<string, number>;
     action: string;
   }>;

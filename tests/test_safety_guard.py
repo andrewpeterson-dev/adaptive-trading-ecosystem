@@ -242,6 +242,22 @@ class TestTradeProposalChecks:
             guard.check_bot_mutation_allowed()
 
 
+class TestRateLimiting:
+    def test_rate_limit_blocks_excess_requests(self):
+        SafetyGuard._local_rate_buckets.clear()
+        guard = _make_guard()
+        action = "research"
+        max_requests, _ = guard.RATE_LIMITS[action]
+
+        for _ in range(max_requests):
+            guard.check_rate_limit(user_id=42, action=action)
+
+        with pytest.raises(SafetyViolation) as exc_info:
+            guard.check_rate_limit(user_id=42, action=action)
+
+        assert exc_info.value.violation_type == "rate_limited"
+
+
 # ---------------------------------------------------------------------------
 # UI command validation tests
 # ---------------------------------------------------------------------------

@@ -116,10 +116,14 @@ class BacktestRequest(BaseModel):
     conditions: Optional[list[ConditionSchema]] = None
     condition_groups: Optional[list[dict]] = None
     symbol: str = "SPY"
+    timeframe: Optional[str] = None
     lookback_days: int = 252
     initial_capital: float = 100_000.0
     commission_pct: float = 0.001
     slippage_pct: float = 0.0005
+    stop_loss_pct: Optional[float] = None
+    take_profit_pct: Optional[float] = None
+    action: Optional[str] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -561,45 +565,53 @@ async def diagnose_strategy(req: DiagnoseRequest):
 
 @router.post("/compute-indicator")
 async def compute_indicator(req: ComputeRequest):
+    import math
     import pandas as pd
-    import numpy as np
     from services.indicator_engine import IndicatorEngine
 
-    # Generate synthetic OHLCV for indicator shape preview only.
-    # This is NOT real market data — results show indicator behavior, not a real signal.
-    np.random.seed(42)
-    n = req.bars
-    end_date = pd.Timestamp.utcnow().normalize()
-    dates = pd.date_range(end=end_date, periods=n, freq="B")
-    close = 100 * np.exp(np.cumsum(np.random.randn(n) * 0.01))
-    high = close * (1 + np.abs(np.random.randn(n) * 0.005))
-    low = close * (1 - np.abs(np.random.randn(n) * 0.005))
-    volume = np.random.randint(1_000_000, 50_000_000, n).astype(float)
-
-    df = pd.DataFrame({
-        "timestamp": dates,
-        "open": close * (1 + np.random.randn(n) * 0.002),
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    })
+    df, timeframe = await _load_market_frame(req.symbol, req.timeframe, req.bars)
 
     result = IndicatorEngine.compute(req.indicator, df, req.params)
 
+    def _clean_number(value: Any):
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+            if math.isnan(numeric) or math.isinf(numeric):
+                return None
+            return numeric
+        return value
+
     # Serialize result
     if isinstance(result, pd.Series):
-        values = result.tail(50).tolist()
-        return {"indicator": req.indicator, "params": req.params, "values": values, "synthetic_data": True}
+        values = [_clean_number(v) for v in result.tail(50).tolist()]
+        return {
+            "indicator": req.indicator,
+            "params": req.params,
+            "symbol": req.symbol.upper(),
+            "timeframe": timeframe,
+            "values": values,
+        }
     elif isinstance(result, dict):
         serialized = {}
         for k, v in result.items():
             if isinstance(v, pd.Series):
-                serialized[k] = v.tail(50).tolist()
+                serialized[k] = [_clean_number(item) for item in v.tail(50).tolist()]
             else:
-                serialized[k] = v
-        return {"indicator": req.indicator, "params": req.params, "components": serialized, "synthetic_data": True}
-    return {"indicator": req.indicator, "params": req.params, "value": str(result), "synthetic_data": True}
+                serialized[k] = _clean_number(v)
+        return {
+            "indicator": req.indicator,
+            "params": req.params,
+            "symbol": req.symbol.upper(),
+            "timeframe": timeframe,
+            "components": serialized,
+        }
+    return {
+        "indicator": req.indicator,
+        "params": req.params,
+        "symbol": req.symbol.upper(),
+        "timeframe": timeframe,
+        "value": str(result),
+    }
 
 
 @router.post("/backtest")
@@ -613,6 +625,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
     commission_pct = req.commission_pct
     slippage_pct = req.slippage_pct
     action = "BUY"
+    strategy_timeframe = "1D"
     if req.strategy_id is not None:
         user_id = getattr(request.state, "user_id", None) if request else None
         async with get_session() as session:
@@ -640,6 +653,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                     commission_pct = t.commission_pct if t.commission_pct is not None else req.commission_pct
                     slippage_pct = t.slippage_pct if t.slippage_pct is not None else req.slippage_pct
                     action = t.action or "BUY"
+                    strategy_timeframe = t.timeframe or "1D"
                 else:
                     # Fall back to legacy Strategy table
                     s = await session.get(Strategy, req.strategy_id)
@@ -656,6 +670,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                     commission_pct = s.commission_pct if s.commission_pct is not None else req.commission_pct
                     slippage_pct = s.slippage_pct if s.slippage_pct is not None else req.slippage_pct
                     action = s.action or "BUY"
+                    strategy_timeframe = s.timeframe or "1D"
             else:
                 s = await session.get(Strategy, req.strategy_id)
                 if not s:
@@ -671,42 +686,28 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                 commission_pct = s.commission_pct if s.commission_pct is not None else req.commission_pct
                 slippage_pct = s.slippage_pct if s.slippage_pct is not None else req.slippage_pct
                 action = s.action or "BUY"
+                strategy_timeframe = s.timeframe or "1D"
     elif req.condition_groups:
         groups = req.condition_groups
         conditions = [c for g in groups for c in g.get("conditions", [])]
-        stop_loss_pct = 0.02
-        take_profit_pct = 0.05
-        action = next((c.get("action") for c in conditions if c.get("action")), "BUY")
+        stop_loss_pct = req.stop_loss_pct if req.stop_loss_pct is not None else 0.02
+        take_profit_pct = req.take_profit_pct if req.take_profit_pct is not None else 0.05
+        action = req.action or next((c.get("action") for c in conditions if c.get("action")), "BUY")
+        strategy_timeframe = req.timeframe or strategy_timeframe
     elif req.conditions:
         conditions = [c.model_dump() for c in req.conditions]
         groups = [{"conditions": conditions}]
-        stop_loss_pct = 0.02
-        take_profit_pct = 0.05
-        action = next((c.get("action") for c in conditions if c.get("action")), "BUY")
+        stop_loss_pct = req.stop_loss_pct if req.stop_loss_pct is not None else 0.02
+        take_profit_pct = req.take_profit_pct if req.take_profit_pct is not None else 0.05
+        action = req.action or next((c.get("action") for c in conditions if c.get("action")), "BUY")
+        strategy_timeframe = req.timeframe or strategy_timeframe
     else:
         raise HTTPException(400, "Provide strategy_id or inline conditions")
 
-    # NOTE: synthetic OHLCV — real market data integration not yet wired.
-    # All metrics below are computed on a random walk, NOT on historical prices.
-    # Do not use these results for live trading decisions.
-    np.random.seed(123)
-    n = req.lookback_days
-    end_date = pd.Timestamp.utcnow().normalize()
-    dates = pd.date_range(end=end_date, periods=n, freq="B")
-    returns = np.random.randn(n) * 0.012
-    close = 100 * np.exp(np.cumsum(returns))
-    high = close * (1 + np.abs(np.random.randn(n) * 0.005))
-    low = close * (1 - np.abs(np.random.randn(n) * 0.005))
-    volume = np.random.randint(1_000_000, 50_000_000, n).astype(float)
-
-    df = pd.DataFrame({
-        "timestamp": dates,
-        "open": close * (1 + np.random.randn(n) * 0.002),
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    })
+    desired_bars = _estimate_bar_limit(strategy_timeframe, req.lookback_days)
+    df, strategy_timeframe = await _load_market_frame(req.symbol, strategy_timeframe, desired_bars)
+    dates = pd.to_datetime(df["timestamp"])
+    close = df["close"].to_numpy(dtype=float)
 
     def _indicator_cache_key(indicator_name: str, params: dict[str, Any] | None) -> str:
         return f"{indicator_name.strip().lower()}::{json.dumps(params or {}, sort_keys=True, default=str)}"
@@ -866,8 +867,8 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                 pnl = capital * realized_return - capital * friction
                 capital += pnl
                 trades.append({
-                    "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
-                    "exit_date": dates[i].strftime("%Y-%m-%d"),
+                    "entry_date": dates.iloc[entry_idx].strftime("%Y-%m-%d"),
+                    "exit_date": dates.iloc[i].strftime("%Y-%m-%d"),
                     "direction": direction,
                     "entry_price": round(entry_price, 2),
                     "exit_price": round(exit_price, 2),
@@ -883,8 +884,8 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                 pnl = capital * realized_return - capital * friction
                 capital += pnl
                 trades.append({
-                    "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
-                    "exit_date": dates[i].strftime("%Y-%m-%d"),
+                    "entry_date": dates.iloc[entry_idx].strftime("%Y-%m-%d"),
+                    "exit_date": dates.iloc[i].strftime("%Y-%m-%d"),
                     "direction": direction,
                     "entry_price": round(entry_price, 2),
                     "exit_price": round(exit_price, 2),
@@ -911,8 +912,8 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
         pnl = capital * realized_return - capital * friction
         capital += pnl
         trades.append({
-            "entry_date": dates[entry_idx].strftime("%Y-%m-%d"),
-            "exit_date": dates[-1].strftime("%Y-%m-%d"),
+            "entry_date": dates.iloc[entry_idx].strftime("%Y-%m-%d"),
+            "exit_date": dates.iloc[-1].strftime("%Y-%m-%d"),
             "direction": direction,
             "entry_price": round(entry_price, 2),
             "exit_price": round(final_price, 2),
@@ -953,18 +954,18 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
     equity_curve = []
     for i in range(min(len(dates), len(equity_arr))):
         equity_curve.append({
-            "date": dates[i].strftime("%Y-%m-%d"),
+            "date": dates.iloc[i].strftime("%Y-%m-%d"),
             "value": round(float(equity_arr[i]), 2),
         })
 
     benchmark_curve = [
-        {"date": dates[i].strftime("%Y-%m-%d"), "value": round(float(benchmark_equity[i]), 2)}
+        {"date": dates.iloc[i].strftime("%Y-%m-%d"), "value": round(float(benchmark_equity[i]), 2)}
         for i in range(min(len(dates), len(benchmark_equity)))
     ]
 
     return {
-        "synthetic_data": True,
-        "data_warning": "Backtest ran on synthetic random-walk data, not real historical prices. Results are for logic verification only.",
+        "symbol": req.symbol.upper(),
+        "timeframe": strategy_timeframe,
         "commission_pct": commission_pct,
         "slippage_pct": slippage_pct,
         "metrics": {

@@ -14,9 +14,18 @@ export interface MarketRegime {
 }
 
 export interface EnsembleStatus {
-  models: Record<string, unknown>[];
+  ensemble_active: boolean;
+  model_count: number;
   weights: Record<string, number>;
-  regime_weights: Record<string, Record<string, number>>;
+  last_updated: string | null;
+  mode?: string;
+}
+
+export interface RetrainResponse {
+  status: string;
+  model: string;
+  message: string;
+  job_id: string;
 }
 
 export function getModels(): Promise<ModelInfo[]> {
@@ -35,20 +44,16 @@ export function getEquityCurve(): Promise<{ results: EquityCurvePoint[] }> {
   return apiFetch<{ results: EquityCurvePoint[] }>("/api/dashboard/equity-curve");
 }
 
-/**
- * Derives ensemble status from the /api/models/list response.
- * The /api/models/ensemble-status route does not exist; this is a client-side fallback.
- */
-export async function getEnsembleStatus(): Promise<EnsembleStatus> {
-  const models = await apiFetch<ModelInfo[]>("/api/models/list");
-  const list = Array.isArray(models) ? models : (models as any).models ?? [];
-  const weights: Record<string, number> = {};
-  for (const m of list) {
-    if (m.name && m.is_active) {
-      weights[m.name] = 1 / Math.max(list.filter((x: any) => x.is_active).length, 1);
-    }
-  }
-  return { models: list, weights, regime_weights: {} };
+export function getEnsembleStatus(): Promise<EnsembleStatus> {
+  return apiFetch<EnsembleStatus>("/api/models/ensemble-status");
 }
 
-// triggerRetrain is not available — route /api/models/retrain does not exist.
+export function triggerRetrain(modelName?: string): Promise<RetrainResponse> {
+  const query = modelName
+    ? `?model_name=${encodeURIComponent(modelName)}`
+    : "";
+  return apiFetch<RetrainResponse>(`/api/models/retrain${query}`, {
+    method: "POST",
+    maxRetries: 0,
+  });
+}

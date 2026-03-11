@@ -19,27 +19,23 @@ export function PortfolioAnalysis() {
 
   const quickActions = [
     {
-      label: 'Portfolio Risk',
+      label: 'Risk Review',
+      description: 'VaR, drawdown, concentration, and position sizing pressure.',
       prompt: 'Analyze my portfolio risk including VaR, drawdown, and concentration',
     },
     {
-      label: 'Best Trades',
-      prompt: 'Show me my best performing trades',
+      label: 'Performance Review',
+      description: 'Realized winners, losers, and consistency across recent trades.',
+      prompt: 'Review recent portfolio performance, including best trades, worst trades, and consistency',
     },
     {
-      label: 'Worst Trades',
-      prompt: 'Show me my worst trades and what went wrong',
+      label: 'Exposure Map',
+      description: 'Sector, symbol, and asset-class exposure in the current book.',
+      prompt: 'What is my current portfolio exposure by sector, symbol, and asset type?',
     },
     {
-      label: 'Exposure',
-      prompt: 'What is my current portfolio exposure by sector and asset type?',
-    },
-    {
-      label: 'Performance',
-      prompt: 'Compare my strategy performance across all strategies',
-    },
-    {
-      label: 'Holdings',
+      label: 'Current Holdings',
+      description: 'Open positions, unrealized P&L, and risk hotspots.',
       prompt: 'Show my current positions and unrealized P&L',
     },
   ];
@@ -124,18 +120,21 @@ export function PortfolioAnalysis() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {quickActions.map((action) => (
               <button
                 key={action.label}
                 onClick={() => handleAction(action.prompt)}
                 disabled={isLoading}
-                className="rounded-xl border border-border bg-background/60 px-3 py-3 text-left text-xs font-medium text-foreground transition-all hover:border-primary/30 hover:bg-muted disabled:opacity-50"
+                className="rounded-xl border border-border bg-background/60 px-3 py-3 text-left transition-all hover:border-primary/30 hover:bg-muted disabled:opacity-50"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <LineChart className="h-3.5 w-3.5 text-primary" />
                   {action.label}
                 </span>
+                <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                  {action.description}
+                </p>
               </button>
             ))}
           </div>

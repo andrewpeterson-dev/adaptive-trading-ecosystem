@@ -6,13 +6,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from config.settings import get_settings
+from services.security.jwt_utils import JWTConfigurationError, decode_jwt
 
 logger = structlog.get_logger(__name__)
 
 # Paths that don't require authentication
 _PUBLIC_PATHS = frozenset({
     "/health",
+    "/health/ready",
     "/api/auth/login",
     "/api/auth/register",
     "/docs",
@@ -42,7 +43,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
         token = auth_header[7:]
         try:
-            payload = jwt.decode(token, get_settings().jwt_secret, algorithms=["HS256"])
+            payload = decode_jwt(token)
             user_id = payload.get("user_id")
             if user_id is None:
                 raise jwt.InvalidTokenError("Missing user_id claim")
@@ -50,6 +51,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             request.state.user_id = int(user_id)
             request.state.is_admin = payload.get("is_admin", False)
             request.state.email = payload.get("email", "")
+        except JWTConfigurationError as exc:
+            logger.error("jwt_auth_unavailable", path=path, error=str(exc))
+            return JSONResponse({"detail": "Authentication unavailable"}, status_code=503)
         except jwt.ExpiredSignatureError:
             logger.warning("jwt_auth_failed", path=path, reason="expired")
             return JSONResponse({"detail": "Token expired"}, status_code=401)

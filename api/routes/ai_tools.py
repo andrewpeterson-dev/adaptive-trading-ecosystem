@@ -618,6 +618,14 @@ async def get_bot_activity(bot_id: str, request: Request, limit: int = 50):
     """Get recent trades made by a bot."""
     user_id = request.state.user_id
     async with get_session() as session:
+        bot_result = await session.execute(
+            select(CerberusBot, CerberusBotVersion)
+            .outerjoin(CerberusBotVersion, CerberusBot.current_version_id == CerberusBotVersion.id)
+            .where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot_row = bot_result.first()
+        config = bot_row[1].config_json if bot_row and bot_row[1] else {}
+
         result = await session.execute(
             select(CerberusTrade)
             .where(CerberusTrade.bot_id == bot_id, CerberusTrade.user_id == user_id)
@@ -626,7 +634,7 @@ async def get_bot_activity(bot_id: str, request: Request, limit: int = 50):
         )
         trades = result.scalars().all()
 
-    return [_serialize_trade(trade) for trade in trades]
+    return [_serialize_trade(trade, config) for trade in trades]
 
 
 async def _fetch_bot_metrics(session, bot_id: str, config: dict[str, Any]) -> dict[str, Any]:

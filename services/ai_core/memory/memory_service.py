@@ -98,8 +98,8 @@ class MemoryService:
     ) -> list[dict]:
         """Search memory items by text similarity.
 
-        Currently uses SQL LIKE as a placeholder.  Will be replaced with
-        pgvector cosine similarity once embeddings are populated.
+        Uses keyword matching today and can be upgraded to vector similarity
+        once embeddings are populated.
         """
         from db.cerberus_models import CerberusMemoryItem
 

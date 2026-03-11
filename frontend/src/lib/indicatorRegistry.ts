@@ -19,12 +19,14 @@ interface RegistryEntry {
 
 async function fetchCompute(
   indicator: string,
-  params: Record<string, number>
+  params: Record<string, number>,
+  symbol = "SPY",
+  timeframe = "1D"
 ): Promise<unknown> {
   const res = await fetch("/api/strategies/compute-indicator", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ indicator, params }),
+    body: JSON.stringify({ indicator, params, symbol, timeframe }),
   });
   if (!res.ok) throw new Error(`Compute failed: ${res.statusText}`);
   return res.json();

@@ -1,6 +1,7 @@
 """Perplexity provider for real-time search and deep research."""
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import AsyncIterator
 
@@ -14,6 +15,8 @@ from .base import (
 )
 
 logger = structlog.get_logger(__name__)
+
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 529}
 
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
@@ -47,17 +50,45 @@ class PerplexityProvider(BaseProvider):
         }
 
         logger.info("perplexity_complete", model=model)
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                PERPLEXITY_API_URL,
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        settings = get_settings()
+        max_retries = settings.llm_max_retries
+        last_exc: Exception | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        PERPLEXITY_API_URL,
+                        headers={
+                            "Authorization": f"Bearer {self._api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
+                    if resp.status_code in _RETRYABLE_STATUS_CODES and attempt < max_retries:
+                        delay = 2 ** attempt
+                        detail = ""
+                        try:
+                            detail = resp.json().get("error", {}).get("message", "")
+                        except Exception:
+                            pass
+                        logger.warning("perplexity_retry", attempt=attempt + 1, delay=delay, status=resp.status_code, detail=detail)
+                        await asyncio.sleep(delay)
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                break
+            except httpx.HTTPStatusError:
+                raise
+            except Exception as e:
+                last_exc = e
+                if attempt < max_retries:
+                    delay = 2 ** attempt
+                    logger.warning("perplexity_retry", attempt=attempt + 1, delay=delay, error=str(e))
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        else:
+            raise last_exc  # type: ignore[misc]
 
         choice = data["choices"][0]
 

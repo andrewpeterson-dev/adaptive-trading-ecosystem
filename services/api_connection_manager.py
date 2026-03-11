@@ -4,15 +4,28 @@ APIConnectionManager — central service for managing API provider connections.
 Handles: credential storage, conflict detection, routing, fallback.
 """
 
+import asyncio
 import json
 from typing import Optional
+
 import structlog
 from sqlalchemy import select
+
 from db.database import get_session
 from db.models import UserApiConnection, UserApiSettings, ApiProvider, ApiProviderType
 from db.encryption import encrypt_value, decrypt_value
 
 logger = structlog.get_logger(__name__)
+_connection_locks: dict[tuple[int, int], asyncio.Lock] = {}
+_settings_locks: dict[int, asyncio.Lock] = {}
+
+
+def _connection_lock(user_id: int, provider_id: int) -> asyncio.Lock:
+    return _connection_locks.setdefault((user_id, provider_id), asyncio.Lock())
+
+
+def _settings_lock(user_id: int) -> asyncio.Lock:
+    return _settings_locks.setdefault(user_id, asyncio.Lock())
 
 
 class APIConnectionManager:
@@ -75,35 +88,51 @@ class APIConnectionManager:
     ) -> UserApiConnection:
         """Encrypt and save API credentials for a provider."""
         encrypted = encrypt_value(json.dumps(credentials))
-        async with get_session() as db:
-            # Upsert: if connection for this user+provider exists, update it
-            result = await db.execute(
-                select(UserApiConnection).where(
-                    UserApiConnection.user_id == user_id,
-                    UserApiConnection.provider_id == provider_id,
+        async with _connection_lock(user_id, provider_id):
+            async with get_session() as db:
+                result = await db.execute(
+                    select(UserApiConnection)
+                    .where(
+                        UserApiConnection.user_id == user_id,
+                        UserApiConnection.provider_id == provider_id,
+                    )
+                    .order_by(UserApiConnection.updated_at.desc(), UserApiConnection.id.desc())
                 )
-            )
-            conn = result.scalar_one_or_none()
-            if conn:
-                conn.encrypted_credentials = encrypted
-                conn.is_paper = is_paper
-                conn.status = "pending"
-                conn.error_message = None
-                if nickname:
-                    conn.nickname = nickname
-            else:
-                conn = UserApiConnection(
-                    user_id=user_id,
-                    provider_id=provider_id,
-                    encrypted_credentials=encrypted,
-                    is_paper=is_paper,
-                    nickname=nickname,
-                    status="pending",
-                )
-                db.add(conn)
-            await db.commit()
-            await db.refresh(conn)
-            return conn
+                existing_connections = result.scalars().all()
+                conn = existing_connections[0] if existing_connections else None
+
+                if len(existing_connections) > 1:
+                    logger.warning(
+                        "duplicate_api_connections_detected",
+                        user_id=user_id,
+                        provider_id=provider_id,
+                        duplicate_ids=[item.id for item in existing_connections],
+                    )
+                    for duplicate in existing_connections[1:]:
+                        duplicate.status = "disconnected"
+                        duplicate.error_message = "Superseded duplicate connection"
+
+                if conn:
+                    conn.encrypted_credentials = encrypted
+                    conn.is_paper = is_paper
+                    conn.status = "pending"
+                    conn.error_message = None
+                    if nickname is not None:
+                        conn.nickname = nickname
+                else:
+                    conn = UserApiConnection(
+                        user_id=user_id,
+                        provider_id=provider_id,
+                        encrypted_credentials=encrypted,
+                        is_paper=is_paper,
+                        nickname=nickname,
+                        status="pending",
+                    )
+                    db.add(conn)
+
+                await db.flush()
+                await db.refresh(conn)
+                return conn
 
     def get_credentials(self, conn: UserApiConnection) -> dict:
         """Decrypt and return credentials dict (never expose to frontend)."""
@@ -239,17 +268,18 @@ class APIConnectionManager:
     # -- Settings management -----------------------------------------------
 
     async def get_or_create_settings(self, user_id: int) -> UserApiSettings:
-        async with get_session() as db:
-            result = await db.execute(
-                select(UserApiSettings).where(UserApiSettings.user_id == user_id)
-            )
-            settings = result.scalar_one_or_none()
-            if not settings:
-                settings = UserApiSettings(user_id=user_id, fallback_market_data_ids=[])
-                db.add(settings)
-                await db.commit()
-                await db.refresh(settings)
-            return settings
+        async with _settings_lock(user_id):
+            async with get_session() as db:
+                result = await db.execute(
+                    select(UserApiSettings).where(UserApiSettings.user_id == user_id)
+                )
+                settings = result.scalar_one_or_none()
+                if not settings:
+                    settings = UserApiSettings(user_id=user_id, fallback_market_data_ids=[])
+                    db.add(settings)
+                    await db.flush()
+                    await db.refresh(settings)
+                return settings
 
     async def set_active_equity_broker(self, user_id: int, connection_id: int) -> UserApiSettings:
         async with get_session() as db:

@@ -21,6 +21,10 @@ interface UsePriceStreamResult {
   unsubscribe: (symbols: string[]) => void;
 }
 
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30_000;
+
 function getAuthToken(): string {
   if (typeof window === "undefined") return "";
   const match = document.cookie.match(/(?:^|; )auth_token=([^;]*)/);
@@ -46,7 +50,20 @@ export function usePriceStream(initialSymbols: string[] = []): UsePriceStreamRes
   const wsRef = useRef<WebSocket | null>(null);
   const subscribedRef = useRef<Set<string>>(new Set(initialSymbols.map((s) => s.toUpperCase())));
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
   const unmountedRef = useRef(false);
+
+  // Batch WS price updates: accumulate in ref, flush once per animation frame
+  const pendingUpdates = useRef<Record<string, PriceData>>({});
+  const rafId = useRef<number | null>(null);
+
+  const flushUpdates = useCallback(() => {
+    rafId.current = null;
+    const batch = pendingUpdates.current;
+    if (Object.keys(batch).length === 0) return;
+    pendingUpdates.current = {};
+    setPrices((prev) => ({ ...prev, ...batch }));
+  }, []);
 
   const sendMsg = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -77,6 +94,7 @@ export function usePriceStream(initialSymbols: string[] = []): UsePriceStreamRes
 
     ws.onopen = () => {
       setConnected(true);
+      reconnectAttempts.current = 0;
       // Subscribe to all tracked symbols on (re)connect
       if (subscribedRef.current.size > 0) {
         ws.send(JSON.stringify({ subscribe: Array.from(subscribedRef.current) }));
@@ -87,7 +105,11 @@ export function usePriceStream(initialSymbols: string[] = []): UsePriceStreamRes
       try {
         const msg = JSON.parse(evt.data);
         if (msg.type === "price_update" && msg.data?.symbol) {
-          setPrices((prev) => ({ ...prev, [msg.data.symbol]: msg.data }));
+          // Batch: accumulate in ref, schedule single RAF flush
+          pendingUpdates.current[msg.data.symbol] = msg.data;
+          if (rafId.current === null) {
+            rafId.current = requestAnimationFrame(flushUpdates);
+          }
         }
       } catch {
         // ignore
@@ -97,13 +119,18 @@ export function usePriceStream(initialSymbols: string[] = []): UsePriceStreamRes
     ws.onclose = () => {
       setConnected(false);
       wsRef.current = null;
-      if (!unmountedRef.current) {
-        reconnectTimer.current = setTimeout(connect, 3000);
+      if (!unmountedRef.current && reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+        const delay = Math.min(
+          BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttempts.current,
+          MAX_RECONNECT_DELAY_MS
+        );
+        reconnectAttempts.current++;
+        reconnectTimer.current = setTimeout(connect, delay);
       }
     };
 
     ws.onerror = () => ws.close();
-  }, []);
+  }, [flushUpdates]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -111,6 +138,7 @@ export function usePriceStream(initialSymbols: string[] = []): UsePriceStreamRes
     return () => {
       unmountedRef.current = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
       wsRef.current?.close();
     };
   }, [connect]);

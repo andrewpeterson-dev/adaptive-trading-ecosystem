@@ -217,11 +217,11 @@ export default function BacktestPage() {
             </Badge>
             {result && (
               <Badge variant="info" className="tracking-normal font-mono">
-                Commission {((result.commission_pct ?? 0) * 100).toFixed(3)}% • Slippage{" "}
+                {(result.symbol ?? symbol).toUpperCase()} • {(result.timeframe ?? strategy?.timeframe ?? "1D")} • Commission{" "}
+                {((result.commission_pct ?? 0) * 100).toFixed(3)}% • Slippage{" "}
                 {((result.slippage_pct ?? 0) * 100).toFixed(3)}%
               </Badge>
             )}
-            {result?.synthetic_data && <Badge variant="warning">Synthetic data</Badge>}
           </>
         }
       />

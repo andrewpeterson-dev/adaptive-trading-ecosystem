@@ -62,31 +62,39 @@ async def list_models(request: Request):
     mode = request.state.trading_mode
 
     async with get_session() as db:
+        latest_perf_subquery = (
+            select(
+                ModelPerformance.model_id.label("model_id"),
+                func.max(ModelPerformance.timestamp).label("latest_timestamp"),
+            )
+            .where(ModelPerformance.mode == mode)
+            .group_by(ModelPerformance.model_id)
+            .subquery()
+        )
+
         result = await db.execute(
-            select(TradingModel)
+            select(TradingModel, ModelPerformance)
+            .outerjoin(
+                latest_perf_subquery,
+                latest_perf_subquery.c.model_id == TradingModel.id,
+            )
+            .outerjoin(
+                ModelPerformance,
+                (ModelPerformance.model_id == TradingModel.id)
+                & (ModelPerformance.mode == mode)
+                & (ModelPerformance.timestamp == latest_perf_subquery.c.latest_timestamp),
+            )
             .where(TradingModel.mode == mode)
             .order_by(TradingModel.id)
         )
-        models = result.scalars().all()
+        rows = result.all()
 
-        if not models:
+        if not rows:
             return {"models": [], "mode": mode.value}
 
         # Build response with latest performance per model
         model_list = []
-        for m in models:
-            # Get latest performance record for this mode
-            perf_result = await db.execute(
-                select(ModelPerformance)
-                .where(
-                    ModelPerformance.model_id == m.id,
-                    ModelPerformance.mode == mode,
-                )
-                .order_by(ModelPerformance.timestamp.desc())
-                .limit(1)
-            )
-            perf = perf_result.scalar_one_or_none()
-
+        for m, perf in rows:
             model_list.append({
                 "name": m.name,
                 "model_type": m.model_type,

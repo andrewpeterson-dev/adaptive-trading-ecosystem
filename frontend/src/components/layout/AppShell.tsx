@@ -1,10 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { AIWidget } from "@/components/cerberus/AIWidget";
-import { ConfirmationModal } from "@/components/cerberus/ConfirmationModal";
 import { NavHeader } from "@/components/layout/NavHeader";
 import { cn } from "@/lib/utils";
+
+// Lazy-load heavy Cerberus components — they include markdown renderer,
+// chart libraries, and WebSocket logic that aren't needed at initial paint.
+const AIWidget = dynamic(
+  () => import("@/components/cerberus/AIWidget").then((m) => m.AIWidget),
+  { ssr: false }
+);
+const ConfirmationModal = dynamic(
+  () => import("@/components/cerberus/ConfirmationModal").then((m) => m.ConfirmationModal),
+  { ssr: false }
+);
 
 const AUTH_ROUTES = new Set(["/login", "/register"]);
 
@@ -13,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isAuthRoute = pathname ? AUTH_ROUTES.has(pathname) : false;
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen overflow-x-hidden">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute inset-x-0 top-[-18rem] h-[42rem] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.22),transparent_50%)] dark:bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_45%)]" />
         <div className="absolute inset-y-0 right-[-10rem] w-[34rem] bg-[radial-gradient(circle_at_center,rgba(125,211,252,0.18),transparent_58%)] dark:bg-[radial-gradient(circle_at_center,rgba(103,232,249,0.1),transparent_56%)]" />

@@ -27,12 +27,28 @@ class OllamaClient:
         self.base_url = (base_url or settings.ollama_base_url).rstrip("/")
         self.default_model = default_model or settings.ollama_model
         self.timeout_seconds = timeout_seconds or settings.ollama_timeout_seconds
+        self._client: httpx.AsyncClient | None = None
         self._stats = {
             "total_calls": 0,
             "successes": 0,
             "failures": 0,
             "total_latency_ms": 0.0,
         }
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Return a reusable async HTTP client (connection pooling)."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=float(self.timeout_seconds),
+            )
+        return self._client
+
+    async def close(self):
+        """Close the HTTP client. Call on shutdown."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     @property
     def avg_latency_ms(self) -> float:
@@ -43,9 +59,9 @@ class OllamaClient:
     async def is_available(self) -> bool:
         """Check if the Ollama server is reachable."""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{self.base_url}/api/tags")
-                return resp.status_code == 200
+            client = await self._get_client()
+            resp = await client.get("/api/tags")
+            return resp.status_code == 200
         except Exception:
             return False
 
@@ -53,31 +69,31 @@ class OllamaClient:
         """Return detailed health info for the Ollama server."""
         start = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{self.base_url}/api/tags")
-                latency_ms = round((time.monotonic() - start) * 1000, 1)
+            client = await self._get_client()
+            resp = await client.get("/api/tags")
+            latency_ms = round((time.monotonic() - start) * 1000, 1)
 
-                if resp.status_code != 200:
-                    return {
-                        "available": False,
-                        "latency_ms": latency_ms,
-                        "model_loaded": False,
-                        "error": f"HTTP {resp.status_code}",
-                    }
-
-                data = resp.json()
-                models = [m.get("name", "") for m in data.get("models", [])]
-                model_loaded = any(
-                    self.default_model in m for m in models
-                )
-
+            if resp.status_code != 200:
                 return {
-                    "available": True,
+                    "available": False,
                     "latency_ms": latency_ms,
-                    "model_loaded": model_loaded,
-                    "models": models,
-                    "error": None,
+                    "model_loaded": False,
+                    "error": f"HTTP {resp.status_code}",
                 }
+
+            data = resp.json()
+            models = [m.get("name", "") for m in data.get("models", [])]
+            model_loaded = any(
+                self.default_model in m for m in models
+            )
+
+            return {
+                "available": True,
+                "latency_ms": latency_ms,
+                "model_loaded": model_loaded,
+                "models": models,
+                "error": None,
+            }
         except Exception as e:
             latency_ms = round((time.monotonic() - start) * 1000, 1)
             return {
@@ -107,13 +123,10 @@ class OllamaClient:
             payload["system"] = system
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/generate",
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
+            client = await self._get_client()
+            resp = await client.post("/api/generate", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
 
             latency_ms = round((time.monotonic() - start) * 1000, 1)
             self._stats["successes"] += 1
@@ -155,13 +168,10 @@ class OllamaClient:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/chat",
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
+            client = await self._get_client()
+            resp = await client.post("/api/chat", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
 
             latency_ms = round((time.monotonic() - start) * 1000, 1)
             self._stats["successes"] += 1

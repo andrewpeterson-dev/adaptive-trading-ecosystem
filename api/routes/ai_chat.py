@@ -8,7 +8,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, field_validator
 
-from config.settings import get_settings
+from services.security.jwt_utils import JWTConfigurationError, decode_jwt
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -48,9 +48,12 @@ def _get_websocket_user_id(websocket: WebSocket) -> Optional[int]:
         return None
 
     try:
-        payload = jwt.decode(token, get_settings().jwt_secret, algorithms=["HS256"])
+        payload = decode_jwt(token)
         user_id = payload.get("user_id")
         return int(user_id) if user_id is not None else None
+    except JWTConfigurationError:
+        logger.error("ai_chat_websocket_auth_unavailable")
+        return None
     except (jwt.InvalidTokenError, TypeError, ValueError):
         return None
 

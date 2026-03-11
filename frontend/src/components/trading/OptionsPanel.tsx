@@ -104,15 +104,15 @@ function formatExpShort(dateStr: string): string {
 
 function OptionsNoData({ symbol }: { symbol: string }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-5">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="app-panel p-5">
+      <div className="mb-3 flex items-center gap-2">
         <Settings className="h-4 w-4 text-muted-foreground" />
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
           Options Trading
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5 mb-3">
+      <div className="mb-3 flex items-center gap-1.5">
         <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground">
           Underlying:{" "}
@@ -120,34 +120,21 @@ function OptionsNoData({ symbol }: { symbol: string }) {
         </span>
       </div>
 
-      <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
-        <div className="flex items-start gap-2 mb-2">
+      <div className="rounded-[22px] border border-border/50 bg-muted/30 p-4">
+        <div className="mb-2 flex items-start gap-2">
           <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
           <div>
             <p className="text-xs font-medium text-foreground mb-1">
-              No live options chain available
+              Options chain unavailable
             </p>
-            <p className="text-[11px] text-muted-foreground mb-2">
-              When the market data API returns contracts for{" "}
-              <span className="font-medium text-foreground">{symbol}</span>,
-              this panel will show:
+            <p className="text-[11px] leading-5 text-muted-foreground">
+              The active market-data source is not returning tradable contracts for{" "}
+              <span className="font-medium text-foreground">{symbol}</span> right now.
+              Stock trading remains available, and this panel will populate automatically when
+              contracts are published.
             </p>
           </div>
         </div>
-        <ul className="space-y-1 text-[11px] text-muted-foreground ml-5">
-          <li className="flex items-start gap-1.5">
-            <span className="text-muted-foreground/60 mt-px">&#8226;</span>
-            Options chain by expiry with bid/ask
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-muted-foreground/60 mt-px">&#8226;</span>
-            Strike selector and Greeks
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-muted-foreground/60 mt-px">&#8226;</span>
-            Order entry with portfolio impact preview
-          </li>
-        </ul>
       </div>
     </div>
   );
@@ -240,7 +227,7 @@ function GreeksDisplay({ contract }: { contract: OptionContract }) {
   ];
 
   return (
-    <div className="grid grid-cols-5 gap-2">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
       {greeks.map((g) => (
         <div key={g.label} className="text-center">
           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
@@ -322,9 +309,9 @@ function ContractSummary({
   }, [contract.strike, contract.type, direction, premium, quantity]);
 
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2.5">
+    <div className="rounded-[22px] border border-border/50 bg-muted/30 p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs font-medium text-foreground">
           {contract.underlying} {contract.expiration}{" "}
           {contract.strike}
@@ -336,7 +323,7 @@ function ContractSummary({
       </div>
 
       {/* Pricing row */}
-      <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground">
+      <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground sm:grid-cols-4">
         <div>
           <span className="text-[10px] uppercase tracking-wider block">
             Bid
@@ -372,7 +359,7 @@ function ContractSummary({
       </div>
 
       {/* Contract details */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">Multiplier</span>
           <span className="font-mono tabular-nums">100</span>
@@ -400,7 +387,7 @@ function ContractSummary({
       </div>
 
       {/* Risk profile */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1 border-t border-border/30">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-2 border-t border-border/30 pt-3 text-xs sm:grid-cols-2">
         {breakeven != null && (
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Breakeven</span>
@@ -481,7 +468,7 @@ function OrderPreview({
       : null;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-1.5">
+    <div className="rounded-[22px] border border-border/50 bg-muted/20 p-4 space-y-2">
       <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
         Order Preview
       </div>
@@ -777,7 +764,7 @@ export function OptionsPanel() {
   /* ---- Loading state ---- */
   if (chainLoading) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card p-5 flex items-center justify-center min-h-[200px]">
+      <div className="app-panel flex min-h-[200px] items-center justify-center p-5">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
@@ -790,9 +777,9 @@ export function OptionsPanel() {
 
   /* ---- Main panel ---- */
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-5">
+    <div className="app-panel p-5">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="mb-4 flex items-center gap-2">
         <Settings className="h-4 w-4 text-muted-foreground" />
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
           Options Trading
@@ -880,7 +867,7 @@ export function OptionsPanel() {
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
               Chain
             </div>
-            <div className="flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 p-1">
+            <div className="flex flex-wrap items-center gap-1 rounded-full border border-border/60 bg-muted/35 p-1">
               {(["active", "all"] as const).map((value) => (
                 <button
                   key={value}
@@ -904,7 +891,7 @@ export function OptionsPanel() {
           ) : (
             <div className="overflow-hidden rounded-3xl border border-border/60">
               <div className="max-h-72 overflow-auto">
-                <table className="app-table min-w-full text-xs">
+                <table className="app-table min-w-[920px] text-xs">
                   <thead>
                     <tr>
                       <th>Strike</th>
@@ -961,11 +948,11 @@ export function OptionsPanel() {
           <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest block mb-1.5">
             Contracts
           </label>
-          <div className="flex items-center gap-0">
+          <div className="flex items-center overflow-hidden rounded-2xl border border-border/60 bg-muted/35">
             <button
               type="button"
               onClick={decrementQty}
-              className="px-3 py-2 rounded-l-md bg-muted border border-border text-sm font-mono font-bold hover:bg-muted/80 transition-colors"
+              className="border-r border-border/60 px-3 py-2 text-sm font-mono font-bold transition-colors hover:bg-muted/70"
             >
               -
             </button>
@@ -977,12 +964,12 @@ export function OptionsPanel() {
               }
               min="1"
               step="1"
-              className="flex-1 px-3 py-2 bg-muted border-y border-border text-sm font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-ring/40"
+              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-center text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
             <button
               type="button"
               onClick={incrementQty}
-              className="px-3 py-2 rounded-r-md bg-muted border border-border text-sm font-mono font-bold hover:bg-muted/80 transition-colors"
+              className="border-l border-border/60 px-3 py-2 text-sm font-mono font-bold transition-colors hover:bg-muted/70"
             >
               +
             </button>
@@ -1011,7 +998,7 @@ export function OptionsPanel() {
 
         {/* Validation messages */}
         {validation.warnings.length > 0 && (
-          <div className="flex items-start gap-2 text-xs text-amber-400 bg-amber-400/10 rounded-md px-3 py-2">
+          <div className="flex items-start gap-2 rounded-2xl bg-amber-400/10 px-3 py-3 text-xs text-amber-400">
             <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <div className="space-y-0.5">
               {validation.warnings.map((w, i) => (
@@ -1023,7 +1010,7 @@ export function OptionsPanel() {
 
         {/* Inline error */}
         {error && (
-          <div className="flex items-start gap-2 text-xs text-red-400 bg-red-400/10 rounded-md px-3 py-2">
+          <div className="flex items-start gap-2 rounded-2xl bg-red-400/10 px-3 py-3 text-xs text-red-400">
             <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <p>{error}</p>
           </div>
@@ -1033,7 +1020,7 @@ export function OptionsPanel() {
         <button
           type="submit"
           disabled={!canSubmit}
-          className={`w-full py-2.5 rounded-md text-sm font-semibold transition-colors text-white ${submitColor} disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`w-full rounded-full px-4 py-2.5 text-sm font-semibold text-white transition-colors ${submitColor} disabled:cursor-not-allowed disabled:opacity-50`}
         >
           {submitting ? (
             <Loader2 className="h-4 w-4 animate-spin mx-auto" />

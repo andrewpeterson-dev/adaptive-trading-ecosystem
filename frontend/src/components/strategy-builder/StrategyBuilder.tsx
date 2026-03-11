@@ -636,6 +636,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       `${c.indicator}:${c.operator}:${c.value}:${c.compare_to ?? ""}:${c.joiner ?? "AND"}:${JSON.stringify(c.params)}`
     )
     .join("|");
+  const previewKey = `${conditionKey}:${symbols.join(",")}:${timeframe}`;
 
   useEffect(() => {
     if (allValidConditions.length === 0) {
@@ -687,7 +688,12 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               components?: Record<string, number[]>;
             }>("/api/strategies/compute-indicator", {
               method: "POST",
-              body: JSON.stringify({ indicator: c.indicator, params: c.params }),
+              body: JSON.stringify({
+                indicator: c.indicator,
+                params: c.params,
+                symbol: symbols[0] ?? "SPY",
+                timeframe,
+              }),
             });
             previews[c.indicator] = data;
           } catch {
@@ -698,7 +704,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       setIndicatorPreviews(previews);
     }, 800);
     return () => clearTimeout(timeout);
-  }, [conditionKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [previewKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── AI Explainer ────────────────────────────────────────────────────────
 

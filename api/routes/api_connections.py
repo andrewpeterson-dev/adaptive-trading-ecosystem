@@ -14,11 +14,12 @@ from typing import Optional
 import httpx
 import structlog
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from db.database import get_session
 from db.models import ApiProvider, ApiProviderType, UserApiConnection, UserApiSettings
+from api.routes.webull import invalidate_user_client_cache
 from services.api_connection_manager import api_connection_manager
 
 logger = structlog.get_logger(__name__)
@@ -202,7 +203,7 @@ async def _test_connection_internal(
 
 class CreateConnectionRequest(BaseModel):
     provider_id: int
-    credentials: dict
+    credentials: dict = Field(default_factory=dict)
     is_paper: bool = True
     nickname: Optional[str] = None
 
@@ -217,7 +218,7 @@ class SetActiveCryptoBrokerRequest(BaseModel):
 
 class SetMarketDataPriorityRequest(BaseModel):
     primary_id: int
-    fallback_ids: list[int] = []
+    fallback_ids: list[int] = Field(default_factory=list)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -263,6 +264,8 @@ async def list_connections(request: Request):
 async def create_connection(req: CreateConnectionRequest, request: Request):
     """Save a new API connection, test it immediately, return connection object."""
     user_id = _require_user(request)
+    if not req.credentials:
+        raise HTTPException(status_code=400, detail="credentials are required")
 
     # Validate provider exists and is available
     async with get_session() as db:
@@ -297,7 +300,7 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         test_result = await _test_connection_internal(conn, req.credentials)
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = test_result.get("error")
-        conn.last_tested_at = datetime.utcnow()
+        conn.last_tested_at = datetime.now(timezone.utc)
         # Auto-detect paper vs live for Alpaca
         if "is_paper" in test_result and provider.slug == "alpaca":
             conn.is_paper = test_result["is_paper"]
@@ -350,6 +353,14 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         provider=provider.slug,
         status=conn.status,
     )
+    if provider.slug == "webull":
+        invalidated = invalidate_user_client_cache(user_id)
+        logger.info(
+            "webull_cache_invalidated",
+            user_id=user_id,
+            invalidated=invalidated,
+            source="api_connection_upsert",
+        )
     return _connection_dict(conn)
 
 
@@ -369,6 +380,10 @@ async def delete_connection(connection_id: int, request: Request):
         if not conn:
             raise HTTPException(status_code=404, detail="Connection not found")
 
+        provider_result = await db.execute(
+            select(ApiProvider).where(ApiProvider.id == conn.provider_id)
+        )
+        provider = provider_result.scalar_one_or_none()
         conn.status = "disconnected"
         conn.updated_at = datetime.now(timezone.utc)
 
@@ -391,6 +406,15 @@ async def delete_connection(connection_id: int, request: Request):
                 settings.fallback_market_data_ids = [f for f in fallbacks if f != connection_id]
 
         await db.commit()
+
+    if provider and provider.slug == "webull":
+        invalidated = invalidate_user_client_cache(user_id)
+        logger.info(
+            "webull_cache_invalidated",
+            user_id=user_id,
+            invalidated=invalidated,
+            source="api_connection_delete",
+        )
 
     logger.info("connection_disconnected", user_id=user_id, connection_id=connection_id)
     return {"success": True}
@@ -435,8 +459,8 @@ async def test_connection(connection_id: int, request: Request):
         # Update status
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = test_result.get("error")
-        conn.last_tested_at = datetime.utcnow()
-        conn.updated_at = datetime.utcnow()
+        conn.last_tested_at = datetime.now(timezone.utc)
+        conn.updated_at = datetime.now(timezone.utc)
         await db.commit()
 
     _test_cooldowns[connection_id] = time.time()
@@ -479,6 +503,8 @@ async def set_active_broker(req: SetActiveBrokerRequest, request: Request):
         conn = result.scalar_one_or_none()
         if not conn:
             raise HTTPException(status_code=404, detail="Connection not found")
+        if conn.status != "connected":
+            raise HTTPException(status_code=400, detail="Connection must be connected before it can be made active")
 
         prov_result = await db.execute(
             select(ApiProvider).where(ApiProvider.id == conn.provider_id)
@@ -510,6 +536,8 @@ async def set_active_crypto_broker(req: SetActiveCryptoBrokerRequest, request: R
         conn = result.scalar_one_or_none()
         if not conn:
             raise HTTPException(status_code=404, detail="Connection not found")
+        if conn.status != "connected":
+            raise HTTPException(status_code=400, detail="Connection must be connected before it can be made active")
 
         prov_result = await db.execute(
             select(ApiProvider).where(ApiProvider.id == conn.provider_id)
@@ -555,6 +583,11 @@ async def set_market_data_priority(req: SetMarketDataPriorityRequest, request: R
 
         for conn in conns:
             p = providers_by_id.get(conn.provider_id)
+            if conn.status != "connected":
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Connection {conn.id} must be connected before it can be prioritized",
+                )
             if not p or p.api_type != ApiProviderType.MARKET_DATA:
                 raise HTTPException(
                     status_code=400,

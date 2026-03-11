@@ -12,6 +12,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
+import { useTradingMode } from "@/hooks/useTradingMode";
 
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelDetail[]>([]);
@@ -21,46 +23,53 @@ export default function ModelsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const { toast } = useToast();
+  const { mode } = useTradingMode();
 
   const fetchAll = useCallback(async () => {
     try {
-      const [modRes, regRes, allocRes] = await Promise.allSettled([
-        apiFetch<any>("/api/models/list"),
-        apiFetch<any>("/api/models/regime"),
-        apiFetch<any>("/api/models/allocation"),
+      setError(false);
+      const [modRes, regRes, ensembleRes, allocRes] = await Promise.allSettled([
+        apiFetch<{ models: ModelDetail[] }>("/api/models/list"),
+        apiFetch<RegimeData>("/api/models/regime"),
+        apiFetch<EnsembleStatus>("/api/models/ensemble-status"),
+        apiFetch<{ allocations: AllocationEntry[] }>("/api/models/allocation"),
       ]);
 
       let hasData = false;
 
       if (modRes.status === "fulfilled") {
         const data = modRes.value;
-        const list: ModelDetail[] = data.models || data || [];
+        const list = data.models ?? [];
         setModels(list);
-        const activeModels = list.filter((model) => model.is_active);
-        const equalWeight = activeModels.length > 0 ? 1 / activeModels.length : 0;
-        const weights: Record<string, number> = {};
-        for (const model of activeModels) weights[model.name] = equalWeight;
-        setEnsemble({
-          ensemble_active: activeModels.length > 0,
-          model_count: activeModels.length,
-          weights,
-          last_updated: null,
-        });
         hasData = true;
+      } else {
+        setModels([]);
       }
 
       if (regRes.status === "fulfilled") {
         setRegime(regRes.value);
         hasData = true;
+      } else {
+        setRegime(null);
+      }
+
+      if (ensembleRes.status === "fulfilled") {
+        setEnsemble(ensembleRes.value);
+        hasData = true;
+      } else {
+        setEnsemble(null);
       }
 
       if (allocRes.status === "fulfilled") {
         const data = allocRes.value;
-        setAllocation(data.allocations || data || []);
+        setAllocation(data.allocations ?? []);
         hasData = true;
+      } else {
+        setAllocation([]);
       }
 
-      if (!hasData) setError(true);
+      setError(!hasData);
       setLastRefresh(new Date());
     } catch {
       setError(true);
@@ -70,13 +79,25 @@ export default function ModelsPage() {
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     fetchAll();
     const interval = setInterval(fetchAll, 30000);
     return () => clearInterval(interval);
-  }, [fetchAll]);
+  }, [fetchAll, mode]);
 
-  const handleRetrain = async (_modelName: string) => {
-    // Retraining endpoint not available in current backend.
+  const handleRetrain = async (modelName: string) => {
+    try {
+      const result = await apiFetch<{ message?: string }>(
+        `/api/models/retrain?model_name=${encodeURIComponent(modelName)}`,
+        { method: "POST", maxRetries: 0 }
+      );
+      toast(result.message || `Retraining queued for ${modelName}`, "success");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to queue retraining";
+      toast(`Failed to queue retraining for ${modelName}: ${message}`, "error");
+      throw err;
+    }
   };
 
   const ensembleWeightCount = ensemble ? Object.keys(ensemble.weights ?? {}).length : 0;
@@ -107,6 +128,9 @@ export default function ModelsPage() {
         description="Audit active models, inspect ensemble balance, and compare predictive systems side by side with consistent capital and regime context."
         meta={
           <>
+            <Badge variant={mode === "live" ? "positive" : "info"} className="tracking-normal">
+              {mode === "live" ? "Live mode" : "Paper mode"}
+            </Badge>
             <Badge variant="neutral" className="tracking-normal">
               <span className="font-mono">{models.length}</span>
               models
@@ -138,7 +162,7 @@ export default function ModelsPage() {
         <div className="app-panel p-5">
           <div className="app-section-title flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            Ensemble Weights
+            Ensemble Allocation
           </div>
           {ensemble && ensemble.model_count > 0 ? (
             <div className="mt-4 space-y-3">
@@ -173,7 +197,12 @@ export default function ModelsPage() {
       {models.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {models.map((model) => (
-            <ModelCard key={model.name} model={model} onRetrain={handleRetrain} />
+            <ModelCard
+              key={model.name}
+              model={model}
+              onRetrain={handleRetrain}
+              retrainAvailable
+            />
           ))}
         </div>
       )}

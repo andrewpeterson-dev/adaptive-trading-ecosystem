@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, time as dtime, timezone, timedelta
+from datetime import datetime, time as dtime
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import select
@@ -24,6 +25,7 @@ from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
 
 logger = structlog.get_logger(__name__)
+_MARKET_TIMEZONE = ZoneInfo("America/New_York")
 
 
 class BotRunner:
@@ -79,22 +81,28 @@ class BotRunner:
 
         logger.info("bot_runner_checking", count=len(bots))
 
+        # Evaluate bots outside the query session — each bot fetches its own market data
+        error_bot_ids: list[str] = []
         for bot, version in bots:
             try:
                 await self._evaluate_bot(bot, version)
             except Exception as e:
                 logger.error("bot_eval_error", bot_id=bot.id, error=str(e))
-                # Mark as ERROR if persistent failure
-                try:
-                    async with get_session() as session:
+                error_bot_ids.append(bot.id)
+
+        # Batch-update error status in a single session instead of one per bot
+        if error_bot_ids:
+            try:
+                async with get_session() as session:
+                    for bot_id in error_bot_ids:
                         result = await session.execute(
-                            select(CerberusBot).where(CerberusBot.id == bot.id)
+                            select(CerberusBot).where(CerberusBot.id == bot_id)
                         )
                         db_bot = result.scalar_one_or_none()
                         if db_bot:
                             db_bot.status = BotStatus.ERROR
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
     async def _evaluate_bot(
         self, bot: CerberusBot, version: CerberusBotVersion
@@ -335,7 +343,7 @@ class BotRunner:
 
     def _is_market_open(self) -> bool:
         """Check if US stock market is currently open (rough check)."""
-        now = datetime.now(timezone(timedelta(hours=-5)))  # EST
+        now = datetime.now(_MARKET_TIMEZONE)
         # Weekends
         if now.weekday() >= 5:
             return False
