@@ -237,6 +237,9 @@ class MarketDataService:
     QUOTE_TTL = 5    # seconds
     BARS_TTL = 60    # seconds
 
+    def __init__(self) -> None:
+        self._redis = None
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def get_quote(self, symbol: str) -> Optional[QuoteDict]:
@@ -283,29 +286,42 @@ class MarketDataService:
 
     # ── Cache helpers ─────────────────────────────────────────────────────────
 
+    async def _get_redis(self):
+        if self._redis is None:
+            self._redis = _redis_client()
+        return self._redis
+
+    async def _reset_redis(self):
+        if self._redis is not None:
+            try:
+                await self._redis.aclose()
+            except Exception:
+                pass
+            self._redis = None
+
     async def _get_cache(self, key: str):
         try:
-            r = _redis_client()
+            r = await self._get_redis()
             val = await r.get(key)
-            await r.aclose()
             return json.loads(val) if val else None
         except Exception:
+            await self._reset_redis()
             return None
 
     async def _set_cache(self, key: str, value, ttl: int = 5):
         try:
-            r = _redis_client()
+            r = await self._get_redis()
             await r.setex(key, ttl, json.dumps(value))
-            await r.aclose()
         except Exception:
+            await self._reset_redis()
             pass
 
     async def _publish(self, quote: QuoteDict):
         try:
-            r = _redis_client()
+            r = await self._get_redis()
             await r.publish("market:price_updates", json.dumps(quote))
-            await r.aclose()
         except Exception:
+            await self._reset_redis()
             pass
 
 

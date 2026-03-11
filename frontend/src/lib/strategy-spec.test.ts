@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { extractJson, parseStrategySpec, specToBuilderFields } from "./strategy-spec";
+import { extractJson, parseStrategySpec, specToBuilderFields, type StrategySpec } from "./strategy-spec";
 
-const VALID_SPEC = {
+const VALID_SPEC: StrategySpec = {
   name: "RSI Oversold Bounce",
   description: "Buy when RSI drops below 30 on the daily timeframe",
   action: "BUY",
@@ -200,7 +200,7 @@ describe("specToBuilderFields", () => {
   });
 
   it("defaults operator to < when missing", () => {
-    const spec = {
+    const spec: StrategySpec = {
       ...VALID_SPEC,
       entryConditions: [
         { logic: "AND" as const, indicator: "rsi", params: { period: 14 }, signal: "RSI low" },
@@ -211,7 +211,7 @@ describe("specToBuilderFields", () => {
   });
 
   it("defaults value to 0 when missing", () => {
-    const spec = {
+    const spec: StrategySpec = {
       ...VALID_SPEC,
       entryConditions: [
         { logic: "AND" as const, indicator: "sma", params: { period: 20 }, operator: "crosses_above" },
@@ -223,7 +223,7 @@ describe("specToBuilderFields", () => {
   });
 
   it("maps multiple conditions", () => {
-    const spec = {
+    const spec: StrategySpec = {
       ...VALID_SPEC,
       entryConditions: [
         { logic: "AND" as const, indicator: "rsi", params: { period: 14 }, operator: "<", value: 30 },

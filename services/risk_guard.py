@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 
 from db.database import get_session
 from db.models import (
-    UserRiskLimits, Trade, TradeStatus, TradingModeEnum, SystemEventType,
+    UserRiskLimits, PaperTrade, PaperTradeStatus, Trade, TradeStatus, TradingModeEnum, SystemEventType,
 )
 from services.event_logger import log_event
 
@@ -54,21 +54,37 @@ async def check_pre_trade(
         raise RiskViolation("Kill switch is active. All trading is halted.")
 
     # 2. Daily loss limit
-    # TODO: Trade has no user_id column — query currently sums all users' trades.
-    # Once Trade.user_id is added (requires migration), add .where(Trade.user_id == user_id).
     if limits.daily_loss_limit is not None:
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        daily_pnl: Optional[float] = None
         async with get_session() as db:
-            result = await db.execute(
-                select(func.coalesce(func.sum(Trade.pnl), 0.0)).where(
-                    Trade.mode == mode,
-                    Trade.status == TradeStatus.FILLED,
-                    Trade.exit_time >= today_start,
+            if mode == TradingModeEnum.PAPER:
+                result = await db.execute(
+                    select(func.coalesce(func.sum(PaperTrade.pnl), 0.0)).where(
+                        PaperTrade.user_id == user_id,
+                        PaperTrade.status == PaperTradeStatus.CLOSED,
+                        PaperTrade.exit_time >= today_start,
+                    )
                 )
-            )
-            daily_pnl = result.scalar() or 0.0
+                daily_pnl = result.scalar() or 0.0
+            elif hasattr(Trade, "user_id"):
+                result = await db.execute(
+                    select(func.coalesce(func.sum(Trade.pnl), 0.0)).where(
+                        Trade.user_id == user_id,
+                        Trade.mode == mode,
+                        Trade.status == TradeStatus.FILLED,
+                        Trade.exit_time >= today_start,
+                    )
+                )
+                daily_pnl = result.scalar() or 0.0
+            else:
+                logger.warning(
+                    "daily_loss_limit_skipped_unscoped_trade_table",
+                    user_id=user_id,
+                    mode=mode.value,
+                )
 
-        if daily_pnl <= -abs(limits.daily_loss_limit):
+        if daily_pnl is not None and daily_pnl <= -abs(limits.daily_loss_limit):
             await log_event(user_id, SystemEventType.RISK_LIMIT_TRIGGERED, mode,
                             f"Daily loss limit hit: ${daily_pnl:.2f}", "warning")
             raise RiskViolation(

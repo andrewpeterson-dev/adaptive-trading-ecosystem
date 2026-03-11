@@ -55,18 +55,25 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
     subscribed: set[str] = set()
     _subscriptions[ws_id] = subscribed
     settings = get_settings()
+    stop_event = asyncio.Event()
 
     await websocket.send_json({"type": "connected", "message": "Market data stream ready"})
     logger.info("ws_client_connected", user_id=user_id)
 
     async def redis_listener():
         """Subscribe to Redis market:price_updates and forward to this WebSocket."""
+        r = None
+        pubsub = None
         try:
             r = aioredis.from_url(settings.redis_url, decode_responses=True)
             pubsub = r.pubsub()
             await pubsub.subscribe("market:price_updates")
-            async for message in pubsub.listen():
-                if message["type"] != "message":
+            while not stop_event.is_set():
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=1.0,
+                )
+                if not message:
                     continue
                 try:
                     data = json.loads(message["data"])
@@ -75,13 +82,27 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
                         await websocket.send_json({"type": "price_update", "data": data})
                 except Exception:
                     pass
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.debug("ws_redis_listener_error", error=str(e))
+        finally:
+            if pubsub is not None:
+                try:
+                    await pubsub.unsubscribe("market:price_updates")
+                    await pubsub.aclose()
+                except Exception:
+                    pass
+            if r is not None:
+                try:
+                    await r.aclose()
+                except Exception:
+                    pass
 
     async def message_handler():
         """Handle subscription messages from the client."""
         try:
-            while True:
+            while not stop_event.is_set():
                 raw = await websocket.receive_text()
                 try:
                     msg = json.loads(raw)
@@ -102,15 +123,16 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
                         subscribed.discard(sym.upper())
 
         except WebSocketDisconnect:
-            pass
+            stop_event.set()
         except Exception as e:
+            stop_event.set()
             logger.debug("ws_message_handler_error", error=str(e))
 
     async def poll_subscribed():
         """For symbols without a streaming source, poll every 10 seconds."""
-        while True:
+        while not stop_event.is_set():
             await asyncio.sleep(10)
-            if not subscribed:
+            if stop_event.is_set() or not subscribed:
                 continue
             for sym in list(subscribed):
                 try:
@@ -121,14 +143,15 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
                     pass
 
     try:
-        await asyncio.gather(
-            redis_listener(),
-            message_handler(),
-            poll_subscribed(),
-            return_exceptions=True,
-        )
+        listener_task = asyncio.create_task(redis_listener())
+        poll_task = asyncio.create_task(poll_subscribed())
+        await message_handler()
     except WebSocketDisconnect:
         pass
     finally:
+        stop_event.set()
+        for task in (listener_task, poll_task):
+            task.cancel()
+        await asyncio.gather(listener_task, poll_task, return_exceptions=True)
         _subscriptions.pop(ws_id, None)
         logger.info("ws_client_disconnected", user_id=user_id)

@@ -256,7 +256,17 @@ class BotRunner:
             )
             return
 
-        position_value = portfolio.cash * (position_size_pct / 100.0)
+        position_fraction = self._normalize_position_size(position_size_pct)
+        if position_fraction <= 0:
+            logger.warning(
+                "bot_invalid_position_size",
+                bot_id=bot.id,
+                symbol=symbol,
+                position_size_pct=position_size_pct,
+            )
+            return
+
+        position_value = portfolio.cash * position_fraction
         quantity = int(position_value / current_price)
         if quantity < 1:
             logger.warning(
@@ -336,6 +346,14 @@ class BotRunner:
             "1D": 86400,
         }
         return mapping.get(tf, 86400)
+
+    def _normalize_position_size(self, position_size_pct: float) -> float:
+        """Accept both fractional sizing (0.1 = 10%) and percent sizing (10 = 10%)."""
+        if position_size_pct <= 0:
+            return 0.0
+        if position_size_pct <= 1:
+            return position_size_pct
+        return position_size_pct / 100.0
 
 
 # Singleton instance
