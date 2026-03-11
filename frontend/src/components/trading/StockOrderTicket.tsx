@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
 import { apiFetch } from "@/lib/api/client";
+import { useToast } from "@/components/ui/toast";
 import { OrderPreview } from "./OrderPreview";
 
 type Direction = "buy" | "sell";
 type OrderType = "market" | "limit" | "stop" | "stop_limit";
+type InputMode = "shares" | "dollars";
 
 const ORDER_TYPES: { value: OrderType; label: string }[] = [
   { value: "market", label: "Market" },
@@ -21,35 +23,100 @@ interface StockOrderTicketProps {
   isPaperMode?: boolean;
 }
 
+function fmt(value: number): string {
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicketProps) {
-  const { symbol, quote } = useTradeStore();
+  const { symbol, quote, account } = useTradeStore();
+  const { toast } = useToast();
 
   const [direction, setDirection] = useState<Direction>("buy");
   const [orderType, setOrderType] = useState<OrderType>("market");
   const [quantity, setQuantity] = useState(0);
-  const [limitPrice, setLimitPrice] = useState<string>("");
-  const [stopPrice, setStopPrice] = useState<string>("");
+  const [dollarAmount, setDollarAmount] = useState(0);
+  const [inputMode, setInputMode] = useState<InputMode>("shares");
+  const [limitPrice, setLimitPrice] = useState("");
+  const [stopPrice, setStopPrice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  // Reset fields when symbol changes
-  useEffect(() => {
-    setQuantity(0);
-    setLimitPrice("");
-    setStopPrice("");
-    setError(null);
-    setSuccess(null);
-  }, [symbol]);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevOrderType = useRef<OrderType>(orderType);
+  const prevDirection = useRef<Direction>(direction);
 
+  // Derived prices
   const currentPrice = quote?.price ?? quote?.last ?? null;
   const bid = quote?.bid;
   const ask = quote?.ask;
   const last = quote?.last ?? quote?.price;
+  const spread = bid != null && ask != null ? ask - bid : null;
+
+  const needsLimit = orderType === "limit" || orderType === "stop_limit";
+  const needsStop = orderType === "stop" || orderType === "stop_limit";
+
+  // Pre-fill limit price when switching to limit-type order
+  useEffect(() => {
+    const wasLimit =
+      prevOrderType.current === "limit" || prevOrderType.current === "stop_limit";
+    const isLimit = needsLimit;
+
+    if (isLimit && !wasLimit) {
+      // Pre-fill with ask (buy) or bid (sell)
+      const prefill =
+        direction === "buy"
+          ? ask ?? currentPrice
+          : bid ?? currentPrice;
+      if (prefill != null && (!limitPrice || parseFloat(limitPrice) <= 0)) {
+        setLimitPrice(prefill.toFixed(2));
+      }
+    }
+    prevOrderType.current = orderType;
+  }, [orderType, needsLimit, direction, ask, bid, currentPrice, limitPrice]);
+
+  // Update limit price prefill when direction changes while on a limit order
+  useEffect(() => {
+    if (prevDirection.current !== direction && needsLimit) {
+      const prefill =
+        direction === "buy"
+          ? ask ?? currentPrice
+          : bid ?? currentPrice;
+      if (prefill != null) {
+        setLimitPrice(prefill.toFixed(2));
+      }
+    }
+    prevDirection.current = direction;
+  }, [direction, needsLimit, ask, bid, currentPrice]);
+
+  // Reset fields when symbol changes
+  useEffect(() => {
+    setQuantity(0);
+    setDollarAmount(0);
+    setLimitPrice("");
+    setStopPrice("");
+    setError(null);
+    setSuccess(null);
+    setTouched({});
+  }, [symbol]);
+
+  // Auto-clear success after 5s
+  useEffect(() => {
+    if (success) {
+      successTimer.current = setTimeout(() => setSuccess(null), 5000);
+      return () => {
+        if (successTimer.current) clearTimeout(successTimer.current);
+      };
+    }
+  }, [success]);
 
   // Effective price for estimation
-  const effectivePrice = (() => {
-    if (orderType === "limit" || orderType === "stop_limit") {
+  const effectivePrice = useMemo(() => {
+    if (needsLimit) {
       const lp = parseFloat(limitPrice);
       return !isNaN(lp) && lp > 0 ? lp : currentPrice;
     }
@@ -58,70 +125,193 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
       return !isNaN(sp) && sp > 0 ? sp : currentPrice;
     }
     return currentPrice;
-  })();
+  }, [orderType, needsLimit, limitPrice, stopPrice, currentPrice]);
 
-  const validate = useCallback((): string | null => {
-    if (!symbol) return "Enter a symbol";
-    if (quantity <= 0) return "Enter quantity";
-    if ((orderType === "limit" || orderType === "stop_limit") && (!limitPrice || parseFloat(limitPrice) <= 0)) {
-      return "Enter limit price";
+  // Compute actual quantity (resolve dollar mode)
+  const resolvedQuantity = useMemo(() => {
+    if (inputMode === "dollars" && effectivePrice && effectivePrice > 0) {
+      return Math.floor(dollarAmount / effectivePrice);
     }
-    if ((orderType === "stop" || orderType === "stop_limit") && (!stopPrice || parseFloat(stopPrice) <= 0)) {
-      return "Enter stop price";
+    return quantity;
+  }, [inputMode, dollarAmount, effectivePrice, quantity]);
+
+  // Dollar equivalent for share mode, share equivalent for dollar mode
+  const secondaryDisplay = useMemo(() => {
+    if (inputMode === "shares" && quantity > 0 && effectivePrice) {
+      return `$${fmt(quantity * effectivePrice)}`;
+    }
+    if (inputMode === "dollars" && effectivePrice && effectivePrice > 0 && dollarAmount > 0) {
+      const shares = Math.floor(dollarAmount / effectivePrice);
+      return `${shares} share${shares !== 1 ? "s" : ""}`;
     }
     return null;
-  }, [symbol, quantity, orderType, limitPrice, stopPrice]);
+  }, [inputMode, quantity, dollarAmount, effectivePrice]);
+
+  // Inline validation
+  const validationErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+
+    if (touched.symbol && !symbol) {
+      errors.symbol = "Enter a valid symbol";
+    }
+
+    if (touched.quantity) {
+      if (inputMode === "shares" && quantity <= 0) {
+        errors.quantity = "Enter quantity";
+      }
+      if (inputMode === "dollars" && dollarAmount <= 0) {
+        errors.quantity = "Enter dollar amount";
+      }
+    }
+
+    if (touched.limitPrice && needsLimit) {
+      if (!limitPrice || parseFloat(limitPrice) <= 0) {
+        errors.limitPrice = "Enter limit price";
+      }
+    }
+
+    if (touched.stopPrice && needsStop) {
+      if (!stopPrice || parseFloat(stopPrice) <= 0) {
+        errors.stopPrice = "Enter stop price";
+      }
+    }
+
+    // Buying power check
+    if (
+      direction === "buy" &&
+      resolvedQuantity > 0 &&
+      effectivePrice &&
+      account
+    ) {
+      const cost = resolvedQuantity * effectivePrice;
+      if (cost > account.buying_power) {
+        errors.buyingPower = `Insufficient buying power ($${fmt(account.buying_power)} available)`;
+      }
+    }
+
+    return errors;
+  }, [
+    symbol,
+    quantity,
+    dollarAmount,
+    inputMode,
+    limitPrice,
+    stopPrice,
+    needsLimit,
+    needsStop,
+    direction,
+    resolvedQuantity,
+    effectivePrice,
+    account,
+    touched,
+  ]);
+
+  // Full validation for submit guard
+  const canSubmit = useMemo(() => {
+    if (submitting) return false;
+    if (!symbol) return false;
+    if (resolvedQuantity <= 0) return false;
+    if (needsLimit && (!limitPrice || parseFloat(limitPrice) <= 0)) return false;
+    if (needsStop && (!stopPrice || parseFloat(stopPrice) <= 0)) return false;
+    if (
+      direction === "buy" &&
+      effectivePrice &&
+      account &&
+      resolvedQuantity * effectivePrice > account.buying_power
+    ) {
+      return false;
+    }
+    return true;
+  }, [
+    submitting,
+    symbol,
+    resolvedQuantity,
+    needsLimit,
+    needsStop,
+    limitPrice,
+    stopPrice,
+    direction,
+    effectivePrice,
+    account,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    // Touch all fields
+    setTouched({ symbol: true, quantity: true, limitPrice: true, stopPrice: true });
+
+    if (!canSubmit) return;
 
     setSubmitting(true);
+    const orderQty = resolvedQuantity;
+    const orderSymbol = symbol.toUpperCase();
+    const label = `${direction === "buy" ? "Buy" : "Sell"} ${orderQty} ${orderSymbol}`;
+
     try {
       await apiFetch("/api/trading/execute", {
         method: "POST",
         body: JSON.stringify({
-          symbol: symbol.toUpperCase(),
+          symbol: orderSymbol,
           direction: direction === "buy" ? "long" : "short",
-          quantity,
+          quantity: orderQty,
           strength: 1.0,
           model_name: "manual",
           order_type: orderType,
-          limit_price: (orderType === "limit" || orderType === "stop_limit") ? parseFloat(limitPrice) : null,
-          stop_price: (orderType === "stop" || orderType === "stop_limit") ? parseFloat(stopPrice) : null,
+          limit_price: needsLimit ? parseFloat(limitPrice) : null,
+          stop_price: needsStop ? parseFloat(stopPrice) : null,
           user_confirmed: true,
         }),
       });
 
-      setSuccess(
-        `${direction === "buy" ? "Buy" : "Sell"} ${quantity} ${symbol.toUpperCase()} submitted`
-      );
+      const successMsg = `${label} submitted`;
+      setSuccess(successMsg);
+      toast(successMsg, "success");
       setQuantity(0);
+      setDollarAmount(0);
       setLimitPrice("");
       setStopPrice("");
+      setTouched({});
       onOrderPlaced();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Order failed");
+      const msg = err instanceof Error ? err.message : "Order failed";
+      setError(msg);
+      toast(`Order failed: ${msg}`, "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const decrementQty = () => setQuantity((q) => Math.max(0, q - 1));
-  const incrementQty = () => setQuantity((q) => q + 1);
+  const decrementQty = () => {
+    if (inputMode === "shares") {
+      setQuantity((q) => Math.max(0, q - 1));
+    } else {
+      setDollarAmount((d) => Math.max(0, d - 100));
+    }
+    setTouched((t) => ({ ...t, quantity: true }));
+  };
 
-  const submitLabel = quantity > 0 && symbol
-    ? `${direction === "buy" ? "Buy" : "Sell"} ${quantity} ${symbol.toUpperCase()}`
-    : direction === "buy"
-      ? "Buy"
-      : "Sell";
+  const incrementQty = () => {
+    if (inputMode === "shares") {
+      setQuantity((q) => q + 1);
+    } else {
+      setDollarAmount((d) => d + 100);
+    }
+    setTouched((t) => ({ ...t, quantity: true }));
+  };
+
+  const submitLabel =
+    resolvedQuantity > 0 && symbol
+      ? `${direction === "buy" ? "Buy" : "Sell"} ${resolvedQuantity} ${symbol.toUpperCase()}`
+      : direction === "buy"
+        ? "Buy"
+        : "Sell";
+
+  // Est. value
+  const estValue =
+    resolvedQuantity > 0 && effectivePrice ? resolvedQuantity * effectivePrice : null;
 
   return (
     <div className="rounded-xl border border-border/50 bg-card p-5">
@@ -188,7 +378,7 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
         </div>
 
         {/* Conditional price fields */}
-        {(orderType === "limit" || orderType === "stop_limit") && (
+        {needsLimit && (
           <div>
             <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest block mb-1.5">
               Limit Price
@@ -196,15 +386,22 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
             <input
               type="number"
               value={limitPrice}
-              onChange={(e) => setLimitPrice(e.target.value)}
+              onChange={(e) => {
+                setLimitPrice(e.target.value);
+                setTouched((t) => ({ ...t, limitPrice: true }));
+              }}
+              onBlur={() => setTouched((t) => ({ ...t, limitPrice: true }))}
               placeholder="0.00"
               min="0"
               step="0.01"
               className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
+            {validationErrors.limitPrice && (
+              <p className="text-xs text-red-400 mt-1">{validationErrors.limitPrice}</p>
+            )}
           </div>
         )}
-        {(orderType === "stop" || orderType === "stop_limit") && (
+        {needsStop && (
           <div>
             <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest block mb-1.5">
               Stop Price
@@ -212,20 +409,63 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
             <input
               type="number"
               value={stopPrice}
-              onChange={(e) => setStopPrice(e.target.value)}
+              onChange={(e) => {
+                setStopPrice(e.target.value);
+                setTouched((t) => ({ ...t, stopPrice: true }));
+              }}
+              onBlur={() => setTouched((t) => ({ ...t, stopPrice: true }))}
               placeholder="0.00"
               min="0"
               step="0.01"
               className="w-full px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
+            {validationErrors.stopPrice && (
+              <p className="text-xs text-red-400 mt-1">{validationErrors.stopPrice}</p>
+            )}
           </div>
         )}
 
         {/* Quantity */}
         <div>
-          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest block mb-1.5">
-            Quantity
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+              {inputMode === "shares" ? "Quantity" : "Amount"}
+            </label>
+            <div className="flex items-center rounded-md overflow-hidden border border-border/50">
+              <button
+                type="button"
+                onClick={() => {
+                  setInputMode("shares");
+                  setDollarAmount(0);
+                  setQuantity(0);
+                  setTouched((t) => ({ ...t, quantity: false }));
+                }}
+                className={`px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                  inputMode === "shares"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Shares
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInputMode("dollars");
+                  setDollarAmount(0);
+                  setQuantity(0);
+                  setTouched((t) => ({ ...t, quantity: false }));
+                }}
+                className={`px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                  inputMode === "dollars"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                $
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-0">
             <button
               type="button"
@@ -234,14 +474,39 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
             >
               -
             </button>
-            <input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(0, parseInt(e.target.value) || 0))}
-              min="0"
-              step="1"
-              className="flex-1 px-3 py-2 bg-muted border-y border-border text-sm font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-ring/40"
-            />
+            {inputMode === "shares" ? (
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => {
+                  setQuantity(Math.max(0, parseInt(e.target.value) || 0));
+                  setTouched((t) => ({ ...t, quantity: true }));
+                }}
+                onBlur={() => setTouched((t) => ({ ...t, quantity: true }))}
+                min="0"
+                step="1"
+                className="flex-1 px-3 py-2 bg-muted border-y border-border text-sm font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-ring/40"
+              />
+            ) : (
+              <div className="flex-1 relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-muted-foreground">
+                  $
+                </span>
+                <input
+                  type="number"
+                  value={dollarAmount || ""}
+                  onChange={(e) => {
+                    setDollarAmount(Math.max(0, parseFloat(e.target.value) || 0));
+                    setTouched((t) => ({ ...t, quantity: true }));
+                  }}
+                  onBlur={() => setTouched((t) => ({ ...t, quantity: true }))}
+                  min="0"
+                  step="100"
+                  placeholder="0"
+                  className="w-full pl-7 pr-3 py-2 bg-muted border-y border-border text-sm font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-ring/40"
+                />
+              </div>
+            )}
             <button
               type="button"
               onClick={incrementQty}
@@ -250,50 +515,82 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
               +
             </button>
           </div>
+          {/* Secondary display */}
+          {secondaryDisplay && (
+            <p className="text-[11px] text-muted-foreground mt-1 text-center font-mono">
+              {inputMode === "shares" ? "Est. value: " : ""}
+              {secondaryDisplay}
+            </p>
+          )}
+          {validationErrors.quantity && (
+            <p className="text-xs text-red-400 mt-1">{validationErrors.quantity}</p>
+          )}
         </div>
 
         {/* Bid / Ask / Last */}
         {(bid != null || ask != null || last != null) && (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            {bid != null && (
-              <div>
-                <span className="text-[10px] uppercase tracking-wider">Bid</span>{" "}
-                <span className="font-mono tabular-nums">${bid.toFixed(2)}</span>
-              </div>
-            )}
-            {ask != null && (
-              <div>
-                <span className="text-[10px] uppercase tracking-wider">Ask</span>{" "}
-                <span className="font-mono tabular-nums">${ask.toFixed(2)}</span>
-              </div>
-            )}
-            {last != null && (
-              <div>
-                <span className="text-[10px] uppercase tracking-wider">Last</span>{" "}
-                <span className="font-mono tabular-nums">${last.toFixed(2)}</span>
+          <div className="space-y-1">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {bid != null && (
+                <div>
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Bid
+                  </div>
+                  <div className="text-xs font-mono tabular-nums font-medium">
+                    ${bid.toFixed(2)}
+                  </div>
+                </div>
+              )}
+              {ask != null && (
+                <div>
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Ask
+                  </div>
+                  <div className="text-xs font-mono tabular-nums font-medium">
+                    ${ask.toFixed(2)}
+                  </div>
+                </div>
+              )}
+              {last != null && (
+                <div>
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Last
+                  </div>
+                  <div className="text-xs font-mono tabular-nums font-medium">
+                    ${last.toFixed(2)}
+                  </div>
+                </div>
+              )}
+            </div>
+            {spread != null && (
+              <div className="text-center text-[10px] text-muted-foreground font-mono">
+                (spread: ${spread.toFixed(2)})
               </div>
             )}
           </div>
         )}
 
         {/* Estimated order value */}
-        {quantity > 0 && currentPrice != null && (
+        {estValue != null && (
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Est. Value</span>
-            <span className="font-mono tabular-nums font-medium">
-              ${(quantity * currentPrice).toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
+            <span className="font-mono tabular-nums font-medium">${fmt(estValue)}</span>
+          </div>
+        )}
+
+        {/* Buying power warning */}
+        {validationErrors.buyingPower && (
+          <div className="text-xs text-amber-400 bg-amber-400/10 rounded-md px-3 py-2">
+            {validationErrors.buyingPower}
           </div>
         )}
 
         {/* Order Preview */}
         <OrderPreview
-          quantity={quantity}
+          quantity={resolvedQuantity}
           price={effectivePrice}
           direction={direction}
+          symbol={symbol}
         />
 
         {/* Error / Success */}
@@ -311,7 +608,7 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
         {/* Submit */}
         <button
           type="submit"
-          disabled={submitting}
+          disabled={!canSubmit}
           className={`w-full py-2.5 rounded-md text-sm font-semibold transition-colors ${
             direction === "buy"
               ? "bg-emerald-500 hover:bg-emerald-400 text-white"

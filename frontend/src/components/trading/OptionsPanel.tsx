@@ -1,8 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  Settings,
+  BarChart3,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+  Info,
+} from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
+import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api/client";
 import type { OptionContract } from "@/types/trading";
 
@@ -16,16 +25,58 @@ interface OptionsChainResponse {
   contracts: OptionContract[];
 }
 
-type OptionDirection = "buy_to_open" | "sell_to_close";
+type OptionDirection =
+  | "buy_to_open"
+  | "sell_to_close"
+  | "sell_to_open"
+  | "buy_to_close";
+
 type OptionSide = "call" | "put";
 
+const DIRECTION_LABELS: Record<OptionDirection, string> = {
+  buy_to_open: "Buy to Open",
+  sell_to_close: "Sell to Close",
+  sell_to_open: "Sell to Open",
+  buy_to_close: "Buy to Close",
+};
+
+const DIRECTION_VERB: Record<OptionDirection, string> = {
+  buy_to_open: "Buy",
+  sell_to_close: "Sell",
+  sell_to_open: "Sell",
+  buy_to_close: "Buy",
+};
+
+const DIRECTION_PAST: Record<OptionDirection, string> = {
+  buy_to_open: "Bought",
+  sell_to_close: "Sold",
+  sell_to_open: "Sold",
+  buy_to_close: "Bought",
+};
+
+function isBuyDirection(d: OptionDirection): boolean {
+  return d === "buy_to_open" || d === "buy_to_close";
+}
+
 /* ------------------------------------------------------------------ */
-/*  Helper: format a number with fallback                              */
+/*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function fmt(n: number | undefined | null, decimals = 2, fallback = "--"): string {
+function fmt(
+  n: number | undefined | null,
+  decimals = 2,
+  fallback = "--"
+): string {
   if (n == null || isNaN(n)) return fallback;
   return n.toFixed(decimals);
+}
+
+function fmtUsd(n: number | null | undefined, fallback = "--"): string {
+  if (n == null || isNaN(n)) return fallback;
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function fmtPct(n: number | undefined | null, fallback = "--"): string {
@@ -33,57 +84,64 @@ function fmtPct(n: number | undefined | null, fallback = "--"): string {
   return (n * 100).toFixed(1) + "%";
 }
 
+function daysUntil(dateStr: string): number {
+  const target = new Date(dateStr + "T16:00:00");
+  const now = new Date();
+  const diff = target.getTime() - now.getTime();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+function formatExpShort(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" });
+}
+
 /* ------------------------------------------------------------------ */
-/*  No-Data State (State A)                                            */
+/*  No-Data State                                                      */
 /* ------------------------------------------------------------------ */
 
 function OptionsNoData({ symbol }: { symbol: string }) {
   return (
     <div className="rounded-xl border border-border/50 bg-card p-5">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-3">
         <Settings className="h-4 w-4 text-muted-foreground" />
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
           Options Trading
         </span>
       </div>
 
-      {/* Underlying label */}
-      <div className="flex items-center gap-1.5 mb-4">
+      <div className="flex items-center gap-1.5 mb-3">
         <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground">
-          Showing underlying: <span className="font-medium text-foreground">{symbol}</span>
+          Underlying:{" "}
+          <span className="font-medium text-foreground">{symbol}</span>
         </span>
       </div>
 
-      {/* Info card */}
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
-        <p className="text-sm font-medium text-primary mb-3">
-          Options market data not yet connected
-        </p>
-        <p className="text-xs text-muted-foreground mb-3">
-          When options data is available, you&apos;ll see:
-        </p>
-        <ul className="space-y-1.5 text-xs text-muted-foreground">
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-0.5">&#8226;</span>
-            Options chain by expiry
+      <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+        <div className="flex items-start gap-2 mb-2">
+          <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-medium text-foreground mb-1">
+              Options data requires broker connection
+            </p>
+            <p className="text-[11px] text-muted-foreground mb-2">
+              Once connected, you&apos;ll see:
+            </p>
+          </div>
+        </div>
+        <ul className="space-y-1 text-[11px] text-muted-foreground ml-5">
+          <li className="flex items-start gap-1.5">
+            <span className="text-muted-foreground/60 mt-px">&#8226;</span>
+            Options chain by expiry with bid/ask
           </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-0.5">&#8226;</span>
-            Strike selector
+          <li className="flex items-start gap-1.5">
+            <span className="text-muted-foreground/60 mt-px">&#8226;</span>
+            Strike selector and Greeks
           </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-0.5">&#8226;</span>
-            Greeks (delta, gamma, theta, vega, IV)
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-0.5">&#8226;</span>
-            Bid/Ask/Mark pricing
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-0.5">&#8226;</span>
-            Order entry
+          <li className="flex items-start gap-1.5">
+            <span className="text-muted-foreground/60 mt-px">&#8226;</span>
+            Order entry with portfolio impact preview
           </li>
         </ul>
       </div>
@@ -108,7 +166,10 @@ function ExpirationSelector({
 
   const scroll = (dir: "left" | "right") => {
     if (!scrollRef.current) return;
-    scrollRef.current.scrollBy({ left: dir === "left" ? -120 : 120, behavior: "smooth" });
+    scrollRef.current.scrollBy({
+      left: dir === "left" ? -120 : 120,
+      behavior: "smooth",
+    });
   };
 
   return (
@@ -124,21 +185,30 @@ function ExpirationSelector({
         >
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
-        <div ref={scrollRef} className="flex gap-1 overflow-x-auto scrollbar-hide flex-1">
-          {expirations.map((exp) => (
-            <button
-              key={exp}
-              type="button"
-              onClick={() => onSelect(exp)}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                selected === exp
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              }`}
-            >
-              {exp}
-            </button>
-          ))}
+        <div
+          ref={scrollRef}
+          className="flex gap-1 overflow-x-auto scrollbar-hide flex-1"
+        >
+          {expirations.map((exp) => {
+            const dte = daysUntil(exp);
+            return (
+              <button
+                key={exp}
+                type="button"
+                onClick={() => onSelect(exp)}
+                className={`px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                  selected === exp
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                {exp}
+                <span className="ml-1 text-[10px] text-muted-foreground">
+                  ({dte}d)
+                </span>
+              </button>
+            );
+          })}
         </div>
         <button
           type="button"
@@ -179,20 +249,15 @@ function StrikeRow({
           : "hover:bg-muted/40"
       }`}
     >
-      {/* Call bid/ask */}
       <span className="font-mono tabular-nums text-emerald-400 text-right">
         {fmt(callContract?.bid)}
       </span>
       <span className="font-mono tabular-nums text-muted-foreground text-right">
         {fmt(callContract?.ask)}
       </span>
-
-      {/* Strike */}
       <span className="font-mono tabular-nums font-semibold text-foreground text-center">
         {strike.toFixed(strike % 1 === 0 ? 0 : 2)}
       </span>
-
-      {/* Put bid/ask */}
       <span className="font-mono tabular-nums text-red-400 text-left">
         {fmt(putContract?.bid)}
       </span>
@@ -223,7 +288,9 @@ function GreeksDisplay({ contract }: { contract: OptionContract }) {
           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
             {g.label}
           </div>
-          <div className="text-xs font-mono tabular-nums mt-0.5">{g.value}</div>
+          <div className="text-xs font-mono tabular-nums mt-0.5">
+            {g.value}
+          </div>
         </div>
       ))}
     </div>
@@ -245,66 +312,166 @@ function ContractSummary({
 }) {
   const bid = contract.bid;
   const ask = contract.ask;
+  const last = contract.last;
   const hasPricing = bid != null && ask != null;
-  const mark = hasPricing ? (bid + ask) / 2 : null;
-  const premium = direction === "buy_to_open" ? ask : bid;
-  const totalCost = premium != null ? premium * quantity * 100 : null;
+  const mid = hasPricing ? (bid + ask) / 2 : null;
+  const isBuy = isBuyDirection(direction);
+  const premium = isBuy ? ask : bid;
+  const totalPremium = premium != null ? premium * quantity * 100 : null;
+  const dte = daysUntil(contract.expiration);
 
-  // Breakeven for buy-to-open
-  const breakeven =
-    direction === "buy_to_open" && premium != null
-      ? contract.type === "call"
+  // Breakeven
+  const breakeven = useMemo(() => {
+    if (premium == null) return null;
+    if (direction === "buy_to_open") {
+      return contract.type === "call"
         ? contract.strike + premium
-        : contract.strike - premium
-      : null;
+        : contract.strike - premium;
+    }
+    if (direction === "sell_to_open") {
+      return contract.type === "call"
+        ? contract.strike + premium
+        : contract.strike - premium;
+    }
+    return null;
+  }, [contract.strike, contract.type, direction, premium]);
+
+  // Max profit / loss
+  const maxProfit = useMemo((): string => {
+    if (premium == null) return "--";
+    if (direction === "buy_to_open") {
+      return contract.type === "call"
+        ? "Unlimited"
+        : "$" + fmtUsd((contract.strike - premium) * quantity * 100);
+    }
+    if (direction === "sell_to_open") {
+      return "$" + fmtUsd(premium * quantity * 100);
+    }
+    return "--";
+  }, [contract.strike, contract.type, direction, premium, quantity]);
+
+  const maxLoss = useMemo((): string => {
+    if (premium == null) return "--";
+    if (direction === "buy_to_open") {
+      return "$" + fmtUsd(premium * quantity * 100);
+    }
+    if (direction === "sell_to_open") {
+      return contract.type === "call"
+        ? "Unlimited"
+        : "$" + fmtUsd((contract.strike * 100 - premium * 100) * quantity);
+    }
+    return "--";
+  }, [contract.strike, contract.type, direction, premium, quantity]);
 
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
+    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2.5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-foreground">
-          {contract.underlying} {contract.expiration} {contract.strike}
+          {contract.underlying} {contract.expiration}{" "}
+          {contract.strike}
           {contract.type === "call" ? "C" : "P"}
         </span>
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-          {direction === "buy_to_open" ? "Buy to Open" : "Sell to Close"}
+          {DIRECTION_LABELS[direction]}
         </span>
       </div>
 
       {/* Pricing row */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground">
         <div>
-          <span className="text-[10px] uppercase tracking-wider">Bid</span>{" "}
-          <span className="font-mono tabular-nums">{bid != null ? `$${fmt(bid)}` : "\u2014"}</span>
+          <span className="text-[10px] uppercase tracking-wider block">
+            Bid
+          </span>
+          <span className="font-mono tabular-nums">
+            {bid != null ? `$${fmt(bid)}` : "\u2014"}
+          </span>
         </div>
         <div>
-          <span className="text-[10px] uppercase tracking-wider">Ask</span>{" "}
-          <span className="font-mono tabular-nums">{ask != null ? `$${fmt(ask)}` : "\u2014"}</span>
+          <span className="text-[10px] uppercase tracking-wider block">
+            Ask
+          </span>
+          <span className="font-mono tabular-nums">
+            {ask != null ? `$${fmt(ask)}` : "\u2014"}
+          </span>
         </div>
         <div>
-          <span className="text-[10px] uppercase tracking-wider">Mark</span>{" "}
-          <span className="font-mono tabular-nums">{mark != null ? `$${fmt(mark)}` : "\u2014"}</span>
+          <span className="text-[10px] uppercase tracking-wider block">
+            Mid
+          </span>
+          <span className="font-mono tabular-nums">
+            {mid != null ? `$${fmt(mid)}` : "\u2014"}
+          </span>
+        </div>
+        <div>
+          <span className="text-[10px] uppercase tracking-wider block">
+            Last
+          </span>
+          <span className="font-mono tabular-nums">
+            {last != null ? `$${fmt(last)}` : "\u2014"}
+          </span>
         </div>
       </div>
 
-      {/* Cost + breakeven */}
-      {totalCost != null && (
-        <div className="flex items-center justify-between text-xs">
-          <div>
-            <span className="text-muted-foreground">
-              {direction === "buy_to_open" ? "Total Cost" : "Total Credit"}
-            </span>
-          </div>
-          <span className="font-mono tabular-nums font-medium">
-            ${totalCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {/* Contract details */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Multiplier</span>
+          <span className="font-mono tabular-nums">100</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">DTE</span>
+          <span className="font-mono tabular-nums">{dte}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">
+            Per Contract
+          </span>
+          <span className="font-mono tabular-nums">
+            {premium != null ? `$${fmt(premium)}` : "\u2014"}
           </span>
         </div>
-      )}
-      {breakeven != null && (
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Breakeven</span>
-          <span className="font-mono tabular-nums font-medium">${fmt(breakeven)}</span>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">
+            {isBuy ? "Total Cost" : "Total Credit"}
+          </span>
+          <span className="font-mono tabular-nums font-medium">
+            {totalPremium != null ? `$${fmtUsd(totalPremium)}` : "\u2014"}
+          </span>
         </div>
-      )}
+      </div>
+
+      {/* Risk profile */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1 border-t border-border/30">
+        {breakeven != null && (
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Breakeven</span>
+            <span className="font-mono tabular-nums font-medium">
+              ${fmt(breakeven)}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Max Profit</span>
+          <span
+            className={`font-mono tabular-nums font-medium ${
+              maxProfit === "Unlimited" ? "text-emerald-400" : ""
+            }`}
+          >
+            {maxProfit}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Max Loss</span>
+          <span
+            className={`font-mono tabular-nums font-medium ${
+              maxLoss === "Unlimited" ? "text-red-400" : ""
+            }`}
+          >
+            {maxLoss}
+          </span>
+        </div>
+      </div>
 
       {/* Greeks */}
       {(contract.delta != null || contract.gamma != null) && (
@@ -317,11 +484,152 @@ function ContractSummary({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Order Preview (Portfolio Impact)                                   */
+/* ------------------------------------------------------------------ */
+
+function OrderPreview({
+  contract,
+  direction,
+  quantity,
+  cashAvailable,
+  portfolioValue,
+}: {
+  contract: OptionContract;
+  direction: OptionDirection;
+  quantity: number;
+  cashAvailable: number | null;
+  portfolioValue: number | null;
+}) {
+  const isBuy = isBuyDirection(direction);
+  const premium = isBuy ? contract.ask : contract.bid;
+  if (premium == null) return null;
+
+  const totalPremium = premium * quantity * 100;
+  const remainingCash =
+    cashAvailable != null
+      ? isBuy
+        ? cashAvailable - totalPremium
+        : cashAvailable + totalPremium
+      : null;
+  const pctOfPortfolio =
+    portfolioValue != null && portfolioValue > 0
+      ? (totalPremium / portfolioValue) * 100
+      : null;
+  const breakeven =
+    direction === "buy_to_open" || direction === "sell_to_open"
+      ? contract.type === "call"
+        ? contract.strike + premium
+        : contract.strike - premium
+      : null;
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-1.5">
+      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+        Order Preview
+      </div>
+
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">
+          {isBuy ? "Total Debit" : "Total Credit"}
+        </span>
+        <span
+          className={`font-mono tabular-nums font-medium ${
+            isBuy ? "text-red-400" : "text-emerald-400"
+          }`}
+        >
+          {isBuy ? "-" : "+"}${fmtUsd(totalPremium)}
+        </span>
+      </div>
+
+      {remainingCash != null && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Remaining Cash</span>
+          <span
+            className={`font-mono tabular-nums ${
+              remainingCash < 0 ? "text-red-400 font-medium" : ""
+            }`}
+          >
+            ${fmtUsd(remainingCash)}
+          </span>
+        </div>
+      )}
+
+      {pctOfPortfolio != null && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">% of Portfolio</span>
+          <span className="font-mono tabular-nums">
+            {pctOfPortfolio.toFixed(1)}%
+          </span>
+        </div>
+      )}
+
+      {breakeven != null && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Breakeven</span>
+          <span className="font-mono tabular-nums">${fmt(breakeven)}</span>
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground/70 pt-1">
+        {quantity} contract{quantity !== 1 ? "s" : ""} x 100 shares/contract ={" "}
+        {(quantity * 100).toLocaleString()} shares equivalent
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Validation                                                         */
+/* ------------------------------------------------------------------ */
+
+interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+function validateOrder(
+  selectedStrike: number | null,
+  selectedContract: OptionContract | null,
+  direction: OptionDirection,
+  quantity: number,
+  cashAvailable: number | null
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (selectedStrike == null) {
+    errors.push("Select a strike price");
+  }
+
+  if (quantity < 1) {
+    errors.push("Quantity must be at least 1");
+  }
+
+  if (selectedContract && isBuyDirection(direction) && cashAvailable != null) {
+    const premium = selectedContract.ask;
+    if (premium != null) {
+      const totalCost = premium * quantity * 100;
+      if (totalCost > cashAvailable) {
+        warnings.push(
+          `Order cost $${fmtUsd(totalCost)} exceeds available cash $${fmtUsd(
+            cashAvailable
+          )}`
+        );
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Options Panel (main export)                                        */
 /* ------------------------------------------------------------------ */
 
 export function OptionsPanel() {
-  const { symbol } = useTradeStore();
+  const { symbol, account } = useTradeStore();
+  const { toast } = useToast();
 
   // Data state
   const [hasOptionsData, setHasOptionsData] = useState(false);
@@ -338,15 +646,15 @@ export function OptionsPanel() {
   // Submit state
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  /* ---- Fetch options chain on mount / symbol change ---- */
+  /* ---- Fetch options chain ---- */
   const fetchChain = useCallback(async () => {
     setChainLoading(true);
     setHasOptionsData(false);
     setChainData(null);
     setError(null);
-    setSuccess(null);
+    setSelectedStrike(null);
+    setSelectedExpiration("");
 
     try {
       const data = await apiFetch<OptionsChainResponse>(
@@ -356,12 +664,10 @@ export function OptionsPanel() {
         setChainData(data);
         setHasOptionsData(true);
         setSelectedExpiration(data.expirations[0]);
-        setSelectedStrike(null);
       } else {
         setHasOptionsData(false);
       }
     } catch {
-      // API doesn't exist yet -- show no-data state
       setHasOptionsData(false);
     } finally {
       setChainLoading(false);
@@ -372,40 +678,65 @@ export function OptionsPanel() {
     fetchChain();
   }, [fetchChain]);
 
-  // Reset selection when expiration changes
+  // Reset strike when expiration changes
   useEffect(() => {
     setSelectedStrike(null);
   }, [selectedExpiration]);
 
-  /* ---- Loading ---- */
-  if (chainLoading) {
-    return (
-      <div className="rounded-xl border border-border/50 bg-card p-5 flex items-center justify-center min-h-[200px]">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  /* ---- Derived data ---- */
+  const contracts = useMemo(
+    () =>
+      chainData?.contracts.filter(
+        (c) => c.expiration === selectedExpiration
+      ) ?? [],
+    [chainData, selectedExpiration]
+  );
 
-  /* ---- State A: No data ---- */
-  if (!hasOptionsData || !chainData) {
-    return <OptionsNoData symbol={symbol} />;
-  }
+  const strikes = useMemo(
+    () =>
+      Array.from(new Set(contracts.map((c) => c.strike))).sort(
+        (a, b) => a - b
+      ),
+    [contracts]
+  );
 
-  /* ---- State B: Data available ---- */
-  const contracts = chainData.contracts.filter((c) => c.expiration === selectedExpiration);
-  const strikes = Array.from(new Set(contracts.map((c) => c.strike))).sort((a, b) => a - b);
+  const selectedContract = useMemo(
+    () =>
+      selectedStrike != null
+        ? contracts.find(
+            (c) => c.strike === selectedStrike && c.type === optionSide
+          ) ?? null
+        : null,
+    [contracts, selectedStrike, optionSide]
+  );
 
-  const selectedContract = selectedStrike != null
-    ? contracts.find((c) => c.strike === selectedStrike && c.type === optionSide) ?? null
-    : null;
+  const cashAvailable = account?.cash ?? null;
+  const portfolioValue = account?.portfolio_value ?? null;
 
+  const validation = useMemo(
+    () =>
+      validateOrder(
+        selectedStrike,
+        selectedContract,
+        direction,
+        quantity,
+        cashAvailable
+      ),
+    [selectedStrike, selectedContract, direction, quantity, cashAvailable]
+  );
+
+  const canSubmit =
+    validation.valid && selectedContract != null && !submitting;
+
+  /* ---- Submit ---- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedContract) return;
+    if (!canSubmit || !selectedContract) return;
 
     setError(null);
-    setSuccess(null);
     setSubmitting(true);
+
+    const label = `${DIRECTION_PAST[direction]} ${quantity} ${selectedContract.underlying} ${selectedContract.expiration} ${selectedContract.strike}${selectedContract.type === "call" ? "C" : "P"}`;
 
     try {
       await apiFetch("/api/trading/execute-option", {
@@ -421,11 +752,11 @@ export function OptionsPanel() {
           user_confirmed: true,
         }),
       });
-      setSuccess(
-        `${direction === "buy_to_open" ? "Bought" : "Sold"} ${quantity} ${selectedContract.underlying} ${selectedContract.expiration} ${selectedContract.strike}${selectedContract.type === "call" ? "C" : "P"}`
-      );
+      toast(label, "success");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Order failed");
+      const msg = err instanceof Error ? err.message : "Order failed";
+      setError(msg);
+      toast(`Order failed: ${msg}`, "error");
     } finally {
       setSubmitting(false);
     }
@@ -434,6 +765,33 @@ export function OptionsPanel() {
   const decrementQty = () => setQuantity((q) => Math.max(1, q - 1));
   const incrementQty = () => setQuantity((q) => q + 1);
 
+  /* ---- Submit button label ---- */
+  const submitLabel = useMemo(() => {
+    if (!selectedContract) return "Select a strike";
+    const verb = DIRECTION_VERB[direction];
+    const exp = formatExpShort(selectedContract.expiration);
+    return `${verb} ${quantity} ${selectedContract.underlying} ${selectedContract.strike}${selectedContract.type === "call" ? "C" : "P"} ${exp}`;
+  }, [selectedContract, direction, quantity]);
+
+  const submitColor = isBuyDirection(direction)
+    ? "bg-emerald-500 hover:bg-emerald-400"
+    : "bg-red-500 hover:bg-red-400";
+
+  /* ---- Loading state ---- */
+  if (chainLoading) {
+    return (
+      <div className="rounded-xl border border-border/50 bg-card p-5 flex items-center justify-center min-h-[200px]">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  /* ---- No data state ---- */
+  if (!hasOptionsData || !chainData) {
+    return <OptionsNoData symbol={symbol} />;
+  }
+
+  /* ---- Main panel ---- */
   return (
     <div className="rounded-xl border border-border/50 bg-card p-5">
       {/* Header */}
@@ -483,34 +841,39 @@ export function OptionsPanel() {
           </div>
         </div>
 
-        {/* Direction toggle */}
+        {/* Direction toggle (2x2 grid) */}
         <div>
           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">
             Direction
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setDirection("buy_to_open")}
-              className={`py-1.5 rounded-md text-xs font-medium transition-colors ${
-                direction === "buy_to_open"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              }`}
-            >
-              Buy to Open
-            </button>
-            <button
-              type="button"
-              onClick={() => setDirection("sell_to_close")}
-              className={`py-1.5 rounded-md text-xs font-medium transition-colors ${
-                direction === "sell_to_close"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              }`}
-            >
-              Sell to Close
-            </button>
+          <div className="grid grid-cols-2 gap-1.5">
+            {(
+              [
+                "buy_to_open",
+                "sell_to_open",
+                "buy_to_close",
+                "sell_to_close",
+              ] as OptionDirection[]
+            ).map((d) => {
+              const active = direction === d;
+              const buy = isBuyDirection(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDirection(d)}
+                  className={`py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    active
+                      ? buy
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "bg-red-500/20 text-red-400 border border-red-500/30"
+                      : "bg-muted text-muted-foreground border border-border/50 hover:text-foreground"
+                  }`}
+                >
+                  {DIRECTION_LABELS[d]}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -519,7 +882,6 @@ export function OptionsPanel() {
           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5">
             Strikes
           </div>
-          {/* Column headers */}
           <div className="grid grid-cols-5 gap-1 px-2 mb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
             <span className="text-right">C Bid</span>
             <span className="text-right">C Ask</span>
@@ -529,8 +891,12 @@ export function OptionsPanel() {
           </div>
           <div className="max-h-48 overflow-y-auto space-y-0.5">
             {strikes.map((strike) => {
-              const callC = contracts.find((c) => c.strike === strike && c.type === "call");
-              const putC = contracts.find((c) => c.strike === strike && c.type === "put");
+              const callC = contracts.find(
+                (c) => c.strike === strike && c.type === "call"
+              );
+              const putC = contracts.find(
+                (c) => c.strike === strike && c.type === "put"
+              );
               return (
                 <StrikeRow
                   key={strike}
@@ -543,6 +909,11 @@ export function OptionsPanel() {
               );
             })}
           </div>
+          {selectedStrike == null && (
+            <p className="text-[10px] text-muted-foreground/60 mt-1 text-center">
+              Click a row to select a strike
+            </p>
+          )}
         </div>
 
         {/* Quantity */}
@@ -561,7 +932,9 @@ export function OptionsPanel() {
             <input
               type="number"
               value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={(e) =>
+                setQuantity(Math.max(1, parseInt(e.target.value) || 1))
+              }
               min="1"
               step="1"
               className="flex-1 px-3 py-2 bg-muted border-y border-border text-sm font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-ring/40"
@@ -576,7 +949,7 @@ export function OptionsPanel() {
           </div>
         </div>
 
-        {/* Contract summary card */}
+        {/* Contract summary */}
         {selectedContract && (
           <ContractSummary
             contract={selectedContract}
@@ -585,34 +958,47 @@ export function OptionsPanel() {
           />
         )}
 
-        {/* Error / Success */}
-        {error && (
-          <div className="text-xs text-red-400 bg-red-400/10 rounded-md px-3 py-2">
-            {error}
+        {/* Order preview (portfolio impact) */}
+        {selectedContract && (
+          <OrderPreview
+            contract={selectedContract}
+            direction={direction}
+            quantity={quantity}
+            cashAvailable={cashAvailable}
+            portfolioValue={portfolioValue}
+          />
+        )}
+
+        {/* Validation messages */}
+        {validation.warnings.length > 0 && (
+          <div className="flex items-start gap-2 text-xs text-amber-400 bg-amber-400/10 rounded-md px-3 py-2">
+            <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <div className="space-y-0.5">
+              {validation.warnings.map((w, i) => (
+                <p key={i}>{w}</p>
+              ))}
+            </div>
           </div>
         )}
-        {success && (
-          <div className="text-xs text-emerald-400 bg-emerald-400/10 rounded-md px-3 py-2">
-            {success}
+
+        {/* Inline error */}
+        {error && (
+          <div className="flex items-start gap-2 text-xs text-red-400 bg-red-400/10 rounded-md px-3 py-2">
+            <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <p>{error}</p>
           </div>
         )}
 
         {/* Submit */}
         <button
           type="submit"
-          disabled={submitting || !selectedContract}
-          className={`w-full py-2.5 rounded-md text-sm font-semibold transition-colors ${
-            direction === "buy_to_open"
-              ? "bg-emerald-500 hover:bg-emerald-400 text-white"
-              : "bg-red-500 hover:bg-red-400 text-white"
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
+          disabled={!canSubmit}
+          className={`w-full py-2.5 rounded-md text-sm font-semibold transition-colors text-white ${submitColor} disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {submitting ? (
             <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-          ) : selectedContract ? (
-            `${direction === "buy_to_open" ? "Buy" : "Sell"} ${quantity} ${selectedContract.underlying} ${selectedContract.strike}${selectedContract.type === "call" ? "C" : "P"}`
           ) : (
-            "Select a strike"
+            submitLabel
           )}
         </button>
       </form>

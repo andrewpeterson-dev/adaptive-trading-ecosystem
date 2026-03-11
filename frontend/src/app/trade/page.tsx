@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useMemo } from "react";
 import {
   Loader2,
   RefreshCw,
@@ -27,6 +27,7 @@ export default function TradePage() {
     trades,
     loading,
     error,
+    highlightedTradeId,
     fetchAll,
   } = useTradeStore();
 
@@ -40,6 +41,24 @@ export default function TradePage() {
     const interval = setInterval(refresh, 30000);
     return () => clearInterval(interval);
   }, [refresh]);
+
+  // Build trade markers for chart, filtering by current symbol
+  const tradeMarkers: TradeMarker[] = useMemo(() => {
+    return trades
+      .filter((t) => {
+        const tradeSymbol = (t.symbol || "").toUpperCase();
+        const matchesSymbol = tradeSymbol === symbol.toUpperCase();
+        const hasFill = t.filled_at && t.filled_price;
+        return matchesSymbol && hasFill;
+      })
+      .map((t) => ({
+        time: Math.floor(new Date(t.filled_at!).getTime() / 1000),
+        price: t.filled_price!,
+        side: (t.direction === "buy" || t.direction === "long") ? "buy" as const : "sell" as const,
+        tradeId: t.id,
+        label: t.bot_name || undefined,
+      }));
+  }, [trades, symbol]);
 
   if (loading && !account) {
     return (
@@ -66,18 +85,8 @@ export default function TradePage() {
     );
   }
 
-  const tradeMarkers: TradeMarker[] = trades
-    .filter((t: any) => t.filled_at && t.filled_price)
-    .map(
-      (t: any): TradeMarker => ({
-        time: Math.floor(new Date(t.filled_at).getTime() / 1000),
-        price: t.filled_price,
-        side: t.direction === "buy" ? "buy" : "sell",
-      })
-    );
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -107,24 +116,35 @@ export default function TradePage() {
       {/* Metrics Bar */}
       <MetricsBar />
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left Column: Symbol Search + Chart + Trade History */}
-        <div className="lg:col-span-3 space-y-5">
+      {/* Symbol Search + Asset Mode Switch row */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
           <SymbolSearch />
-          {assetMode === "options" && (
-            <div className="text-xs text-muted-foreground mb-1">
-              Showing underlying: {symbol}
-            </div>
-          )}
-          <TradingChart symbol={symbol} trades={tradeMarkers} />
+        </div>
+        <AssetModeSwitch />
+      </div>
+
+      {/* Underlying indicator for options mode */}
+      {assetMode === "options" && (
+        <div className="text-xs text-muted-foreground -mt-2">
+          Chart showing underlying: <span className="font-mono font-medium text-foreground">{symbol}</span>
+        </div>
+      )}
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left Column: Chart + Trade History */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-5">
+          <TradingChart
+            symbol={symbol}
+            trades={tradeMarkers}
+            highlightedTradeId={highlightedTradeId}
+          />
           <TradeHistoryPanel />
         </div>
 
-        {/* Right Column: Asset Mode + Order Ticket + Positions */}
-        <div className="lg:col-span-2 space-y-5">
-          <AssetModeSwitch />
-
+        {/* Right Column: Order Ticket + Positions */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-5">
           {/* Order Ticket Area */}
           {assetMode === "options" ? (
             <OptionsPanel />

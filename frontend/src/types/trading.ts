@@ -20,6 +20,19 @@ export interface Position {
   unrealized_pnl: number;
   unrealized_pnl_pct: number;
   side: string;
+  asset_type?: 'stock' | 'option';
+  source?: TradeSource;
+  bot_name?: string | null;
+  stop_loss?: number | null;
+  take_profit?: number | null;
+  // Option-specific fields
+  contract_symbol?: string;
+  underlying?: string;
+  expiration?: string;
+  strike?: number;
+  option_type?: 'call' | 'put';
+  avg_premium?: number;
+  current_mark?: number;
 }
 
 export interface Order {
@@ -31,8 +44,39 @@ export interface Order {
   status: string;
   filled_price: number | null;
   limit_price: number | null;
+  stop_price: number | null;
   submitted_at: string;
   filled_at: string | null;
+  asset_type?: 'stock' | 'option';
+  source?: TradeSource;
+  bot_name?: string | null;
+}
+
+export interface Trade {
+  id: string;
+  symbol: string;
+  asset_type: 'stock' | 'option';
+  direction: string;
+  quantity: number;
+  order_type: string;
+  status: string;
+  filled_price: number | null;
+  entry_price: number | null;
+  limit_price: number | null;
+  stop_price: number | null;
+  submitted_at: string;
+  filled_at: string | null;
+  pnl: number | null;
+  total_value: number | null;
+  source: TradeSource;
+  bot_name: string | null;
+  bot_explanation: string | null;
+  // Option-specific
+  contract_symbol?: string;
+  underlying?: string;
+  expiration?: string;
+  strike?: number;
+  option_type?: 'call' | 'put';
 }
 
 export interface RiskSummary {
@@ -50,8 +94,11 @@ export type AssetMode = 'stocks' | 'options';
 
 export type TradeSource = 'manual' | string;
 
+export type TradeFilter = 'all' | 'stocks' | 'options' | 'buys' | 'sells' | 'manual' | 'bot';
+
 export interface Quote {
   symbol: string;
+  name?: string;
   price: number;
   bid?: number;
   ask?: number;
@@ -59,6 +106,10 @@ export interface Quote {
   change?: number;
   change_pct?: number;
   volume?: number;
+  high?: number;
+  low?: number;
+  open?: number;
+  prev_close?: number;
 }
 
 export interface OptionContract {
@@ -86,4 +137,10 @@ export interface OptionPosition {
   current_price: number;
   market_value: number;
   unrealized_pnl: number;
+}
+
+export interface SymbolSearchResult {
+  symbol: string;
+  name: string;
+  type: 'stock' | 'etf' | 'crypto';
 }

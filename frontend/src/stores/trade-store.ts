@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiFetch } from '@/lib/api/client';
-import type { Account, Position, AssetMode, Quote } from '@/types/trading';
+import type { Account, Position, AssetMode, Quote, Trade } from '@/types/trading';
 
 interface TradeState {
   // State
@@ -9,14 +9,18 @@ interface TradeState {
   quote: Quote | null;
   account: Account | null;
   positions: Position[];
-  trades: any[];
+  trades: Trade[];
   loading: boolean;
   quoteLoading: boolean;
   error: boolean;
+  highlightedTradeId: string | null;
+  showAllExecutions: boolean;
 
   // Actions
   setSymbol: (symbol: string) => void;
   setAssetMode: (mode: AssetMode) => void;
+  setHighlightedTradeId: (id: string | null) => void;
+  setShowAllExecutions: (show: boolean) => void;
   fetchQuote: (symbol?: string) => Promise<void>;
   fetchAll: (mode: string) => Promise<void>;
 }
@@ -32,13 +36,21 @@ export const useTradeStore = create<TradeState>()((set, get) => ({
   loading: true,
   quoteLoading: false,
   error: false,
+  highlightedTradeId: null,
+  showAllExecutions: true,
 
   setSymbol: (symbol: string) => {
-    set({ symbol });
-    get().fetchQuote(symbol);
+    const upper = symbol.trim().toUpperCase();
+    if (!upper || upper === get().symbol) return;
+    set({ symbol: upper, highlightedTradeId: null });
+    get().fetchQuote(upper);
   },
 
   setAssetMode: (mode: AssetMode) => set({ assetMode: mode }),
+
+  setHighlightedTradeId: (id: string | null) => set({ highlightedTradeId: id }),
+
+  setShowAllExecutions: (show: boolean) => set({ showAllExecutions: show }),
 
   fetchQuote: async (symbol?: string) => {
     const sym = symbol || get().symbol;
@@ -59,7 +71,7 @@ export const useTradeStore = create<TradeState>()((set, get) => ({
       const [accRes, posRes, tradeRes] = await Promise.allSettled([
         apiFetch<Account>(`/api/trading/account${q}`),
         apiFetch<{ positions: Position[] }>(`/api/trading/positions${q}`),
-        apiFetch<any>(`/api/trading/trade-log?limit=100&mode=${mode}`),
+        apiFetch<{ trades: Trade[] } | Trade[]>(`/api/trading/trade-log?limit=100&mode=${mode}`),
       ]);
 
       let hasData = false;
@@ -77,8 +89,15 @@ export const useTradeStore = create<TradeState>()((set, get) => ({
 
       if (tradeRes.status === 'fulfilled') {
         const data = tradeRes.value;
-        set({ trades: data.trades || data || [] });
+        const trades = Array.isArray(data) ? data : (data as { trades: Trade[] }).trades || [];
+        set({ trades });
         hasData = true;
+      }
+
+      // Also fetch quote for current symbol
+      const sym = get().symbol;
+      if (sym) {
+        get().fetchQuote(sym);
       }
 
       set({ error: !hasData, loading: false });
