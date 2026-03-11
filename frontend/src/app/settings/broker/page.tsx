@@ -4,6 +4,9 @@ import { useState } from "react";
 import { KeyRound, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { BrokerForm } from "@/components/settings/BrokerForm";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 type BrokerType = "alpaca" | "webull";
 
@@ -11,12 +14,12 @@ const BROKERS: { id: BrokerType; name: string; description: string }[] = [
   {
     id: "alpaca",
     name: "Alpaca",
-    description: "Commission-free stock & crypto trading API",
+    description: "Commission-free equities and crypto execution with separate paper and live endpoints.",
   },
   {
     id: "webull",
-    name: "WebULL",
-    description: "Advanced trading platform with extended hours",
+    name: "Webull",
+    description: "Broker connectivity for extended-hours trading and advanced retail routing.",
   },
 ];
 
@@ -24,43 +27,56 @@ export default function BrokerSettingsPage() {
   const [selectedBroker, setSelectedBroker] = useState<BrokerType>("alpaca");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/settings"
-          className="p-1.5 rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="flex items-center gap-2">
-          <KeyRound className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-semibold">Broker Configuration</h2>
-        </div>
-      </div>
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Connections"
+        title="Broker Configuration"
+        description="Manage the encrypted broker credentials that power trading, account sync, and paper-to-live transitions."
+        badge={
+          <Badge variant="info">
+            <KeyRound className="h-3.5 w-3.5" />
+            Broker Access
+          </Badge>
+        }
+        actions={
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/settings">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Settings
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="flex gap-6">
-        {/* Broker selector sidebar */}
-        <div className="flex flex-col gap-2 min-w-[180px]">
-          {BROKERS.map((broker) => (
-            <button
-              key={broker.id}
-              onClick={() => setSelectedBroker(broker.id)}
-              className={`text-left px-3 py-2.5 rounded-md border transition-colors ${
-                selectedBroker === broker.id
-                  ? "bg-muted border-border/50 text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              }`}
-            >
-              <div className="text-sm font-medium">{broker.name}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {broker.description}
-              </div>
-            </button>
-          ))}
+      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="app-panel p-3">
+          <div className="flex gap-2 overflow-x-auto xl:flex-col">
+            {BROKERS.map((broker) => (
+              <button
+                key={broker.id}
+                onClick={() => setSelectedBroker(broker.id)}
+                className={`min-w-[220px] rounded-[22px] px-4 py-4 text-left transition-all xl:min-w-0 ${
+                  selectedBroker === broker.id
+                    ? "bg-foreground text-background shadow-[0_18px_30px_-24px_rgba(2,6,23,0.9)]"
+                    : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                }`}
+              >
+                <div className="text-sm font-semibold">{broker.name}</div>
+                <div
+                  className={`mt-1 text-xs leading-5 ${
+                    selectedBroker === broker.id
+                      ? "text-background/80"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {broker.description}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Form */}
-        <div className="flex-1 rounded-lg border border-border/50 bg-card p-6">
+        <div className="app-panel p-6 sm:p-7">
           <BrokerForm broker={selectedBroker} />
         </div>
       </div>

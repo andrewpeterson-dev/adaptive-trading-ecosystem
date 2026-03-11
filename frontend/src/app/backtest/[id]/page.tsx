@@ -2,25 +2,48 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Play, Loader2, BarChart3, TrendingUp, List, TrendingDown } from "lucide-react";
+import {
+  Play,
+  Loader2,
+  BarChart3,
+  TrendingUp,
+  List,
+  TrendingDown,
+} from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import type { StrategyRecord } from "@/types/strategy";
 import type { BacktestResult, BacktestTrade } from "@/types/backtest";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
-function MetricCard({ label, value, format }: { label: string; value: number; format?: string }) {
+function MetricCard({
+  label,
+  value,
+  format,
+}: {
+  label: string;
+  value: number;
+  format?: string;
+}) {
   const formatted = (() => {
     if (format === "percent") return `${(value * 100).toFixed(1)}%`;
     if (format === "ratio") return value.toFixed(3);
-    if (format === "currency") return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    if (format === "currency") {
+      return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    }
     if (format === "integer") return value.toString();
     return value.toFixed(2);
   })();
-  const isNeg = formatted.startsWith("-");
+  const negative = formatted.startsWith("-");
+
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="text-xs text-muted-foreground uppercase tracking-wider">{label}</div>
-      <div className={`text-2xl font-mono font-bold mt-1 ${isNeg ? "text-red-400" : ""}`}>
+    <div className="app-metric-card">
+      <div className="app-metric-label">{label}</div>
+      <div className={`mt-2 text-2xl font-mono font-semibold ${negative ? "text-red-300" : ""}`}>
         {formatted}
       </div>
     </div>
@@ -30,41 +53,53 @@ function MetricCard({ label, value, format }: { label: string; value: number; fo
 function TradeRow({ trade }: { trade: BacktestTrade }) {
   const isWin = trade.pnl > 0;
   return (
-    <tr className="border-b border-border/50 text-sm">
-      <td className="py-2 px-4">{trade.entry_date}</td>
-      <td className="py-2 px-4">{trade.exit_date}</td>
-      <td className="py-2 px-4 font-mono">${trade.entry_price.toFixed(2)}</td>
-      <td className="py-2 px-4 font-mono">${trade.exit_price.toFixed(2)}</td>
-      <td className={`py-2 px-4 font-mono font-medium ${isWin ? "text-emerald-400" : "text-red-400"}`}>
+    <tr>
+      <td>{trade.entry_date}</td>
+      <td>{trade.exit_date}</td>
+      <td className="font-mono tabular-nums">${trade.entry_price.toFixed(2)}</td>
+      <td className="font-mono tabular-nums">${trade.exit_price.toFixed(2)}</td>
+      <td className={`font-mono tabular-nums ${isWin ? "text-emerald-300" : "text-red-300"}`}>
         {isWin ? "+" : ""}${trade.pnl.toFixed(2)}
       </td>
-      <td className={`py-2 px-4 font-mono text-xs ${isWin ? "text-emerald-400" : "text-red-400"}`}>
-        {isWin ? "+" : ""}{trade.pnl_pct.toFixed(1)}%
+      <td className={`font-mono tabular-nums ${isWin ? "text-emerald-300" : "text-red-300"}`}>
+        {isWin ? "+" : ""}
+        {trade.pnl_pct.toFixed(1)}%
       </td>
-      <td className="py-2 px-4 font-mono text-muted-foreground">{trade.bars_held}d</td>
+      <td className="font-mono tabular-nums text-muted-foreground">{trade.bars_held}d</td>
     </tr>
   );
 }
 
-function DrawdownChart({ equityCurve, initialCapital }: {
+function DrawdownChart({
+  equityCurve,
+  initialCapital,
+}: {
   equityCurve: { date: string; value: number }[];
   initialCapital: number;
 }) {
   let peak = initialCapital;
-  const ddSeries = equityCurve.map((pt) => {
-    if (pt.value > peak) peak = pt.value;
-    const dd = peak > 0 ? ((pt.value - peak) / peak) * 100 : 0;
-    return { date: pt.date, value: dd };
+  const ddSeries = equityCurve.map((point) => {
+    if (point.value > peak) peak = point.value;
+    const dd = peak > 0 ? ((point.value - peak) / peak) * 100 : 0;
+    return { date: point.date, value: dd };
   });
-  const minDD = Math.min(...ddSeries.map((p) => p.value));
+  const minDD = Math.min(...ddSeries.map((point) => point.value));
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-        Drawdown — Max: {minDD.toFixed(1)}%
+    <div className="app-panel p-4">
+      <div className="app-label mb-2">
+        Drawdown
+        <span className="ml-2 font-mono tracking-normal text-red-300">
+          Max {minDD.toFixed(1)}%
+        </span>
       </div>
-      <svg width="100%" height="120" viewBox={`0 0 ${ddSeries.length} 120`}
-        preserveAspectRatio="none" className="text-red-400">
+      <svg
+        width="100%"
+        height="120"
+        viewBox={`0 0 ${ddSeries.length} 120`}
+        preserveAspectRatio="none"
+        className="text-red-300"
+      >
         <defs>
           <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="currentColor" stopOpacity="0.3" />
@@ -74,10 +109,10 @@ function DrawdownChart({ equityCurve, initialCapital }: {
         <polygon
           fill="url(#ddGrad)"
           points={[
-            `0,0`,
-            ...ddSeries.map((p, i) => {
-              const y = minDD < 0 ? (p.value / minDD) * 115 : 0;
-              return `${i},${y}`;
+            "0,0",
+            ...ddSeries.map((point, index) => {
+              const y = minDD < 0 ? (point.value / minDD) * 115 : 0;
+              return `${index},${y}`;
             }),
             `${ddSeries.length - 1},0`,
           ].join(" ")}
@@ -86,10 +121,12 @@ function DrawdownChart({ equityCurve, initialCapital }: {
           fill="none"
           stroke="currentColor"
           strokeWidth="1.5"
-          points={ddSeries.map((p, i) => {
-            const y = minDD < 0 ? (p.value / minDD) * 115 : 0;
-            return `${i},${y}`;
-          }).join(" ")}
+          points={ddSeries
+            .map((point, index) => {
+              const y = minDD < 0 ? (point.value / minDD) * 115 : 0;
+              return `${index},${y}`;
+            })
+            .join(" ")}
         />
       </svg>
     </div>
@@ -105,8 +142,9 @@ export default function BacktestPage() {
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"equity" | "drawdown" | "metrics" | "trades">("equity");
-
+  const [activeTab, setActiveTab] = useState<"equity" | "drawdown" | "metrics" | "trades">(
+    "equity"
+  );
   const [symbol, setSymbol] = useState("SPY");
   const [lookbackDays, setLookbackDays] = useState(252);
   const [initialCapital, setInitialCapital] = useState(100000);
@@ -116,7 +154,6 @@ export default function BacktestPage() {
       try {
         const data = await apiFetch<StrategyRecord>(`/api/strategies/${id}`);
         setStrategy(data);
-        // Pre-fill symbol from strategy universe
         if (data.symbols?.length) setSymbol(data.symbols[0]);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : "Failed to load strategy");
@@ -124,6 +161,7 @@ export default function BacktestPage() {
         setLoading(false);
       }
     }
+
     load();
   }, [id]);
 
@@ -135,7 +173,7 @@ export default function BacktestPage() {
       const data = await apiFetch<BacktestResult>("/api/strategies/backtest", {
         method: "POST",
         body: JSON.stringify({
-          strategy_id: parseInt(id),
+          strategy_id: parseInt(id, 10),
           symbol,
           lookback_days: lookbackDays,
           initial_capital: initialCapital,
@@ -152,7 +190,7 @@ export default function BacktestPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex items-center justify-center py-24">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -160,159 +198,173 @@ export default function BacktestPage() {
 
   if (loadError) {
     return (
-      <div className="rounded-lg border border-red-400/30 bg-red-400/5 p-6 text-center">
-        <p className="text-red-400 font-medium">Failed to load strategy</p>
-        <p className="text-sm text-muted-foreground mt-1">{loadError}</p>
+      <div className="app-panel">
+        <EmptyState title="Failed to load strategy" description={loadError} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Backtest</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {strategy ? strategy.name : `Strategy #${id}`}
-          {result && (
-            <span className="ml-2 text-muted-foreground/60 text-xs">
-              · commission {((result.commission_pct ?? 0) * 100).toFixed(3)}%
-              · slippage {((result.slippage_pct ?? 0) * 100).toFixed(3)}%
-              {result.synthetic_data && " · synthetic data"}
-            </span>
-          )}
-        </p>
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Research"
+        title="Backtest"
+        description="Run a fast historical validation loop against a selected symbol, capital base, and lookback window."
+        meta={
+          <>
+            <Badge variant="neutral" className="tracking-normal">
+              {strategy ? strategy.name : `Strategy #${id}`}
+            </Badge>
+            {result && (
+              <Badge variant="info" className="tracking-normal font-mono">
+                Commission {((result.commission_pct ?? 0) * 100).toFixed(3)}% • Slippage{" "}
+                {((result.slippage_pct ?? 0) * 100).toFixed(3)}%
+              </Badge>
+            )}
+            {result?.synthetic_data && <Badge variant="warning">Synthetic data</Badge>}
+          </>
+        }
+      />
+
+      <div className="app-panel p-5 sm:p-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-2">
+            <label className="app-label">Symbol</label>
+            <Input
+              value={symbol}
+              onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+              className="font-mono"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="app-label">Lookback Days</label>
+            <Input
+              type="number"
+              value={lookbackDays}
+              min={30}
+              max={1000}
+              onChange={(event) => setLookbackDays(parseInt(event.target.value, 10) || 252)}
+              className="font-mono text-right"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="app-label">Initial Capital</label>
+            <Input
+              type="number"
+              value={initialCapital}
+              min={1000}
+              step={10000}
+              onChange={(event) =>
+                setInitialCapital(parseInt(event.target.value, 10) || 100000)
+              }
+              className="font-mono text-right"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button onClick={runBacktest} disabled={running} variant="primary" className="w-full">
+              {running ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              {running ? "Running..." : "Run Backtest"}
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* Config */}
-      <div className="grid grid-cols-4 gap-3">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Symbol</label>
-          <input type="text" value={symbol}
-            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lookback Days</label>
-          <input type="number" value={lookbackDays}
-            onChange={(e) => setLookbackDays(parseInt(e.target.value) || 252)}
-            min={30} max={1000}
-            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Initial Capital</label>
-          <input type="number" value={initialCapital}
-            onChange={(e) => setInitialCapital(parseInt(e.target.value) || 100000)}
-            min={1000} step={10000}
-            className="mt-1 h-9 w-full rounded-md border bg-background px-3 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary/50" />
-        </div>
-        <div className="flex items-end">
-          <button onClick={runBacktest} disabled={running}
-            className="h-9 w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40">
-            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {running ? "Running..." : "Run Backtest"}
-          </button>
-        </div>
-      </div>
-
-      {/* Run error */}
       {runError && (
-        <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-3 text-sm text-red-400">
+        <div className="app-inset border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-300">
           {runError}
         </div>
       )}
 
-      {/* Results */}
       {result && (
-        <div className="space-y-4">
-          <div className="flex gap-1 border-b">
+        <div className="space-y-5">
+          <div className="app-inset flex flex-wrap items-center gap-2 p-2">
             {([
               { key: "equity" as const, label: "Equity Curve", icon: TrendingUp },
               { key: "drawdown" as const, label: "Drawdown", icon: TrendingDown },
               { key: "metrics" as const, label: "Metrics", icon: BarChart3 },
               { key: "trades" as const, label: "Trades", icon: List },
             ]).map(({ key, label, icon: Icon }) => (
-              <button key={key} onClick={() => setActiveTab(key)}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === key
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}>
+              <Button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                variant={activeTab === key ? "secondary" : "ghost"}
+                size="sm"
+                className="rounded-full px-4"
+              >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
 
           {activeTab === "equity" && (
-            <div>
-              <EquityCurveChart data={result.equity_curve} initialCapital={initialCapital} height={400} />
-              {result.benchmark_equity_curve?.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Strategy vs buy-and-hold: strategy return{" "}
-                  <span className={result.metrics.total_return >= 0 ? "text-emerald-400" : "text-red-400"}>
-                    {(result.metrics.total_return * 100).toFixed(1)}%
-                  </span>
-                  {" "}· buy-and-hold{" "}
-                  <span className="text-sky-400">
-                    {(((result.benchmark_equity_curve[result.benchmark_equity_curve.length - 1]?.value ?? initialCapital) / initialCapital - 1) * 100).toFixed(1)}%
-                  </span>
-                </p>
-              )}
+            <div className="app-panel p-4 sm:p-5">
+              <EquityCurveChart data={result.equity_curve} height={360} />
             </div>
           )}
 
           {activeTab === "drawdown" && (
-            <DrawdownChart equityCurve={result.equity_curve} initialCapital={initialCapital} />
+            <DrawdownChart
+              equityCurve={result.equity_curve}
+              initialCapital={initialCapital}
+            />
           )}
 
           {activeTab === "metrics" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              <MetricCard label="Sharpe Ratio" value={result.metrics.sharpe_ratio} format="ratio" />
-              <MetricCard label="Sortino Ratio" value={result.metrics.sortino_ratio} format="ratio" />
-              <MetricCard label="Win Rate" value={result.metrics.win_rate} format="percent" />
-              <MetricCard label="Max Drawdown" value={result.metrics.max_drawdown} format="percent" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard label="Total Return" value={result.metrics.total_return} format="percent" />
-              <MetricCard label="Total Trades" value={result.metrics.num_trades} format="integer" />
-              <MetricCard label="Avg Trade P&L" value={result.metrics.avg_trade_pnl} format="currency" />
+              <MetricCard label="Sharpe" value={result.metrics.sharpe_ratio} format="ratio" />
+              <MetricCard label="Max Drawdown" value={result.metrics.max_drawdown} format="percent" />
+              <MetricCard label="Win Rate" value={result.metrics.win_rate} format="percent" />
               <MetricCard label="Profit Factor" value={result.metrics.profit_factor} format="ratio" />
+              <MetricCard label="Trades" value={result.metrics.num_trades} format="integer" />
+              <MetricCard
+                label="Ending Equity"
+                value={result.equity_curve[result.equity_curve.length - 1]?.value ?? initialCapital}
+                format="currency"
+              />
+              <MetricCard
+                label="Net P&L"
+                value={(result.equity_curve[result.equity_curve.length - 1]?.value ?? initialCapital) - initialCapital}
+                format="currency"
+              />
             </div>
           )}
 
           {activeTab === "trades" && (
-            <div className="rounded-lg border bg-card overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
-                    <th className="py-2 px-4">Entry</th>
-                    <th className="py-2 px-4">Exit</th>
-                    <th className="py-2 px-4">Entry $</th>
-                    <th className="py-2 px-4">Exit $</th>
-                    <th className="py-2 px-4">P&L</th>
-                    <th className="py-2 px-4">Return</th>
-                    <th className="py-2 px-4">Bars</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.trades.length === 0 ? (
+            <div className="app-table-shell overflow-x-auto">
+              {result.trades.length === 0 ? (
+                <EmptyState
+                  title="No trades generated"
+                  description="This backtest did not produce any fills for the selected symbol and window."
+                  className="py-12"
+                />
+              ) : (
+                <table className="app-table">
+                  <thead>
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">
-                        No trades executed
-                      </td>
+                      <th>Entry Date</th>
+                      <th>Exit Date</th>
+                      <th>Entry</th>
+                      <th>Exit</th>
+                      <th>P&L</th>
+                      <th>P&L %</th>
+                      <th>Bars Held</th>
                     </tr>
-                  ) : (
-                    result.trades.map((t, i) => <TradeRow key={i} trade={t} />)
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {result.trades.map((trade, index) => (
+                      <TradeRow key={index} trade={trade} />
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
-        </div>
-      )}
-
-      {!result && !running && (
-        <div className="text-center py-16 border border-dashed rounded-lg">
-          <BarChart3 className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-muted-foreground">Configure parameters and run a backtest</p>
         </div>
       )}
     </div>

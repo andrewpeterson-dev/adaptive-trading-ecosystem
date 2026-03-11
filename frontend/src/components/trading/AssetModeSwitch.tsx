@@ -15,7 +15,7 @@ export function AssetModeSwitch() {
   const setAssetMode = useTradeStore((s) => s.setAssetMode);
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-black/5 bg-white/75 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:border-white/10 dark:bg-white/[0.05]">
+    <div className="inline-flex items-center gap-1 rounded-full border border-border/75 bg-muted/45 p-1">
       {modes.map((m) => {
         const active = assetMode === m.value;
         return (
@@ -23,9 +23,9 @@ export function AssetModeSwitch() {
             key={m.value}
             type="button"
             onClick={() => setAssetMode(m.value)}
-            className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition-all ${
               active
-                ? "bg-foreground text-background shadow-[0_14px_28px_-20px_rgba(15,23,42,0.65)]"
+                ? "bg-foreground text-background shadow-[0_14px_28px_-20px_rgba(2,6,23,0.85)]"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >

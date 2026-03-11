@@ -40,10 +40,10 @@ export function NavHeader() {
   return (
     <header className="sticky top-0 z-50 px-4 pt-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1440px]">
-        <div className="rounded-[28px] border border-white/70 bg-white/80 px-4 py-3 shadow-[0_28px_90px_-54px_rgba(15,23,42,0.45)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.05] sm:px-5">
+        <div className="app-panel px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-white/60 bg-white/80 shadow-[0_14px_34px_-24px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-white/[0.06]">
+              <div className="app-card flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px]">
                 <Image
                   src="/logo.png"
                   alt="Adaptive Trading"
@@ -64,16 +64,16 @@ export function NavHeader() {
             </Link>
 
             <nav className="ml-4 hidden flex-1 justify-center xl:flex">
-              <div className="flex items-center gap-1 rounded-full border border-black/5 bg-slate-950/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
+              <div className="app-segmented">
                 {NAV_ITEMS.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "rounded-full px-4 py-2 text-[13px] font-medium tracking-tight transition-all",
+                      "app-segment text-[13px] tracking-tight",
                       isActive(item.href)
-                        ? "bg-foreground text-background shadow-[0_12px_24px_-16px_rgba(15,23,42,0.5)]"
-                        : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]"
+                        ? "app-toggle-active"
+                        : "text-muted-foreground"
                     )}
                   >
                     {item.label}
@@ -83,7 +83,7 @@ export function NavHeader() {
             </nav>
 
             <div className="ml-auto flex items-center gap-2">
-              <div className="hidden items-center rounded-full border border-black/5 bg-slate-950/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04] lg:flex">
+              <div className="app-segmented hidden lg:flex">
                 {(["paper", "live"] as const).map((targetMode) => {
                   const active = mode === targetMode;
 
@@ -94,12 +94,12 @@ export function NavHeader() {
                       onClick={() => setMode(targetMode)}
                       disabled={switching || active}
                       className={cn(
-                        "inline-flex items-center gap-2 rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all",
+                        "app-segment text-[11px] font-semibold uppercase tracking-[0.18em]",
                         active
                           ? targetMode === "live"
-                            ? "bg-emerald-500/12 text-emerald-500 dark:text-emerald-300"
-                            : "bg-foreground text-background"
-                          : "text-muted-foreground hover:text-foreground",
+                            ? "border border-emerald-500/25 bg-emerald-500/12 text-emerald-300"
+                            : "app-toggle-active"
+                          : "text-muted-foreground",
                         switching && "opacity-60"
                       )}
                     >
@@ -120,7 +120,7 @@ export function NavHeader() {
               </div>
 
               {user?.email && (
-                <div className="hidden max-w-[220px] rounded-full border border-black/5 bg-white/70 px-3 py-2 text-[11px] font-medium text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:border-white/10 dark:bg-white/[0.05] 2xl:block">
+                <div className="app-pill hidden max-w-[220px] px-3 py-2 text-[11px] font-medium 2xl:block">
                   <span className="block truncate font-mono">{user.email}</span>
                 </div>
               )}
@@ -128,7 +128,7 @@ export function NavHeader() {
               <Link
                 href="/settings"
                 aria-label="Settings"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-black/5 bg-white/70 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors hover:text-foreground dark:border-white/10 dark:bg-white/[0.05]"
+                className="app-button-icon"
               >
                 <Settings className="h-4 w-4" />
               </Link>
@@ -136,14 +136,14 @@ export function NavHeader() {
                 onClick={logout}
                 aria-label="Log out"
                 title="Log out"
-                className="hidden h-10 w-10 items-center justify-center rounded-full border border-black/5 bg-white/70 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors hover:text-foreground dark:border-white/10 dark:bg-white/[0.05] sm:flex"
+                className="app-button-icon hidden sm:inline-flex"
               >
                 <LogOut className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setMenuOpen((open) => !open)}
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-black/5 bg-white/70 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors hover:text-foreground dark:border-white/10 dark:bg-white/[0.05] xl:hidden"
+                className="app-button-icon xl:hidden"
               >
                 {menuOpen ? (
                   <X className="h-4.5 w-4.5" />
@@ -156,7 +156,7 @@ export function NavHeader() {
         </div>
 
         {menuOpen && (
-          <div className="mt-3 rounded-[24px] border border-white/70 bg-white/85 p-3 shadow-[0_26px_80px_-52px_rgba(15,23,42,0.42)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/80 xl:hidden">
+          <div className="app-panel mt-3 p-3 xl:hidden">
             <nav className="grid gap-2">
               {NAV_ITEMS.map((item) => (
                 <Link
@@ -165,8 +165,8 @@ export function NavHeader() {
                   className={cn(
                     "rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
                     isActive(item.href)
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]"
+                      ? "app-card text-foreground"
+                      : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                   )}
                 >
                   {item.label}
@@ -186,12 +186,12 @@ export function NavHeader() {
                       onClick={() => setMode(targetMode)}
                       disabled={switching || active}
                       className={cn(
-                        "rounded-2xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all",
+                        "app-inset rounded-2xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all",
                         active
                           ? targetMode === "live"
-                            ? "bg-emerald-500/12 text-emerald-500 dark:text-emerald-300"
-                            : "bg-foreground text-background"
-                          : "border border-border/60 text-muted-foreground"
+                            ? "border-emerald-500/25 bg-emerald-500/12 text-emerald-300"
+                            : "border-primary/20 bg-primary/12 text-primary"
+                          : "border-border/60 text-muted-foreground"
                       )}
                     >
                       {targetMode}

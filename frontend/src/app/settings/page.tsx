@@ -14,6 +14,8 @@ import { PreferencesForm } from "@/components/settings/PreferencesForm";
 import { ApiConnectionsSection } from "@/components/settings/ApiConnectionsSection";
 import { useEffect } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -72,7 +74,7 @@ function ProfileSection() {
     <div className="space-y-5">
       <div className="space-y-2">
         <label className="app-label">Email</label>
-        <input
+        <Input
           type="email"
           value={email}
           disabled
@@ -83,16 +85,15 @@ function ProfileSection() {
 
       <div className="space-y-2">
         <label className="app-label">Display Name</label>
-        <input
+        <Input
           type="text"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Your name..."
-          className="app-input"
         />
       </div>
 
-      <div className="app-inset p-4 sm:p-5 space-y-4">
+      <div className="app-inset space-y-4 p-4 sm:p-5">
         <div>
           <p className="text-sm font-semibold text-foreground">Change Password</p>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -102,21 +103,19 @@ function ProfileSection() {
 
         <div className="space-y-2">
           <label className="app-label">Current Password</label>
-          <input
+          <Input
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className="app-input"
           />
         </div>
 
         <div className="space-y-2">
           <label className="app-label">New Password</label>
-          <input
+          <Input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="app-input"
           />
         </div>
       </div>
@@ -128,10 +127,10 @@ function ProfileSection() {
         <p className="text-xs text-red-400">Failed to update profile.</p>
       )}
 
-      <button
+      <Button
         onClick={handleSave}
         disabled={saving || !displayName}
-        className="app-button-primary disabled:translate-y-0 disabled:opacity-50"
+        variant="primary"
       >
         {saving ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -139,7 +138,7 @@ function ProfileSection() {
           <Save className="h-3.5 w-3.5" />
         )}
         Save Profile
-      </button>
+      </Button>
     </div>
   );
 }
@@ -177,8 +176,8 @@ export default function SettingsPage() {
                   className={cn(
                     "flex min-w-fit items-center gap-2 rounded-2xl px-4 py-3 text-sm text-left transition-all lg:w-full",
                     active
-                      ? "bg-foreground text-background shadow-[0_18px_32px_-24px_rgba(15,23,42,0.6)]"
-                      : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]"
+                      ? "app-card text-foreground shadow-none"
+                      : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                   )}
                 >
                   <Icon className="h-4 w-4" />

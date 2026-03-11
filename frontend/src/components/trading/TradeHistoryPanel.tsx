@@ -4,6 +4,9 @@ import React, { useState, useMemo, useCallback } from "react";
 import { Clock, Bot, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
 import type { Trade, TradeFilter } from "@/types/trading";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -392,11 +395,11 @@ export function TradeHistoryPanel() {
   const isLoading = loading && trades.length === 0;
 
   // ---- Header ----
-  const header = (
-    <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between gap-3">
+const header = (
+    <div className="app-section-header">
       <div className="flex items-center gap-2 shrink-0">
-        <h3 className="text-sm font-semibold">Trade History</h3>
-        <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+        <h3 className="text-sm font-semibold text-foreground">Trade History</h3>
+        <span className="rounded-full bg-muted/50 px-2 py-1 text-[10px] font-mono text-muted-foreground">
           {isLoading ? "--" : trades.length}
         </span>
       </div>
@@ -404,7 +407,7 @@ export function TradeHistoryPanel() {
       {!isLoading && trades.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto">
           {showSymbolSearch && (
-            <input
+            <Input
               type="text"
               value={symbolSearch}
               onChange={(e) => {
@@ -412,22 +415,20 @@ export function TradeHistoryPanel() {
                 setPage(0);
               }}
               placeholder="Filter symbol..."
-              className="h-6 w-24 text-xs rounded border border-border/50 bg-muted/30 px-2 placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30 font-mono"
+              className="h-9 w-32 rounded-full px-3 text-xs font-mono"
             />
           )}
           <div className="flex items-center gap-0.5">
             {FILTER_TABS.map((tab) => (
-              <button
+              <Button
                 key={tab.value}
                 onClick={() => handleFilterChange(tab.value)}
-                className={`text-xs font-medium px-2 py-1 rounded transition-colors whitespace-nowrap ${
-                  filter === tab.value
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
+                variant={filter === tab.value ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 whitespace-nowrap rounded-full px-3 text-[10px] uppercase tracking-[0.16em]"
               >
                 {tab.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -438,13 +439,13 @@ export function TradeHistoryPanel() {
   // ---- Loading state ----
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="app-table-shell">
         {header}
-        <table className="w-full text-left text-sm">
+        <table className="app-table">
           <thead>
-            <tr className="bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
+            <tr>
               {COLUMNS.map((col, i) => (
-                <th key={i} className="py-2 px-4 whitespace-nowrap">
+                <th key={i} className="whitespace-nowrap">
                   {col}
                 </th>
               ))}
@@ -463,21 +464,14 @@ export function TradeHistoryPanel() {
   // ---- Empty state ----
   if (trades.length === 0) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="app-table-shell">
         {header}
-        <div className="py-6 flex flex-col items-center gap-2 text-center px-4">
-          <div className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-muted/50 border border-border/50">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground/50" />
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">
-              No trades yet
-            </div>
-            <div className="text-xs text-muted-foreground/60 mt-0.5">
-              Executed trades will appear here
-            </div>
-          </div>
-        </div>
+        <EmptyState
+          className="py-10"
+          icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+          title="No trades yet"
+          description="Executed trades will appear here once the terminal starts filling orders."
+        />
       </div>
     );
   }
@@ -485,37 +479,39 @@ export function TradeHistoryPanel() {
   // ---- Filtered empty ----
   if (filtered.length === 0) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="app-table-shell">
         {header}
-        <div className="py-6 flex flex-col items-center gap-2 text-center px-4">
-          <div className="text-sm text-muted-foreground">
-            No trades match the current filter
-          </div>
-          <button
-            onClick={() => {
-              setFilter("all");
-              setSymbolSearch("");
-              setPage(0);
-            }}
-            className="text-xs text-primary hover:underline"
-          >
-            Clear filters
-          </button>
-        </div>
+        <EmptyState
+          className="py-10"
+          title="No trades match the current filter"
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilter("all");
+                setSymbolSearch("");
+                setPage(0);
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   // ---- Main render ----
   return (
-    <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+    <div className="app-table-shell">
       {header}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="app-table">
           <thead>
-            <tr className="bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
+            <tr>
               {COLUMNS.map((col, i) => (
-                <th key={i} className="py-2 px-4 whitespace-nowrap">
+                <th key={i} className="whitespace-nowrap">
                   {col}
                 </th>
               ))}
@@ -540,32 +536,36 @@ export function TradeHistoryPanel() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="px-4 py-2.5 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border/50 px-4 py-2.5 text-xs text-muted-foreground">
           <span>
             {safePage * PAGE_SIZE + 1}&ndash;
             {Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of{" "}
             {filtered.length}
           </span>
           <div className="flex items-center gap-1.5">
-            <button
+            <Button
               onClick={() => setPage(Math.max(0, safePage - 1))}
               disabled={safePage === 0}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-border/50 hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              variant="secondary"
+              size="sm"
+              className="h-8 px-3 text-[11px]"
             >
               <ChevronLeft className="h-3 w-3" />
               Prev
-            </button>
+            </Button>
             <span className="px-1 tabular-nums font-mono">
               {safePage + 1}/{totalPages}
             </span>
-            <button
+            <Button
               onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
               disabled={safePage >= totalPages - 1}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-border/50 hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              variant="secondary"
+              size="sm"
+              className="h-8 px-3 text-[11px]"
             >
               Next
               <ChevronRight className="h-3 w-3" />
-            </button>
+            </Button>
           </div>
         </div>
       )}

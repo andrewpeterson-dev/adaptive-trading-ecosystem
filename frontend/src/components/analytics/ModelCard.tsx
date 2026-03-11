@@ -1,18 +1,25 @@
 "use client";
 
 import React, { useState } from "react";
-import { RotateCcw, Loader2 } from "lucide-react";
+import { RotateCcw, Loader2, Activity } from "lucide-react";
 import type { ModelDetail } from "@/types/models";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const TYPE_COLORS: Record<string, string> = {
-  MomentumModel: "text-blue-400 bg-blue-400/10 border-blue-400/30",
-  MeanReversionModel: "text-amber-400 bg-amber-400/10 border-amber-400/30",
-  MLModel: "text-purple-400 bg-purple-400/10 border-purple-400/30",
-  BreakoutModel: "text-cyan-400 bg-cyan-400/10 border-cyan-400/30",
-  StatArbModel: "text-pink-400 bg-pink-400/10 border-pink-400/30",
+  MomentumModel: "border-blue-500/25 bg-blue-500/12 text-blue-200",
+  MeanReversionModel: "border-amber-500/25 bg-amber-500/12 text-amber-200",
+  MLModel: "border-violet-500/25 bg-violet-500/12 text-violet-200",
+  BreakoutModel: "border-cyan-500/25 bg-cyan-500/12 text-cyan-200",
+  StatArbModel: "border-pink-500/25 bg-pink-500/12 text-pink-200",
 };
 
-function metricColor(value: number, goodThreshold: number, badThreshold: number, invert = false): string {
+function metricColor(
+  value: number,
+  goodThreshold: number,
+  badThreshold: number,
+  invert = false
+): string {
   if (invert) {
     if (value <= goodThreshold) return "text-emerald-400";
     if (value >= badThreshold) return "text-red-400";
@@ -33,7 +40,8 @@ export function ModelCard({
   retrainAvailable?: boolean;
 }) {
   const [retraining, setRetraining] = useState(false);
-  const typeClass = TYPE_COLORS[model.model_type] || "text-muted-foreground bg-muted border-border";
+  const typeClass =
+    TYPE_COLORS[model.model_type] || "border-border/75 bg-muted/50 text-muted-foreground";
 
   const handleRetrain = async () => {
     if (!retrainAvailable) return;
@@ -52,67 +60,135 @@ export function ModelCard({
   const totalReturn = model.total_return ?? 0;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${model.is_active ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
-          <h3 className="text-sm font-semibold">{model.name}</h3>
+    <div className="app-panel p-5">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-block h-2.5 w-2.5 rounded-full ${
+                model.is_active
+                  ? "bg-emerald-400 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]"
+                  : "bg-muted-foreground/40"
+              }`}
+            />
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">{model.name}</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {model.is_active ? "Active in production" : "Inactive model"}
+              </p>
+            </div>
+          </div>
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${typeClass}`}
+          >
+            {model.model_type.replace("Model", "")}
+          </span>
         </div>
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${typeClass}`}>
-          {model.model_type.replace("Model", "")}
-        </span>
-      </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-        <div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sharpe</div>
-          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(sharpe, 1.0, 0.0)}`}>
-            {model.sharpe_ratio != null ? sharpe.toFixed(3) : "—"}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[20px] border border-border/65 bg-muted/30 p-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Sharpe
+            </div>
+            <div
+              className={`text-sm font-mono font-medium tabular-nums ${metricColor(
+                sharpe,
+                1.0,
+                0.0
+              )}`}
+            >
+              {model.sharpe_ratio != null ? sharpe.toFixed(3) : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Sortino
+            </div>
+            <div
+              className={`text-sm font-mono font-medium tabular-nums ${metricColor(
+                sortino,
+                1.5,
+                0.0
+              )}`}
+            >
+              {model.sortino_ratio != null ? sortino.toFixed(3) : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Win Rate
+            </div>
+            <div
+              className={`text-sm font-mono font-medium tabular-nums ${metricColor(
+                winRate,
+                0.55,
+                0.4
+              )}`}
+            >
+              {model.win_rate != null ? `${(winRate * 100).toFixed(1)}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Max DD
+            </div>
+            <div
+              className={`text-sm font-mono font-medium tabular-nums ${metricColor(
+                maxDrawdown,
+                0.05,
+                0.15,
+                true
+              )}`}
+            >
+              {model.max_drawdown != null ? `${(maxDrawdown * 100).toFixed(1)}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Return
+            </div>
+            <div
+              className={`text-sm font-mono font-medium tabular-nums ${metricColor(
+                totalReturn,
+                0.05,
+                -0.02
+              )}`}
+            >
+              {model.total_return != null ? `${(totalReturn * 100).toFixed(1)}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Trades
+            </div>
+            <div className="text-sm font-mono tabular-nums text-muted-foreground">
+              {model.num_trades}
+            </div>
           </div>
         </div>
-        <div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sortino</div>
-          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(sortino, 1.5, 0.0)}`}>
-            {model.sortino_ratio != null ? sortino.toFixed(3) : "—"}
-          </div>
-        </div>
-        <div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Win Rate</div>
-          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(winRate, 0.55, 0.4)}`}>
-            {model.win_rate != null ? `${(winRate * 100).toFixed(1)}%` : "—"}
-          </div>
-        </div>
-        <div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Max DD</div>
-          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(maxDrawdown, 0.05, 0.15, true)}`}>
-            {model.max_drawdown != null ? `${(maxDrawdown * 100).toFixed(1)}%` : "—"}
-          </div>
-        </div>
-        <div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Return</div>
-          <div className={`text-sm font-mono tabular-nums font-medium ${metricColor(totalReturn, 0.05, -0.02)}`}>
-            {model.total_return != null ? `${(totalReturn * 100).toFixed(1)}%` : "—"}
-          </div>
-        </div>
-        <div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Trades</div>
-          <div className="text-sm font-mono tabular-nums text-muted-foreground">{model.num_trades}</div>
+
+        <div className="flex items-center justify-between gap-3">
+          <Badge variant={model.is_active ? "positive" : "neutral"}>
+            <Activity className="h-3.5 w-3.5" />
+            {model.is_active ? "Enabled" : "Disabled"}
+          </Badge>
+          <Button
+            onClick={handleRetrain}
+            disabled={!retrainAvailable || retraining}
+            title={retrainAvailable ? undefined : "Retrain not available"}
+            variant="secondary"
+            size="sm"
+            className="h-9 px-4 text-xs"
+          >
+            {retraining ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3 w-3" />
+            )}
+            {retraining ? "Retraining..." : retrainAvailable ? "Retrain" : "Retrain unavailable"}
+          </Button>
         </div>
       </div>
-
-      <button
-        onClick={handleRetrain}
-        disabled={!retrainAvailable || retraining}
-        title={retrainAvailable ? undefined : "Retrain not available"}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {retraining ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <RotateCcw className="h-3 w-3" />
-        )}
-        {retraining ? "Retraining..." : retrainAvailable ? "Retrain" : "Retrain unavailable"}
-      </button>
     </div>
   );
 }

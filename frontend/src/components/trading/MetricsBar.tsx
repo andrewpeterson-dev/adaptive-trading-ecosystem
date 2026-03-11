@@ -30,8 +30,8 @@ function SkeletonCard({ label, icon: Icon }: { label: string; icon: React.Elemen
           {label}
         </div>
       </div>
-      <div className="h-6 w-24 animate-pulse bg-muted rounded" />
-      <div className="h-3 w-16 animate-pulse bg-muted rounded mt-1.5" />
+      <div className="app-skeleton h-6 w-24 rounded" />
+      <div className="app-skeleton mt-1.5 h-3 w-16 rounded" />
     </div>
   );
 }
@@ -128,7 +128,7 @@ export function MetricsBar() {
         return (
           <div
             key={card.label}
-            className="app-panel p-4 transition-colors hover:border-border"
+            className="app-panel p-4 transition-transform hover:-translate-y-0.5"
           >
             <div className="flex items-center gap-1.5 mb-2">
               <card.icon className="h-3.5 w-3.5 text-muted-foreground/50" />
@@ -138,7 +138,7 @@ export function MetricsBar() {
             </div>
             <div className="flex items-center gap-1.5">
               <div
-                className={`text-base font-mono font-bold tabular-nums tracking-tight ${
+                className={`text-lg font-mono font-semibold tabular-nums tracking-tight ${
                   card.valueColor || ""
                 }`}
               >

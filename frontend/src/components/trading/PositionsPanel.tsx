@@ -14,6 +14,8 @@ import { apiFetch } from "@/lib/api/client";
 import { useTradeStore } from "@/stores/trade-store";
 import { useToast } from "@/components/ui/toast";
 import type { Position } from "@/types/trading";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -610,30 +612,28 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
 
   // ---- Header ----
   const header = (
-    <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+    <div className="app-section-header">
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold">Open Positions</h3>
-        <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+        <h3 className="text-sm font-semibold text-foreground">Open Positions</h3>
+        <span className="rounded-full bg-muted/50 px-2 py-1 text-[10px] font-mono text-muted-foreground">
           {isLoading ? "--" : positions.length}
         </span>
       </div>
       {showFilter && !isLoading && (
         <div className="flex items-center gap-1">
           {filterTabs.map((tab) => (
-            <button
+            <Button
               key={tab.value}
               onClick={() => setAssetFilter(tab.value)}
-              className={`text-xs font-medium px-2.5 py-1 rounded transition-colors ${
-                assetFilter === tab.value
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              }`}
+              variant={assetFilter === tab.value ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 rounded-full px-3 text-[10px] uppercase tracking-[0.16em]"
             >
               {tab.label}
               {tab.count != null && tab.count > 0 && (
                 <span className="ml-1 text-[10px] opacity-60">{tab.count}</span>
               )}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -643,13 +643,13 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
   // ---- Loading state ----
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="app-table-shell">
         {header}
-        <table className="w-full text-left text-sm">
+        <table className="app-table">
           <thead>
-            <tr className="bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
+            <tr>
               {STOCK_COLUMNS.map((col, i) => (
-                <th key={i} className="py-2 px-4">
+                <th key={i}>
                   {col}
                 </th>
               ))}
@@ -668,21 +668,14 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
   // ---- Empty state ----
   if (positions.length === 0) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="app-table-shell">
         {header}
-        <div className="py-6 flex flex-col items-center gap-2 text-center px-4 max-h-[80px] justify-center">
-          <div className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-muted/50 border border-border/50">
-            <TrendingUp className="h-3.5 w-3.5 text-muted-foreground/50" />
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">
-              No open positions
-            </div>
-            <div className="text-xs text-muted-foreground/60 mt-0.5">
-              Place a trade or run a strategy to see positions here
-            </div>
-          </div>
-        </div>
+        <EmptyState
+          className="py-10"
+          icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
+          title="No open positions"
+          description="Place a trade or run a strategy to populate the blotter."
+        />
       </div>
     );
   }
@@ -690,27 +683,23 @@ export function PositionsPanel({ onClose }: PositionsPanelProps) {
   // ---- Filtered empty ----
   if (filtered.length === 0) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="app-table-shell">
         {header}
-        <div className="py-6 flex flex-col items-center gap-2 text-center px-4">
-          <div className="text-sm text-muted-foreground">
-            No {assetFilter} positions
-          </div>
-        </div>
+        <EmptyState className="py-10" title={`No ${assetFilter} positions`} />
       </div>
     );
   }
 
   // ---- Main render ----
   return (
-    <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+    <div className="app-table-shell">
       {header}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="app-table">
           <thead>
-            <tr className="bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
+            <tr>
               {columns.map((col, i) => (
-                <th key={i} className="py-2 px-4 whitespace-nowrap">
+                <th key={i} className="whitespace-nowrap">
                   {col}
                 </th>
               ))}

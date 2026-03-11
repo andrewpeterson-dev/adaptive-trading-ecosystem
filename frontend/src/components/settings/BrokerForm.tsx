@@ -11,6 +11,9 @@ import {
   Save,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 
 type BrokerType = "alpaca" | "webull";
 
@@ -41,14 +44,22 @@ export function BrokerForm({ broker }: BrokerFormProps) {
   const [showSecret, setShowSecret] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
-  const [testStatus, setTestStatus] = useState<"idle" | "connected" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">(
+    "idle"
+  );
+  const [testStatus, setTestStatus] = useState<"idle" | "connected" | "error">(
+    "idle"
+  );
   const [errorMsg, setErrorMsg] = useState("");
   const [hasSavedCreds, setHasSavedCreds] = useState(false);
 
-  // Load existing credential status when broker changes
   useEffect(() => {
-    setForm({ api_key: "", api_secret: "", base_url: DEFAULT_URLS[broker], is_paper: true });
+    setForm({
+      api_key: "",
+      api_secret: "",
+      base_url: DEFAULT_URLS[broker],
+      is_paper: true,
+    });
     setSaveStatus("idle");
     setTestStatus("idle");
     setErrorMsg("");
@@ -59,17 +70,19 @@ export function BrokerForm({ broker }: BrokerFormProps) {
         const me = await apiFetch<{
           brokers?: { broker_type: string; is_paper: boolean }[];
         }>("/api/auth/me");
-        const match = me.brokers?.find((b) => b.broker_type.toLowerCase() === broker);
+        const match = me.brokers?.find(
+          (entry) => entry.broker_type.toLowerCase() === broker
+        );
         if (match) {
           setHasSavedCreds(true);
-          setForm((f) => ({ ...f, is_paper: match.is_paper }));
-          // Auto-test connection for saved credentials
-          const endpoint = broker === "webull" ? "/api/webull/status" : "/api/trading/account";
+          setForm((current) => ({ ...current, is_paper: match.is_paper }));
+          const endpoint =
+            broker === "webull" ? "/api/webull/status" : "/api/trading/account";
           const data = await apiFetch<{ connected?: boolean }>(endpoint);
           setTestStatus(data?.connected ? "connected" : "error");
         }
       } catch {
-        // Not logged in or API down — ignore
+        // ignore auth or API issues here
       }
     })();
   }, [broker]);
@@ -90,7 +103,7 @@ export function BrokerForm({ broker }: BrokerFormProps) {
         }),
       });
       setSaveStatus("success");
-      setForm((f) => ({ ...f, api_key: "", api_secret: "" }));
+      setForm((current) => ({ ...current, api_key: "", api_secret: "" }));
     } catch (err) {
       setSaveStatus("error");
       setErrorMsg(err instanceof Error ? err.message : "Failed to save credentials");
@@ -104,13 +117,16 @@ export function BrokerForm({ broker }: BrokerFormProps) {
     setTestStatus("idle");
     setErrorMsg("");
     try {
-      const endpoint = broker === "webull" ? "/api/webull/status" : "/api/trading/account";
+      const endpoint =
+        broker === "webull" ? "/api/webull/status" : "/api/trading/account";
       const data = await apiFetch<{ connected?: boolean }>(endpoint);
       if (data?.connected) {
         setTestStatus("connected");
       } else {
         setTestStatus("error");
-        setErrorMsg("Credentials saved but broker returned not connected — verify API key and secret");
+        setErrorMsg(
+          "Credentials saved but the broker still reports disconnected access."
+        );
       }
     } catch (err) {
       setTestStatus("error");
@@ -122,150 +138,167 @@ export function BrokerForm({ broker }: BrokerFormProps) {
 
   const updateUrl = (isPaper: boolean) => {
     if (broker === "alpaca") {
-      setForm((f) => ({
-        ...f,
+      setForm((current) => ({
+        ...current,
         is_paper: isPaper,
         base_url: isPaper
           ? "https://paper-api.alpaca.markets"
           : "https://api.alpaca.markets",
       }));
     } else {
-      setForm((f) => ({ ...f, is_paper: isPaper }));
+      setForm((current) => ({ ...current, is_paper: isPaper }));
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold capitalize">{broker} Credentials</h4>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="app-label">{broker} Connection</p>
+          <h3 className="mt-2 text-lg font-semibold capitalize text-foreground">
+            {broker} credentials
+          </h3>
+        </div>
         {testStatus === "connected" && (
-          <span className="inline-flex items-center gap-1 text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
-            <CheckCircle2 className="h-3 w-3" />
+          <Badge variant="positive">
+            <CheckCircle2 className="h-3.5 w-3.5" />
             Connected
-          </span>
+          </Badge>
         )}
         {testStatus === "error" && (
-          <span className="inline-flex items-center gap-1 text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded">
-            <XCircle className="h-3 w-3" />
+          <Badge variant="negative">
+            <XCircle className="h-3.5 w-3.5" />
             Disconnected
-          </span>
+          </Badge>
         )}
       </div>
 
-      {/* Paper/Live toggle */}
-      <div className="flex items-center gap-3">
-        <button
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant={form.is_paper ? "primary" : "secondary"}
+          size="sm"
           onClick={() => updateUrl(true)}
-          className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
-            form.is_paper
-              ? "bg-primary/10 text-primary border-primary/30"
-              : "text-muted-foreground border-border hover:bg-muted"
-          }`}
         >
           Paper
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={!form.is_paper ? "danger" : "secondary"}
+          size="sm"
           onClick={() => updateUrl(false)}
-          className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
-            !form.is_paper
-              ? "bg-red-500/10 text-red-400 border-red-500/30"
-              : "text-muted-foreground border-border hover:bg-muted"
-          }`}
         >
           Live
-        </button>
+        </Button>
       </div>
 
-      {/* API Key */}
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">API Key</label>
-        <div className="relative">
-          <input
-            type={showKey ? "text" : "password"}
-            value={form.api_key}
-            onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))}
-            placeholder={hasSavedCreds ? "Saved — enter new key to update" : "Enter API key..."}
-            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
-          />
-          <button
-            type="button"
-            onClick={() => setShowKey(!showKey)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          </button>
+      <section className="grid gap-4">
+        <div className="space-y-2">
+          <label className="app-label">API Key</label>
+          <div className="relative">
+            <Input
+              type={showKey ? "text" : "password"}
+              value={form.api_key}
+              onChange={(e) =>
+                setForm((current) => ({ ...current, api_key: e.target.value }))
+              }
+              placeholder={
+                hasSavedCreds ? "Saved. Enter a new key to rotate it." : "Enter API key"
+              }
+              className="pr-10 font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((current) => !current)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="app-label">API Secret</label>
+          <div className="relative">
+            <Input
+              type={showSecret ? "text" : "password"}
+              value={form.api_secret}
+              onChange={(e) =>
+                setForm((current) => ({ ...current, api_secret: e.target.value }))
+              }
+              placeholder={
+                hasSavedCreds
+                  ? "Saved. Enter a new secret to rotate it."
+                  : "Enter API secret"
+              }
+              className="pr-10 font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecret((current) => !current)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {showSecret ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {broker === "alpaca" && (
+          <div className="space-y-2">
+            <label className="app-label">Base URL</label>
+            <Input
+              type="text"
+              value={form.base_url}
+              onChange={(e) =>
+                setForm((current) => ({ ...current, base_url: e.target.value }))
+              }
+              placeholder="https://..."
+              className="font-mono"
+            />
+          </div>
+        )}
+      </section>
+
+      <div className="app-inset p-4 sm:p-5">
+        <div className="space-y-2">
+          <p className="app-label">Connection Notes</p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Credentials are encrypted at rest. Paper mode points to your simulation
+            environment and live mode points to the broker production endpoint.
+          </p>
         </div>
       </div>
 
-      {/* API Secret */}
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">API Secret</label>
-        <div className="relative">
-          <input
-            type={showSecret ? "text" : "password"}
-            value={form.api_secret}
-            onChange={(e) => setForm((f) => ({ ...f, api_secret: e.target.value }))}
-            placeholder={hasSavedCreds ? "Saved — enter new secret to update" : "Enter API secret..."}
-            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 pr-9 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
-          />
-          <button
-            type="button"
-            onClick={() => setShowSecret(!showSecret)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Base URL — only for Alpaca (Webull SDK manages its own endpoints) */}
-      {broker === "alpaca" && (
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Base URL</label>
-          <input
-            type="text"
-            value={form.base_url}
-            onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))}
-            placeholder="https://..."
-            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
-          />
-        </div>
-      )}
-
-      {/* Feedback */}
       {saveStatus === "success" && (
-        <p className="text-xs text-emerald-400">Credentials saved and encrypted.</p>
+        <p className="text-xs text-emerald-300">Credentials saved and encrypted.</p>
       )}
       {(saveStatus === "error" || testStatus === "error") && errorMsg && (
-        <p className="text-xs text-red-400">{errorMsg}</p>
+        <p className="text-xs text-red-300">{errorMsg}</p>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 pt-1">
-        <button
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
           onClick={handleSave}
           disabled={saving || !form.api_key || !form.api_secret}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Save className="h-3.5 w-3.5" />
           )}
-          Save
-        </button>
-        <button
-          onClick={handleTest}
-          disabled={testing}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/50 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
-        >
+          Save Credentials
+        </Button>
+        <Button variant="secondary" onClick={handleTest} disabled={testing}>
           {testing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Plug className="h-3.5 w-3.5" />
           )}
           Test Connection
-        </button>
+        </Button>
       </div>
     </div>
   );

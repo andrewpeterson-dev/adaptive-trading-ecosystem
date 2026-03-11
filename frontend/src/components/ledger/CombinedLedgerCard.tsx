@@ -34,17 +34,24 @@ export function CombinedLedgerCard() {
   const pnlColor = data.options_sim_pnl >= 0 ? "text-emerald-400" : "text-red-400";
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+    <div className="app-panel p-5">
+      <div className="space-y-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         Combined Simulated Equity
       </p>
       <div className="flex items-end justify-between">
-        <span className="text-2xl font-mono font-bold">{fmt(data.total_simulated_equity)}</span>
-        <span className={`text-sm font-mono ${data.metrics.returns_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+        <span className="text-2xl font-mono font-semibold text-foreground">
+          {fmt(data.total_simulated_equity)}
+        </span>
+        <span
+          className={`text-sm font-mono ${
+            data.metrics.returns_pct >= 0 ? "text-emerald-300" : "text-red-300"
+          }`}
+        >
           {data.metrics.returns_pct >= 0 ? "+" : ""}{data.metrics.returns_pct.toFixed(2)}%
         </span>
       </div>
-      <div className="space-y-1 text-sm">
+      <div className="space-y-2 rounded-[18px] border border-border/70 bg-muted/30 p-4 text-sm">
         <div className="flex justify-between text-muted-foreground">
           <span>{data.broker_label}</span>
           <span className="font-mono text-foreground">{fmt(data.broker_equity)}</span>
@@ -61,8 +68,19 @@ export function CombinedLedgerCard() {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-        <div>Drawdown <span className="text-foreground font-mono">{data.metrics.drawdown_pct.toFixed(2)}%</span></div>
-        <div>Sharpe <span className="text-foreground font-mono">{data.metrics.sharpe.toFixed(2)}</span></div>
+        <div>
+          Drawdown{" "}
+          <span className="font-mono text-foreground">
+            {data.metrics.drawdown_pct.toFixed(2)}%
+          </span>
+        </div>
+        <div>
+          Sharpe{" "}
+          <span className="font-mono text-foreground">
+            {data.metrics.sharpe.toFixed(2)}
+          </span>
+        </div>
+      </div>
       </div>
     </div>
   );

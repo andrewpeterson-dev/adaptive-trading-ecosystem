@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { ConnectApiModal, ApiProvider } from "./ConnectApiModal";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface AvailableProviderCardProps {
   provider: ApiProvider;
@@ -40,22 +42,24 @@ export function AvailableProviderCard({
 
   return (
     <>
-      <div className="flex items-center justify-between rounded-xl border border-border/50 bg-card/50 px-4 py-3">
+      <div className="app-inset flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <span className="text-sm font-medium text-muted-foreground">
+          <span className="text-sm font-medium text-foreground">
             {provider.name}
           </span>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest border text-muted-foreground bg-muted border-border/50">
+          <Badge variant="neutral">
             {API_TYPE_LABELS[provider.api_type] ?? provider.api_type}
-          </span>
+          </Badge>
         </div>
-        <button
+        <Button
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          variant="secondary"
+          size="sm"
+          className="h-9 rounded-full px-3"
         >
           <Plus className="h-3 w-3" />
           Connect
-        </button>
+        </Button>
       </div>
 
       {showModal && (

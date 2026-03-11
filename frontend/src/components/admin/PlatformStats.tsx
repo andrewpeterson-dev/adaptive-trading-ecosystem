@@ -38,39 +38,39 @@ export function PlatformStats() {
         cards.push({
           label: "Total Users",
           value: userList.length,
-          icon: <Users className="h-5 w-5 text-blue-400" />,
+          icon: <Users className="h-4.5 w-4.5 text-sky-300" />,
         });
         cards.push({
           label: "Verified Users",
-          value: userList.filter((u: any) => u.email_verified).length,
-          icon: <UserCheck className="h-5 w-5 text-emerald-400" />,
+          value: userList.filter((user: any) => user.email_verified).length,
+          icon: <UserCheck className="h-4.5 w-4.5 text-emerald-300" />,
         });
         cards.push({
           label: "Admin Users",
-          value: userList.filter((u: any) => u.is_admin).length,
-          icon: <Activity className="h-5 w-5 text-purple-400" />,
+          value: userList.filter((user: any) => user.is_admin).length,
+          icon: <Activity className="h-4.5 w-4.5 text-violet-300" />,
         });
       } else {
         cards.push(
-          { label: "Total Users", value: "--", icon: <Users className="h-5 w-5 text-blue-400" /> },
-          { label: "Verified Users", value: "--", icon: <UserCheck className="h-5 w-5 text-emerald-400" /> },
-          { label: "Admin Users", value: "--", icon: <Activity className="h-5 w-5 text-purple-400" /> },
+          { label: "Total Users", value: "--", icon: <Users className="h-4.5 w-4.5 text-sky-300" /> },
+          { label: "Verified Users", value: "--", icon: <UserCheck className="h-4.5 w-4.5 text-emerald-300" /> },
+          { label: "Admin Users", value: "--", icon: <Activity className="h-4.5 w-4.5 text-violet-300" /> }
         );
       }
 
       if (modelsRes.status === "fulfilled") {
         const models = modelsRes.value;
-        const modelList = Array.isArray(models) ? models : [];
+        const modelList = Array.isArray(models) ? models : models.models || [];
         cards.push({
-          label: "Active Models",
+          label: "Models",
           value: modelList.length,
-          icon: <Brain className="h-5 w-5 text-amber-400" />,
+          icon: <Brain className="h-4.5 w-4.5 text-amber-300" />,
         });
       } else {
         cards.push({
-          label: "Active Models",
+          label: "Models",
           value: "--",
-          icon: <Brain className="h-5 w-5 text-amber-400" />,
+          icon: <Brain className="h-4.5 w-4.5 text-amber-300" />,
         });
       }
 
@@ -79,20 +79,20 @@ export function PlatformStats() {
         cards.push({
           label: "Trading Mode",
           value: config.trading_mode?.toUpperCase() || "--",
-          icon: <BarChart3 className="h-5 w-5 text-cyan-400" />,
-          description: `Max ${config.max_trades_per_hour} trades/hr`,
+          icon: <BarChart3 className="h-4.5 w-4.5 text-cyan-300" />,
+          description: config.max_trades_per_hour
+            ? `Max ${config.max_trades_per_hour} trades/hr`
+            : undefined,
         });
       } else {
         cards.push({
           label: "Trading Mode",
           value: "--",
-          icon: <BarChart3 className="h-5 w-5 text-cyan-400" />,
+          icon: <BarChart3 className="h-4.5 w-4.5 text-cyan-300" />,
         });
       }
 
       setStats(cards);
-    } catch {
-      // Keep empty stats on error
     } finally {
       setLoading(false);
     }
@@ -111,19 +111,14 @@ export function PlatformStats() {
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
       {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className="rounded-lg border border-border/50 bg-card p-4 space-y-2"
-        >
+        <div key={stat.label} className="app-metric-card space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">
-              {stat.label}
-            </span>
+            <span className="app-metric-label">{stat.label}</span>
             {stat.icon}
           </div>
-          <div className="text-2xl font-bold font-mono tabular-nums">{stat.value}</div>
+          <div className="app-metric-value-mono text-[1.8rem]">{stat.value}</div>
           {stat.description && (
             <p className="text-xs text-muted-foreground">{stat.description}</p>
           )}

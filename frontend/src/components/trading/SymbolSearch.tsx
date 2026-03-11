@@ -233,7 +233,7 @@ export function SymbolSearch() {
         <div className="app-panel absolute z-30 mt-2 w-full overflow-hidden">
           {showResults && searchResults.length > 0 && (
             <div className="p-2">
-              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5 px-1">
+              <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Results
               </div>
               {searchResults.map((result) => (
@@ -244,7 +244,7 @@ export function SymbolSearch() {
                     e.preventDefault();
                     handleSelectResult(result.symbol);
                   }}
-                  className="flex items-center gap-3 w-full px-2.5 py-2 rounded-md text-left hover:bg-muted/50 transition-colors"
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
                 >
                   <span className="font-mono font-bold text-sm text-foreground w-16 shrink-0">
                     {result.symbol}
@@ -263,7 +263,7 @@ export function SymbolSearch() {
           {/* Recent symbols */}
           {(!showResults || searchResults.length === 0) && recent.length > 0 && (
             <div className="p-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5 px-1">
+              <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 Recent
               </div>
@@ -278,7 +278,7 @@ export function SymbolSearch() {
                         e.preventDefault();
                         handleSelectResult(sym);
                       }}
-                      className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-mono bg-muted hover:bg-muted/80 transition-colors"
+                      className="group flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-mono transition-colors hover:bg-muted/80"
                     >
                       <TrendingUp className="h-3 w-3 text-muted-foreground/50 group-hover:text-muted-foreground" />
                       <span className="font-bold text-foreground">{sym}</span>

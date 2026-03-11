@@ -9,13 +9,15 @@ import {
   Zap,
 } from "lucide-react";
 import type { RegimeData } from "@/types/models";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 
 const REGIME_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; icon: React.ElementType }> = {
-  low_vol_bull: { label: "Low Vol Bull", color: "text-emerald-400", bgColor: "bg-emerald-400/10", borderColor: "border-emerald-400/30", icon: TrendingUp },
-  high_vol_bull: { label: "High Vol Bull", color: "text-purple-400", bgColor: "bg-purple-400/10", borderColor: "border-purple-400/30", icon: Zap },
-  low_vol_bear: { label: "Low Vol Bear", color: "text-red-400", bgColor: "bg-red-400/10", borderColor: "border-red-400/30", icon: TrendingDown },
-  high_vol_bear: { label: "High Vol Bear", color: "text-red-500", bgColor: "bg-red-500/10", borderColor: "border-red-500/30", icon: Zap },
-  sideways: { label: "Sideways", color: "text-amber-400", bgColor: "bg-amber-400/10", borderColor: "border-amber-400/30", icon: Minus },
+  low_vol_bull: { label: "Low Vol Bull", color: "text-emerald-300", bgColor: "bg-emerald-500/12", borderColor: "border-emerald-500/25", icon: TrendingUp },
+  high_vol_bull: { label: "High Vol Bull", color: "text-violet-200", bgColor: "bg-violet-500/12", borderColor: "border-violet-500/25", icon: Zap },
+  low_vol_bear: { label: "Low Vol Bear", color: "text-red-200", bgColor: "bg-red-500/12", borderColor: "border-red-500/25", icon: TrendingDown },
+  high_vol_bear: { label: "High Vol Bear", color: "text-red-100", bgColor: "bg-red-500/16", borderColor: "border-red-500/30", icon: Zap },
+  sideways: { label: "Sideways", color: "text-amber-200", bgColor: "bg-amber-500/12", borderColor: "border-amber-500/25", icon: Minus },
 };
 
 export function RegimeIndicator({ data }: { data: RegimeData | null }) {
@@ -29,56 +31,56 @@ export function RegimeIndicator({ data }: { data: RegimeData | null }) {
   const trendDirection = (data.trend_strength ?? 0) >= 0 ? "Bullish" : "Bearish";
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+    <div className="app-panel p-5">
+      <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
         <Activity className="h-4 w-4" />
         Market Regime
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${config.bgColor} ${config.borderColor}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${config.bgColor} ${config.borderColor}`}>
           <Icon className={`h-4 w-4 ${config.color}`} />
           <span className={`text-sm font-bold ${config.color}`}>{config.label}</span>
         </div>
-        <span className="text-xs text-muted-foreground font-mono tabular-nums">
+        <Badge className="tracking-normal font-mono">
           {(data.confidence * 100).toFixed(0)}% confidence
-        </span>
+        </Badge>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 rounded-[20px] border border-border/70 bg-muted/30 p-4 md:grid-cols-2">
         <div>
-          <div className="text-xs text-muted-foreground mb-1">Volatility (20d)</div>
-          <div className="text-sm font-mono tabular-nums">
+          <div className="mb-1 text-xs text-muted-foreground">Volatility (20d)</div>
+          <div className="text-sm font-mono tabular-nums text-foreground">
             {hasVol ? `${(data.volatility_20d! * 100).toFixed(1)}%` : <span className="text-muted-foreground/50">N/A</span>}
           </div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1">
-            <div
-              className="h-full rounded-full bg-purple-500"
-              style={{ width: `${Math.min((data.vol_percentile || 0) * 100, 100)}%` }}
-            />
-          </div>
+          <Progress
+            className="mt-2"
+            value={Math.min((data.vol_percentile || 0) * 100, 100)}
+            indicatorClassName="bg-gradient-to-r from-violet-500 via-fuchsia-400 to-sky-400"
+          />
         </div>
         <div>
-          <div className="text-xs text-muted-foreground mb-1">Trend ({trendDirection})</div>
+          <div className="mb-1 text-xs text-muted-foreground">Trend ({trendDirection})</div>
           {hasTrend ? (
             <div className="flex items-center gap-1">
               {(data.trend_strength ?? 0) >= 0 ? (
-                <TrendingUp className="h-3 w-3 text-emerald-400" />
+                <TrendingUp className="h-3 w-3 text-emerald-300" />
               ) : (
-                <TrendingDown className="h-3 w-3 text-red-400" />
+                <TrendingDown className="h-3 w-3 text-red-300" />
               )}
-              <span className="text-sm font-mono tabular-nums">{(data.trend_strength! * 10000).toFixed(2)}</span>
+              <span className="text-sm font-mono tabular-nums text-foreground">{(data.trend_strength! * 10000).toFixed(2)}</span>
             </div>
           ) : (
             <span className="text-sm text-muted-foreground/50">N/A</span>
           )}
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1">
-            <div
-              className={`h-full rounded-full ${(data.trend_strength ?? 0) >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
-              style={{ width: `${trendPct}%` }}
-            />
-          </div>
+          <Progress
+            className="mt-2"
+            value={trendPct}
+            indicatorClassName={(data.trend_strength ?? 0) >= 0 ? "bg-emerald-400" : "bg-red-400"}
+          />
         </div>
+      </div>
       </div>
     </div>
   );

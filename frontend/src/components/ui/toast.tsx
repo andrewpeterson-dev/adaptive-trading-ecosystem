@@ -25,10 +25,10 @@ const ICONS: Record<ToastVariant, React.ReactNode> = {
 };
 
 const BORDER_COLORS: Record<ToastVariant, string> = {
-  success: "border-emerald-400/30",
-  error: "border-red-400/30",
-  warning: "border-amber-400/30",
-  info: "border-blue-400/30",
+  success: "border-emerald-400/30 text-emerald-50",
+  error: "border-red-400/30 text-red-50",
+  warning: "border-amber-400/30 text-amber-50",
+  info: "border-blue-400/30 text-slate-50",
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -53,13 +53,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`flex items-start gap-2 rounded-lg border bg-card p-3 shadow-lg animate-in slide-in-from-right-5 fade-in-0 duration-200 ${BORDER_COLORS[t.variant]}`}
+            className={`flex items-start gap-2 rounded-[22px] border bg-[linear-gradient(180deg,hsl(var(--surface-2)/0.98),hsl(var(--surface-1)/0.98))] p-3.5 shadow-[0_24px_60px_-36px_hsl(var(--shadow-color)/0.95)] animate-in slide-in-from-right-5 fade-in-0 duration-200 ${BORDER_COLORS[t.variant]}`}
           >
             {ICONS[t.variant]}
-            <p className="text-sm text-foreground flex-1">{t.message}</p>
+            <p className="flex-1 text-sm text-foreground">{t.message}</p>
             <button
               onClick={() => removeToast(t.id)}
-              className="text-muted-foreground hover:text-foreground shrink-0"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
             </button>

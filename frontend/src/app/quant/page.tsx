@@ -23,6 +23,10 @@ import { BarChart3, Brain, ChevronRight, Loader2, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -201,22 +205,25 @@ export default function QuantPage() {
       : [];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Brain className="h-5 w-5 text-primary" />
-            Quant Intelligence
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Compare strategy performance, risk, and AI confidence side by side
-          </p>
-        </div>
-      </div>
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Research"
+        title="Quant Intelligence"
+        description="Compare strategy performance, risk posture, and AI confidence side by side before you promote a setup into production."
+        badge={
+          <Badge variant="info">
+            <Brain className="h-3.5 w-3.5" />
+            Compare up to 6
+          </Badge>
+        }
+        meta={
+          <Badge className="font-mono tracking-normal">
+            {selectedIds.length} selected
+          </Badge>
+        }
+      />
 
-      {/* Strategy selector */}
-      <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
+      <div className="app-panel p-4 md:p-5 space-y-3">
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Select strategies to compare (up to 6)
         </div>
@@ -225,13 +232,21 @@ export default function QuantPage() {
             {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-8 w-28 rounded-lg" />)}
           </div>
         ) : strategies.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            No strategies found.{" "}
-            <Link href="/" className="text-primary hover:underline">
-              Create one
-            </Link>{" "}
-            to start comparing.
-          </div>
+          <EmptyState
+            title="No strategies found"
+            description={
+              <>
+                Create a strategy first, then return here to compare performance,
+                risk, and confidence.
+              </>
+            }
+            action={
+              <Button asChild variant="primary" size="sm">
+                <Link href="/">Create strategy</Link>
+              </Button>
+            }
+            className="py-10"
+          />
         ) : (
           <div className="flex flex-wrap gap-2">
             {strategies.map((s, i) => {
@@ -258,34 +273,36 @@ export default function QuantPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-400">
+        <div className="rounded-[20px] border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-300">
           {error}
         </div>
       )}
 
       {compareLoading && (
-        <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">Analysing strategies…</span>
+        <div className="app-panel">
+          <EmptyState
+            icon={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+            title="Analysing strategies"
+            description="Building the comparison set, normalising metrics, and preparing the visualization stack."
+            className="py-12"
+          />
         </div>
       )}
 
       {!compareLoading && compareData.length > 0 && !hasPerfData && (
-        <div className="rounded-xl border border-dashed border-border/50 p-12 text-center space-y-3">
-          <BarChart3 className="h-10 w-10 text-muted-foreground/30 mx-auto" />
-          <div className="text-sm text-muted-foreground">
-            No performance data available for comparison
-          </div>
-          <p className="text-xs text-muted-foreground/60">
-            Run your strategies in paper or live mode to generate performance data.
-          </p>
+        <div className="app-panel">
+          <EmptyState
+            icon={<BarChart3 className="h-5 w-5 text-muted-foreground/70" />}
+            title="No performance data available"
+            description="Run your strategies in paper or live mode to generate performance data for comparison."
+            className="py-12"
+          />
         </div>
       )}
 
       {!compareLoading && compareData.length > 0 && hasPerfData && (
         <>
-          {/* Side-by-side equity curves */}
-          <div className="rounded-xl border border-border/50 bg-card p-4">
+          <div className="app-panel p-4 md:p-5">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               Equity Curves
             </div>
@@ -362,10 +379,8 @@ export default function QuantPage() {
             </div>
           </div>
 
-          {/* Radar + metrics table */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Radar chart */}
-            <div className="rounded-xl border border-border/50 bg-card p-4">
+            <div className="app-panel p-4 md:p-5">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                 Performance Radar
               </div>
@@ -404,8 +419,7 @@ export default function QuantPage() {
               </ResponsiveContainer>
             </div>
 
-            {/* Metric comparison bar charts */}
-            <div className="rounded-xl border border-border/50 bg-card p-4 space-y-4">
+            <div className="app-panel p-4 md:p-5 space-y-4">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Key Metrics
               </div>
@@ -459,31 +473,19 @@ export default function QuantPage() {
             </div>
           </div>
 
-          {/* Full metrics table */}
-          <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+          <div className="app-table-shell">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 border-b border-border/40">
               Full Comparison Table
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="app-table">
                 <thead>
-                  <tr className="border-b border-border/40 bg-muted/20">
-                    <th className="py-2 px-4 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Strategy
-                    </th>
+                  <tr>
+                    <th>Strategy</th>
                     {["Sharpe", "Sortino", "Win Rate", "Profit Factor", "Max DD", "Return", "Trades", "Conf"].map(
-                      (h) => (
-                        <th
-                          key={h}
-                          className="py-2 px-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
-                        >
-                          {h}
-                        </th>
-                      )
+                      (h) => <th key={h} className="text-right">{h}</th>
                     )}
-                    <th className="py-2 px-3 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Detail
-                    </th>
+                    <th className="text-center">Detail</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -491,8 +493,8 @@ export default function QuantPage() {
                     const p = s.performance;
                     const color = PALETTE[i % PALETTE.length];
                     return (
-                      <tr key={s.id} className="border-b border-border/30 hover:bg-muted/10 transition-colors">
-                        <td className="py-3 px-4">
+                      <tr key={s.id}>
+                        <td>
                           <div className="flex items-center gap-2">
                             <span
                               className="h-2 w-2 rounded-full shrink-0"
@@ -507,52 +509,52 @@ export default function QuantPage() {
                           </div>
                         </td>
                         <td
-                          className={`py-3 px-3 text-right font-mono text-xs ${
+                          className={`text-right font-mono text-xs ${
                             p.sharpe == null ? "text-muted-foreground" : p.sharpe > 0 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
                           {safeRatio(p.sharpe)}
                         </td>
                         <td
-                          className={`py-3 px-3 text-right font-mono text-xs ${
+                          className={`text-right font-mono text-xs ${
                             p.sortino == null ? "text-muted-foreground" : p.sortino > 0 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
                           {safeRatio(p.sortino)}
                         </td>
                         <td
-                          className={`py-3 px-3 text-right font-mono text-xs ${
+                          className={`text-right font-mono text-xs ${
                             p.win_rate == null ? "text-muted-foreground" : p.win_rate > 0.5 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
                           {safePct(p.win_rate)}
                         </td>
                         <td
-                          className={`py-3 px-3 text-right font-mono text-xs ${
+                          className={`text-right font-mono text-xs ${
                             p.profit_factor == null ? "text-muted-foreground" : p.profit_factor > 1 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
                           {safeRatio(p.profit_factor)}
                         </td>
                         <td
-                          className={`py-3 px-3 text-right font-mono text-xs ${
+                          className={`text-right font-mono text-xs ${
                             p.max_drawdown == null ? "text-muted-foreground" : p.max_drawdown > -0.15 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
                           {safePct(p.max_drawdown)}
                         </td>
                         <td
-                          className={`py-3 px-3 text-right font-mono text-xs ${
+                          className={`text-right font-mono text-xs ${
                             p.total_return == null ? "text-muted-foreground" : p.total_return > 0 ? "text-emerald-400" : "text-red-400"
                           }`}
                         >
                           {p.total_return == null ? "\u2014" : `${p.total_return >= 0 ? "+" : ""}${fmtPct(p.total_return)}`}
                         </td>
-                        <td className="py-3 px-3 text-right font-mono text-xs text-muted-foreground">
+                        <td className="text-right font-mono text-xs text-muted-foreground">
                           {p.num_trades}
                         </td>
                         <td
-                          className={`py-3 px-3 text-right font-mono text-xs ${
+                          className={`text-right font-mono text-xs ${
                             p.confidence == null
                               ? "text-muted-foreground"
                               : p.confidence >= 70
@@ -564,7 +566,7 @@ export default function QuantPage() {
                         >
                           {p.confidence != null ? `${p.confidence.toFixed(0)}%` : "\u2014"}
                         </td>
-                        <td className="py-3 px-3 text-center">
+                        <td className="text-center">
                           <Link
                             href={`/intelligence/${s.id}`}
                             className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline"
@@ -583,15 +585,21 @@ export default function QuantPage() {
       )}
 
       {!compareLoading && compareData.length === 0 && !strategiesLoading && strategies.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border/50 p-12 text-center space-y-3">
-          <Brain className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-          <div className="text-sm text-muted-foreground">No strategies to compare yet.</div>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-          >
-            <Plus className="h-3.5 w-3.5" /> Build your first strategy
-          </Link>
+        <div className="app-panel">
+          <EmptyState
+            icon={<Brain className="h-5 w-5 text-muted-foreground/70" />}
+            title="No strategies to compare yet"
+            description="Build and save a strategy first, then return here to compare risk, return, and AI confidence."
+            action={
+              <Button asChild variant="primary" size="sm">
+                <Link href="/">
+                  <Plus className="h-3.5 w-3.5" />
+                  Build your first strategy
+                </Link>
+              </Button>
+            }
+            className="py-12"
+          />
         </div>
       )}
     </div>

@@ -1,18 +1,17 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import {
-  Loader2,
-  Unplug,
-  RefreshCw,
-  Brain,
-} from "lucide-react";
+import { Loader2, Unplug, RefreshCw, Brain, Activity } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { ModelCard } from "@/components/analytics/ModelCard";
 import { RegimeIndicator } from "@/components/analytics/RegimeIndicator";
 import { AllocationChart } from "@/components/analytics/AllocationChart";
 import type { ModelDetail, RegimeData, EnsembleStatus } from "@/types/models";
 import type { AllocationEntry } from "@/types/portfolio";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelDetail[]>([]);
@@ -37,12 +36,16 @@ export default function ModelsPage() {
         const data = modRes.value;
         const list: ModelDetail[] = data.models || data || [];
         setModels(list);
-        // Derive ensemble status from the model list — /api/models/ensemble-status does not exist
-        const activeModels = list.filter((m) => m.is_active);
+        const activeModels = list.filter((model) => model.is_active);
         const equalWeight = activeModels.length > 0 ? 1 / activeModels.length : 0;
         const weights: Record<string, number> = {};
-        for (const m of activeModels) weights[m.name] = equalWeight;
-        setEnsemble({ ensemble_active: activeModels.length > 0, model_count: activeModels.length, weights, last_updated: null });
+        for (const model of activeModels) weights[model.name] = equalWeight;
+        setEnsemble({
+          ensemble_active: activeModels.length > 0,
+          model_count: activeModels.length,
+          weights,
+          last_updated: null,
+        });
         hasData = true;
       }
 
@@ -72,15 +75,15 @@ export default function ModelsPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  // Retrain is not available — /api/models/retrain does not exist.
-  // The ModelCard button is disabled and shows "Not Available" via the prop below.
   const handleRetrain = async (_modelName: string) => {
-    // no-op: feature not available
+    // Retraining endpoint not available in current backend.
   };
+
+  const ensembleWeightCount = ensemble ? Object.keys(ensemble.weights ?? {}).length : 0;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex items-center justify-center py-24">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -88,128 +91,175 @@ export default function ModelsPage() {
 
   if (error && models.length === 0) {
     return (
-      <div className="text-center py-20 space-y-3">
-        <Unplug className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-        <h2 className="text-lg font-semibold">No Model Data</h2>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Train models and start the backend to view model performance, regime detection, and capital allocation.
-        </p>
-      </div>
+      <EmptyState
+        icon={<Unplug className="h-5 w-5 text-muted-foreground" />}
+        title="No model data available"
+        description="Train models and bring the backend online to view performance, regime detection, and allocation analytics."
+      />
     );
   }
 
-  const ensembleWeightCount = ensemble ? Object.keys(ensemble.weights ?? {}).length : 0;
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Model Performance</h2>
-          {lastRefresh && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {models.length} model{models.length !== 1 ? "s" : ""} registered
-              {ensembleWeightCount > 0 && ` \u00B7 ${ensembleWeightCount} in ensemble`}
-              {" \u00B7 "}Updated {lastRefresh.toLocaleTimeString()}
-            </p>
-          )}
-        </div>
-        <button
-          onClick={fetchAll}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
-        </button>
-      </div>
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Signals"
+        title="Model Performance"
+        description="Audit active models, inspect ensemble balance, and compare predictive systems side by side with consistent capital and regime context."
+        meta={
+          <>
+            <Badge variant="neutral" className="tracking-normal">
+              <span className="font-mono">{models.length}</span>
+              models
+            </Badge>
+            {ensembleWeightCount > 0 && (
+              <Badge variant="info" className="tracking-normal">
+                <span className="font-mono">{ensembleWeightCount}</span>
+                in ensemble
+              </Badge>
+            )}
+            {lastRefresh && (
+              <Badge variant="neutral" className="tracking-normal font-mono">
+                Updated {lastRefresh.toLocaleTimeString()}
+              </Badge>
+            )}
+          </>
+        }
+        actions={
+          <Button onClick={fetchAll} variant="secondary" size="sm">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        }
+      />
 
-      {/* Top: Regime + Ensemble Status */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
         <RegimeIndicator data={regime} />
 
-        {ensemble && ensemble.model_count > 0 && (
-          <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              <Brain className="h-4 w-4" />
-              Ensemble Weights
-            </div>
-            <div className="space-y-2">
+        <div className="app-panel p-5">
+          <div className="app-section-title flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            Ensemble Weights
+          </div>
+          {ensemble && ensemble.model_count > 0 ? (
+            <div className="mt-4 space-y-3">
               {Object.entries(ensemble.weights ?? {}).map(([name, weight]) => (
-                <div key={name} className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{name}</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.min(weight * 100, 100)}%` }}
-                      />
-                    </div>
-                    <span className="font-mono tabular-nums text-xs w-12 text-right">{(weight * 100).toFixed(1)}%</span>
+                <div key={name} className="app-inset p-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-foreground">{name}</span>
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {(weight * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="app-progress-track mt-3">
+                    <div
+                      className="app-progress-bar bg-primary"
+                      style={{ width: `${Math.min(weight * 100, 100)}%` }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <EmptyState
+              icon={<Activity className="h-5 w-5 text-muted-foreground" />}
+              title="No active ensemble"
+              description="Activate at least one model to populate the ensemble allocation."
+              className="py-10"
+            />
+          )}
+        </div>
       </div>
 
-      {/* Middle: Model Cards Grid */}
       {models.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {models.map((model) => (
             <ModelCard key={model.name} model={model} onRetrain={handleRetrain} />
           ))}
         </div>
       )}
 
-      {/* Bottom: Allocation Chart + Comparison Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {allocation.length > 0 && (
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
+        {allocation.length > 0 ? (
           <AllocationChart data={allocation} />
+        ) : (
+          <EmptyState
+            title="No allocation data"
+            description="Capital allocation appears here after portfolio weights are calculated."
+          />
         )}
 
-        {/* Comparison Table */}
-        {models.length > 0 && (
-          <div className={`rounded-lg border border-border/50 bg-card overflow-x-auto ${allocation.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
-            <div className="px-4 py-3 border-b">
+        <div className="app-table-shell overflow-x-auto">
+          <div className="app-section-header">
+            <div>
               <h3 className="text-sm font-semibold">Model Comparison</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                High-level ranking metrics across the active model inventory.
+              </p>
             </div>
-            <table className="w-full text-left text-sm">
+          </div>
+          {models.length === 0 ? (
+            <EmptyState
+              title="No models registered"
+              description="Once model metadata is available, comparative metrics will populate this table."
+              className="py-12"
+            />
+          ) : (
+            <table className="app-table">
               <thead>
-                <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
-                  <th className="py-2 px-4">Model</th>
-                  <th className="py-2 px-4">Type</th>
-                  <th className="py-2 px-4">Trained</th>
-                  <th className="py-2 px-4">Sharpe</th>
-                  <th className="py-2 px-4">Sortino</th>
-                  <th className="py-2 px-4">Win Rate</th>
-                  <th className="py-2 px-4">Max DD</th>
-                  <th className="py-2 px-4">Return</th>
-                  <th className="py-2 px-4">Trades</th>
-                  <th className="py-2 px-4">P/F</th>
+                <tr>
+                  <th>Model</th>
+                  <th>Type</th>
+                  <th>Active</th>
+                  <th>Sharpe</th>
+                  <th>Sortino</th>
+                  <th>Win Rate</th>
+                  <th>Max DD</th>
+                  <th>Return</th>
+                  <th>Trades</th>
                 </tr>
               </thead>
               <tbody>
-                {models.map((m) => (
-                  <tr key={m.name} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="py-2 px-4 font-medium">{m.name}</td>
-                    <td className="py-2 px-4 text-xs text-muted-foreground">{m.model_type.replace("Model", "")}</td>
-                    <td className="py-2 px-4">
-                      <span className={`inline-block h-2 w-2 rounded-full ${m.is_active ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
+                {models.map((model) => (
+                  <tr key={model.name}>
+                    <td className="font-medium">{model.name}</td>
+                    <td className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                      {model.model_type.replace("Model", "")}
                     </td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.sharpe_ratio != null ? m.sharpe_ratio.toFixed(3) : "—"}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.sortino_ratio != null ? m.sortino_ratio.toFixed(3) : "—"}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.win_rate != null ? `${(m.win_rate * 100).toFixed(1)}%` : "—"}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.max_drawdown != null ? `${(m.max_drawdown * 100).toFixed(1)}%` : "—"}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">{m.total_return != null ? `${(m.total_return * 100).toFixed(1)}%` : "—"}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums text-muted-foreground">{m.num_trades}</td>
-                    <td className="py-2 px-4 font-mono tabular-nums">—</td>
+                    <td>
+                      <span
+                        className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                          model.is_active ? "bg-emerald-400" : "bg-muted-foreground/35"
+                        }`}
+                      />
+                    </td>
+                    <td className="font-mono tabular-nums">
+                      {model.sharpe_ratio != null ? model.sharpe_ratio.toFixed(3) : "—"}
+                    </td>
+                    <td className="font-mono tabular-nums">
+                      {model.sortino_ratio != null ? model.sortino_ratio.toFixed(3) : "—"}
+                    </td>
+                    <td className="font-mono tabular-nums">
+                      {model.win_rate != null ? `${(model.win_rate * 100).toFixed(1)}%` : "—"}
+                    </td>
+                    <td className="font-mono tabular-nums">
+                      {model.max_drawdown != null
+                        ? `${(model.max_drawdown * 100).toFixed(1)}%`
+                        : "—"}
+                    </td>
+                    <td className="font-mono tabular-nums">
+                      {model.total_return != null
+                        ? `${(model.total_return * 100).toFixed(1)}%`
+                        : "—"}
+                    </td>
+                    <td className="font-mono tabular-nums text-muted-foreground">
+                      {model.num_trades}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

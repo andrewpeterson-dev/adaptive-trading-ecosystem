@@ -12,6 +12,8 @@ import {
   Pencil,
 } from "lucide-react";
 import { ConnectApiModal, ApiProvider } from "./ConnectApiModal";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export interface ApiConnection {
   id: number;
@@ -52,17 +54,17 @@ interface ApiConnectionCardProps {
   ) => Promise<void>;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  connected:    "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
-  error:        "text-red-400 bg-red-400/10 border-red-400/20",
-  pending:      "text-amber-400 bg-amber-400/10 border-amber-400/20",
-  disconnected: "text-muted-foreground bg-muted border-border/50",
+const STATUS_VARIANTS: Record<string, "neutral" | "success" | "danger" | "warning"> = {
+  connected: "success",
+  error: "danger",
+  pending: "warning",
+  disconnected: "neutral",
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  connected:    "Connected",
-  error:        "Error",
-  pending:      "Pending",
+  connected: "Connected",
+  error: "Error",
+  pending: "Pending",
   disconnected: "Disconnected",
 };
 
@@ -77,22 +79,21 @@ export function ApiConnectionCard({
   onTest,
   onEdit,
 }: ApiConnectionCardProps) {
-  const [testState, setTestState]     = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [testError, setTestError]     = useState("");
-  const [removing, setRemoving]       = useState(false);
+  const [testState, setTestState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [testError, setTestError] = useState("");
+  const [removing, setRemoving] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Normalise to uppercase for comparisons (backend returns uppercase)
   const apiType = connection.api_type.toUpperCase();
-
   const isActiveBroker = settings.active_equity_broker_id === connection.id;
   const isActiveCrypto = settings.active_crypto_broker_id === connection.id;
-  const isPrimaryData  = settings.primary_market_data_id  === connection.id;
-  const isFallbackData = settings.fallback_market_data_ids.includes(connection.id) && !isPrimaryData;
+  const isPrimaryData = settings.primary_market_data_id === connection.id;
+  const isFallbackData =
+    settings.fallback_market_data_ids.includes(connection.id) && !isPrimaryData;
 
-  const isBrokerage   = apiType === "BROKERAGE";
+  const isBrokerage = apiType === "BROKERAGE";
   const isCryptoBroker = apiType === "CRYPTO_BROKER";
-  const isMarketData  = apiType === "MARKET_DATA";
+  const isMarketData = apiType === "MARKET_DATA";
 
   const handleTest = async () => {
     setTestState("loading");
@@ -125,87 +126,52 @@ export function ApiConnectionCard({
 
   return (
     <>
-      <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
-        {/* Top row */}
+      <div className="app-card space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1.5 min-w-0 flex-1">
-            {/* Name */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold">{displayName}</span>
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">{displayName}</span>
               {connection.nickname && (
-                <span className="text-xs text-muted-foreground/70">
-                  {connection.provider_name}
-                </span>
+                <span className="text-xs text-muted-foreground">{connection.provider_name}</span>
               )}
             </div>
-
-            {/* Role + mode badges */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {isActiveBroker && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest text-blue-400 bg-blue-400/10 border-blue-400/20">
-                  Active Broker
-                </span>
-              )}
-              {isActiveCrypto && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest text-purple-400 bg-purple-400/10 border-purple-400/20">
-                  Active Crypto
-                </span>
-              )}
-              {isPrimaryData && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest text-emerald-400 bg-emerald-400/10 border-emerald-400/20">
-                  Primary Data
-                </span>
-              )}
-              {isFallbackData && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest text-amber-400 bg-amber-400/10 border-amber-400/20">
-                  Fallback Data
-                </span>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={STATUS_VARIANTS[connection.status] ?? "neutral"}>
+                {STATUS_LABELS[connection.status] ?? connection.status}
+              </Badge>
+              {isActiveBroker && <Badge variant="primary">Active Broker</Badge>}
+              {isActiveCrypto && <Badge variant="info">Active Crypto</Badge>}
+              {isPrimaryData && <Badge variant="success">Primary Data</Badge>}
+              {isFallbackData && <Badge variant="warning">Fallback Data</Badge>}
               {(isBrokerage || isCryptoBroker) && (
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${
-                    connection.is_paper
-                      ? "text-sky-400 bg-sky-400/10 border-sky-400/20"
-                      : "text-red-400 bg-red-400/10 border-red-400/20"
-                  }`}
-                >
+                <Badge variant={connection.is_paper ? "info" : "danger"}>
                   {connection.is_paper ? "Paper" : "Live"}
-                </span>
+                </Badge>
               )}
             </div>
           </div>
-
-          {/* Status pill */}
-          <span
-            className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${
-              STATUS_STYLES[connection.status] ?? STATUS_STYLES.disconnected
-            }`}
-          >
-            {STATUS_LABELS[connection.status] ?? connection.status}
-          </span>
         </div>
 
-        {/* Inline test result */}
         {testState === "success" && (
-          <p className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+          <p className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
             <CheckCircle2 className="h-3 w-3" />
-            Connected
+            Connection healthy
           </p>
         )}
         {testState === "error" && testError && (
-          <p className="inline-flex items-center gap-1.5 text-xs text-red-400">
+          <p className="inline-flex items-center gap-1.5 text-xs text-red-300">
             <XCircle className="h-3 w-3" />
             {testError}
           </p>
         )}
 
-        {/* Actions */}
-        <div className="flex items-center gap-1.5 flex-wrap border-t border-border/40 pt-2.5">
-          {/* Test */}
-          <button
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+          <Button
             onClick={handleTest}
             disabled={testState === "loading"}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+            variant="secondary"
+            size="sm"
+            className="h-9 rounded-full px-3"
           >
             {testState === "loading" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -213,55 +179,60 @@ export function ApiConnectionCard({
               <Plug className="h-3 w-3" />
             )}
             Test
-          </button>
+          </Button>
 
-          {/* Edit credentials */}
-          <button
+          <Button
             onClick={() => setShowEditModal(true)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            variant="secondary"
+            size="sm"
+            className="h-9 rounded-full px-3"
           >
             <Pencil className="h-3 w-3" />
             Edit
-          </button>
+          </Button>
 
-          {/* Set as Active Broker */}
           {isBrokerage && !isActiveBroker && (
-            <button
+            <Button
               onClick={() => onSetActiveBroker(connection.id)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-blue-400/20 text-xs text-blue-400 hover:bg-blue-400/10 transition-colors"
+              variant="secondary"
+              size="sm"
+              className="h-9 rounded-full px-3"
             >
               <Star className="h-3 w-3" />
               Set Active
-            </button>
+            </Button>
           )}
 
-          {/* Set as Active Crypto */}
           {isCryptoBroker && !isActiveCrypto && (
-            <button
+            <Button
               onClick={() => onSetActiveCrypto(connection.id)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-purple-400/20 text-xs text-purple-400 hover:bg-purple-400/10 transition-colors"
+              variant="secondary"
+              size="sm"
+              className="h-9 rounded-full px-3"
             >
               <Star className="h-3 w-3" />
               Set Active
-            </button>
+            </Button>
           )}
 
-          {/* Set as Primary Data */}
           {isMarketData && !isPrimaryData && (
-            <button
+            <Button
               onClick={() => onSetPrimaryData(connection.id)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-emerald-400/20 text-xs text-emerald-400 hover:bg-emerald-400/10 transition-colors"
+              variant="secondary"
+              size="sm"
+              className="h-9 rounded-full px-3"
             >
               <TrendingUp className="h-3 w-3" />
               Set Primary
-            </button>
+            </Button>
           )}
 
-          {/* Remove — pushed to the right */}
-          <button
+          <Button
             onClick={handleRemove}
             disabled={removing}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/50 text-xs text-red-400/60 hover:text-red-400 hover:bg-red-400/5 hover:border-red-400/20 transition-colors disabled:opacity-50 ml-auto"
+            variant="danger"
+            size="sm"
+            className="ml-auto h-9 rounded-full px-3"
           >
             {removing ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -269,21 +240,21 @@ export function ApiConnectionCard({
               <Trash2 className="h-3 w-3" />
             )}
             Remove
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Edit modal */}
       {showEditModal && (
         <ConnectApiModal
           provider={provider}
           mode="edit"
           defaultNickname={connection.nickname ?? ""}
           defaultIsPaper={connection.is_paper}
-          onConnect={async (creds, is_paper, nickname) => {
-            await onEdit(provider, creds, is_paper, nickname);
-          }}
           onClose={() => setShowEditModal(false)}
+          onConnect={async (credentials, isPaper, nickname) => {
+            await onEdit(provider, credentials, isPaper, nickname);
+            setShowEditModal(false);
+          }}
         />
       )}
     </>

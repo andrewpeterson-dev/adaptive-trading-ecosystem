@@ -3,13 +3,15 @@
 import React, { useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import type { RiskEvent } from "@/types/risk";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const SEVERITY_MAP: Record<string, { label: string; class: string }> = {
-  halt: { label: "Critical", class: "text-red-400 bg-red-400/10" },
-  breach: { label: "Critical", class: "text-red-400 bg-red-400/10" },
-  warning: { label: "Warning", class: "text-amber-400 bg-amber-400/10" },
-  resume: { label: "Info", class: "text-blue-400 bg-blue-400/10" },
-  info: { label: "Info", class: "text-blue-400 bg-blue-400/10" },
+  halt: { label: "Critical", class: "text-red-300 bg-red-400/10 border-red-400/20" },
+  breach: { label: "Critical", class: "text-red-300 bg-red-400/10 border-red-400/20" },
+  warning: { label: "Warning", class: "text-amber-300 bg-amber-400/10 border-amber-400/20" },
+  resume: { label: "Info", class: "text-sky-300 bg-sky-400/10 border-sky-400/20" },
+  info: { label: "Info", class: "text-sky-300 bg-sky-400/10 border-sky-400/20" },
 };
 
 function getSeverity(eventType: string): { label: string; class: string } {
@@ -17,7 +19,7 @@ function getSeverity(eventType: string): { label: string; class: string } {
   for (const [key, val] of Object.entries(SEVERITY_MAP)) {
     if (lower.includes(key)) return val;
   }
-  return { label: "Info", class: "text-blue-400 bg-blue-400/10" };
+  return { label: "Info", class: "text-sky-300 bg-sky-400/10 border-sky-400/20" };
 }
 
 type FilterLevel = "all" | "critical" | "warning" | "info";
@@ -25,69 +27,70 @@ type FilterLevel = "all" | "critical" | "warning" | "info";
 export function RiskEventLog({ events }: { events: RiskEvent[] }) {
   const [filter, setFilter] = useState<FilterLevel>("all");
 
-  const filtered = events.filter((e) => {
+  const filtered = events.filter((event) => {
     if (filter === "all") return true;
-    const sev = getSeverity(e.event_type).label.toLowerCase();
-    return sev === filter;
+    return getSeverity(event.event_type).label.toLowerCase() === filter;
   });
 
   const sorted = [...filtered].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
-      <div className="px-4 py-3 border-b flex items-center justify-between">
+    <div className="app-table-shell overflow-x-auto">
+      <div className="app-section-header">
         <div className="flex items-center gap-2">
           <ShieldAlert className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">
             Risk Events
-            <span className="text-muted-foreground font-normal ml-2">{sorted.length}</span>
+            <span className="ml-2 font-normal text-muted-foreground">{sorted.length}</span>
           </h3>
         </div>
         <div className="flex items-center gap-1">
           {(["all", "critical", "warning", "info"] as FilterLevel[]).map((level) => (
-            <button
+            <Button
               key={level}
               onClick={() => setFilter(level)}
-              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors ${
-                filter === level
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              variant={filter === level ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 rounded-full px-3 text-[10px] uppercase tracking-[0.16em]"
             >
-              {level.charAt(0).toUpperCase() + level.slice(1)}
-            </button>
+              {level}
+            </Button>
           ))}
         </div>
       </div>
       {sorted.length === 0 ? (
-        <div className="py-8 text-center text-muted-foreground text-sm">
-          {filter === "all" ? "No risk events recorded" : `No ${filter} events`}
-        </div>
+        <EmptyState
+          title={filter === "all" ? "No risk events recorded" : `No ${filter} events`}
+          description="Halts, resumptions, and policy breaches will appear here once live risk workflows are producing events."
+          className="py-12"
+        />
       ) : (
-        <table className="w-full text-left text-sm">
+        <table className="app-table">
           <thead>
-            <tr className="border-b bg-muted/30 text-xs text-muted-foreground uppercase tracking-wider">
-              <th className="py-2 px-4">Timestamp</th>
-              <th className="py-2 px-4">Event Type</th>
-              <th className="py-2 px-4">Severity</th>
-              <th className="py-2 px-4">Details</th>
+            <tr>
+              <th>Timestamp</th>
+              <th>Event Type</th>
+              <th>Severity</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((event, i) => {
-              const sev = getSeverity(event.event_type);
+            {sorted.map((event, index) => {
+              const severity = getSeverity(event.event_type);
               return (
-                <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-2 px-4 font-mono tabular-nums text-xs text-muted-foreground">
+                <tr key={index}>
+                  <td className="font-mono text-xs tabular-nums text-muted-foreground">
                     {event.timestamp.replace("T", " ").slice(0, 19)}
                   </td>
-                  <td className="py-2 px-4 text-xs font-medium">{event.event_type}</td>
-                  <td className="py-2 px-4">
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${sev.class}`}>
-                      {sev.label}
+                  <td className="text-xs font-medium">{event.event_type}</td>
+                  <td>
+                    <span
+                      className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${severity.class}`}
+                    >
+                      {severity.label}
                     </span>
                   </td>
-                  <td className="py-2 px-4 text-xs text-muted-foreground max-w-xs truncate">
+                  <td className="max-w-xs text-xs text-muted-foreground">
                     {event.description}
                   </td>
                 </tr>

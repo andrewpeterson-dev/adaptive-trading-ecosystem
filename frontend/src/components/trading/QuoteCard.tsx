@@ -2,6 +2,7 @@
 
 import React from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export interface QuoteData {
   symbol: string;
@@ -25,13 +26,8 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
   const changeColor = isFlat
     ? "text-muted-foreground"
     : isUp
-    ? "text-emerald-400"
-    : "text-red-400";
-  const changeBg = isFlat
-    ? "bg-muted"
-    : isUp
-    ? "bg-emerald-400/10"
-    : "bg-red-400/10";
+      ? "text-emerald-300"
+      : "text-red-300";
 
   const rangeWidth =
     quote.high && quote.low && quote.high !== quote.low
@@ -39,31 +35,39 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
       : 50;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3 group">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-mono font-semibold text-sm">{quote.symbol}</div>
+    <div className="app-card group space-y-4 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-mono text-base font-semibold">{quote.symbol}</div>
           {quote.name && (
-            <div className="text-xs text-muted-foreground truncate max-w-[140px]">
-              {quote.name}
-            </div>
+            <div className="truncate text-xs text-muted-foreground">{quote.name}</div>
           )}
         </div>
         {onRemove && (
-          <button
+          <Button
             onClick={() => onRemove(quote.symbol)}
-            className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2.5 text-[10px] uppercase tracking-[0.16em] opacity-0 group-hover:opacity-100"
           >
             Remove
-          </button>
+          </Button>
         )}
       </div>
 
-      <div className="flex items-end justify-between">
-        <span className="text-xl font-mono tabular-nums font-bold">
+      <div className="flex items-end justify-between gap-3">
+        <span className="text-[1.65rem] font-mono font-semibold tracking-tight">
           ${quote.price.toFixed(2)}
         </span>
-        <div className={`flex items-center gap-1 text-xs font-medium tabular-nums px-1.5 py-0.5 rounded ${changeBg} ${changeColor}`}>
+        <div
+          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${changeColor} ${
+            isFlat
+              ? "border-border/75 bg-muted/50"
+              : isUp
+                ? "border-emerald-400/20 bg-emerald-400/10"
+                : "border-red-400/20 bg-red-400/10"
+          }`}
+        >
           {isFlat ? (
             <Minus className="h-3 w-3" />
           ) : isUp ? (
@@ -77,16 +81,15 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
         </div>
       </div>
 
-      {/* High/Low range bar */}
       {quote.high != null && quote.low != null && (
-        <div>
-          <div className="flex justify-between text-[10px] tabular-nums text-muted-foreground mb-0.5">
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-muted-foreground">
             <span>${quote.low.toFixed(2)}</span>
             <span>${quote.high.toFixed(2)}</span>
           </div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden relative">
+          <div className="app-progress-track">
             <div
-              className="h-full rounded-full bg-primary/60"
+              className="app-progress-bar bg-primary"
               style={{ width: `${Math.min(100, Math.max(0, rangeWidth))}%` }}
             />
           </div>
@@ -100,8 +103,8 @@ export function QuoteCard({ quote, onRemove }: QuoteCardProps) {
             {quote.volume >= 1_000_000
               ? `${(quote.volume / 1_000_000).toFixed(1)}M`
               : quote.volume >= 1_000
-              ? `${(quote.volume / 1_000).toFixed(1)}K`
-              : quote.volume.toLocaleString()}
+                ? `${(quote.volume / 1_000).toFixed(1)}K`
+                : quote.volume.toLocaleString()}
           </span>
         </div>
       )}

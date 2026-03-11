@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ConflictBanner } from "@/components/settings/ConflictBanner";
 import {
   ApiConnectionCard,
@@ -109,24 +111,23 @@ function ApiTypeSection({
   if (sectionProviders.length === 0 && sectionConnections.length === 0) return null;
 
   return (
-    <div className="space-y-2">
-      {/* Section header */}
+    <div className="space-y-3">
       <div className="flex items-center justify-between px-0.5">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+        <span className="app-label">
           {SECTION_LABELS[apiType]}
         </span>
         {availableProviders.length > 0 && (
-          <button
+          <Button
             onClick={() => setAddModalProvider(availableProviders[0])}
-            className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-[10px] uppercase tracking-[0.16em]"
           >
             <Plus className="h-3 w-3" />
             Add
-          </button>
+          </Button>
         )}
       </div>
-
-      {/* Connected cards */}
       {sectionConnections.map((conn) => {
         const provider = providerMap.get(conn.provider_id);
         if (!provider) return null;
@@ -145,8 +146,6 @@ function ApiTypeSection({
           />
         );
       })}
-
-      {/* Available to connect */}
       {availableProviders.map((provider) => (
         <AvailableProviderCard
           key={provider.id}
@@ -154,8 +153,6 @@ function ApiTypeSection({
           onConnect={onConnectProvider}
         />
       ))}
-
-      {/* Section-level Add modal */}
       {addModalProvider && (
         <ConnectApiModal
           provider={addModalProvider}
@@ -307,9 +304,7 @@ export function ApiConnectionsSection() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-4 py-3">
-        <p className="text-sm text-red-400">{error}</p>
-      </div>
+      <EmptyState title="API connections unavailable" description={error} />
     );
   }
 

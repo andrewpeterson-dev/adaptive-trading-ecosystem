@@ -3,6 +3,7 @@
 import React from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import type { QuoteData } from "./QuoteCard";
+import { Button } from "@/components/ui/button";
 
 interface WatchlistRowProps {
   quote: QuoteData;
@@ -12,24 +13,24 @@ interface WatchlistRowProps {
 
 export function WatchlistRow({ quote, onRemove, onTrade }: WatchlistRowProps) {
   const isUp = quote.change >= 0;
-  const changeColor = isUp ? "text-emerald-400" : "text-red-400";
+  const changeColor = isUp ? "text-emerald-300" : "text-red-300";
 
   return (
-    <tr className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
-      <td className="py-2.5 px-4">
+    <tr>
+      <td>
         <div className="flex items-center gap-2">
-          <span className="font-mono font-medium text-sm">{quote.symbol}</span>
+          <span className="font-mono text-sm font-medium">{quote.symbol}</span>
           {quote.name && (
-            <span className="text-xs text-muted-foreground hidden sm:inline truncate max-w-[120px]">
+            <span className="hidden max-w-[140px] truncate text-xs text-muted-foreground sm:inline">
               {quote.name}
             </span>
           )}
         </div>
       </td>
-      <td className="py-2.5 px-4 font-mono tabular-nums text-sm font-medium">
+      <td className="font-mono text-sm font-medium tabular-nums">
         ${quote.price.toFixed(2)}
       </td>
-      <td className={`py-2.5 px-4 font-mono tabular-nums text-sm ${changeColor}`}>
+      <td className={`font-mono text-sm tabular-nums ${changeColor}`}>
         <div className="flex items-center gap-1">
           {isUp ? (
             <TrendingUp className="h-3 w-3" />
@@ -40,36 +41,40 @@ export function WatchlistRow({ quote, onRemove, onTrade }: WatchlistRowProps) {
           {quote.change.toFixed(2)}
         </div>
       </td>
-      <td className={`py-2.5 px-4 font-mono tabular-nums text-sm ${changeColor}`}>
+      <td className={`font-mono text-sm tabular-nums ${changeColor}`}>
         {isUp ? "+" : ""}
         {quote.change_pct.toFixed(2)}%
       </td>
-      <td className="py-2.5 px-4 font-mono tabular-nums text-xs text-muted-foreground">
+      <td className="font-mono text-xs tabular-nums text-muted-foreground">
         {quote.volume != null
           ? quote.volume >= 1_000_000
             ? `${(quote.volume / 1_000_000).toFixed(1)}M`
             : quote.volume >= 1_000
-            ? `${(quote.volume / 1_000).toFixed(1)}K`
-            : quote.volume.toLocaleString()
+              ? `${(quote.volume / 1_000).toFixed(1)}K`
+              : quote.volume.toLocaleString()
           : "—"}
       </td>
-      <td className="py-2.5 px-4">
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <td>
+        <div className="flex items-center justify-end gap-2">
           {onTrade && (
-            <button
+            <Button
               onClick={() => onTrade(quote.symbol)}
-              className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              variant="secondary"
+              size="sm"
+              className="h-8 px-3 text-[10px] uppercase tracking-[0.16em]"
             >
               Trade
-            </button>
+            </Button>
           )}
           {onRemove && (
-            <button
+            <Button
               onClick={() => onRemove(quote.symbol)}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2.5 text-[10px] uppercase tracking-[0.16em]"
             >
               Remove
-            </button>
+            </Button>
           )}
         </div>
       </td>

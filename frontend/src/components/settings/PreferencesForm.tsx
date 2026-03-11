@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { Save, Loader2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 interface Preferences {
   default_symbols: string[];
@@ -36,9 +40,10 @@ export function PreferencesForm() {
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [symbolInput, setSymbolInput] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">(
+    "idle"
+  );
 
-  // Load preferences from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem(PREFS_KEY);
@@ -53,18 +58,18 @@ export function PreferencesForm() {
   const addSymbol = () => {
     const symbol = symbolInput.trim().toUpperCase();
     if (symbol && !prefs.default_symbols.includes(symbol)) {
-      setPrefs((p) => ({
-        ...p,
-        default_symbols: [...p.default_symbols, symbol],
+      setPrefs((current) => ({
+        ...current,
+        default_symbols: [...current.default_symbols, symbol],
       }));
     }
     setSymbolInput("");
   };
 
-  const removeSymbol = (sym: string) => {
-    setPrefs((p) => ({
-      ...p,
-      default_symbols: p.default_symbols.filter((s) => s !== sym),
+  const removeSymbol = (symbol: string) => {
+    setPrefs((current) => ({
+      ...current,
+      default_symbols: current.default_symbols.filter((value) => value !== symbol),
     }));
   };
 
@@ -90,141 +95,175 @@ export function PreferencesForm() {
 
   return (
     <div className="space-y-6">
-      {/* Default Symbols */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Default Watchlist Symbols</label>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {prefs.default_symbols.map((sym) => (
-            <span
-              key={sym}
-              className="inline-flex items-center gap-1 text-xs font-mono bg-muted px-2 py-1 rounded"
+      <section className="space-y-3">
+        <div>
+          <p className="app-label">Default Watchlist</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Seed the workspace with the names you monitor every day.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {prefs.default_symbols.map((symbol) => (
+            <Badge
+              key={symbol}
+              className="gap-2 px-3 py-1.5 tracking-normal font-mono"
             >
-              {sym}
+              {symbol}
               <button
-                onClick={() => removeSymbol(sym)}
-                className="text-muted-foreground hover:text-foreground"
+                onClick={() => removeSymbol(symbol)}
+                className="text-muted-foreground transition-colors hover:text-foreground"
               >
                 <X className="h-3 w-3" />
               </button>
-            </span>
+            </Badge>
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
             type="text"
             value={symbolInput}
             onChange={(e) => setSymbolInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Add symbol (e.g. TSLA)..."
-            className="flex-1 bg-input border border-border/50 rounded-md px-3 py-1.5 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+            placeholder="Add symbol (e.g. TSLA)"
+            className="font-mono sm:max-w-xs"
           />
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={addSymbol}
             disabled={!symbolInput.trim()}
-            className="px-3 py-1.5 text-sm rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
           >
-            Add
-          </button>
+            Add symbol
+          </Button>
         </div>
-      </div>
+      </section>
 
-      {/* Notifications */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium">Notifications</label>
-        <div className="space-y-2">
-          {[
-            { key: "notify_risk_alerts" as const, label: "Risk alerts" },
-            { key: "notify_trade_executions" as const, label: "Trade executions" },
-            { key: "notify_model_retraining" as const, label: "Model retraining" },
-          ].map((item) => (
-            <label
-              key={item.key}
-              className="flex items-center gap-3 cursor-pointer"
-            >
-              <button
-                onClick={() =>
-                  setPrefs((p) => ({ ...p, [item.key]: !p[item.key] }))
-                }
-                className={`relative h-5 w-9 rounded-full transition-colors ${
-                  prefs[item.key] ? "bg-primary" : "bg-muted"
-                }`}
+      <section className="app-inset p-4 sm:p-5">
+        <div className="space-y-4">
+          <div>
+            <p className="app-label">Notifications</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Choose which operational events should interrupt you.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {[
+              {
+                key: "notify_risk_alerts" as const,
+                label: "Risk alerts",
+                description: "Halt conditions, drawdown breaches, and policy violations.",
+              },
+              {
+                key: "notify_trade_executions" as const,
+                label: "Trade executions",
+                description: "Filled orders, cancellations, and execution-side feedback.",
+              },
+              {
+                key: "notify_model_retraining" as const,
+                label: "Model retraining",
+                description: "New learning cycles, refreshed weights, and ensemble changes.",
+              },
+            ].map((item) => (
+              <label
+                key={item.key}
+                className="flex items-start justify-between gap-4 rounded-[18px] border border-border/70 bg-muted/30 p-4"
               >
-                <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                    prefs[item.key] ? "translate-x-4" : "translate-x-0.5"
-                  }`}
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {item.description}
+                  </p>
+                </div>
+                <Switch
+                  checked={prefs[item.key]}
+                  onClick={() =>
+                    setPrefs((current) => ({
+                      ...current,
+                      [item.key]: !current[item.key],
+                    }))
+                  }
                 />
-              </button>
-              <span className="text-sm">{item.label}</span>
-            </label>
-          ))}
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Trading Mode */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Trading Mode</label>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setPrefs((p) => ({ ...p, trading_mode: "paper" }))}
-            className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
-              prefs.trading_mode === "paper"
-                ? "bg-primary/10 text-primary border-primary/30"
-                : "text-muted-foreground border-border hover:bg-muted"
-            }`}
-          >
-            Paper Trading
-          </button>
-          <button
-            onClick={() => setPrefs((p) => ({ ...p, trading_mode: "live" }))}
-            className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
-              prefs.trading_mode === "live"
-                ? "bg-red-500/10 text-red-400 border-red-500/30"
-                : "text-muted-foreground border-border hover:bg-muted"
-            }`}
-          >
-            Live Trading
-          </button>
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="app-inset p-4 sm:p-5">
+          <div className="space-y-3">
+            <div>
+              <p className="app-label">Trading Mode</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Set the default environment for new sessions.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={prefs.trading_mode === "paper" ? "primary" : "secondary"}
+                size="sm"
+                onClick={() =>
+                  setPrefs((current) => ({ ...current, trading_mode: "paper" }))
+                }
+              >
+                Paper Trading
+              </Button>
+              <Button
+                variant={prefs.trading_mode === "live" ? "danger" : "secondary"}
+                size="sm"
+                onClick={() =>
+                  setPrefs((current) => ({ ...current, trading_mode: "live" }))
+                }
+              >
+                Live Trading
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Refresh Interval */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Data Refresh Interval</label>
-        <select
-          value={prefs.refresh_interval}
-          onChange={(e) =>
-            setPrefs((p) => ({ ...p, refresh_interval: Number(e.target.value) }))
-          }
-          className="bg-input border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
-        >
-          {REFRESH_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="app-inset p-4 sm:p-5">
+          <div className="space-y-3">
+            <div>
+              <p className="app-label">Refresh Interval</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Control how aggressively the UI polls for updates.
+              </p>
+            </div>
+            <Select
+              value={prefs.refresh_interval}
+              onChange={(e) =>
+                setPrefs((current) => ({
+                  ...current,
+                  refresh_interval: Number(e.target.value),
+                }))
+              }
+              className="sm:max-w-xs"
+            >
+              {REFRESH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </section>
 
-      {/* Save */}
       {saveStatus === "success" && (
-        <p className="text-xs text-emerald-400">Preferences saved.</p>
+        <p className="text-xs text-emerald-300">Preferences saved.</p>
       )}
       {saveStatus === "error" && (
-        <p className="text-xs text-red-400">Failed to save preferences.</p>
+        <p className="text-xs text-red-300">Failed to save preferences.</p>
       )}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
-      >
+
+      <Button variant="primary" onClick={handleSave} disabled={saving}>
         {saving ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : (
           <Save className="h-3.5 w-3.5" />
         )}
         Save Preferences
-      </button>
+      </Button>
     </div>
   );
 }

@@ -39,7 +39,7 @@ export function AuthShell({
       <div className="grid w-full max-w-6xl gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <section className="hidden space-y-8 lg:block">
           <Link href="/" className="inline-flex items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-white/60 bg-white/80 shadow-[0_18px_50px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06]">
+            <div className="app-card flex h-14 w-14 items-center justify-center rounded-[20px]">
               <Image
                 src="/logo.png"
                 alt="Adaptive Trading"
@@ -85,10 +85,10 @@ export function AuthShell({
         </section>
 
         <section className="app-panel overflow-hidden p-1">
-          <div className="rounded-[28px] border border-white/70 bg-white/90 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] dark:border-white/10 dark:bg-slate-950/80 sm:p-8">
+          <div className="app-card rounded-[28px] p-6 sm:p-8">
             <div className="mb-8 space-y-4">
               <div className="inline-flex items-center gap-3 lg:hidden">
-                <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/60 bg-white/80 shadow-[0_12px_34px_-26px_rgba(15,23,42,0.5)] dark:border-white/10 dark:bg-white/[0.06]">
+                <div className="app-card flex h-12 w-12 items-center justify-center rounded-[18px]">
                   <Image
                     src="/logo.png"
                     alt="Adaptive Trading"

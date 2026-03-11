@@ -21,7 +21,6 @@ export function RiskGauge({ config }: { config: RiskGaugeConfig }) {
   const color = gaugeColor(ratio);
   const stroke = arcColor(ratio);
 
-  // SVG semi-circle gauge
   const cx = 60;
   const cy = 55;
   const r = 40;
@@ -38,19 +37,37 @@ export function RiskGauge({ config }: { config: RiskGaugeConfig }) {
   const bgPath = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card p-4 flex flex-col items-center">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">{config.label}</div>
+    <div className="app-card flex flex-col items-center p-4">
+      <div className="app-label mb-2">{config.label}</div>
       <svg width="120" height="70" viewBox="0 0 120 70">
-        <path d={bgPath} fill="none" stroke="hsl(222, 47%, 18%)" strokeWidth="8" strokeLinecap="round" />
+        <path
+          d={bgPath}
+          fill="none"
+          stroke="hsl(var(--surface-3))"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
         {ratio > 0 && (
-          <path d={arcPath} fill="none" stroke={stroke} strokeWidth="8" strokeLinecap="round" />
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="8"
+            strokeLinecap="round"
+          />
         )}
       </svg>
-      <div className={`text-lg font-mono tabular-nums font-bold -mt-1 ${color}`}>
-        {config.unit === "%" ? `${(config.current * 100).toFixed(1)}%` : config.current.toFixed(0)}
+      <div className={`-mt-1 text-lg font-mono font-bold tabular-nums ${color}`}>
+        {config.unit === "%"
+          ? `${(config.current * 100).toFixed(1)}%`
+          : config.current.toFixed(0)}
       </div>
-      <div className="text-[10px] text-muted-foreground mt-0.5">
-        of {config.unit === "%" ? `${(config.limit * 100).toFixed(0)}%` : config.limit.toFixed(0)} {config.unit !== "%" ? config.unit : ""} limit
+      <div className="mt-0.5 text-[11px] text-muted-foreground">
+        of{" "}
+        {config.unit === "%"
+          ? `${(config.limit * 100).toFixed(0)}%`
+          : config.limit.toFixed(0)}{" "}
+        {config.unit !== "%" ? config.unit : ""} limit
       </div>
     </div>
   );

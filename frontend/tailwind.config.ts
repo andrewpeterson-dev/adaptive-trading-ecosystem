@@ -7,14 +7,21 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: [
-          "var(--font-inter)",
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Segoe UI",
-          "Roboto",
-          "Helvetica Neue",
-          "Arial",
+          "\"Avenir Next\"",
+          "\"Segoe UI Variable Display\"",
+          "\"SF Pro Display\"",
+          "Inter",
+          "ui-sans-serif",
           "sans-serif",
+        ],
+        mono: [
+          "\"Berkeley Mono\"",
+          "\"JetBrains Mono\"",
+          "\"SF Mono\"",
+          "\"IBM Plex Mono\"",
+          "SFMono-Regular",
+          "ui-monospace",
+          "monospace",
         ],
       },
       colors: {
@@ -50,6 +57,22 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        positive: {
+          DEFAULT: "hsl(var(--positive))",
+          foreground: "hsl(var(--positive-foreground))",
+        },
+        negative: {
+          DEFAULT: "hsl(var(--negative))",
+          foreground: "hsl(var(--negative-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
         },
       },
       borderRadius: {
