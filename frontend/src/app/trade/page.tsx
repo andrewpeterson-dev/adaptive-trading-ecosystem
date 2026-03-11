@@ -14,6 +14,7 @@ import { TradingChart } from "@/components/charts/TradingChart";
 import { MetricsBar } from "@/components/trading/MetricsBar";
 import { SymbolSearch } from "@/components/trading/SymbolSearch";
 import { AssetModeSwitch } from "@/components/trading/AssetModeSwitch";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { useTradeStore } from "@/stores/trade-store";
 import type { TradeMarker } from "@/types/chart";
 import { useTradingMode } from "@/hooks/useTradingMode";
@@ -86,55 +87,53 @@ export default function TradePage() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-lg font-semibold tracking-tight">
-              {mode === "live" ? "Live" : "Paper"} Trading
-            </h1>
-            {mode === "live" && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                Real Money
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Execute trades and manage positions
-          </p>
-        </div>
-        <button
-          onClick={refresh}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/50 transition-colors"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
-        </button>
-      </div>
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Execution"
+        title={`${mode === "live" ? "Live" : "Paper"} Trading`}
+        description="Monitor quotes, stage orders, and manage positions from one trading workspace without jumping between modules."
+        badge={
+          <span className="app-pill">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                mode === "live" ? "bg-emerald-400" : "bg-primary"
+              }`}
+            />
+            {mode === "live" ? "Real Money" : "Simulated Capital"}
+          </span>
+        }
+        actions={
+          <button onClick={refresh} className="app-button-secondary">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        }
+      />
 
-      {/* Metrics Bar */}
       <MetricsBar />
 
-      {/* Symbol Search + Asset Mode Switch row */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <SymbolSearch />
+      <div className="app-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
+          <div className="flex-1">
+            <SymbolSearch />
+          </div>
+          <AssetModeSwitch />
         </div>
-        <AssetModeSwitch />
+
+        {assetMode === "options" && (
+          <div className="mt-4">
+            <span className="app-pill">
+              Underlying chart
+              <span className="font-mono tracking-normal text-foreground">
+                {symbol}
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Underlying indicator for options mode */}
-      {assetMode === "options" && (
-        <div className="text-xs text-muted-foreground -mt-2">
-          Chart showing underlying: <span className="font-mono font-medium text-foreground">{symbol}</span>
-        </div>
-      )}
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Column: Chart + Trade History */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-7 xl:col-span-8">
           <TradingChart
             symbol={symbol}
             trades={tradeMarkers}
@@ -143,16 +142,16 @@ export default function TradePage() {
           <TradeHistoryPanel />
         </div>
 
-        {/* Right Column: Order Ticket + Positions */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-5">
-          {/* Order Ticket Area */}
+        <div className="space-y-6 lg:col-span-5 xl:col-span-4">
           {assetMode === "options" ? (
             <OptionsPanel />
           ) : (
-            <StockOrderTicket onOrderPlaced={refresh} isPaperMode={mode === "paper"} />
+            <StockOrderTicket
+              onOrderPlaced={refresh}
+              isPaperMode={mode === "paper"}
+            />
           )}
 
-          {/* Positions */}
           <PositionsPanel onClose={refresh} />
         </div>
       </div>

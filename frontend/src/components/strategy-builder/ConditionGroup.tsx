@@ -37,10 +37,9 @@ export function ConditionGroup({
     group.conditions.length === 1 && totalGroups === 1;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card/50 overflow-hidden">
-      {/* Group header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/20 border-b border-border/40">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+    <div className="app-card overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border/50 bg-slate-950/[0.03] px-4 py-3 dark:bg-white/[0.03]">
+        <span className="app-label">
           Group {label}
         </span>
         <button
@@ -54,8 +53,7 @@ export function ConditionGroup({
         </button>
       </div>
 
-      {/* Conditions */}
-      <div className="p-2 space-y-2">
+      <div className="space-y-3 p-3">
         {group.conditions.map((condition, condIndex) => (
           <React.Fragment key={condition.id}>
             {condIndex > 0 && (
@@ -82,7 +80,7 @@ export function ConditionGroup({
         <button
           type="button"
           onClick={() => onAddCondition(groupIndex)}
-          className="w-full flex items-center justify-center gap-1 py-1.5 rounded border border-dashed border-border/40 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
+          className="app-inset flex w-full items-center justify-center gap-1 py-3 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           <Plus className="h-3 w-3" />
           Add Condition

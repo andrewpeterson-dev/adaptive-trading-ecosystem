@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { NavHeader } from "@/components/layout/NavHeader";
+import { AppShell } from "@/components/layout/AppShell";
 import { Providers } from "@/components/layout/Providers";
-import { AIWidget } from "@/components/cerberus/AIWidget";
-import { ConfirmationModal } from "@/components/cerberus/ConfirmationModal";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -18,9 +16,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "AI Trading",
+  title: "Adaptive Trading",
   description:
-    "Build, analyze, and optimize trading strategies with AI-powered diagnostics",
+    "Adaptive Trading combines strategy design, portfolio intelligence, and live execution in one polished workspace.",
   icons: {
     icon: "/logo.png",
     apple: "/logo.png",
@@ -36,10 +34,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>
-          <NavHeader />
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</main>
-          <AIWidget />
-          <ConfirmationModal />
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

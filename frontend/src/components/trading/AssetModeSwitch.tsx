@@ -15,7 +15,7 @@ export function AssetModeSwitch() {
   const setAssetMode = useTradeStore((s) => s.setAssetMode);
 
   return (
-    <div className="inline-flex rounded-lg border border-border/50 overflow-hidden bg-muted/30">
+    <div className="inline-flex items-center gap-1 rounded-full border border-black/5 bg-white/75 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:border-white/10 dark:bg-white/[0.05]">
       {modes.map((m) => {
         const active = assetMode === m.value;
         return (
@@ -23,13 +23,13 @@ export function AssetModeSwitch() {
             key={m.value}
             type="button"
             onClick={() => setAssetMode(m.value)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
               active
-                ? "bg-card text-foreground shadow-sm border-r border-border/50"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                ? "bg-foreground text-background shadow-[0_14px_28px_-20px_rgba(15,23,42,0.65)]"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <m.icon className={`h-3.5 w-3.5 ${active ? "text-primary" : ""}`} />
+            <m.icon className="h-3.5 w-3.5" />
             {m.label}
           </button>
         );

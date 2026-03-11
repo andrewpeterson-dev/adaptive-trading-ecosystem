@@ -13,6 +13,8 @@ import { apiFetch } from "@/lib/api/client";
 import { PreferencesForm } from "@/components/settings/PreferencesForm";
 import { ApiConnectionsSection } from "@/components/settings/ApiConnectionsSection";
 import { useEffect } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "profile",     label: "Profile",      icon: User },
@@ -68,46 +70,53 @@ function ProfileSection() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Email</label>
+      <div className="space-y-2">
+        <label className="app-label">Email</label>
         <input
           type="email"
           value={email}
           disabled
-          className="w-full bg-input/50 border border-border rounded-md px-3 py-2 text-sm font-mono opacity-60 cursor-not-allowed"
+          className="app-input cursor-not-allowed font-mono opacity-60"
         />
         <p className="text-xs text-muted-foreground">Email cannot be changed.</p>
       </div>
 
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Display Name</label>
+      <div className="space-y-2">
+        <label className="app-label">Display Name</label>
         <input
           type="text"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Your name..."
-          className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+          className="app-input"
         />
       </div>
 
-      <div className="border-t border-border/50 pt-4 space-y-3">
-        <h4 className="text-sm font-medium">Change Password</h4>
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Current Password</label>
+      <div className="app-inset p-4 sm:p-5 space-y-4">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Change Password</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Leave these fields blank unless you want to rotate your password.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="app-label">Current Password</label>
           <input
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+            className="app-input"
           />
         </div>
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">New Password</label>
+
+        <div className="space-y-2">
+          <label className="app-label">New Password</label>
           <input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full bg-input border border-border/50 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+            className="app-input"
           />
         </div>
       </div>
@@ -122,7 +131,7 @@ function ProfileSection() {
       <button
         onClick={handleSave}
         disabled={saving || !displayName}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+        className="app-button-primary disabled:translate-y-0 disabled:opacity-50"
       >
         {saving ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -141,39 +150,52 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Settings className="h-5 w-5 text-primary" />
-        <h2 className="text-xl font-semibold">Settings</h2>
-      </div>
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Preferences"
+        title="Settings"
+        description="Manage your account identity, product behavior, and external connections from a cleaner control surface."
+        badge={
+          <span className="app-pill">
+            <Settings className="h-3.5 w-3.5" />
+            Workspace
+          </span>
+        }
+      />
 
-      <div className="flex gap-6">
-        {/* Sidebar */}
-        <div className="flex flex-col gap-1 min-w-[160px]">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left transition-colors ${
-                  activeTab === tab.id
-                    ? "bg-muted text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
+      <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="app-panel p-3">
+          <div className="flex gap-2 overflow-x-auto lg:flex-col">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex min-w-fit items-center gap-2 rounded-2xl px-4 py-3 text-sm text-left transition-all lg:w-full",
+                    active
+                      ? "bg-foreground text-background shadow-[0_18px_32px_-24px_rgba(15,23,42,0.6)]"
+                      : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Content */}
-        <div className={`flex-1 rounded-lg border border-border/50 bg-card min-h-[400px] ${
-          activeTab === "connections" ? "p-5" : "p-6"
-        }`}>
-          {activeTab === "profile"     && <ProfileSection />}
+        <div
+          className={cn(
+            "app-panel min-h-[420px]",
+            activeTab === "connections" ? "p-4 sm:p-5" : "p-6 sm:p-7"
+          )}
+        >
+          {activeTab === "profile" && <ProfileSection />}
           {activeTab === "preferences" && <PreferencesForm />}
           {activeTab === "connections" && <ApiConnectionsSection />}
         </div>

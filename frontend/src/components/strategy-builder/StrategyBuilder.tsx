@@ -9,6 +9,7 @@ import { AccordionSection } from "./AccordionSection";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { ExplainerPanel } from "./ExplainerPanel";
 import { IndicatorChart } from "@/components/charts/IndicatorChart";
+import { PageHeader } from "@/components/layout/PageHeader";
 import type {
   ConditionGroup,
   StrategyCondition,
@@ -499,24 +500,29 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">
-            {mode === "edit" ? "Edit Strategy" : "Strategy Builder"}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {mode === "edit"
-              ? `Editing strategy #${initialStrategy?.id}`
-              : "Define entry conditions with real-time diagnostics"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Builder"
+        title={mode === "edit" ? "Edit Strategy" : "Strategy Builder"}
+        description={
+          mode === "edit"
+            ? `Refine strategy #${initialStrategy?.id} with diagnostics, AI explanation, and execution controls.`
+            : "Design entry logic, evaluate diagnostics in real time, and shape the strategy before it reaches execution."
+        }
+        meta={
+          allValidConditions.length > 0 ? (
+            <span className="app-pill font-mono tracking-normal">
+              {allValidConditions.length} active condition
+              {allValidConditions.length !== 1 ? "s" : ""}
+            </span>
+          ) : undefined
+        }
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={resetBuilder}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            className="app-button-ghost"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Reset
@@ -525,7 +531,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             type="button"
             onClick={runExplainer}
             disabled={allValidConditions.length === 0 || explainLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-primary border border-primary/20 hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Zap className="h-3.5 w-3.5" />
             {explainLoading ? "Analyzing…" : "Analyze"}
@@ -533,7 +539,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           {mode === "edit" && initialStrategy && (
             <button
               onClick={() => router.push(`/backtest/${initialStrategy.id}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm text-amber-400 border border-amber-400/20 hover:bg-amber-400/10 transition-colors"
+              className="app-button-secondary text-amber-500"
             >
               <Play className="h-3.5 w-3.5" />
               Backtest
@@ -543,7 +549,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             type="button"
             onClick={saveStrategy}
             disabled={allValidConditions.length === 0 || saveStatus === "saving"}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="app-button-primary disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-40"
           >
             <Save className="h-3.5 w-3.5" />
             {saveStatus === "saving"
@@ -556,27 +562,27 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                     ? "Update Strategy"
                     : "Save"}
           </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Builder */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
-          {/* Name & description */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="app-panel p-5 sm:p-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                 Strategy Name
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="app-input mt-2"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                 Description
               </label>
               <input
@@ -584,34 +590,33 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description..."
-                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="app-input mt-2"
               />
+              </div>
             </div>
-          </div>
 
-          {/* Action + timeframe + position size */}
-          <div className="grid grid-cols-3 gap-3">
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                 Action
               </label>
               <select
                 value={action}
                 onChange={(e) => setAction(e.target.value as Action)}
-                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="app-select mt-2 text-sm font-medium"
               >
                 <option value="BUY">BUY</option>
                 <option value="SELL">SELL</option>
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                 Timeframe
               </label>
               <select
                 value={timeframe}
                 onChange={(e) => setTimeframe(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="app-select mt-2 text-sm"
               >
                 {["1m", "5m", "15m", "1H", "4H", "1D", "1W"].map((t) => (
                   <option key={t} value={t}>{t}</option>
@@ -619,7 +624,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                 Position %
               </label>
               <input
@@ -627,18 +632,18 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 value={positionSize}
                 onChange={(e) => setPositionSize(parseFloat(e.target.value) || 0)}
                 min={1} max={100} step={1}
-                className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="app-input mt-2 font-mono text-right"
               />
             </div>
           </div>
+          </div>
 
-          {/* Condition Groups */}
-          <div className="space-y-2">
+          <div className="app-panel p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <h3 className="app-label">
                 Entry Conditions
               </h3>
-              <span className="text-xs text-muted-foreground">
+              <span className="app-pill font-mono tracking-normal">
                 {allValidConditions.length} active
               </span>
             </div>
@@ -666,27 +671,25 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
             <button
               onClick={addGroup}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-border/50 text-sm text-muted-foreground hover:text-foreground hover:border-amber-400/30 hover:bg-amber-400/5 transition-colors"
+              className="app-inset flex w-full items-center justify-center gap-1.5 py-4 text-sm text-muted-foreground hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" />
               Add OR Group
             </button>
           </div>
 
-          {/* Logic preview */}
           {logicString && (
-            <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">
+            <div className="app-inset p-4">
+              <div className="app-label mb-2">
                 Strategy Logic
               </div>
               <code className="text-sm font-mono text-primary break-all">{logicString}</code>
             </div>
           )}
 
-          {/* Indicator previews */}
           {allValidConditions.length > 0 && Object.keys(indicatorPreviews).length > 0 && (
-            <div className="space-y-2">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            <div className="app-panel space-y-3 p-5 sm:p-6">
+              <div className="app-label">
                 Indicator Previews
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -711,28 +714,25 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           )}
 
-          {/* ── Accordions ──────────────────────────────────────────────── */}
-
-          {/* Exit Conditions */}
           <AccordionSection title="Exit Conditions" defaultOpen>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Stop Loss %
                 </label>
                 <input type="number" value={stopLoss}
                   onChange={(e) => setStopLoss(parseFloat(e.target.value) || 0)}
                   min={0.1} max={50} step={0.5}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Take Profit %
                 </label>
                 <input type="number" value={takeProfit}
                   onChange={(e) => setTakeProfit(parseFloat(e.target.value) || 0)}
                   min={0.1} max={100} step={0.5}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
               </div>
             </div>
             <div className="space-y-2">
@@ -740,7 +740,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 <input type="checkbox" checked={trailingStopEnabled}
                   onChange={(e) => setTrailingStopEnabled(e.target.checked)}
                   className="rounded border-border/50" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="app-label">
                   Trailing Stop %
                 </span>
               </label>
@@ -748,7 +748,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 <input type="number" value={trailingStop}
                   onChange={(e) => setTrailingStop(parseFloat(e.target.value) || 0)}
                   min={0.1} max={50} step={0.5}
-                  className="h-9 w-32 rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input h-10 w-full max-w-[10rem] font-mono text-right" />
               )}
             </div>
             <div className="space-y-2">
@@ -756,7 +756,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 <input type="checkbox" checked={exitAfterBarsEnabled}
                   onChange={(e) => setExitAfterBarsEnabled(e.target.checked)}
                   className="rounded border-border/50" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="app-label">
                   Exit After N Bars
                 </span>
               </label>
@@ -764,12 +764,11 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 <input type="number" value={exitAfterBars}
                   onChange={(e) => setExitAfterBars(parseInt(e.target.value) || 1)}
                   min={1} max={500} step={1}
-                  className="h-9 w-32 rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input h-10 w-full max-w-[10rem] font-mono text-right" />
               )}
             </div>
           </AccordionSection>
 
-          {/* Symbol Universe */}
           <AccordionSection
             title="Symbol Universe"
             badge={symbols.length > 0 ? symbols[0] : undefined}
@@ -777,14 +776,14 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             <div className="flex flex-wrap gap-1.5 mb-2">
               {symbols.map((s) => (
                 <span key={s}
-                  className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-muted border border-border/50">
+                  className="app-pill items-center gap-1 px-2.5 py-1 text-xs font-mono tracking-normal">
                   {s}
                   <button type="button" onClick={() => setSymbols((prev) => prev.filter((x) => x !== s))}
                     className="text-muted-foreground hover:text-red-400 transition-colors ml-0.5">×</button>
                 </span>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 type="text"
                 value={symbolInput}
@@ -796,10 +795,10 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                   }
                 }}
                 placeholder="Add symbol (Enter)"
-                className="h-9 flex-1 rounded-md border border-border/50 bg-background px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40"
+                className="app-input flex-1 font-mono"
               />
               <button type="button" onClick={() => addSymbol(symbolInput)}
-                className="h-9 px-3 rounded-md border border-border/50 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                className="app-button-secondary h-11 px-5">
                 Add
               </button>
             </div>
@@ -808,78 +807,75 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </p>
           </AccordionSection>
 
-          {/* Execution Settings */}
           <AccordionSection title="Execution Settings">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Commission %
                 </label>
                 <input type="number" value={commissionPct}
                   onChange={(e) => setCommissionPct(parseFloat(e.target.value) || 0)}
                   min={0} max={5} step={0.01}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Slippage %
                 </label>
                 <input type="number" value={slippagePct}
                   onChange={(e) => setSlippagePct(parseFloat(e.target.value) || 0)}
                   min={0} max={5} step={0.01}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
               </div>
             </div>
           </AccordionSection>
 
-          {/* Risk Controls */}
           <AccordionSection title="Risk Controls">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Cooldown (bars)
                 </label>
                 <input type="number" value={cooldownBars}
                   onChange={(e) => setCooldownBars(parseInt(e.target.value) || 0)}
                   min={0} max={500}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
                 <p className="text-[10px] text-muted-foreground mt-0.5">0 = no cooldown</p>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Max Trades/Day
                 </label>
                 <input type="number" value={maxTradesPerDay}
                   onChange={(e) => setMaxTradesPerDay(parseInt(e.target.value) || 0)}
                   min={0} max={100}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
                 <p className="text-[10px] text-muted-foreground mt-0.5">0 = unlimited</p>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Max Exposure %
                 </label>
                 <input type="number" value={maxExposurePct}
                   onChange={(e) => setMaxExposurePct(parseFloat(e.target.value) || 100)}
                   min={1} max={100}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <label className="app-label">
                   Daily Loss Limit %
                 </label>
                 <input type="number" value={maxLossPct}
                   onChange={(e) => setMaxLossPct(parseFloat(e.target.value) || 0)}
                   min={0} max={100} step={0.5}
-                  className="mt-1 h-9 w-full rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40" />
+                  className="app-input mt-2 font-mono text-right" />
                 <p className="text-[10px] text-muted-foreground mt-0.5">0 = no limit</p>
               </div>
             </div>
           </AccordionSection>
         </div>
 
-        {/* Right: Diagnostics & Explainer */}
-        <div className="space-y-4">
+        <div className="space-y-4 lg:sticky lg:top-28 lg:self-start">
           <DiagnosticPanel report={diagnostics} loading={diagLoading} />
           <ExplainerPanel explanation={explanation} loading={explainLoading} />
         </div>

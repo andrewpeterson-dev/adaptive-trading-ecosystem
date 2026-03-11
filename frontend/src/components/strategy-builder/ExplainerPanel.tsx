@@ -19,7 +19,7 @@ interface ExplainerPanelProps {
 export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border/50 p-6 flex items-center justify-center">
+      <div className="app-panel flex items-center justify-center p-6">
         <div className="animate-pulse flex items-center gap-2 text-muted-foreground">
           <Brain className="h-4 w-4" />
           <span className="text-sm">Analyzing strategy...</span>
@@ -30,7 +30,7 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
 
   if (!explanation) {
     return (
-      <div className="rounded-lg border border-dashed border-border/50 p-6 flex items-center justify-center">
+      <div className="app-panel flex items-center justify-center border-dashed p-6">
         <p className="text-sm text-muted-foreground">
           Build a strategy to see AI analysis
         </p>
@@ -39,8 +39,7 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
   }
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card space-y-0 divide-y divide-border/50">
-      {/* Summary */}
+    <div className="app-panel space-y-0 divide-y divide-border/50 overflow-hidden">
       <div className="p-4">
         <div className="flex items-center gap-2 mb-2">
           <Brain className="h-4 w-4 text-primary" />
@@ -51,7 +50,6 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
         </p>
       </div>
 
-      {/* Market Regime */}
       <div className="p-4">
         <div className="flex items-center gap-2 mb-1">
           <TrendingUp className="h-4 w-4 text-emerald-400" />
@@ -62,8 +60,7 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
         <p className="text-sm text-foreground/90">{explanation.market_regime}</p>
       </div>
 
-      {/* Strengths & Weaknesses */}
-      <div className="grid grid-cols-2 divide-x">
+      <div className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
         <div className="p-4">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
             Strengths
@@ -92,7 +89,6 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
         </div>
       </div>
 
-      {/* Risk Profile */}
       <div className="p-4">
         <div className="flex items-center gap-2 mb-1">
           <Shield className="h-4 w-4 text-amber-400" />
@@ -103,7 +99,6 @@ export function ExplainerPanel({ explanation, loading }: ExplainerPanelProps) {
         <p className="text-sm text-foreground/90">{explanation.risk_profile}</p>
       </div>
 
-      {/* Overfitting Warning */}
       {explanation.overfitting_warning && (
         <div className="p-4 bg-amber-400/5">
           <div className="flex items-start gap-2">

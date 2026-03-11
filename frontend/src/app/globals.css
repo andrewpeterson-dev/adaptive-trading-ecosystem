@@ -3,52 +3,50 @@
 @tailwind utilities;
 
 @layer base {
-  /* Paper mode = light theme (default) */
   :root {
-    --background: 0 0% 98%;
-    --foreground: 220 20% 10%;
+    --background: 210 40% 98.3%;
+    --foreground: 222 41% 10.5%;
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card-foreground: 222 41% 10.5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
-    --primary: 217 91% 50%;
+    --popover-foreground: 222 41% 10.5%;
+    --primary: 217 90% 56%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 93%;
-    --secondary-foreground: 220 20% 10%;
-    --muted: 220 14% 92%;
-    --muted-foreground: 215 16% 40%;
-    --accent: 220 14% 92%;
-    --accent-foreground: 220 20% 10%;
+    --secondary: 214 36% 95.5%;
+    --secondary-foreground: 222 41% 10.5%;
+    --muted: 214 28% 94%;
+    --muted-foreground: 215 17% 40%;
+    --accent: 210 31% 94.5%;
+    --accent-foreground: 222 41% 10.5%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 86%;
-    --input: 220 13% 86%;
-    --ring: 217 91% 50%;
-    --radius: 0.5rem;
+    --border: 214 24% 87%;
+    --input: 0 0% 100%;
+    --ring: 217 90% 56%;
+    --radius: 1rem;
   }
 
-  /* Live mode = dark theme */
   .dark {
-    --background: 220 20% 4.5%;
-    --foreground: 210 20% 93%;
-    --card: 220 18% 7%;
-    --card-foreground: 210 20% 93%;
-    --popover: 220 18% 7%;
-    --popover-foreground: 210 20% 93%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 220 20% 4.5%;
-    --secondary: 220 14% 11%;
-    --secondary-foreground: 210 20% 93%;
-    --muted: 220 14% 13%;
-    --muted-foreground: 215 16% 53%;
-    --accent: 220 14% 13%;
-    --accent-foreground: 210 20% 93%;
+    --background: 224 32% 7%;
+    --foreground: 210 24% 95%;
+    --card: 222 26% 10%;
+    --card-foreground: 210 24% 95%;
+    --popover: 222 26% 10%;
+    --popover-foreground: 210 24% 95%;
+    --primary: 213 94% 66%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 223 20% 14%;
+    --secondary-foreground: 210 24% 95%;
+    --muted: 223 18% 14.5%;
+    --muted-foreground: 216 16% 65%;
+    --accent: 223 18% 15%;
+    --accent-foreground: 210 24% 95%;
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 20% 93%;
-    --border: 220 13% 14%;
-    --input: 220 13% 14%;
-    --ring: 217 91% 60%;
-    --radius: 0.5rem;
+    --destructive-foreground: 210 24% 95%;
+    --border: 221 22% 20%;
+    --input: 222 26% 10%;
+    --ring: 213 94% 66%;
+    --radius: 1rem;
   }
 }
 
@@ -61,23 +59,32 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-tap-highlight-color: transparent;
     -webkit-overflow-scrolling: touch;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.1), transparent 38%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(241, 245, 249, 0.82));
+    background-attachment: fixed;
   }
 
-  /* Smooth theme transition */
   html {
     transition: background-color 0.2s ease, color 0.2s ease;
+    background-color: hsl(var(--background));
   }
 
-  /* Global transitions on interactive elements */
+  .dark body {
+    background-image:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.16), transparent 28%),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(2, 6, 23, 0.96));
+  }
+
   button,
   a,
   input,
   select,
   textarea {
-    @apply transition-colors duration-150;
+    @apply transition-[color,background-color,border-color,box-shadow,transform] duration-200;
   }
 
-  /* Slim custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -92,13 +99,69 @@
     @apply bg-muted-foreground/30;
   }
 
-  /* Selection */
   ::selection {
     @apply bg-primary/20 text-foreground;
   }
 }
 
-/* Cerberus highlight animation */
+@layer components {
+  .app-page {
+    @apply space-y-8;
+  }
+
+  .app-hero {
+    @apply relative overflow-hidden rounded-[30px] border border-white/70 bg-white/80 px-6 py-6 shadow-[0_28px_90px_-54px_rgba(15,23,42,0.42)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.05] sm:px-8 sm:py-7;
+  }
+
+  .app-panel {
+    @apply rounded-[24px] border border-white/70 bg-white/75 shadow-[0_24px_80px_-52px_rgba(15,23,42,0.4)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.05];
+  }
+
+  .app-card {
+    @apply rounded-[20px] border border-black/5 bg-white/85 shadow-[0_18px_50px_-36px_rgba(15,23,42,0.3)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/75;
+  }
+
+  .app-inset {
+    @apply rounded-[18px] border border-black/5 bg-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.03];
+  }
+
+  .app-kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground;
+  }
+
+  .app-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+  }
+
+  .app-input {
+    @apply h-11 w-full rounded-2xl border border-black/5 bg-white/80 px-4 text-sm text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] outline-none placeholder:text-muted-foreground/65 focus:border-primary/40 focus:ring-4 focus:ring-primary/10 dark:border-white/10 dark:bg-slate-950/70;
+  }
+
+  .app-select {
+    @apply app-input appearance-none pr-10;
+  }
+
+  .app-textarea {
+    @apply min-h-[120px] w-full rounded-[22px] border border-black/5 bg-white/80 px-4 py-3 text-sm text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] outline-none placeholder:text-muted-foreground/65 focus:border-primary/40 focus:ring-4 focus:ring-primary/10 dark:border-white/10 dark:bg-slate-950/70;
+  }
+
+  .app-button-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-[0_20px_45px_-28px_rgba(15,23,42,0.7)] transition-all hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-28px_rgba(15,23,42,0.75)];
+  }
+
+  .app-button-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-black/5 bg-white/75 px-5 py-2.5 text-sm font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition-colors hover:bg-white dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.08];
+  }
+
+  .app-button-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05];
+  }
+
+  .app-pill {
+    @apply inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/70 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.58)] dark:border-white/10 dark:bg-white/[0.05];
+  }
+}
+
 .cerberus-highlight {
   animation: cerberus-glow 2.5s ease-in-out;
 }

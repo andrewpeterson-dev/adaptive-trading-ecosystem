@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
+import { useTradingMode } from "@/hooks/useTradingMode";
 import type { CandleData, TradeMarker, TimeFrame, ChartIndicator } from "@/types/chart";
 import type {
   IChartApi,
@@ -22,9 +23,6 @@ import type {
 const TIMEFRAMES: TimeFrame[] = ["1m", "5m", "15m", "1H", "4H", "1D", "1W"];
 
 const CHART_COLORS = {
-  background: "#0a0a0f",
-  text: "#a1a1aa",
-  grid: "#1e293b",
   up: "#10b981",
   down: "#ef4444",
   volume: "#334155",
@@ -35,6 +33,22 @@ const CHART_COLORS = {
   rsi: "#e879f9",
   macdLine: "#38bdf8",
   macdSignal: "#fb923c",
+  crosshair: "#64748b",
+};
+
+const LIGHT_CHART_THEME = {
+  background: "#ffffff",
+  text: "#475569",
+  grid: "#e2e8f0",
+  border: "#cbd5e1",
+  crosshair: "#94a3b8",
+};
+
+const DARK_CHART_THEME = {
+  background: "#08111f",
+  text: "#94a3b8",
+  grid: "#1e293b",
+  border: "#334155",
   crosshair: "#64748b",
 };
 
@@ -192,6 +206,12 @@ interface TradingChartProps {
   highlightedTradeId?: string | null;
 }
 
+function getResponsiveHeight(baseHeight: number, viewportWidth: number): number {
+  if (viewportWidth < 640) return Math.min(baseHeight, 340);
+  if (viewportWidth < 1024) return Math.min(baseHeight, 420);
+  return baseHeight;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -205,6 +225,11 @@ export function TradingChart({
 }: TradingChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const { mode } = useTradingMode();
+  const chartTheme = useMemo(
+    () => (mode === "live" ? DARK_CHART_THEME : LIGHT_CHART_THEME),
+    [mode],
+  );
 
   // Series refs — created once at init, visibility toggled
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -227,6 +252,7 @@ export function TradingChart({
   const [timeframe, setTimeframe] = useState<TimeFrame>("1D");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chartHeight, setChartHeight] = useState(height);
   const [indicators, setIndicators] = useState<Record<ChartIndicator, boolean>>({
     sma20: true,
     sma50: false,
@@ -249,6 +275,16 @@ export function TradingChart({
   const toggleIndicator = useCallback((ind: ChartIndicator) => {
     setIndicators((prev) => ({ ...prev, [ind]: !prev[ind] }));
   }, []);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      setChartHeight(getResponsiveHeight(height, window.innerWidth));
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, [height]);
 
   // ---------------------------------------------------------------------------
   // Update scale margins when sub-indicators change
@@ -531,25 +567,25 @@ export function TradingChart({
 
       chart = createChart(containerRef.current, {
         width: containerRef.current.clientWidth,
-        height,
+        height: chartHeight,
         layout: {
-          background: { color: CHART_COLORS.background },
-          textColor: CHART_COLORS.text,
+          background: { color: chartTheme.background },
+          textColor: chartTheme.text,
           fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
         },
         grid: {
-          vertLines: { color: CHART_COLORS.grid },
-          horzLines: { color: CHART_COLORS.grid },
+          vertLines: { color: chartTheme.grid },
+          horzLines: { color: chartTheme.grid },
         },
         crosshair: {
-          vertLine: { color: CHART_COLORS.crosshair, width: 1, style: 2 },
-          horzLine: { color: CHART_COLORS.crosshair, width: 1, style: 2 },
+          vertLine: { color: chartTheme.crosshair, width: 1, style: 2 },
+          horzLine: { color: chartTheme.crosshair, width: 1, style: 2 },
         },
         rightPriceScale: {
-          borderColor: CHART_COLORS.grid,
+          borderColor: chartTheme.border,
         },
         timeScale: {
-          borderColor: CHART_COLORS.grid,
+          borderColor: chartTheme.border,
           timeVisible: true,
           secondsVisible: false,
         },
@@ -721,7 +757,37 @@ export function TradingChart({
     };
     // Only re-init when height changes. Symbol/timeframe changes handled separately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [height]);
+  }, []);
+
+  useEffect(() => {
+    chartRef.current?.applyOptions({ height: chartHeight });
+  }, [chartHeight]);
+
+  useEffect(() => {
+    chartRef.current?.applyOptions({
+      layout: {
+        background: { color: chartTheme.background },
+        textColor: chartTheme.text,
+        fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
+      },
+      grid: {
+        vertLines: { color: chartTheme.grid },
+        horzLines: { color: chartTheme.grid },
+      },
+      crosshair: {
+        vertLine: { color: chartTheme.crosshair, width: 1, style: 2 },
+        horzLine: { color: chartTheme.crosshair, width: 1, style: 2 },
+      },
+      rightPriceScale: {
+        borderColor: chartTheme.border,
+      },
+      timeScale: {
+        borderColor: chartTheme.border,
+        timeVisible: true,
+        secondsVisible: false,
+      },
+    });
+  }, [chartTheme]);
 
   // ---------------------------------------------------------------------------
   // Re-fetch on symbol or timeframe change
@@ -753,13 +819,12 @@ export function TradingChart({
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
+    <div className="app-panel overflow-hidden p-4 sm:p-5">
+      <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-mono font-bold">{symbol}</span>
           {companyName && (
-            <span className="text-xs text-muted-foreground truncate max-w-[160px]">
+            <span className="max-w-[240px] truncate text-xs text-muted-foreground">
               {companyName}
             </span>
           )}
@@ -781,30 +846,28 @@ export function TradingChart({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Show All Executions toggle */}
-          <label className="flex items-center gap-1.5 cursor-pointer select-none mr-2">
+        <div className="flex flex-col gap-3 xl:items-end">
+          <label className="flex items-center gap-2 self-start cursor-pointer select-none xl:self-end">
             <input
               type="checkbox"
               checked={showAllExecutions}
               onChange={(e) => setShowAllExecutions(e.target.checked)}
-              className="h-3 w-3 rounded border-border accent-blue-500 cursor-pointer"
+              className="h-3.5 w-3.5 rounded border-border accent-blue-500 cursor-pointer"
             />
-            <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
-              All Executions
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+              Show all executions
             </span>
           </label>
 
-          {/* Timeframe buttons */}
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
-                className={`px-2 py-1 text-xs font-mono rounded transition-colors ${
+                className={`rounded-full px-3 py-1.5 text-xs font-mono transition-colors ${
                   timeframe === tf
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    ? "bg-foreground text-background"
+                    : "bg-black/[0.03] text-muted-foreground hover:text-foreground dark:bg-white/[0.03]"
                 }`}
               >
                 {tf}
@@ -814,18 +877,17 @@ export function TradingChart({
         </div>
       </div>
 
-      {/* Indicator toggles */}
-      <div className="flex items-center gap-1 mb-3 flex-wrap">
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
         {ALL_INDICATORS.map((ind) => {
           const meta = INDICATOR_META[ind];
           return (
             <button
               key={ind}
               onClick={() => toggleIndicator(ind)}
-              className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider rounded-md transition-colors ${
+              className={`rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors ${
                 indicators[ind]
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground/50 hover:text-muted-foreground"
+                  ? "bg-foreground text-background"
+                  : "bg-black/[0.03] text-muted-foreground/70 hover:text-muted-foreground dark:bg-white/[0.03]"
               }`}
             >
               <span className="flex items-center gap-1.5">
@@ -840,18 +902,17 @@ export function TradingChart({
         })}
       </div>
 
-      {/* Chart container */}
-      <div className="relative" style={{ height }}>
+      <div className="relative" style={{ height: chartHeight }}>
         <div ref={containerRef} className="absolute inset-0" />
 
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         )}
 
         {error && !loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/80 z-10 gap-2">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/80 backdrop-blur-sm">
             <AlertTriangle className="h-5 w-5 text-muted-foreground/60" />
             <span className="text-sm text-muted-foreground">{error}</span>
           </div>

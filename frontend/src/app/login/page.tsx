@@ -3,9 +3,9 @@
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { AuthShell } from "@/components/layout/AuthShell";
 
 function LoginForm() {
   const router = useRouter();
@@ -34,91 +34,69 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center gap-2.5 mb-4">
-            <Image src="/logo.png" alt="Adaptive Trading" width={40} height={40} className="h-10 w-10 object-contain" priority />
-            <span className="text-lg font-semibold tracking-tight text-foreground">
-              Adaptive Trading
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Sign in to your trading account
-          </p>
-        </div>
-
-        {/* Card */}
-        <div className="rounded-xl border border-border/60 bg-card shadow-2xl shadow-black/40 p-6 space-y-5">
-          {error && (
-            <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5 text-sm text-red-400 flex items-start gap-2">
-              <span className="mt-0.5 shrink-0">⚠</span>
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="email"
-                className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-              >
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="w-full rounded-lg border border-border/60 bg-secondary/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label
-                htmlFor="password"
-                className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="w-full rounded-lg border border-border/60 bg-secondary/60 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20"
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
-        </div>
-
-        <p className="text-center text-sm text-muted-foreground mt-5">
+    <AuthShell
+      title="Sign in"
+      description="Access your strategies, broker connections, and Cerberus workspace from a cleaner control surface."
+      footer={
+        <>
           Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
-            className="text-primary hover:text-primary/80 font-medium transition-colors"
-          >
+          <Link href="/register" className="font-medium text-foreground">
             Create one
           </Link>
-        </p>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {error && (
+          <div className="rounded-[22px] border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="email" className="app-label">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              className="app-input"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="password" className="app-label">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              className="app-input"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="app-button-primary w-full disabled:translate-y-0 disabled:opacity-50"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 

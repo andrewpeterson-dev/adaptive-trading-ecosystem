@@ -58,16 +58,15 @@ export function ConditionRow({
   const catColor = selected ? CATEGORY_COLORS[selected.category] ?? "" : "";
 
   return (
-    <div className="group flex items-start gap-2 p-3 rounded-lg border border-border/50 bg-card hover:border-primary/30 transition-colors">
+    <div className="app-inset group flex flex-col gap-3 p-3 sm:flex-row sm:items-start">
       <div className="mt-2 text-muted-foreground/40 cursor-grab">
         <GripVertical className="h-4 w-4" />
       </div>
 
       <div className="flex-1 space-y-2">
-        {/* Row 1: Indicator selector + info button */}
         <div className="flex items-center gap-2 flex-wrap">
           {index > 0 && (
-            <span className="text-xs font-semibold text-primary uppercase tracking-wider px-2 py-0.5 rounded bg-primary/10">
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
               AND
             </span>
           )}
@@ -75,7 +74,7 @@ export function ConditionRow({
           <select
             value={condition.indicator}
             onChange={(e) => handleIndicatorChange(e.target.value)}
-            className="h-8 rounded-md border border-border/50 bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+            className="app-select h-10 min-w-[220px] rounded-2xl px-3 py-0 text-sm font-medium"
           >
             <option value="">Select indicator...</option>
             {allIndicators.map((m) => (
@@ -94,13 +93,12 @@ export function ConditionRow({
 
           {selected && (
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${catColor}`}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${catColor}`}
             >
               {selected.category}
             </span>
           )}
 
-          {/* Operator + Value — only shown once an indicator is selected */}
           {condition.indicator && (
             <>
               <select
@@ -109,7 +107,7 @@ export function ConditionRow({
                   onChange(index, { operator: e.target.value as Operator })
                 }
                 aria-label="Comparison operator"
-                className="h-8 rounded-md border border-border/50 bg-background px-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+                className="app-select h-10 rounded-2xl px-3 py-0 text-sm font-mono"
               >
                 {OPERATORS.map((op) => (
                   <option key={op.value} value={op.value}>
@@ -121,23 +119,22 @@ export function ConditionRow({
               <input
                 type="number"
                 value={condition.value}
-                onChange={(e) =>
-                  onChange(index, { value: parseFloat(e.target.value) || 0 })
-                }
-                aria-label="Threshold value"
-                className="h-8 w-20 rounded-md border border-border/50 bg-background px-2 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-transparent"
+                  onChange={(e) =>
+                    onChange(index, { value: parseFloat(e.target.value) || 0 })
+                  }
+                  aria-label="Threshold value"
+                className="app-input h-10 w-24 rounded-2xl px-3 py-0 text-right font-mono"
                 step="any"
               />
             </>
           )}
         </div>
 
-        {/* Row 2: Parameter editors */}
         {selected && Object.keys(selected.parameters).length > 0 && (
           <div className="flex items-center gap-3 pl-1 flex-wrap">
             {Object.entries(selected.parameters).map(([key, param]) => (
               <div key={key} className="flex items-center gap-1.5">
-                <label className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                <label className="app-label tracking-[0.14em]">
                   {key}
                 </label>
                 <input
@@ -148,7 +145,7 @@ export function ConditionRow({
                   onChange={(e) =>
                     handleParamChange(key, parseFloat(e.target.value) || param.default)
                   }
-                  className="h-6 w-16 rounded border border-border/50 bg-muted/50 px-1.5 text-xs font-mono text-center focus:outline-none focus:ring-1 focus:ring-ring/40 focus:border-transparent"
+                  className="app-input h-9 w-20 rounded-xl px-2 py-0 text-center text-xs font-mono"
                 />
               </div>
             ))}
@@ -161,7 +158,7 @@ export function ConditionRow({
         onClick={() => onRemove(index)}
         disabled={isOnly}
         title={isOnly ? "At least one condition is required" : "Remove condition"}
-        className="mt-2 p-1 rounded-md text-muted-foreground/40 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:text-muted-foreground/40 disabled:hover:bg-transparent"
+        className="self-end rounded-xl p-2 text-muted-foreground/40 transition-colors hover:bg-red-400/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-muted-foreground/40 sm:self-start"
         aria-label="Remove condition"
       >
         <Trash2 className="h-4 w-4" />

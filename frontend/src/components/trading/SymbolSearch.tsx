@@ -194,8 +194,7 @@ export function SymbolSearch() {
 
   return (
     <div ref={wrapperRef} className="relative">
-      {/* Input row with current symbol info */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
@@ -207,7 +206,7 @@ export function SymbolSearch() {
             onFocus={() => setFocused(true)}
             onBlur={handleBlur}
             placeholder="Search symbol or company..."
-            className="w-full pl-9 pr-8 py-2 rounded-md border border-border/50 bg-card text-sm font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="app-input pl-10 pr-9 font-mono"
           />
           {input && (
             <button
@@ -222,19 +221,16 @@ export function SymbolSearch() {
             </button>
           )}
         </div>
-        {/* Current symbol badge */}
         {companyName && !focused && (
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+          <div className="app-pill w-fit shrink-0">
             <span className="font-mono font-bold text-foreground">{symbol}</span>
-            <span className="truncate max-w-[180px]">{companyName}</span>
+            <span className="max-w-[220px] truncate tracking-normal">{companyName}</span>
           </div>
         )}
       </div>
 
-      {/* Dropdown */}
       {showDropdown && (
-        <div className="absolute z-30 mt-1.5 w-full rounded-lg border border-border/50 bg-card shadow-xl overflow-hidden">
-          {/* Autocomplete results */}
+        <div className="app-panel absolute z-30 mt-2 w-full overflow-hidden">
           {showResults && searchResults.length > 0 && (
             <div className="p-2">
               <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5 px-1">

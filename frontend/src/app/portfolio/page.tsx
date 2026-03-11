@@ -20,6 +20,7 @@ import { apiFetch } from "@/lib/api/client";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import type { ModelInfo, AllocationEntry, EquityCurvePoint } from "@/types/portfolio";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const PIE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
@@ -126,42 +127,38 @@ export default function PortfolioPage() {
   const regimeLabel = regime?.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "Unknown";
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-lg font-semibold tracking-tight">Portfolio</h1>
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Capital"
+        title="Portfolio"
+        description="Review deployed models, capital allocation, and regime posture in one polished analytics view."
+        badge={
+          <span className="app-pill">
             <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest border ${
-                mode === "live"
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-                  : "bg-muted text-muted-foreground border-border/50"
+              className={`h-2 w-2 rounded-full ${
+                mode === "live" ? "bg-emerald-400" : "bg-primary"
               }`}
-            >
-              {mode === "live" ? "Live" : "Paper"}
+            />
+            {mode === "live" ? "Live" : "Paper"}
+          </span>
+        }
+        meta={
+          <>
+            <span className="app-pill font-mono tracking-normal">
+              {models.length} model{models.length !== 1 ? "s" : ""} deployed
             </span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-            {models.length} model{models.length !== 1 ? "s" : ""} deployed
-          </p>
-        </div>
-        {regime && (
-          <div className="flex items-center gap-2">
-            <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Regime
-            </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
-              {regimeLabel}
-            </span>
-          </div>
-        )}
-      </div>
+            {regime && (
+              <span className="app-pill">
+                <Activity className="h-3.5 w-3.5" />
+                {regimeLabel}
+              </span>
+            )}
+          </>
+        }
+      />
 
-      {/* Equity Curve */}
       {equityCurve.length > 0 && (
-        <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+        <div className="app-panel overflow-hidden">
           <div className="px-4 py-3 border-b border-border/50">
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
               <TrendingUp className="h-3.5 w-3.5" />
@@ -174,11 +171,9 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      {/* Allocation + Model Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Allocation Pie */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {pieData.length > 0 && (
-          <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+          <div className="app-panel overflow-hidden">
             <div className="px-4 py-3 border-b border-border/50">
               <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                 <Layers className="h-3.5 w-3.5" />
@@ -220,8 +215,7 @@ export default function PortfolioPage() {
           </div>
         )}
 
-        {/* Model Performance Table */}
-        <div className={`rounded-xl border border-border/50 bg-card overflow-hidden ${pieData.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
+        <div className={`app-panel overflow-hidden ${pieData.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
             <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">

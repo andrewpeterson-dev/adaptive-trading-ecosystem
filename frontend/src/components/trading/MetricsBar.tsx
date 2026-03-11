@@ -23,7 +23,7 @@ function formatCurrency(val: number | null | undefined, decimals = 0): string {
 
 function SkeletonCard({ label, icon: Icon }: { label: string; icon: React.ElementType }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-4">
+    <div className="app-panel p-4">
       <div className="flex items-center gap-1.5 mb-2">
         <Icon className="h-3.5 w-3.5 text-muted-foreground/50" />
         <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
@@ -42,7 +42,7 @@ export function MetricsBar() {
 
   if (!account) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SkeletonCard label="Cash Balance" icon={DollarSign} />
         <SkeletonCard label="Portfolio Value" icon={Briefcase} />
         <SkeletonCard label="Total Equity" icon={BarChart3} />
@@ -122,13 +122,13 @@ export function MetricsBar() {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => {
         const ArrowIcon = card.arrow;
         return (
           <div
             key={card.label}
-            className="rounded-xl border border-border/50 bg-card p-4 transition-colors hover:border-border/80"
+            className="app-panel p-4 transition-colors hover:border-border"
           >
             <div className="flex items-center gap-1.5 mb-2">
               <card.icon className="h-3.5 w-3.5 text-muted-foreground/50" />
