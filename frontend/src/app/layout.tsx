@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   description:
     "Adaptive Trading combines strategy design, portfolio intelligence, and live execution in one polished workspace.",
   icons: {
-    icon: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: "/logo.svg",
+    apple: "/logo.svg",
   },
 };
 

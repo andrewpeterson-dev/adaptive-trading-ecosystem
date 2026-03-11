@@ -1,1 +1,70 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="32" height="32" rx="6" fill="#0a0b10"/><path d="M27 16h-5l-3.75 9L11.25 7 7.5 16H3" stroke="#3b82f6" stroke-width="2.5"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="crown-grad" x1="20" y1="20" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5EABFF"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="arrow-grad" x1="70" y1="80" x2="95" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+    <linearGradient id="bar1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="bar2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="100%" stop-color="#60A5FA"/>
+    </linearGradient>
+    <linearGradient id="bar3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Crown body -->
+  <path d="M18 82 L18 48 L36 62 L60 30 L84 62 L102 48 L102 82 Z"
+        fill="url(#crown-grad)" opacity="0.15"/>
+  <path d="M18 82 L18 48 L36 62 L60 30 L84 62 L102 48 L102 82 Z"
+        fill="none" stroke="url(#crown-grad)" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- Crown base band -->
+  <rect x="18" y="82" width="84" height="10" rx="3"
+        fill="url(#crown-grad)" opacity="0.25"/>
+  <rect x="18" y="82" width="84" height="10" rx="3"
+        fill="none" stroke="url(#crown-grad)" stroke-width="2"/>
+
+  <!-- Crown jewels (circles at points) -->
+  <circle cx="18" cy="48" r="4" fill="url(#crown-grad)"/>
+  <circle cx="60" cy="30" r="4.5" fill="url(#crown-grad)"/>
+  <circle cx="102" cy="48" r="4" fill="url(#crown-grad)"/>
+
+  <!-- Candlestick bars inside crown -->
+  <rect x="38" y="60" width="7" height="18" rx="1.5" fill="url(#bar1)" opacity="0.7"/>
+  <rect x="49" y="52" width="7" height="26" rx="1.5" fill="url(#bar2)" opacity="0.8"/>
+  <rect x="60" y="45" width="7" height="33" rx="1.5" fill="url(#bar3)" opacity="0.9"/>
+
+  <!-- Candlestick wicks -->
+  <line x1="41.5" y1="56" x2="41.5" y2="60" stroke="#60A5FA" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  <line x1="52.5" y1="47" x2="52.5" y2="52" stroke="#93C5FD" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+  <line x1="63.5" y1="39" x2="63.5" y2="45" stroke="#34D399" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Upward arrow -->
+  <path d="M72 75 L88 38" stroke="url(#arrow-grad)" stroke-width="3" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M82 36 L89 37 L87 44" fill="none" stroke="url(#arrow-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Sparkle at crown apex -->
+  <g transform="translate(60, 20)" filter="url(#glow)">
+    <line x1="0" y1="-5" x2="0" y2="5" stroke="#5EABFF" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-5" y1="0" x2="5" y2="0" stroke="#5EABFF" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-3" y1="-3" x2="3" y2="3" stroke="#5EABFF" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+    <line x1="3" y1="-3" x2="-3" y2="3" stroke="#5EABFF" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+  </g>
+</svg>
