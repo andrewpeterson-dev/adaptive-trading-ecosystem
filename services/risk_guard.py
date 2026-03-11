@@ -67,7 +67,7 @@ async def check_pre_trade(
                     )
                 )
                 daily_pnl = result.scalar() or 0.0
-            elif hasattr(Trade, "user_id"):
+            else:
                 result = await db.execute(
                     select(func.coalesce(func.sum(Trade.pnl), 0.0)).where(
                         Trade.user_id == user_id,
@@ -77,12 +77,6 @@ async def check_pre_trade(
                     )
                 )
                 daily_pnl = result.scalar() or 0.0
-            else:
-                logger.warning(
-                    "daily_loss_limit_skipped_unscoped_trade_table",
-                    user_id=user_id,
-                    mode=mode.value,
-                )
 
         if daily_pnl is not None and daily_pnl <= -abs(limits.daily_loss_limit):
             await log_event(user_id, SystemEventType.RISK_LIMIT_TRIGGERED, mode,

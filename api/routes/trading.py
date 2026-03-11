@@ -18,7 +18,7 @@ from sqlalchemy import select
 from config.settings import get_settings, TradingMode
 from db.database import get_session
 from db.models import (
-    PaperPortfolio, PaperPosition, Trade, TradingModeEnum, SystemEventType,
+    PaperPortfolio, PaperPosition, Trade, TradeDirection, TradeStatus, TradingModeEnum, TradingModel, SystemEventType,
     UserApiConnection, ApiProvider,
 )
 from db.encryption import decrypt_value
@@ -108,6 +108,50 @@ async def _fetch_alpaca_account(user_id: int, mode: TradingModeEnum) -> Optional
     except Exception as exc:
         logger.warning("alpaca_account_fetch_failed", user_id=user_id, error=str(exc))
     return None
+
+
+async def _persist_legacy_trade_submission(
+    user_id: int,
+    mode: TradingModeEnum,
+    req: "ExecuteSignalRequest",
+    order_result: dict,
+    current_price: float,
+) -> None:
+    model_name = (req.model_name or "manual").strip() or "manual"
+    direction = req.direction.strip().lower()
+    trade_direction = (
+        TradeDirection.LONG if direction in ("long", "buy") else TradeDirection.SHORT
+    )
+
+    async with get_session() as db:
+        result = await db.execute(
+            select(TradingModel).where(TradingModel.name == model_name)
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            model = TradingModel(
+                name=model_name,
+                model_type="manual",
+                mode=mode,
+                parameters={},
+            )
+            db.add(model)
+            await db.flush()
+
+        db.add(
+            Trade(
+                user_id=user_id,
+                model_id=model.id,
+                symbol=req.symbol.upper(),
+                direction=trade_direction,
+                quantity=req.quantity,
+                entry_price=current_price,
+                status=TradeStatus.PENDING,
+                mode=mode,
+                order_id=order_result.get("order_id"),
+                notes="executor_fallback",
+            )
+        )
 
 
 class ExecuteSignalRequest(BaseModel):
@@ -485,6 +529,23 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
     if result is None:
         raise HTTPException(status_code=422, detail="Trade rejected by risk management")
 
+    if user_id and req.direction.strip().lower() != "flat":
+        try:
+            await _persist_legacy_trade_submission(
+                user_id=user_id,
+                mode=mode,
+                req=req,
+                order_result=result,
+                current_price=current_price,
+            )
+        except Exception as exc:
+            logger.warning(
+                "legacy_trade_persist_failed",
+                user_id=user_id,
+                symbol=req.symbol.upper(),
+                error=str(exc),
+            )
+
     return result
 
 
@@ -542,15 +603,22 @@ async def get_risk_summary(request: Request):
 @router.get("/trade-log")
 async def get_trade_log(request: Request, limit: int = 100):
     """Get execution audit trail — filtered by active trading mode."""
+    user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
     # Try database Trade records first (mode-scoped)
     async with get_session() as session:
-        result = await session.execute(
+        stmt = (
             select(Trade)
             .where(Trade.mode == mode)
             .order_by(Trade.entry_time.desc())
             .limit(limit)
+        )
+        if user_id:
+            stmt = stmt.where(Trade.user_id == user_id)
+
+        result = await session.execute(
+            stmt
         )
         trades = result.scalars().all()
 
@@ -574,6 +642,9 @@ async def get_trade_log(request: Request, limit: int = 100):
                 ],
                 "mode": mode.value,
             }
+
+        if user_id:
+            return {"trades": [], "mode": mode.value}
 
     # Fallback to executor log
     try:

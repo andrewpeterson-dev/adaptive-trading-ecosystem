@@ -96,6 +96,7 @@ class Trade(Base):
     __tablename__ = "trades"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     model_id = Column(Integer, ForeignKey("trading_models.id"), nullable=False)
     symbol = Column(String(16), nullable=False)
     direction = Column(_enum(TradeDirection), nullable=False)
@@ -113,9 +114,12 @@ class Trade(Base):
     exit_time = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
 
+    user = relationship("User", back_populates="trades")
     model = relationship("TradingModel", back_populates="trades")
 
     __table_args__ = (
+        Index("ix_trades_user_id", "user_id"),
+        Index("ix_trades_user_mode_time", "user_id", "mode", "entry_time"),
         Index("ix_trades_symbol_time", "symbol", "entry_time"),
         Index("ix_trades_model_status", "model_id", "status"),
     )
@@ -250,6 +254,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    trades = relationship("Trade", back_populates="user")
     broker_credentials = relationship("BrokerCredential", back_populates="user", cascade="all, delete-orphan")
     email_verifications = relationship("EmailVerification", back_populates="user", cascade="all, delete-orphan")
 

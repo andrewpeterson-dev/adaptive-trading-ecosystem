@@ -8,6 +8,7 @@ module which uses a separate sync engine.
 
 from contextlib import asynccontextmanager
 
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import DeclarativeBase
 
 from config.settings import get_settings
@@ -84,6 +85,9 @@ async def get_db():
 async def init_db():
     async with _get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Compatibility shim for local/dev startups that call create_all directly
+    # instead of running Alembic migrations against an existing database.
+    await _ensure_legacy_trade_user_schema()
     # Seed static reference data (idempotent — skips existing rows)
     from scripts.seed_providers import seed as _seed_providers
     await _seed_providers()
@@ -95,6 +99,30 @@ async def init_db():
 async def close_db():
     if _engine is not None:
         await _engine.dispose()
+
+
+async def _ensure_legacy_trade_user_schema() -> None:
+    async with _get_engine().begin() as conn:
+        def _ensure(sync_conn) -> None:
+            inspector = inspect(sync_conn)
+            if "trades" not in inspector.get_table_names():
+                return
+
+            columns = {column["name"] for column in inspector.get_columns("trades")}
+            if "user_id" not in columns:
+                sync_conn.execute(text("ALTER TABLE trades ADD COLUMN user_id INTEGER"))
+
+            sync_conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_trades_user_id ON trades (user_id)")
+            )
+            sync_conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_trades_user_mode_time "
+                    "ON trades (user_id, mode, entry_time)"
+                )
+            )
+
+        await conn.run_sync(_ensure)
 
 
 # Import all models so Base.metadata includes them for Alembic and init_db

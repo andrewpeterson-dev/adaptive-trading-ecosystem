@@ -2,6 +2,7 @@
 """Seed the database with example trading data for demo purposes."""
 
 import sys
+import bcrypt
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from db.models import (
     TradeStatus,
     TradingModeEnum,
     TradingModel,
+    User,
 )
 
 settings = get_settings()
@@ -68,9 +70,21 @@ def seed():
         session.add_all([momentum, mean_rev, ml_model])
         session.flush()
 
+        demo_user = session.query(User).order_by(User.id.asc()).first()
+        if not demo_user:
+            demo_user = User(
+                email="demo@example.com",
+                password_hash=bcrypt.hashpw(b"demo-password", bcrypt.gensalt()).decode(),
+                display_name="Demo User",
+                email_verified=True,
+            )
+            session.add(demo_user)
+            session.flush()
+
         # -- Trades --
         trades = [
             Trade(
+                user_id=demo_user.id,
                 model_id=momentum.id, symbol="AAPL", direction=TradeDirection.LONG,
                 quantity=100, entry_price=185.50, exit_price=192.30,
                 pnl=680.0, pnl_pct=3.66, status=TradeStatus.FILLED,
@@ -78,6 +92,7 @@ def seed():
                 entry_time=now - timedelta(days=5), exit_time=now - timedelta(days=3),
             ),
             Trade(
+                user_id=demo_user.id,
                 model_id=mean_rev.id, symbol="TSLA", direction=TradeDirection.SHORT,
                 quantity=50, entry_price=245.00, exit_price=238.20,
                 pnl=340.0, pnl_pct=2.78, status=TradeStatus.FILLED,
@@ -85,6 +100,7 @@ def seed():
                 entry_time=now - timedelta(days=4), exit_time=now - timedelta(days=2),
             ),
             Trade(
+                user_id=demo_user.id,
                 model_id=ml_model.id, symbol="NVDA", direction=TradeDirection.LONG,
                 quantity=30, entry_price=720.00, status=TradeStatus.FILLED,
                 mode=TradingModeEnum.PAPER,
