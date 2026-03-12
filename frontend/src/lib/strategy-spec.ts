@@ -12,6 +12,12 @@ import type {
   StrategyType,
 } from "@/types/strategy";
 
+export interface AIThinking {
+  marketRegimeCheck?: string;
+  disruptionTriggers?: string[];
+  adaptiveBehavior?: string;
+}
+
 export interface StrategySpec {
   name: string;
   description: string;
@@ -29,6 +35,7 @@ export interface StrategySpec {
   featureSignals?: string[];
   assumptions?: string[];
   learningPlan?: Record<string, unknown>;
+  aiThinking?: AIThinking;
 }
 
 export interface SpecCondition {
@@ -182,6 +189,14 @@ export function parseStrategySpec(text: string): ParseResult {
     spec.learningPlan = obj.learningPlan as Record<string, unknown>;
   }
 
+  if (
+    typeof obj.aiThinking === "object" &&
+    obj.aiThinking !== null &&
+    !Array.isArray(obj.aiThinking)
+  ) {
+    spec.aiThinking = obj.aiThinking as AIThinking;
+  }
+
   return { ok: true, spec };
 }
 
@@ -259,6 +274,7 @@ export function specToBuilderFields(spec: StrategySpec): {
       assumptions: spec.assumptions,
       learning_plan: spec.learningPlan,
       exit_conditions: spec.exitConditions as Array<Record<string, unknown>> | undefined,
+      ai_thinking: spec.aiThinking as Record<string, unknown> | undefined,
     },
   };
 }

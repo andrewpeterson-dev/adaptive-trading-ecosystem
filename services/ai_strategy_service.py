@@ -49,6 +49,18 @@ class LearningPlan(BaseModel):
     goals: list[str] = Field(default_factory=lambda: list(DEFAULT_GOALS))
 
 
+class AIThinking(BaseModel):
+    """Defines what the bot's AI layer should actively monitor beyond indicators."""
+    marketRegimeCheck: str = "Monitor for regime changes — trending vs range-bound vs volatile."
+    disruptionTriggers: list[str] = Field(default_factory=lambda: [
+        "earnings releases on held symbols",
+        "FOMC or Fed announcements",
+        "unusual volume spike (>3x average)",
+        "broad market circuit breaker events",
+    ])
+    adaptiveBehavior: str = "Tighten stops in high volatility, pause new entries before major events, scale out early if momentum deteriorates."
+
+
 class GeneratedStrategySpec(BaseModel):
     name: str
     description: str = ""
@@ -66,6 +78,7 @@ class GeneratedStrategySpec(BaseModel):
     featureSignals: list[str] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
     learningPlan: LearningPlan = Field(default_factory=LearningPlan)
+    aiThinking: AIThinking = Field(default_factory=AIThinking)
 
 
 def extract_json(text: str) -> str | None:
@@ -183,6 +196,7 @@ def compile_strategy_payload(spec: GeneratedStrategySpec) -> dict[str, Any]:
         "assumptions": spec.assumptions,
         "learning_plan": learning_plan,
         "exit_conditions": [condition.model_dump() for condition in spec.exitConditions],
+        "ai_thinking": spec.aiThinking.model_dump(),
         "generation": {
             "generated_at": datetime.now(timezone.utc).isoformat(),
         },
@@ -334,6 +348,7 @@ class AIStrategyService:
                         },
                         "exitConditions": {
                             "type": "array",
+                            "minItems": 2,
                             "items": {
                                 "type": "object",
                                 "additionalProperties": False,
@@ -347,6 +362,16 @@ class AIStrategyService:
                                 },
                                 "required": ["logic", "indicator", "params", "operator", "value", "signal"],
                             },
+                        },
+                        "aiThinking": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "marketRegimeCheck": {"type": "string"},
+                                "disruptionTriggers": {"type": "array", "items": {"type": "string"}},
+                                "adaptiveBehavior": {"type": "string"},
+                            },
+                            "required": ["marketRegimeCheck", "disruptionTriggers", "adaptiveBehavior"],
                         },
                         "symbols": {"type": "array", "items": {"type": "string"}},
                         "strategyType": {"type": "string", "enum": ["ai_generated"]},
@@ -382,6 +407,7 @@ class AIStrategyService:
                         "featureSignals",
                         "assumptions",
                         "learningPlan",
+                        "aiThinking",
                     ],
                 },
             }
@@ -392,12 +418,17 @@ class AIStrategyService:
             "run in the existing strategy builder. Use only these indicators: rsi, sma, ema, macd, "
             "atr, stochastic, vwap, volume. If a prompt references macro, earnings, options, or news "
             "that the schema cannot encode directly, translate it into a reasonable technical proxy and "
-            "explain that proxy in overview/assumptions. Use strategyType='ai_generated'."
+            "explain that proxy in overview/assumptions. Use strategyType='ai_generated'.\n\n"
+            "CRITICAL: Every strategy MUST include:\n"
+            "1) 2-4 entryConditions that confirm the trade thesis\n"
+            "2) 2-3 exitConditions that detect when the thesis breaks (RSI reversal, MACD crossover against position, trend break, etc.) — NEVER leave exitConditions empty\n"
+            "3) An aiThinking block with marketRegimeCheck (what regime to watch), disruptionTriggers (events that could invalidate the strategy), and adaptiveBehavior (how the bot should adapt)\n"
+            "stopLossPct and takeProfitPct are hard safety limits. exitConditions are the intelligent exits that fire BEFORE the hard stops."
         )
         user_prompt = (
             f"User request: {prompt}\n"
-            "Generate a strategy spec with concise, practical risk settings. "
-            "Favor 2-4 entry conditions max. Symbols should be the underlying ticker(s) only."
+            "Generate a complete strategy spec. Favor 2-4 entry conditions, 2-3 exit conditions, "
+            "and a thoughtful aiThinking block. Symbols should be the underlying ticker(s) only."
         )
         response = await routing.provider.complete(
             messages=[
@@ -430,6 +461,10 @@ class AIStrategyService:
         if not spec.entryConditions:
             raise ValueError("AI-generated strategy is missing entry conditions")
 
+        # Ensure exit conditions exist — synthesize from entry signals if AI omitted them
+        if not spec.exitConditions:
+            spec.exitConditions = self._synthesize_exit_conditions(spec)
+
         spec.strategyType = "ai_generated"
         spec.sourcePrompt = prompt
         spec.symbols = [symbol.upper() for symbol in (spec.symbols or ["SPY"])][:5]
@@ -444,78 +479,170 @@ class AIStrategyService:
             spec.overview = spec.description or f"AI-generated strategy derived from: {prompt}"
         return spec
 
+    @staticmethod
+    def _synthesize_exit_conditions(spec: GeneratedStrategySpec) -> list[GeneratedCondition]:
+        """Generate intelligent exit conditions from entry signal inversions."""
+        exits: list[GeneratedCondition] = []
+        is_long = spec.action == "BUY"
+
+        # Scan entry conditions for key indicators and create inverted exits
+        has_rsi = False
+        has_momentum = False
+        for entry in spec.entryConditions:
+            ind = entry.indicator.strip().lower()
+            if ind == "rsi" and not has_rsi:
+                has_rsi = True
+                exits.append(GeneratedCondition(
+                    logic="OR",
+                    indicator="rsi",
+                    params=entry.params,
+                    operator=">" if is_long else "<",
+                    value=75 if is_long else 25,
+                    signal="RSI reached exhaustion — exit before reversal",
+                ))
+            elif ind == "macd" and not has_momentum:
+                has_momentum = True
+                exits.append(GeneratedCondition(
+                    logic="OR",
+                    indicator="macd",
+                    params=entry.params,
+                    operator="<" if is_long else ">",
+                    value=0,
+                    signal="MACD crossed against position direction — momentum lost",
+                ))
+
+        # Always add a moving average trend break exit
+        exits.append(GeneratedCondition(
+            logic="OR",
+            indicator="ema",
+            params={"period": 20},
+            operator=">" if is_long else "<",
+            value=0,
+            signal="Price broke below EMA-20 — trend support lost" if is_long else "Price broke above EMA-20 — trend resistance broken",
+        ))
+
+        if not exits:
+            # Fallback: simple RSI exhaustion exit
+            exits.append(GeneratedCondition(
+                logic="OR",
+                indicator="rsi",
+                params={"period": 14},
+                operator=">" if is_long else "<",
+                value=72 if is_long else 28,
+                signal="RSI approaching overbought/oversold — take profit zone",
+            ))
+
+        return exits
+
     def _generate_heuristic(self, prompt: str) -> GeneratedStrategySpec:
         prompt_lower = prompt.lower()
         tickers = _extract_symbols(prompt)
         action = "SELL" if any(token in prompt_lower for token in ["short", "sell", "bearish", "fade"]) else "BUY"
 
+        # Exit conditions that invert entry signals (long exits shown; SELL variants flipped below)
+        _rsi_exit = {"logic": "OR", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 74, "signal": "RSI overbought — momentum exhaustion, exit before reversal"}
+        _macd_exit = {"logic": "OR", "indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}, "operator": "<", "value": 0, "signal": "MACD crossed below zero — trend acceleration lost"}
+        _ema_exit = {"logic": "OR", "indicator": "ema", "params": {"period": 20}, "operator": ">", "value": 0, "signal": "Price broke below EMA-20 — near-term trend support lost"}
+
         if "earnings" in prompt_lower:
             template = {
                 "name": "AI Earnings Surprise Momentum",
-                "description": "Targets post-earnings continuation using momentum and participation proxies.",
+                "description": "Targets post-earnings continuation using momentum and participation proxies. AI monitors for follow-through failure and abnormal reversals.",
                 "timeframe": "1D",
                 "stopLossPct": 2.8,
                 "takeProfitPct": 7.5,
                 "positionPct": 12,
                 "entryConditions": [
-                    {"logic": "AND", "indicator": "volume", "params": {}, "operator": ">", "value": 2000000, "signal": "Unusually strong participation"},
+                    {"logic": "AND", "indicator": "volume", "params": {}, "operator": ">", "value": 2000000, "signal": "Unusually strong participation confirms post-earnings move"},
                     {"logic": "AND", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 58 if action == "BUY" else 42, "signal": "Momentum confirms post-event direction"},
                     {"logic": "AND", "indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}, "operator": ">", "value": 0 if action == "BUY" else -0.1, "signal": "Trend acceleration remains favorable"},
                 ],
+                "exitConditions": [_rsi_exit, _macd_exit],
                 "assumptions": [
                     "Earnings data is proxied through price, volume, and momentum because the builder schema is indicator-based.",
+                    "AI layer will monitor for earnings revision and guidance changes that indicators cannot capture.",
                 ],
+                "aiThinking": {
+                    "marketRegimeCheck": "Monitor if post-earnings move is continuation or exhaustion gap. Watch for volume collapse on day 2-3 as reversal signal.",
+                    "disruptionTriggers": ["analyst revision against position", "sector-wide earnings miss", "guidance cut after initial beat", "unusual options activity in opposite direction"],
+                    "adaptiveBehavior": "If volume collapses below average within 2 sessions of entry, tighten stops aggressively. Pause new entries during earnings blackout windows for correlated names.",
+                },
             }
         elif "volatility breakout" in prompt_lower or "breakout" in prompt_lower or "volatility" in prompt_lower:
             template = {
                 "name": "AI Volatility Breakout Bot",
-                "description": "Looks for volatility expansion with momentum confirmation after a compressed regime.",
+                "description": "Detects volatility expansion with momentum confirmation after compression. AI watches for false breakouts and regime changes.",
                 "timeframe": "15m" if "options" in prompt_lower or "intraday" in prompt_lower else "1H",
                 "stopLossPct": 1.8,
                 "takeProfitPct": 4.5,
                 "positionPct": 8,
                 "entryConditions": [
-                    {"logic": "AND", "indicator": "atr", "params": {"period": 14}, "operator": ">", "value": 2.0, "signal": "Range expansion is underway"},
-                    {"logic": "AND", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 60 if action == "BUY" else 40, "signal": "Momentum aligns with the breakout"},
-                    {"logic": "AND", "indicator": "volume", "params": {}, "operator": ">", "value": 1500000, "signal": "Breakout is backed by participation"},
+                    {"logic": "AND", "indicator": "atr", "params": {"period": 14}, "operator": ">", "value": 2.0, "signal": "Range expansion is underway — volatility breakout detected"},
+                    {"logic": "AND", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 60 if action == "BUY" else 40, "signal": "Momentum aligns with the breakout direction"},
+                    {"logic": "AND", "indicator": "volume", "params": {}, "operator": ">", "value": 1500000, "signal": "Breakout backed by institutional participation"},
+                ],
+                "exitConditions": [
+                    {"logic": "OR", "indicator": "atr", "params": {"period": 14}, "operator": "<", "value": 1.0, "signal": "Volatility contracting — breakout losing steam"},
+                    _rsi_exit,
+                    _ema_exit,
                 ],
                 "assumptions": [
-                    "Options intent is mapped to the underlying symbol because the builder schema currently encodes underlying trade logic only.",
+                    "Options intent is mapped to the underlying symbol because the builder schema encodes underlying trade logic only.",
+                    "AI evaluates whether the breakout is genuine by checking volume persistence and follow-through.",
                 ],
+                "aiThinking": {
+                    "marketRegimeCheck": "Distinguish genuine breakouts (sustained expansion + volume) from false breakouts (spike then immediate reversion). Track ATR trend over 3-5 bars.",
+                    "disruptionTriggers": ["VIX spike >25%", "sudden volume collapse after breakout", "sector divergence from broad market", "FOMC meeting within 24 hours"],
+                    "adaptiveBehavior": "If breakout fails to sustain volume for 2+ bars, exit immediately. Before known macro events, reduce position size by 50% or pause.",
+                },
             }
         elif "fed" in prompt_lower or "rate cut" in prompt_lower or "rates" in prompt_lower:
             template = {
                 "name": "AI Fed Easing Trend Follower",
-                "description": "Maps an easing-policy thesis into trend and momentum confirmation rules on liquid index exposure.",
+                "description": "Maps an easing-policy thesis into trend and momentum confirmation. AI monitors policy language shifts and cross-asset signals.",
                 "timeframe": "1D",
                 "stopLossPct": 2.2,
                 "takeProfitPct": 6.0,
                 "positionPct": 10,
                 "entryConditions": [
-                    {"logic": "AND", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 55 if action == "BUY" else 45, "signal": "Momentum confirms the macro thesis"},
-                    {"logic": "AND", "indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}, "operator": ">", "value": 0 if action == "BUY" else -0.1, "signal": "Trend acceleration is positive"},
-                    {"logic": "AND", "indicator": "volume", "params": {}, "operator": ">", "value": 1200000, "signal": "Participation remains elevated"},
+                    {"logic": "AND", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 55 if action == "BUY" else 45, "signal": "Momentum confirms the macro-driven thesis"},
+                    {"logic": "AND", "indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}, "operator": ">", "value": 0 if action == "BUY" else -0.1, "signal": "Trend acceleration supports easing thesis"},
+                    {"logic": "AND", "indicator": "ema", "params": {"period": 50}, "operator": "<", "value": 0, "signal": "Price above 50-EMA — structural uptrend intact"},
                 ],
+                "exitConditions": [_macd_exit, _ema_exit],
                 "assumptions": [
-                    "Fed language is translated into price and momentum proxies because the current schema does not encode macro event feeds directly.",
+                    "Fed language is translated into price and momentum proxies since the schema does not encode macro event feeds.",
+                    "AI layer will watch for hawkish surprises that would invalidate the easing thesis.",
                 ],
+                "aiThinking": {
+                    "marketRegimeCheck": "Track whether the rate-sensitive rally is broad-based or narrow. Monitor bond yields (TLT proxy) for divergence from equity positioning.",
+                    "disruptionTriggers": ["hawkish Fed dot plot surprise", "inflation print above consensus", "employment report overshoot", "geopolitical escalation"],
+                    "adaptiveBehavior": "Pause all new entries 24 hours before FOMC. If yields spike sharply against the thesis, exit 50% immediately. Resume full sizing only after market digests the event.",
+                },
             }
         else:
             template = {
                 "name": "AI Momentum Allocation Bot",
-                "description": "General AI-generated momentum strategy with clear trend, confirmation, and risk parameters.",
+                "description": "AI-driven momentum strategy with trend confirmation, participation filters, and adaptive risk controls.",
                 "timeframe": "1D",
                 "stopLossPct": 2.0,
                 "takeProfitPct": 5.5,
                 "positionPct": 10,
                 "entryConditions": [
-                    {"logic": "AND", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 56 if action == "BUY" else 44, "signal": "Momentum bias is favorable"},
-                    {"logic": "AND", "indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}, "operator": ">", "value": 0 if action == "BUY" else -0.1, "signal": "Trend acceleration confirms the move"},
-                    {"logic": "AND", "indicator": "volume", "params": {}, "operator": ">", "value": 1000000, "signal": "Participation is sufficient for follow-through"},
+                    {"logic": "AND", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 56 if action == "BUY" else 44, "signal": "Momentum bias is favorable for entry"},
+                    {"logic": "AND", "indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}, "operator": ">", "value": 0 if action == "BUY" else -0.1, "signal": "Trend acceleration confirms directional move"},
+                    {"logic": "AND", "indicator": "volume", "params": {}, "operator": ">", "value": 1000000, "signal": "Sufficient participation for follow-through"},
                 ],
+                "exitConditions": [_rsi_exit, _macd_exit, _ema_exit],
                 "assumptions": [
-                    "Plain-language intent was mapped into a momentum/trend proxy because no more specific event feed was available in the builder schema.",
+                    "Plain-language intent mapped to momentum/trend proxy using supported indicators.",
+                    "AI layer continuously evaluates whether the momentum regime persists or is degrading.",
                 ],
+                "aiThinking": {
+                    "marketRegimeCheck": "Track whether momentum is trending or mean-reverting. If RSI oscillates between 40-60 for 5+ bars, regime has shifted to range-bound — reduce sizing.",
+                    "disruptionTriggers": ["earnings release on held symbol", "macro data surprise", "sector rotation detected", "unusual put/call ratio shift"],
+                    "adaptiveBehavior": "In choppy/range-bound regimes, reduce position size by 50% and widen stops. Before major events, tighten trailing stops. If multiple exit signals fire simultaneously, exit full position immediately.",
+                },
             }
 
         if action == "SELL":
@@ -525,13 +652,22 @@ class AIStrategyService:
                     condition["operator"] = "<"
                 elif condition["indicator"] == "macd":
                     condition["operator"] = "<"
-                elif condition["indicator"] == "volume":
+            # Flip exit conditions for short side
+            for condition in template.get("exitConditions", []):
+                if condition["indicator"] == "rsi":
+                    condition["operator"] = "<"
+                    condition["value"] = 26
+                    condition["signal"] = "RSI oversold — short exhaustion, cover before reversal"
+                elif condition["indicator"] == "macd":
                     condition["operator"] = ">"
+                    condition["signal"] = "MACD crossed above zero — downward momentum lost"
+                elif condition["indicator"] == "ema":
+                    condition["operator"] = "<"
+                    condition["signal"] = "Price broke above EMA-20 — short-term trend resistance broken"
 
         spec_dict = {
             **template,
             "action": action,
-            "exitConditions": [],
             "symbols": tickers,
             "strategyType": "ai_generated",
             "sourcePrompt": prompt,

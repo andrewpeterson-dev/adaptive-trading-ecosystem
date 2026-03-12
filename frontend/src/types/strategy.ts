@@ -15,12 +15,19 @@ export interface StrategyLearningPlan {
   parameter_adjustments?: Array<Record<string, unknown>>;
 }
 
+export interface StrategyAiThinking {
+  marketRegimeCheck?: string;
+  disruptionTriggers?: string[];
+  adaptiveBehavior?: string;
+}
+
 export interface StrategyAiContext {
   overview?: string;
   feature_signals?: string[];
   assumptions?: string[];
   learning_plan?: StrategyLearningPlan;
   exit_conditions?: Array<Record<string, unknown>>;
+  ai_thinking?: StrategyAiThinking | Record<string, unknown>;
   builder_preferences?: {
     order_type?: "market" | "limit" | "stop";
     backtest_period?: string;

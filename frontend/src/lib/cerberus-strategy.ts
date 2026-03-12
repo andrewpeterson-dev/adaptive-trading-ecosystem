@@ -59,6 +59,9 @@ export function buildCerberusStrategyPrompt(input: CerberusStrategyInput): strin
     "- If the request references options, macro events, or other unsupported primitives, map them to the closest executable price, volatility, momentum, or participation proxy.",
     "- Mention those approximations in overview and assumptions.",
     "- Keep the logic specific enough that the builder draft is immediately usable.",
+    "- ALWAYS include 2-3 exitConditions that detect when the trade thesis breaks (e.g. RSI reversal, MACD crossover against position, EMA trend break). NEVER leave exitConditions empty.",
+    "- ALWAYS populate the aiThinking block with what market regimes to watch, what events could disrupt the strategy, and how the bot should adapt.",
+    "- This is not a static rule set — design it as an intelligent trading bot that actively monitors conditions.",
   ].join("\n");
 }
 
