@@ -31,6 +31,8 @@ export interface ChatResponse {
   threadId: string;
   turnId: string;
   streamChannel: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  message?: any;
 }
 
 // WebSocket stream events

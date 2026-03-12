@@ -2,11 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthShell } from "@/components/layout/AuthShell";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const { register } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,7 +16,6 @@ export default function RegisterPage() {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,43 +33,13 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, password, displayName);
-      setSuccess(true);
+      router.push("/dashboard");
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Registration failed";
       setError(message);
-    } finally {
       setLoading(false);
     }
-  }
-
-  if (success) {
-    return (
-      <AuthShell
-        title="Account created"
-        description="Verify your email, then return to sign in and connect your workspace."
-        footer={
-          <Link href="/login" className="font-medium text-foreground">
-            Go to login
-          </Link>
-        }
-      >
-        <div className="space-y-5 text-center">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 mx-auto">
-            <CheckCircle2 className="h-7 w-7 text-emerald-400" />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Check your email to verify your account, then sign in.
-          </p>
-          <Link
-            href="/login"
-            className="app-button-primary"
-          >
-            Go to login
-          </Link>
-        </div>
-      </AuthShell>
-    );
   }
 
   return (

@@ -3,6 +3,12 @@ const nextConfig = {
   // standalone output for Docker; Vercel ignores this and uses its own builder
   ...(process.env.VERCEL ? {} : { output: "standalone" }),
 
+  images: {
+    dangerouslyAllowSVG: true,
+    contentDispositionType: "attachment",
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
+
   // Optimize CSS — removes unused rules from the final CSS bundle
   experimental: {
     optimizeCss: true,

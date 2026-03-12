@@ -127,7 +127,7 @@ export interface GeneratedStrategyResponse {
   };
 }
 
-export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse & { message: any }> {
+export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
   return apiFetch('/api/ai/chat', {
     method: 'POST',
     body: JSON.stringify(request),

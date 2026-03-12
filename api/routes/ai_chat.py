@@ -93,6 +93,7 @@ class ChatResponse(BaseModel):
     threadId: str
     turnId: str
     streamChannel: str
+    message: Optional[dict] = None
 
 
 @router.post("/chat")
