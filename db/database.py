@@ -153,7 +153,7 @@ async def _ensure_ai_strategy_schema() -> None:
 
             add_column_if_missing("cerberus_bots", "learning_enabled", "BOOLEAN DEFAULT TRUE")
             add_column_if_missing("cerberus_bots", "learning_status_json", "JSON")
-            add_column_if_missing("cerberus_bots", "last_optimization_at", "DATETIME")
+            add_column_if_missing("cerberus_bots", "last_optimization_at", "TIMESTAMP")
 
             if "cerberus_bot_optimization_runs" not in tables:
                 sync_conn.execute(
@@ -169,7 +169,7 @@ async def _ensure_ai_strategy_schema() -> None:
                             metrics_json JSON,
                             adjustments_json JSON,
                             summary TEXT,
-                            created_at DATETIME,
+                            created_at TIMESTAMP,
                             FOREIGN KEY(bot_id) REFERENCES cerberus_bots (id),
                             FOREIGN KEY(source_version_id) REFERENCES cerberus_bot_versions (id),
                             FOREIGN KEY(result_version_id) REFERENCES cerberus_bot_versions (id)
