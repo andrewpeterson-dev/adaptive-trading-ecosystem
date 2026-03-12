@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Activity, ArrowLeft, Clock3, LineChart, Radar } from "lucide-react";
+import { Activity, ArrowLeft, Brain, Clock3, GraduationCap, Globe, LineChart, Radar } from "lucide-react";
 
 import { AIExplanationPanel } from "@/components/bots/AIExplanationPanel";
 import { BotDetailPanel } from "@/components/bots/BotDetailPanel";
@@ -15,6 +15,10 @@ import { TradeTimeline } from "@/components/bots/TradeTimeline";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AIReasoningTab } from "@/components/bots/reasoning/AIReasoningTab";
+import { LearningTab } from "@/components/bots/reasoning/LearningTab";
+import { UniverseTab } from "@/components/bots/reasoning/UniverseTab";
+import { cn } from "@/lib/utils";
 import { getBotDetail, type BotDetail, type BotTrade } from "@/lib/cerberus-api";
 import {
   buildTimelineBuckets,
@@ -48,6 +52,7 @@ export default function BotDetailPage() {
   const [hoveredTradeId, setHoveredTradeId] = useState<string | null>(null);
   const [timelineGranularity, setTimelineGranularity] = useState<TimelineGranularity>("week");
   const [timelineIndex, setTimelineIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<"overview" | "reasoning" | "learning" | "universe">("overview");
 
   useEffect(() => {
     async function load() {
@@ -188,6 +193,35 @@ export default function BotDetailPage() {
 
       <BotPerformanceStats detail={detail} />
 
+      {/* Tab navigation for AI Reasoning subsections */}
+      <div className="flex items-center gap-1.5 rounded-[24px] border border-border/65 bg-muted/24 px-3 py-2">
+        {([
+          { key: "overview" as const, label: "Overview", icon: LineChart },
+          { key: "reasoning" as const, label: "AI Reasoning", icon: Brain },
+          { key: "learning" as const, label: "Learning", icon: GraduationCap },
+          { key: "universe" as const, label: "Universe", icon: Globe },
+        ]).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[13px] font-medium tracking-tight transition-all",
+              activeTab === key
+                ? "border border-primary/20 bg-primary/12 text-primary shadow-[0_14px_26px_-22px_rgba(59,130,246,0.55)]"
+                : "text-muted-foreground hover:bg-muted/35 hover:text-foreground"
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "reasoning" && <AIReasoningTab botId={botId} />}
+      {activeTab === "learning" && <LearningTab botId={botId} />}
+      {activeTab === "universe" && <UniverseTab botId={botId} />}
+
+      {activeTab === "overview" && <>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.88fr_1.62fr]">
         <BotDetailPanel
           detail={detail}
@@ -367,6 +401,7 @@ export default function BotDetailPage() {
           </div>
         </section>
       </div>
+      </>}
     </div>
   );
 }

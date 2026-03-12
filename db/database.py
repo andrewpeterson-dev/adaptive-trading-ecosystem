@@ -94,8 +94,10 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
     # Compatibility shim for local/dev startups that call create_all directly
     # instead of running Alembic migrations against an existing database.
+    await _ensure_auth_schema()
     await _ensure_legacy_trade_user_schema()
     await _ensure_ai_strategy_schema()
+    await _ensure_reasoning_schema()
     # Seed static reference data (idempotent — skips existing rows)
     from scripts.seed_providers import seed as _seed_providers
     await _seed_providers()
@@ -104,6 +106,20 @@ async def init_db():
 async def close_db():
     if _engine is not None:
         await _engine.dispose()
+
+
+async def _ensure_auth_schema() -> None:
+    async with _get_engine().begin() as conn:
+        def _ensure(sync_conn) -> None:
+            inspector = inspect(sync_conn)
+            tables = set(inspector.get_table_names())
+
+            if "users" in tables:
+                user_columns = {column["name"] for column in inspector.get_columns("users")}
+                if "session_version" not in user_columns:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN session_version INTEGER DEFAULT 0"))
+
+        await conn.run_sync(_ensure)
 
 
 async def _ensure_legacy_trade_user_schema() -> None:
@@ -189,6 +205,28 @@ async def _ensure_ai_strategy_schema() -> None:
                         "ON cerberus_bot_optimization_runs (created_at)"
                     )
                 )
+
+        await conn.run_sync(_ensure)
+
+
+async def _ensure_reasoning_schema() -> None:
+    """Add columns for AI reasoning layer to existing tables."""
+    async with _get_engine().begin() as conn:
+        def _ensure(sync_conn) -> None:
+            inspector = inspect(sync_conn)
+            tables = set(inspector.get_table_names())
+
+            def add_column_if_missing(table: str, column: str, ddl: str) -> None:
+                if table not in tables:
+                    return
+                columns = {c["name"] for c in inspector.get_columns(table)}
+                if column not in columns:
+                    sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
+            add_column_if_missing("users", "subscription_tier", "VARCHAR(16) DEFAULT 'free' NOT NULL")
+            add_column_if_missing("cerberus_bots", "reasoning_model_config", "JSON")
+            add_column_if_missing("cerberus_bot_versions", "universe_config", "JSON")
+            add_column_if_missing("cerberus_bot_versions", "override_level", "VARCHAR(16) DEFAULT 'soft'")
 
         await conn.run_sync(_ensure)
 

@@ -25,6 +25,7 @@ from api.routes import ai_chat, ai_tools, documents as documents_routes
 from api.routes import user_mode as user_mode_routes
 from api.routes import risk_limits as risk_limits_routes
 from api.routes import quant as quant_routes
+from api.routes import reasoning as reasoning_routes
 from api.middleware.auth import JWTAuthMiddleware
 from api.middleware.trading_mode import TradingModeMiddleware
 from config.settings import get_settings
@@ -129,16 +130,24 @@ async def lifespan(app: FastAPI):
     # Start the bot execution engine (evaluates running bots every 60s)
     from services.bot_engine.runner import bot_runner
     from services.strategy_learning_engine import StrategyLearningEngine
+    from services.context_monitor import ContextMonitor
+    from services.universe_scanner import UniverseScanner
 
     learning_engine = StrategyLearningEngine()
+    context_monitor = ContextMonitor()
+    universe_scanner = UniverseScanner()
     _spawn_background_task(background_tasks, coro=bot_runner.start(), name="bot_runner")
     _spawn_background_task(background_tasks, coro=learning_engine.start(), name="strategy_learning_engine")
+    _spawn_background_task(background_tasks, coro=context_monitor.start(), name="context_monitor")
+    _spawn_background_task(background_tasks, coro=universe_scanner.start(), name="universe_scanner")
 
     yield
 
     # Shutdown
     await bot_runner.stop()
     await learning_engine.stop()
+    await context_monitor.stop()
+    await universe_scanner.stop()
     if background_tasks:
         await asyncio.gather(*background_tasks, return_exceptions=True)
     await close_db()
@@ -164,6 +173,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Security headers middleware
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if _settings.base_url.startswith("https://"):
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Mount route modules
 app.include_router(auth_routes.router, prefix="/api/auth", tags=["Auth"])
@@ -192,6 +215,7 @@ app.include_router(documents_routes.router, prefix="/api/documents", tags=["Docu
 app.include_router(user_mode_routes.router, prefix="/api/user", tags=["User"])
 app.include_router(risk_limits_routes.router, prefix="/api/risk", tags=["Risk"])
 app.include_router(quant_routes.router, prefix="/api/quant", tags=["Quant Intelligence"])
+app.include_router(reasoning_routes.router, prefix="/api/reasoning", tags=["AI Reasoning"])
 
 
 @app.get("/health")

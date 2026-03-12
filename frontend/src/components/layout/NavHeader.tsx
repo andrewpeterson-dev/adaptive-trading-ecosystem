@@ -43,6 +43,7 @@ const NAV_ITEMS = [
   { href: "/models", label: "Models" },
   { href: "/risk", label: "Risk" },
   { href: "/quant", label: "Quant" },
+  { href: "/ai-intelligence", label: "AI Intel" },
 ];
 
 export function NavHeader() {

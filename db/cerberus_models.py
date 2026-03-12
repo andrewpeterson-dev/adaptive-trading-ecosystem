@@ -256,6 +256,7 @@ class CerberusBot(Base):
     learning_enabled = Column(Boolean, default=True)
     learning_status_json = Column(JSON, default=dict)
     last_optimization_at = Column(DateTime, nullable=True)
+    reasoning_model_config = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -283,6 +284,8 @@ class CerberusBotVersion(Base):
     created_by = Column(String(64), nullable=True)
     backtest_required = Column(Boolean, default=False)
     backtest_id = Column(String(36), nullable=True)
+    universe_config = Column(JSON, default=dict)
+    override_level = Column(String(16), default="soft")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     bot = relationship("CerberusBot", back_populates="versions")
@@ -587,4 +590,146 @@ class CerberusAuditLog(Base):
         Index("ix_cerberus_audit_action", "action_type"),
         Index("ix_cerberus_audit_resource", "resource_type", "resource_id"),
         Index("ix_cerberus_audit_trace", "trace_id"),
+    )
+
+
+# ── AI Reasoning Layer Models ───────────────────────────────────────────────
+
+class MarketEvent(Base):
+    """Context Monitor output — real-time market intelligence events."""
+    __tablename__ = "market_events"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    event_type = Column(String(32), nullable=False)
+    impact = Column(String(16), nullable=False)
+    symbols = Column(JSON, default=list)
+    sectors = Column(JSON, default=list)
+    headline = Column(String(512), nullable=False)
+    raw_data = Column(JSON, default=dict)
+    source = Column(String(64), nullable=False)
+    source_id = Column(String(128), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    detected_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_market_event_type", "event_type"),
+        Index("ix_market_event_source_id", "source_id"),
+        Index("ix_market_event_detected", "detected_at"),
+        Index("ix_market_event_user", "user_id"),
+    )
+
+
+class UniverseCandidate(Base):
+    """Universe Scanner output — ranked symbol candidates per bot."""
+    __tablename__ = "universe_candidates"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
+    symbol = Column(String(16), nullable=False)
+    score = Column(Float, nullable=False)
+    reason = Column(String(512), nullable=True)
+    scanned_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_universe_cand_bot", "bot_id"),
+        Index("ix_universe_cand_bot_scanned", "bot_id", "scanned_at"),
+    )
+
+
+class TradeDecision(Base):
+    """Reasoning Engine output — persisted for UI decision timeline."""
+    __tablename__ = "trade_decisions"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
+    symbol = Column(String(16), nullable=False)
+    strategy_signal = Column(String(16), nullable=False)
+    context_risk_level = Column(String(16), nullable=False)
+    ai_confidence = Column(Float, nullable=False)
+    decision = Column(String(32), nullable=False)
+    reasoning = Column(Text, nullable=True)
+    size_adjustment = Column(Float, default=1.0)
+    delay_seconds = Column(Integer, default=0)
+    events_considered = Column(JSON, default=list)
+    model_used = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_trade_decision_bot", "bot_id"),
+        Index("ix_trade_decision_bot_created", "bot_id", "created_at"),
+    )
+
+
+class BotTradeJournal(Base):
+    """Enriched trade records with full AI context for bot learning."""
+    __tablename__ = "bot_trade_journal"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
+    trade_id = Column(String(36), nullable=False)
+    symbol = Column(String(16), nullable=False)
+    side = Column(String(16), nullable=False)
+    entry_price = Column(Float, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    entry_at = Column(DateTime, nullable=True)
+    exit_at = Column(DateTime, nullable=True)
+    hold_duration_seconds = Column(Integer, nullable=True)
+    pnl = Column(Float, nullable=True)
+    pnl_pct = Column(Float, nullable=True)
+    market_events = Column(JSON, default=list)
+    vix_at_entry = Column(Float, nullable=True)
+    sector_momentum_at_entry = Column(Float, nullable=True)
+    ai_confidence_at_entry = Column(Float, nullable=True)
+    ai_decision = Column(String(32), nullable=True)
+    ai_reasoning = Column(Text, nullable=True)
+    regime_at_entry = Column(String(32), nullable=True)
+    outcome_tag = Column(String(64), nullable=True)
+    lesson_learned = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_bot_journal_bot", "bot_id"),
+        Index("ix_bot_journal_bot_created", "bot_id", "created_at"),
+        Index("ix_bot_journal_trade", "trade_id"),
+    )
+
+
+class BotRegimeStats(Base):
+    """Per-regime performance tracking for each bot."""
+    __tablename__ = "bot_regime_stats"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
+    regime = Column(String(32), nullable=False)
+    total_trades = Column(Integer, default=0)
+    win_rate = Column(Float, default=0.0)
+    avg_pnl = Column(Float, default=0.0)
+    avg_confidence = Column(Float, default=0.0)
+    sharpe = Column(Float, default=0.0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_regime_stats_bot", "bot_id"),
+        Index("ix_regime_stats_bot_regime", "bot_id", "regime", unique=True),
+    )
+
+
+class BotAdaptation(Base):
+    """Learning adjustments log — parameter changes with reasoning."""
+    __tablename__ = "bot_adaptations"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
+    adaptation_type = Column(String(64), nullable=False)
+    old_value = Column(JSON, default=dict)
+    new_value = Column(JSON, default=dict)
+    reasoning = Column(Text, nullable=True)
+    confidence = Column(Float, nullable=True)
+    auto_applied = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_bot_adaptation_bot", "bot_id"),
+        Index("ix_bot_adaptation_bot_created", "bot_id", "created_at"),
     )

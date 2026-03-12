@@ -190,6 +190,7 @@ class PortfolioSnapshot(Base):
     __tablename__ = "portfolio_snapshots"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     total_equity = Column(Float, nullable=False)
     cash = Column(Float, nullable=False)
@@ -205,6 +206,7 @@ class PortfolioSnapshot(Base):
     __table_args__ = (
         Index("ix_portfolio_time", "timestamp"),
         Index("ix_portfolio_mode_time", "mode", "timestamp"),
+        Index("ix_portfolio_user_mode", "user_id", "mode"),
     )
 
 
@@ -252,12 +254,15 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     email_verified = Column(Boolean, default=False)
+    session_version = Column(Integer, default=0, nullable=False)
+    subscription_tier = Column(String(16), default="free", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     trades = relationship("Trade", back_populates="user")
     broker_credentials = relationship("BrokerCredential", back_populates="user", cascade="all, delete-orphan")
     email_verifications = relationship("EmailVerification", back_populates="user", cascade="all, delete-orphan")
+    password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
 
 
 class EmailVerification(Base):
@@ -271,6 +276,19 @@ class EmailVerification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="email_verifications")
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String(255), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="password_reset_tokens")
 
 
 class BrokerCredential(Base):

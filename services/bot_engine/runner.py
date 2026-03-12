@@ -19,10 +19,12 @@ from db.cerberus_models import (
     CerberusBot,
     CerberusBotVersion,
     CerberusTrade,
+    UniverseCandidate,
     BotStatus,
 )
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
+from services.reasoning_engine import ReasoningEngine
 
 logger = structlog.get_logger(__name__)
 _MARKET_TIMEZONE = ZoneInfo("America/New_York")
@@ -36,6 +38,7 @@ class BotRunner:
         self._task: asyncio.Task | None = None
         # Track last evaluation time per bot to avoid duplicate signals
         self._last_eval: dict[str, datetime] = {}
+        self._reasoning_engine = ReasoningEngine()
 
     async def start(self) -> None:
         """Start the bot runner loop."""
@@ -115,6 +118,20 @@ class BotRunner:
         timeframe = config.get("timeframe", "1D")
         position_size_pct = config.get("position_size_pct", 5.0)
 
+        # Dynamic universe: pull candidates from UniverseScanner if not "fixed" mode
+        universe_config = version.universe_config or {}
+        universe_mode = universe_config.get("mode", "fixed")
+        if universe_mode != "fixed":
+            async with get_session() as session:
+                result = await session.execute(
+                    select(UniverseCandidate.symbol)
+                    .where(UniverseCandidate.bot_id == bot.id)
+                    .order_by(UniverseCandidate.score.desc())
+                )
+                dynamic_symbols = [r[0] for r in result.all()]
+            if dynamic_symbols:
+                symbols = dynamic_symbols
+
         if not symbols or not conditions:
             logger.warning("bot_skipped_no_config", bot_id=bot.id)
             return
@@ -186,14 +203,59 @@ class BotRunner:
                 action=action,
                 reasons=reasons,
             )
+
+            # Gate through Reasoning Engine before execution
+            try:
+                decision = await self._reasoning_engine.evaluate(
+                    bot=bot,
+                    symbol=symbol,
+                    signal=action,
+                    strategy_config=config,
+                )
+
+                if decision.decision in ("PAUSE_BOT", "EXIT_POSITION"):
+                    logger.info(
+                        "bot_trade_blocked_by_reasoning",
+                        bot_id=bot.id, symbol=symbol,
+                        decision=decision.decision, reasoning=decision.reasoning,
+                    )
+                    return
+                if decision.delay_seconds > 0:
+                    logger.info(
+                        "bot_trade_delayed_by_reasoning",
+                        bot_id=bot.id, symbol=symbol,
+                        delay=decision.delay_seconds, reasoning=decision.reasoning,
+                    )
+                    return  # Will re-evaluate on next cycle
+
+                # Apply size adjustment from reasoning
+                adjusted_size = position_size_pct * decision.size_adjustment
+            except Exception as e:
+                logger.warning("reasoning_engine_error", bot_id=bot.id, error=str(e))
+                adjusted_size = position_size_pct
+
             await self._execute_trade(
                 bot,
                 symbol,
                 action,
-                position_size_pct,
+                adjusted_size,
                 bars[-1].get("close", 0),
                 reasons=reasons,
             )
+
+            # Record in trade journal
+            try:
+                from services.bot_memory.journal import record_trade
+                await record_trade(
+                    bot_id=bot.id,
+                    trade_id=str(uuid.uuid4()),
+                    symbol=symbol,
+                    side=action,
+                    entry_price=bars[-1].get("close", 0),
+                    trade_decision=decision if 'decision' in dir() else None,
+                )
+            except Exception as e:
+                logger.warning("journal_record_error", bot_id=bot.id, error=str(e))
         else:
             logger.debug(
                 "bot_conditions_not_met", bot_id=bot.id, symbol=symbol
