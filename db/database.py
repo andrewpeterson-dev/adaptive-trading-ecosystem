@@ -151,7 +151,7 @@ async def _ensure_ai_strategy_schema() -> None:
             add_column_if_missing("strategy_templates", "source_prompt", "TEXT")
             add_column_if_missing("strategy_templates", "ai_context", "JSON")
 
-            add_column_if_missing("cerberus_bots", "learning_enabled", "BOOLEAN DEFAULT 1")
+            add_column_if_missing("cerberus_bots", "learning_enabled", "BOOLEAN DEFAULT TRUE")
             add_column_if_missing("cerberus_bots", "learning_status_json", "JSON")
             add_column_if_missing("cerberus_bots", "last_optimization_at", "DATETIME")
 
