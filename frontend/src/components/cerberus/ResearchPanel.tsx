@@ -150,9 +150,9 @@ export function ResearchPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-border p-4 space-y-3">
-        <div>
-          <h3 className="mb-1 text-sm font-semibold text-foreground">Research Mode</h3>
+      <div className="space-y-4 border-b border-border/60 p-4 sm:p-5">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-foreground">Research Mode</h3>
           <p className="text-xs text-muted-foreground">
             Upload research, ask questions with citations, then hand the thesis into Strategy drafting when it is ready.
           </p>
@@ -171,10 +171,10 @@ export function ResearchPanel() {
               void uploadFiles(event.dataTransfer.files);
             }
           }}
-          className={`rounded-[20px] border border-dashed px-4 py-4 transition-colors ${
+          className={`app-inset rounded-[20px] border-dashed px-4 py-4 transition-colors ${
             isDragActive
               ? 'border-primary bg-primary/5'
-              : 'border-border/60 bg-muted/20'
+              : 'bg-muted/10'
           }`}
         >
           <div className="flex items-start gap-3">
@@ -195,7 +195,7 @@ export function ResearchPanel() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-full border border-border px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="app-button-secondary h-9 px-4 text-xs"
             >
               Browse
             </button>
@@ -203,7 +203,7 @@ export function ResearchPanel() {
         </div>
 
         {uploadedDocs.length > 0 && (
-          <div className="rounded-[20px] border border-border/60 bg-muted/20 p-3">
+          <div className="app-inset rounded-[20px] p-3">
             <div className="flex items-center gap-2">
               <FileStack className="h-4 w-4 text-primary" />
               <p className="app-label">Uploaded Documents</p>
@@ -212,7 +212,7 @@ export function ResearchPanel() {
               {uploadedDocs.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-3 py-2"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-3 py-2.5"
                 >
                   <div>
                     <p className="text-sm font-medium text-foreground">{doc.name}</p>
@@ -237,7 +237,7 @@ export function ResearchPanel() {
           </div>
         )}
 
-        <div className="rounded-[20px] border border-border/60 bg-muted/20 p-3">
+        <div className="app-inset rounded-[20px] p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="app-label">Implement Strategy</p>
@@ -248,7 +248,7 @@ export function ResearchPanel() {
             <button
               onClick={handleImplementStrategy}
               disabled={uploadedDocs.length === 0}
-              className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-40"
+              className="app-button-secondary h-9 px-4 text-xs text-primary disabled:opacity-40"
             >
               <span className="inline-flex items-center gap-1.5">
                 <Sparkles className="h-3 w-3" />
@@ -258,20 +258,20 @@ export function ResearchPanel() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-start gap-2">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleResearch()}
             placeholder="Research question..."
-            className="flex-1 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="app-input h-10 flex-1"
           />
           <button
             onClick={handleResearch}
             disabled={!query.trim() || isResearching}
-            className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            className="app-button-primary h-10 shrink-0 px-4 text-sm disabled:opacity-50"
           >
-            {isResearching ? '...' : 'Ask'}
+            {isResearching ? 'Working...' : 'Ask'}
           </button>
         </div>
 

@@ -38,11 +38,13 @@ class LedgerAggregator:
         sharpe = 0.0
         if len(equity_series) >= 2:
             daily_rets = [(equity_series[i] - equity_series[i-1]) / equity_series[i-1]
-                          for i in range(1, len(equity_series))]
-            mean_r = sum(daily_rets) / len(daily_rets)
-            variance = sum((r - mean_r)**2 for r in daily_rets) / len(daily_rets)
-            std_r = math.sqrt(variance) if variance > 0 else 0.0
-            sharpe = (mean_r / std_r * math.sqrt(252)) if std_r > 0 else 0.0
+                          for i in range(1, len(equity_series))
+                          if equity_series[i-1] != 0]
+            if daily_rets:
+                mean_r = sum(daily_rets) / len(daily_rets)
+                variance = sum((r - mean_r)**2 for r in daily_rets) / len(daily_rets)
+                std_r = math.sqrt(variance) if variance > 0 else 0.0
+                sharpe = (mean_r / std_r * math.sqrt(252)) if std_r > 0 else 0.0
         return {
             "returns_pct": round(returns_pct, 4),
             "drawdown_pct": round(drawdown_pct, 4),

@@ -11,7 +11,7 @@ import { SymbolNewsFeed } from "./SymbolNewsFeed";
 
 function DetailMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[18px] border border-border/70 bg-muted/18 px-3 py-3">
+    <div className="app-inset rounded-[18px] px-3 py-3">
       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
       <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
     </div>
@@ -42,10 +42,8 @@ export function TradingInfoTabs() {
   return (
     <div className="app-panel p-4 sm:p-5">
       <div className="mb-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Info Drawer
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="app-label">Info</p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
           Snapshot, headlines, fundamentals, options, market depth, and AI trade notes for {symbol}.
         </p>
       </div>
@@ -76,7 +74,7 @@ export function TradingInfoTabs() {
           </div>
 
           {snapshot?.name && (
-            <div className="mt-4 rounded-[20px] border border-border/70 bg-muted/18 px-4 py-4">
+            <div className="app-inset mt-4 rounded-[20px] px-4 py-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <BookOpen className="h-4 w-4 text-primary" />
                 {snapshot.name}
@@ -142,7 +140,7 @@ export function TradingInfoTabs() {
               {symbolNotes.map((trade) => (
                 <div
                   key={trade.id}
-                  className="rounded-[18px] border border-border/70 bg-background/70 px-4 py-4"
+                  className="app-inset rounded-[18px] bg-background/70 px-4 py-4"
                 >
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
                     <Waypoints className="h-3.5 w-3.5" />

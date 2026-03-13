@@ -116,13 +116,11 @@ export function SymbolSearch() {
 
   return (
     <div ref={wrapperRef} className="relative">
-      <div className="rounded-[24px] border border-border/70 bg-background/80 p-3 shadow-[0_20px_45px_-38px_hsl(var(--shadow-color)/0.9)]">
+      <div className="app-card p-3.5">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Search Securities
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="app-label">Search</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Ranked by symbol, company, and exchange match.
             </p>
           </div>
@@ -179,7 +177,7 @@ export function SymbolSearch() {
                       type="button"
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => commitSymbol(result.symbol)}
-                      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[20px] px-3 py-3 text-left transition-colors hover:bg-muted/45"
+                      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[18px] border border-transparent px-3 py-3 text-left transition-colors hover:border-border/60 hover:bg-muted/35"
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -214,7 +212,7 @@ export function SymbolSearch() {
                 })}
               </div>
             ) : (
-              <div className="rounded-[18px] border border-dashed border-border/70 px-4 py-5 text-center">
+              <div className="app-inset rounded-[18px] border-dashed px-4 py-5 text-center">
                 <p className="text-sm font-medium text-foreground">
                   No ranked match for “{deferredInput.toUpperCase()}”
                 </p>
@@ -246,7 +244,7 @@ export function SymbolSearch() {
               </div>
             </div>
           ) : (
-            <div className="rounded-[18px] border border-dashed border-border/70 px-4 py-5 text-center">
+            <div className="app-inset rounded-[18px] border-dashed px-4 py-5 text-center">
               <Building2 className="mx-auto h-5 w-5 text-muted-foreground" />
               <p className="mt-2 text-sm font-medium text-foreground">
                 Start with a ticker, company name, or ETF.

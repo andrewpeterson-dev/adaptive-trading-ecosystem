@@ -195,9 +195,9 @@ export function AIWidget() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-50 flex h-[100dvh] w-full min-w-0 flex-col border-l border-border/50 bg-background/95 shadow-2xl shadow-black/20 backdrop-blur-xl sm:left-auto sm:w-[460px]"
+            className="fixed inset-0 z-50 flex h-[100dvh] w-full min-w-0 flex-col border-l border-border/50 bg-background/95 shadow-2xl shadow-black/20 backdrop-blur-xl sm:left-auto sm:w-[480px]"
           >
-            <div className="max-h-[40vh] overflow-y-auto border-b border-border/50 bg-gradient-to-r from-primary/6 via-transparent to-transparent px-4 py-3 sm:max-h-[45vh]">
+            <div className="max-h-[40vh] overflow-y-auto border-b border-border/50 bg-gradient-to-r from-primary/6 via-transparent to-transparent px-4 py-4 sm:max-h-[45vh] sm:px-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2.5">
@@ -235,13 +235,13 @@ export function AIWidget() {
 
                 <button
                   onClick={closeCerberus}
-                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="app-button-icon h-9 w-9"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="mt-4 rounded-[22px] border border-border/60 bg-muted/20 p-3">
+              <div className="app-inset mt-4 rounded-[22px] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="app-label">Connected Data</p>
@@ -289,7 +289,7 @@ export function AIWidget() {
                 </div>
               </div>
 
-              <div className="mt-3 rounded-[22px] border border-border/60 bg-muted/20 p-3">
+              <div className="app-inset mt-3 rounded-[22px] p-3">
                 <div className="flex items-center gap-2">
                   <Activity className="h-4 w-4 text-primary" />
                   <p className="app-label">State Table</p>

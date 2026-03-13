@@ -27,6 +27,8 @@ export function RiskGauge() {
     medium: "bg-amber-400",
     high: "bg-rose-400",
   };
+  const vix = data?.components.vix as { value?: number } | undefined;
+  const fearGreed = data?.components.fear_greed as { value?: number } | undefined;
 
   return (
     <div className="app-panel p-5 sm:p-6">
@@ -57,30 +59,30 @@ export function RiskGauge() {
         </div>
       </div>
 
-      {data && (
+      {data ? (
         <div className="mt-4 grid grid-cols-3 gap-3">
-          {data.components.vix && (
+          {vix ? (
             <div className="rounded-2xl border border-border/60 bg-muted/10 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">VIX</div>
               <div className="mt-1 text-sm font-semibold text-foreground">
-                {(data.components.vix as { value: number }).value?.toFixed(1) ?? "—"}
+                {vix.value?.toFixed(1) ?? "—"}
               </div>
             </div>
-          )}
-          {data.components.fear_greed && (
+          ) : null}
+          {fearGreed ? (
             <div className="rounded-2xl border border-border/60 bg-muted/10 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Fear/Greed</div>
               <div className="mt-1 text-sm font-semibold text-foreground">
-                {(data.components.fear_greed as { value: number }).value?.toFixed(0) ?? "—"}
+                {fearGreed.value?.toFixed(0) ?? "—"}
               </div>
             </div>
-          )}
+          ) : null}
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-3 py-2.5">
             <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Active Events</div>
             <div className="mt-1 text-sm font-semibold text-foreground">{data.active_events}</div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

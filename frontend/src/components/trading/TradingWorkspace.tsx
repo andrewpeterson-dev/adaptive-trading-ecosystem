@@ -38,18 +38,45 @@ function DrawerShell({
 }) {
   const isLeft = side === "left";
 
+  if (!open) {
+    return (
+      <aside className="min-w-0">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="app-panel flex min-h-[520px] w-full flex-col items-center justify-center gap-4 px-2 py-5 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={`Expand ${title}`}
+        >
+          {isLeft ? (
+            <PanelLeft className="h-4 w-4" />
+          ) : (
+            <PanelRight className="h-4 w-4" />
+          )}
+          <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-[0.24em]">
+            {title}
+          </span>
+          <span className="text-[11px] leading-4 text-muted-foreground/80">
+            {isLeft ? "Search and watchlist" : "Ticket and info"}
+          </span>
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="min-w-0">
-      <div className="app-panel p-3">
-        <div className="flex items-start justify-between gap-3">
-          {open && (
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {title}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-            </div>
-          )}
+      <div className="app-panel overflow-hidden">
+        <div
+          className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3.5"
+        >
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              {title}
+            </p>
+            <p className="mt-1 max-w-[17rem] text-[13px] leading-5 text-muted-foreground">
+              {description}
+            </p>
+          </div>
 
           <button
             type="button"
@@ -66,15 +93,9 @@ function DrawerShell({
             )}
           </button>
         </div>
-      </div>
 
-      {open ? (
-        <div className="mt-4 space-y-4">{children}</div>
-      ) : (
-        <div className="app-panel mt-4 flex items-center justify-center p-6 text-center text-xs text-muted-foreground">
-          {title}
-        </div>
-      )}
+        <div className="space-y-4 px-4 py-4">{children}</div>
+      </div>
     </aside>
   );
 }

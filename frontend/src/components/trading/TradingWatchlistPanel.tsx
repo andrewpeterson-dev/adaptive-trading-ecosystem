@@ -38,9 +38,7 @@ export function TradingWatchlistPanel() {
     <div className="app-panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Watchlist
-          </p>
+          <p className="app-label">Watchlist</p>
           <p className="mt-1 text-sm font-medium text-foreground">
             Keep a short list beside the chart.
           </p>
@@ -69,10 +67,10 @@ export function TradingWatchlistPanel() {
             return (
               <div
                 key={item}
-                className={`flex items-center gap-3 rounded-3xl border px-4 py-3 transition-colors ${
+                className={`flex items-center gap-3 rounded-[24px] border px-4 py-3 transition-colors ${
                   active
                     ? "border-primary/35 bg-primary/10"
-                    : "border-border/60 bg-muted/20 hover:border-border hover:bg-muted/35"
+                    : "border-border/60 bg-muted/14 hover:border-border hover:bg-muted/28"
                 }`}
               >
                 <button

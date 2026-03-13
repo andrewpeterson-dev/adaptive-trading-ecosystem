@@ -164,8 +164,8 @@ export function StrategyBuilder() {
 
   return (
     <div className="flex h-full flex-col space-y-4 overflow-y-auto p-4">
-      <div>
-        <h3 className="text-sm font-semibold text-foreground mb-1">Cerberus Strategy Drafting</h3>
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-foreground">Cerberus Strategy Drafting</h3>
         <p className="text-xs text-muted-foreground">
           Cerberus turns plain-language ideas into a builder-ready spec, then you decide whether to send it into the main builder or import it as a bot.
         </p>
@@ -231,7 +231,7 @@ export function StrategyBuilder() {
       </div>
 
       {generatedStrategy && !importedBotId && (
-        <div className="rounded-[22px] border border-primary/30 bg-primary/5 p-4 space-y-3">
+        <div className="app-card space-y-3 border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium text-foreground">Strategy ready</span>

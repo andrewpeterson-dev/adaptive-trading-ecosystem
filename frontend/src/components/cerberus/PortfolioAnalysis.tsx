@@ -86,8 +86,8 @@ export function PortfolioAnalysis() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4 space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold text-foreground mb-1">Portfolio Analysis</h3>
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-foreground">Portfolio Analysis</h3>
         <p className="text-xs text-muted-foreground">
           Cerberus can review holdings, exposure, and realized trade quality once a broker is connected.
         </p>
@@ -108,7 +108,7 @@ export function PortfolioAnalysis() {
 
       {status?.portfolioConnected && (
         <>
-          <div className="grid gap-3 rounded-[22px] border border-border/60 bg-muted/20 p-4">
+          <div className="app-inset grid gap-3 rounded-[22px] p-4">
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-400" />
               <div>
@@ -120,13 +120,15 @@ export function PortfolioAnalysis() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="space-y-2">
+            <p className="app-label">Quick Reviews</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {quickActions.map((action) => (
               <button
                 key={action.label}
                 onClick={() => handleAction(action.prompt)}
                 disabled={isLoading}
-                className="rounded-xl border border-border bg-background/60 px-3 py-3 text-left transition-all hover:border-primary/30 hover:bg-muted disabled:opacity-50"
+                className="app-inset rounded-[20px] px-3.5 py-3.5 text-left transition-all hover:border-primary/30 hover:bg-muted/20 disabled:opacity-50"
               >
                 <span className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <LineChart className="h-3.5 w-3.5 text-primary" />
@@ -137,6 +139,7 @@ export function PortfolioAnalysis() {
                 </p>
               </button>
             ))}
+            </div>
           </div>
         </>
       )}

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   Trash2,
   Shield,
-  ChevronRight,
   Pencil,
   Play,
   Copy,
@@ -181,7 +180,7 @@ export default function StrategiesPage() {
         meta={
           <Badge variant="neutral" className="tracking-normal">
             <span className="font-mono">{strategies.length}</span>
-            strategy{strategies.length !== 1 ? "ies" : ""}
+            strateg{strategies.length !== 1 ? "ies" : "y"}
           </Badge>
         }
         actions={
@@ -212,15 +211,15 @@ export default function StrategiesPage() {
             <div
               key={strategy.id}
               onClick={() => router.push(`/edit/${strategy.id}`)}
-              className="app-panel cursor-pointer p-4 transition-transform hover:-translate-y-0.5 sm:p-5"
+              className="app-panel group cursor-pointer p-4 transition-transform hover:-translate-y-0.5 sm:p-5"
             >
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-                <div className="flex flex-1 flex-col gap-3">
+              <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start">
+                <div className="min-w-0 flex-1 space-y-3.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <ScoreBadge score={strategy.diagnostics?.score ?? 0} />
                     <h3 className="text-lg font-semibold tracking-tight text-foreground">
                       {strategy.name}
                     </h3>
+                    <ScoreBadge score={strategy.diagnostics?.score ?? 0} />
                     <Badge variant="neutral">{strategy.action}</Badge>
                     <Badge variant="neutral">{strategy.timeframe}</Badge>
                     <Badge
@@ -240,17 +239,18 @@ export default function StrategiesPage() {
                     </Badge>
                   </div>
 
-                  <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
-                    {conditionSummary(strategy) || "No conditions defined yet."}
-                  </p>
-
-                  {strategy.description && (
-                    <p className="text-sm italic text-muted-foreground/80">
-                      {strategy.description}
+                  <div className="space-y-2">
+                    <p className="max-w-4xl text-sm leading-6 text-muted-foreground">
+                      {conditionSummary(strategy) || "No conditions defined yet."}
                     </p>
-                  )}
+                    {strategy.description && (
+                      <p className="max-w-3xl text-sm leading-6 text-muted-foreground/80">
+                        {strategy.description}
+                      </p>
+                    )}
+                  </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
                     <Badge variant="neutral" className="tracking-normal">
                       <span className="font-mono">{conditionCount(strategy)}</span>
                       conditions
@@ -269,7 +269,7 @@ export default function StrategiesPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-4 2xl:max-w-[26rem] 2xl:justify-end 2xl:border-t-0 2xl:pt-0">
                   <Button
                     onClick={(event) => {
                       event.stopPropagation();
@@ -284,7 +284,7 @@ export default function StrategiesPage() {
                   <Button
                     onClick={(event) => deployStrategy(strategy, event)}
                     disabled={deployingId === strategy.id}
-                    variant={deployedIds.has(strategy.id) ? "success" : "secondary"}
+                    variant={deployedIds.has(strategy.id) ? "success" : "primary"}
                     size="sm"
                   >
                     {deployingId === strategy.id ? (
@@ -308,7 +308,7 @@ export default function StrategiesPage() {
                   <Button
                     onClick={(event) => cloneStrategy(strategy, event)}
                     disabled={cloningId === strategy.id}
-                    variant="secondary"
+                    variant="subtle"
                     size="sm"
                   >
                     {cloningId === strategy.id ? (
@@ -323,7 +323,7 @@ export default function StrategiesPage() {
                       event.stopPropagation();
                       router.push(`/intelligence/${strategy.id}`);
                     }}
-                    variant="secondary"
+                    variant="subtle"
                     size="sm"
                   >
                     <Brain className="h-3.5 w-3.5" />
@@ -337,7 +337,6 @@ export default function StrategiesPage() {
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
                   </Button>
-                  <ChevronRight className="hidden h-4 w-4 text-muted-foreground/50 xl:block" />
                 </div>
               </div>
             </div>

@@ -227,6 +227,9 @@ async def _ensure_reasoning_schema() -> None:
             add_column_if_missing("cerberus_bots", "reasoning_model_config", "JSON")
             add_column_if_missing("cerberus_bot_versions", "universe_config", "JSON")
             add_column_if_missing("cerberus_bot_versions", "override_level", "VARCHAR(16) DEFAULT 'soft'")
+            add_column_if_missing("trading_models", "mode", "VARCHAR(8) DEFAULT 'paper' NOT NULL")
+            add_column_if_missing("portfolio_snapshots", "user_id", "INTEGER")
+            add_column_if_missing("capital_allocations", "mode", "VARCHAR(8) DEFAULT 'paper' NOT NULL")
 
         await conn.run_sync(_ensure)
 
