@@ -9,6 +9,7 @@ import { AllocationChart } from "@/components/analytics/AllocationChart";
 import type { ModelDetail, RegimeData, EnsembleStatus } from "@/types/models";
 import type { AllocationEntry } from "@/types/portfolio";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -122,6 +123,12 @@ export default function ModelsPage() {
 
   return (
     <div className="app-page">
+      <SubNav items={[
+        { href: "/ai-intelligence", label: "Market Intel" },
+        { href: "/models", label: "Models" },
+        { href: "/quant", label: "Quant" },
+      ]} />
+
       <PageHeader
         eyebrow="Signals"
         title="Model Performance"

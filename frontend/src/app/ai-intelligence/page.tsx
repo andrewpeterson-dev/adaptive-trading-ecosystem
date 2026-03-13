@@ -2,12 +2,25 @@
 
 import { Brain } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 import { RiskGauge } from "@/components/intelligence/RiskGauge";
 import { ActiveEvents } from "@/components/intelligence/ActiveEvents";
+import { NewsFeed } from "@/components/intelligence/NewsFeed";
+import { SectorMomentum } from "@/components/intelligence/SectorMomentum";
+import { SentimentTicker } from "@/components/intelligence/SentimentTicker";
+import { EarningsCalendar } from "@/components/intelligence/EarningsCalendar";
 
 export default function AIIntelligencePage() {
   return (
     <div className="app-page">
+      <SubNav
+        items={[
+          { href: "/ai-intelligence", label: "Market Intel" },
+          { href: "/models", label: "Models" },
+          { href: "/quant", label: "Quant" },
+        ]}
+      />
+
       <PageHeader
         eyebrow="AI Reasoning Layer"
         title="Market Intelligence"
@@ -20,8 +33,21 @@ export default function AIIntelligencePage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.5fr]">
+      {/* Row 1: Risk Score + Sentiment */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <RiskGauge />
+        <SentimentTicker />
+      </div>
+
+      {/* Row 2: News + Sector Momentum */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
+        <NewsFeed />
+        <SectorMomentum />
+      </div>
+
+      {/* Row 3: Earnings + Active Events */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <EarningsCalendar />
         <ActiveEvents />
       </div>
     </div>

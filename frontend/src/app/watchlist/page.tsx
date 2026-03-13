@@ -15,6 +15,7 @@ import { QuoteCard } from "@/components/trading/QuoteCard";
 import type { QuoteData } from "@/components/trading/QuoteCard";
 import { WatchlistRow } from "@/components/trading/WatchlistRow";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -99,6 +100,11 @@ export default function WatchlistPage() {
 
   return (
     <div className="app-page">
+      <SubNav items={[
+        { href: "/trade", label: "Workspace" },
+        { href: "/watchlist", label: "Watchlist" },
+      ]} />
+
       <PageHeader
         eyebrow="Market Pulse"
         title="Watchlist"

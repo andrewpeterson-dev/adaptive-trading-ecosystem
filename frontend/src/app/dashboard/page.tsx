@@ -16,6 +16,7 @@ import { SentimentPanel } from "@/components/analytics/SentimentPanel";
 import { PortfolioRiskPanel } from "@/components/analytics/PortfolioRiskPanel";
 import { CombinedLedgerCard } from "@/components/ledger/CombinedLedgerCard";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 
 function formatCurrency(val: number): string {
   return val.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -183,6 +184,12 @@ export default function DashboardPage() {
 
   return (
     <div className="app-page">
+      <SubNav items={[
+        { href: "/dashboard", label: "Overview" },
+        { href: "/portfolio", label: "Portfolio" },
+        { href: "/risk", label: "Risk" },
+      ]} />
+
       <PageHeader
         eyebrow="Overview"
         title="Trading Dashboard"

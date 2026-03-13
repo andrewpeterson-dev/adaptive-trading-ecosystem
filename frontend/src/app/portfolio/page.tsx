@@ -15,6 +15,7 @@ import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import { AllocationChart } from "@/components/analytics/AllocationChart";
 import type { ModelInfo, AllocationEntry, EquityCurvePoint } from "@/types/portfolio";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -114,6 +115,12 @@ export default function PortfolioPage() {
 
   return (
     <div className="app-page">
+      <SubNav items={[
+        { href: "/dashboard", label: "Overview" },
+        { href: "/portfolio", label: "Portfolio" },
+        { href: "/risk", label: "Risk" },
+      ]} />
+
       <PageHeader
         eyebrow="Capital"
         title="Portfolio"

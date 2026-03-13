@@ -15,6 +15,7 @@ import { RiskGauge } from "@/components/analytics/RiskGauge";
 import { RiskEventLog } from "@/components/analytics/RiskEventLog";
 import type { RiskEvent, RiskSummaryExtended, RiskGaugeConfig } from "@/types/risk";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -132,6 +133,12 @@ export default function RiskPage() {
 
   return (
     <div className="app-page">
+      <SubNav items={[
+        { href: "/dashboard", label: "Overview" },
+        { href: "/portfolio", label: "Portfolio" },
+        { href: "/risk", label: "Risk" },
+      ]} />
+
       <PageHeader
         eyebrow="Protection"
         title="Risk Monitoring"

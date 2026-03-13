@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo } from "react";
 import { Loader2, RefreshCw, Unplug } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { TradingWorkspace } from "@/components/trading/TradingWorkspace";
 import { useTradeStore } from "@/stores/trade-store";
@@ -72,6 +73,11 @@ export default function TradePage() {
 
   return (
     <div className="app-page">
+      <SubNav items={[
+        { href: "/trade", label: "Workspace" },
+        { href: "/watchlist", label: "Watchlist" },
+      ]} />
+
       <PageHeader
         eyebrow="Execution"
         title={`${mode === "live" ? "Live" : "Paper"} Trading`}

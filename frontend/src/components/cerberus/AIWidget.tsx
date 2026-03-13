@@ -154,9 +154,10 @@ export function AIWidget() {
 
   return (
     <>
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {!isOpen && (
           <motion.div
+            key="cerberus-bubble"
             ref={bubbleRef}
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -188,9 +189,10 @@ export function AIWidget() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isOpen && (
           <motion.div
+            key="cerberus-panel"
             initial={{ x: '100%', opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}

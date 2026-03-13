@@ -24,6 +24,7 @@ import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -206,6 +207,12 @@ export default function QuantPage() {
 
   return (
     <div className="app-page">
+      <SubNav items={[
+        { href: "/ai-intelligence", label: "Market Intel" },
+        { href: "/models", label: "Models" },
+        { href: "/quant", label: "Quant" },
+      ]} />
+
       <PageHeader
         eyebrow="Research"
         title="Quant Intelligence"
