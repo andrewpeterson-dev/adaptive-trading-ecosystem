@@ -5,6 +5,7 @@ AI Reasoning Layer endpoints — market events, risk score, bot reasoning/learni
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -38,8 +39,8 @@ def _get_user_id(request: Request) -> int:
 @router.get("/events")
 async def get_market_events(
     request: Request,
-    event_type: str | None = Query(None),
-    impact: str | None = Query(None),
+    event_type: Optional[str] = Query(None),
+    impact: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get active market events (non-expired)."""

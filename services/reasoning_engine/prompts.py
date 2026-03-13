@@ -1,4 +1,5 @@
 """Prompt templates for AI reasoning decisions."""
+from __future__ import annotations
 
 TRADE_DECISION_SYSTEM = """You are an AI trading analyst evaluating whether a bot should execute a trade signal.
 
