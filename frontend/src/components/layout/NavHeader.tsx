@@ -33,17 +33,12 @@ import {
 import { BrandLogo } from "./BrandLogo";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Builder" },
-  { href: "/strategies", label: "Strategies" },
-  { href: "/bots", label: "Bots" },
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/trade", label: "Trade" },
-  { href: "/watchlist", label: "Watchlist" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/models", label: "Models" },
-  { href: "/risk", label: "Risk" },
-  { href: "/quant", label: "Quant" },
-  { href: "/ai-intelligence", label: "AI Intel" },
+  { href: "/", label: "Builder", activeFor: ["/"] },
+  { href: "/strategies", label: "Strategies", activeFor: ["/strategies"] },
+  { href: "/bots", label: "Bots", activeFor: ["/bots"] },
+  { href: "/dashboard", label: "Dashboard", activeFor: ["/dashboard", "/portfolio", "/risk"] },
+  { href: "/trade", label: "Trade", activeFor: ["/trade", "/watchlist"] },
+  { href: "/ai-intelligence", label: "Intelligence", activeFor: ["/ai-intelligence", "/models", "/quant"] },
 ];
 
 export function NavHeader() {
@@ -61,9 +56,11 @@ export function NavHeader() {
     setMenuOpen(false);
   }, [pathname]);
 
-  const isActive = (href: string) => {
-    if (href === "/") return pathname === "/";
-    return pathname.startsWith(href);
+  const isActive = (item: typeof NAV_ITEMS[number]) => {
+    if (!pathname) return false;
+    return item.activeFor.some((route) =>
+      route === "/" ? pathname === "/" : pathname.startsWith(route)
+    );
   };
 
   const handleModeRequest = async (targetMode: "paper" | "live") => {
@@ -123,7 +120,7 @@ export function NavHeader() {
                       href={item.href}
                       className={cn(
                         "rounded-full px-4 py-2.5 text-[13px] font-medium tracking-tight transition-all",
-                        isActive(item.href)
+                        isActive(item)
                           ? "border border-primary/20 bg-primary/12 text-primary shadow-[0_14px_26px_-22px_rgba(59,130,246,0.55)]"
                           : "text-muted-foreground hover:bg-muted/35 hover:text-foreground"
                       )}
@@ -250,7 +247,7 @@ export function NavHeader() {
                     href={item.href}
                     className={cn(
                       "rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
-                      isActive(item.href)
+                      isActive(item)
                         ? "app-card text-foreground"
                         : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                     )}
