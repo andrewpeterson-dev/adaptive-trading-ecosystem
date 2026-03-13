@@ -64,36 +64,20 @@ async def _get_user_clients(user_id: int, mode: str = "paper") -> Optional[Webul
     app_key: Optional[str] = None
     app_secret: Optional[str] = None
 
-    # 1. Try legacy BrokerCredential table
+    # 1. Prefer the current UserApiConnection system.
     async with get_session() as db:
         result = await db.execute(
-            select(BrokerCredential).where(
-                BrokerCredential.user_id == user_id,
-                BrokerCredential.broker_type == BrokerType.WEBULL,
+            select(UserApiConnection)
+            .join(ApiProvider)
+            .where(
+                UserApiConnection.user_id == user_id,
+                UserApiConnection.status == "connected",
+                ApiProvider.slug == "webull",
             )
         )
-        cred = result.scalar_one_or_none()
+        conn = result.scalar_one_or_none()
 
-    if cred:
-        app_key = decrypt_value(cred.encrypted_api_key)
-        app_secret = decrypt_value(cred.encrypted_api_secret)
-    else:
-        # 2. Fallback: new UserApiConnection system
-        async with get_session() as db:
-            result = await db.execute(
-                select(UserApiConnection)
-                .join(ApiProvider)
-                .where(
-                    UserApiConnection.user_id == user_id,
-                    UserApiConnection.status == "connected",
-                    ApiProvider.slug == "webull",
-                )
-            )
-            conn = result.scalar_one_or_none()
-
-        if not conn:
-            return None
-
+    if conn:
         try:
             creds = json.loads(decrypt_value(conn.encrypted_credentials))
             app_key = creds.get("app_key", "")
@@ -101,6 +85,22 @@ async def _get_user_clients(user_id: int, mode: str = "paper") -> Optional[Webul
         except Exception as exc:
             logger.error("webull_cred_decrypt_failed", user_id=user_id, error=str(exc))
             return None
+    else:
+        # 2. Fall back to legacy BrokerCredential storage for older users.
+        async with get_session() as db:
+            result = await db.execute(
+                select(BrokerCredential).where(
+                    BrokerCredential.user_id == user_id,
+                    BrokerCredential.broker_type == BrokerType.WEBULL,
+                )
+            )
+            cred = result.scalar_one_or_none()
+
+        if not cred:
+            return None
+
+        app_key = decrypt_value(cred.encrypted_api_key)
+        app_secret = decrypt_value(cred.encrypted_api_secret)
 
     if not app_key or not app_secret:
         return None

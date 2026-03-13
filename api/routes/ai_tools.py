@@ -395,14 +395,17 @@ async def _load_strategy_record(session, user_id: int, strategy_id: int) -> dict
 
 
 @router.post("/generate-strategy")
-async def generate_strategy(body: GenerateStrategyRequest):
+async def generate_strategy(request: Request, body: GenerateStrategyRequest):
     """Generate a structured strategy from a plain-language prompt."""
+    user_id = request.state.user_id
     service = AIStrategyService()
     prompt = body.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Prompt is required")
     try:
-        return await service.generate(prompt)
+        result = await service.generate(prompt)
+        logger.info("strategy_generated", user_id=user_id, prompt_len=len(prompt))
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -485,7 +488,7 @@ async def list_bots(request: Request):
                 )
                 version = version_result.scalar_one_or_none()
                 config = normalize_bot_config(version.config_json if version else {})
-            metrics = await _fetch_bot_metrics(session, bot.id, config or {})
+            metrics = await _fetch_bot_metrics(session, bot.id, config or {}, user_id=user_id)
             bot_list.append(
                 {
                     "id": bot.id,
@@ -789,11 +792,10 @@ async def get_bot_activity(bot_id: str, request: Request, limit: int = 50):
     return [_serialize_trade(trade, config) for trade in trades]
 
 
-async def _fetch_bot_metrics(session, bot_id: str, config: dict[str, Any]) -> dict[str, Any]:
-    result = await session.execute(
-        select(CerberusTrade)
-        .where(CerberusTrade.bot_id == bot_id)
-        .order_by(CerberusTrade.created_at.asc())
-    )
+async def _fetch_bot_metrics(session, bot_id: str, config: dict[str, Any], user_id: int | None = None) -> dict[str, Any]:
+    stmt = select(CerberusTrade).where(CerberusTrade.bot_id == bot_id)
+    if user_id is not None:
+        stmt = stmt.where(CerberusTrade.user_id == user_id)
+    result = await session.execute(stmt.order_by(CerberusTrade.created_at.asc()))
     trades = list(result.scalars().all())
     return calculate_trade_metrics(trades, config)

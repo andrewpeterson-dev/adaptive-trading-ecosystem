@@ -12,7 +12,6 @@ import json
 from datetime import datetime, timedelta
 from typing import Optional
 
-import httpx
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -22,8 +21,19 @@ from sqlalchemy import select
 from config.settings import get_settings, TradingMode
 from db.database import get_session
 from db.models import (
-    PaperPortfolio, PaperPosition, PaperTrade, Trade, TradeDirection, TradeStatus, TradingModeEnum, TradingModel, SystemEventType,
-    UserApiConnection, ApiProvider,
+    ApiProvider,
+    ApiProviderType,
+    PaperPortfolio,
+    PaperPosition,
+    PaperTrade,
+    SystemEventType,
+    Trade,
+    TradeDirection,
+    TradeStatus,
+    TradingModeEnum,
+    TradingModel,
+    UserApiConnection,
+    UserApiSettings,
 )
 from db.encryption import decrypt_value
 from risk.manager import RiskManager
@@ -48,78 +58,276 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
-_risk_manager = RiskManager()
+_legacy_risk_manager = RiskManager()
+_user_risk_managers: dict[int, RiskManager] = {}
 _executor = None
 _news_ingestion = NewsIngestion()
 
 
-def _get_executor():
-    """Lazy-init the Alpaca ExecutionEngine (fallback when no Webull creds)."""
+def _get_legacy_executor():
+    """Lazy-init the legacy Alpaca ExecutionEngine for non-user fallback flows."""
     global _executor
     if _executor is None:
         from engine.executor import ExecutionEngine
-        _executor = ExecutionEngine(risk_manager=_risk_manager)
+        _executor = ExecutionEngine(risk_manager=_legacy_risk_manager)
     return _executor
 
 
-async def _fetch_alpaca_account(user_id: int, mode: TradingModeEnum) -> Optional[dict]:
-    """
-    Fetch live account data from a connected Alpaca API for this user.
-    Only returns data if the connection's paper/live status matches the active mode.
-    """
-    try:
-        async with get_session() as db:
-            result = await db.execute(
-                select(UserApiConnection)
-                .join(ApiProvider)
-                .where(
-                    UserApiConnection.user_id == user_id,
-                    UserApiConnection.status == "connected",
-                    ApiProvider.slug == "alpaca",
-                )
-            )
-            conn = result.scalar_one_or_none()
-            if not conn:
-                return None
+def _get_risk_manager(user_id: int | None) -> RiskManager:
+    if user_id is None:
+        return _legacy_risk_manager
+    return _user_risk_managers.setdefault(user_id, RiskManager())
 
-            # Mode mismatch: paper API in live mode or vice versa → skip
-            conn_is_paper = conn.is_paper if conn.is_paper is not None else True
-            if mode == TradingModeEnum.LIVE and conn_is_paper:
-                return None
-            if mode == TradingModeEnum.PAPER and not conn_is_paper:
-                return None
 
-            creds = json.loads(decrypt_value(conn.encrypted_credentials))
-            api_key = creds.get("api_key", "")
-            api_secret = creds.get("api_secret", "")
-            base = (
-                "https://paper-api.alpaca.markets"
-                if conn_is_paper
-                else "https://api.alpaca.markets"
-            )
+def _connection_is_live_capable(conn: UserApiConnection, provider: ApiProvider) -> bool:
+    if provider.slug == "alpaca":
+        return not bool(conn.is_paper if conn.is_paper is not None else True)
+    return True
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{base}/v2/account",
-                headers={
-                    "APCA-API-KEY-ID": api_key,
-                    "APCA-API-SECRET-KEY": api_secret,
-                },
+
+async def _resolve_live_broker_context(user_id: int) -> dict:
+    async with get_session() as db:
+        settings_result = await db.execute(
+            select(UserApiSettings).where(UserApiSettings.user_id == user_id)
+        )
+        settings = settings_result.scalar_one_or_none()
+
+        result = await db.execute(
+            select(UserApiConnection, ApiProvider)
+            .join(ApiProvider)
+            .where(
+                UserApiConnection.user_id == user_id,
+                UserApiConnection.status == "connected",
+                ApiProvider.api_type == ApiProviderType.BROKERAGE,
             )
-            if resp.status_code == 200:
-                acct = resp.json()
+        )
+        rows = result.all()
+
+    if settings and settings.active_equity_broker_id:
+        for conn, provider in rows:
+            if conn.id != settings.active_equity_broker_id:
+                continue
+            if not _connection_is_live_capable(conn, provider):
                 return {
-                    "equity": float(acct.get("equity", 0)),
-                    "cash": float(acct.get("cash", 0)),
-                    "buying_power": float(acct.get("buying_power", 0)),
-                    "portfolio_value": float(acct.get("portfolio_value", 0)),
-                    "unrealized_pnl": float(acct.get("unrealized_pl", 0)),
-                    "account_number": acct.get("account_number", ""),
-                    "broker": "alpaca",
+                    "connection": None,
+                    "provider": None,
+                    "reason": "The selected active broker is configured for paper trading only. Choose a live broker in Settings.",
                 }
-    except Exception as exc:
-        logger.warning("alpaca_account_fetch_failed", user_id=user_id, error=str(exc))
-    return None
+            return {"connection": conn, "provider": provider, "reason": None}
+
+        return {
+            "connection": None,
+            "provider": None,
+            "reason": "The selected active broker is unavailable. Reconnect it or choose a different active broker in Settings.",
+        }
+
+    live_capable = [
+        (conn, provider)
+        for conn, provider in rows
+        if _connection_is_live_capable(conn, provider)
+    ]
+    if len(live_capable) == 1:
+        conn, provider = live_capable[0]
+        return {"connection": conn, "provider": provider, "reason": None}
+    if len(live_capable) > 1:
+        return {
+            "connection": None,
+            "provider": None,
+            "reason": "Multiple live brokers are connected. Select an active broker in Settings before trading live.",
+        }
+
+    wb = await _get_user_webull_client(user_id, "real")
+    if wb:
+        return {
+            "connection": None,
+            "provider": None,
+            "legacy_webull": True,
+            "reason": None,
+        }
+
+    if rows:
+        return {
+            "connection": None,
+            "provider": None,
+            "reason": "A connected brokerage was found, but it is not configured for live trading.",
+        }
+
+    return {
+        "connection": None,
+        "provider": None,
+        "reason": "No live trading account configured. Connect a live broker in Settings.",
+    }
+
+
+def _get_alpaca_credentials(conn: UserApiConnection) -> tuple[str, str]:
+    creds = json.loads(decrypt_value(conn.encrypted_credentials))
+    api_key = str(creds.get("api_key", "") or "").strip()
+    api_secret = str(creds.get("api_secret", "") or "").strip()
+    if not api_key or not api_secret:
+        raise HTTPException(status_code=400, detail="Connected Alpaca credentials are incomplete")
+    return api_key, api_secret
+
+
+def _build_alpaca_client(conn: UserApiConnection):
+    from alpaca.trading.client import TradingClient
+
+    api_key, api_secret = _get_alpaca_credentials(conn)
+    is_paper = bool(conn.is_paper if conn.is_paper is not None else True)
+    return TradingClient(api_key=api_key, secret_key=api_secret, paper=is_paper)
+
+
+async def _fetch_alpaca_account_from_connection(conn: UserApiConnection) -> dict:
+    def _fetch() -> dict:
+        client = _build_alpaca_client(conn)
+        account = client.get_account()
+        return {
+            "equity": float(account.equity),
+            "cash": float(account.cash),
+            "buying_power": float(account.buying_power),
+            "portfolio_value": float(account.portfolio_value),
+            "unrealized_pnl": float(getattr(account, "unrealized_pl", 0) or 0),
+            "account_number": getattr(account, "account_number", ""),
+            "broker": "alpaca",
+        }
+
+    return await asyncio.to_thread(_fetch)
+
+
+async def _fetch_alpaca_positions(conn: UserApiConnection) -> list[dict]:
+    def _fetch() -> list[dict]:
+        client = _build_alpaca_client(conn)
+        positions = client.get_all_positions()
+        return [
+            {
+                "symbol": position.symbol,
+                "quantity": float(position.qty),
+                "avg_entry_price": float(position.avg_entry_price),
+                "current_price": float(position.current_price),
+                "market_value": float(position.market_value),
+                "unrealized_pnl": float(position.unrealized_pl),
+                "unrealized_pnl_pct": _normalize_unrealized_pnl_pct(float(position.unrealized_plpc)),
+                "side": "short" if str(position.side).lower() == "short" else "long",
+                "asset_type": "stock",
+                "contract_symbol": None,
+                "underlying": None,
+                "expiration": None,
+                "strike": None,
+                "option_type": None,
+                "avg_premium": None,
+                "current_mark": None,
+            }
+            for position in positions
+        ]
+
+    return await asyncio.to_thread(_fetch)
+
+
+async def _fetch_alpaca_orders(conn: UserApiConnection, status_value: str = "open") -> list[dict]:
+    def _fetch() -> list[dict]:
+        from alpaca.trading.enums import QueryOrderStatus
+        from alpaca.trading.requests import GetOrdersRequest
+
+        client = _build_alpaca_client(conn)
+        status_map = {
+            "open": QueryOrderStatus.OPEN,
+            "closed": QueryOrderStatus.CLOSED,
+            "all": QueryOrderStatus.ALL,
+        }
+        request = GetOrdersRequest(status=status_map.get(status_value, QueryOrderStatus.OPEN))
+        orders = client.get_orders(request)
+        return [
+            {
+                "id": str(order.id),
+                "symbol": order.symbol,
+                "direction": str(order.side).lower(),
+                "quantity": float(order.qty) if order.qty else 0,
+                "order_type": str(order.type).lower(),
+                "status": str(order.status).lower(),
+                "filled_price": float(order.filled_avg_price) if getattr(order, "filled_avg_price", None) else None,
+                "submitted_at": str(order.submitted_at) if getattr(order, "submitted_at", None) else None,
+            }
+            for order in orders
+        ]
+
+    return await asyncio.to_thread(_fetch)
+
+
+async def _place_alpaca_order(
+    conn: UserApiConnection,
+    *,
+    symbol: str,
+    direction: str,
+    quantity: float,
+    order_type: str,
+    limit_price: float | None,
+    stop_price: float | None,
+) -> dict:
+    def _submit() -> dict:
+        from alpaca.trading.enums import OrderSide, TimeInForce
+        from alpaca.trading.requests import (
+            LimitOrderRequest,
+            MarketOrderRequest,
+            StopLimitOrderRequest,
+            StopOrderRequest,
+        )
+
+        client = _build_alpaca_client(conn)
+        normalized_direction = direction.strip().lower()
+        side = OrderSide.BUY if normalized_direction in {"long", "buy"} else OrderSide.SELL
+        normalized_order_type = order_type.strip().lower()
+
+        if normalized_order_type == "market":
+            order_request = MarketOrderRequest(
+                symbol=symbol.upper(),
+                qty=quantity,
+                side=side,
+                time_in_force=TimeInForce.DAY,
+            )
+        elif normalized_order_type == "limit":
+            if limit_price is None:
+                raise HTTPException(status_code=400, detail="limit_price is required for limit orders")
+            order_request = LimitOrderRequest(
+                symbol=symbol.upper(),
+                qty=quantity,
+                side=side,
+                time_in_force=TimeInForce.DAY,
+                limit_price=limit_price,
+            )
+        elif normalized_order_type == "stop":
+            if stop_price is None:
+                raise HTTPException(status_code=400, detail="stop_price is required for stop orders")
+            order_request = StopOrderRequest(
+                symbol=symbol.upper(),
+                qty=quantity,
+                side=side,
+                time_in_force=TimeInForce.DAY,
+                stop_price=stop_price,
+            )
+        elif normalized_order_type == "stop_limit":
+            if stop_price is None or limit_price is None:
+                raise HTTPException(status_code=400, detail="stop_price and limit_price are required for stop-limit orders")
+            order_request = StopLimitOrderRequest(
+                symbol=symbol.upper(),
+                qty=quantity,
+                side=side,
+                time_in_force=TimeInForce.DAY,
+                stop_price=stop_price,
+                limit_price=limit_price,
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported order type: {order_type}")
+
+        order = client.submit_order(order_request)
+        return {
+            "executed": True,
+            "mode": "live",
+            "success": True,
+            "status": str(order.status).lower(),
+            "order_id": str(order.id),
+            "client_order_id": getattr(order, "client_order_id", None),
+        }
+
+    return await asyncio.to_thread(_submit)
 
 
 async def _persist_legacy_trade_submission(
@@ -128,6 +336,7 @@ async def _persist_legacy_trade_submission(
     req: "ExecuteSignalRequest",
     order_result: dict,
     current_price: float,
+    quantity: float | None = None,
 ) -> None:
     model_name = (req.model_name or "manual").strip() or "manual"
     direction = req.direction.strip().lower()
@@ -156,12 +365,12 @@ async def _persist_legacy_trade_submission(
                 model_id=model.id,
                 symbol=req.symbol.upper(),
                 direction=trade_direction,
-                quantity=req.quantity,
+                quantity=quantity if quantity is not None else req.quantity,
                 entry_price=current_price,
                 status=TradeStatus.PENDING,
                 mode=mode,
                 order_id=order_result.get("order_id"),
-                notes="executor_fallback",
+                notes="broker_order_submission",
             )
         )
 
@@ -202,6 +411,51 @@ async def _resolve_reference_price(
 
 def _paper_trade_sort_key(trade: dict) -> str:
     return trade.get("filled_at") or trade.get("submitted_at") or ""
+
+
+def _normalize_webull_positions_payload(raw_positions: list[dict]) -> list[dict]:
+    positions: list[dict] = []
+    for position in raw_positions:
+        raw_symbol = position.get("symbol", "")
+        contract_meta = parse_occ_contract_symbol(raw_symbol)
+        quantity = float(position.get("quantity", 0) or 0)
+        avg_entry_price = float(position.get("avg_cost", position.get("cost_price", 0)) or 0)
+        current_price = float(position.get("last_price", position.get("market_price", 0)) or 0)
+        positions.append({
+            "symbol": contract_meta["underlying"] if contract_meta else raw_symbol,
+            "quantity": quantity,
+            "avg_entry_price": avg_entry_price,
+            "current_price": current_price,
+            "market_value": float(position.get("market_value", 0) or 0),
+            "unrealized_pnl": float(position.get("unrealized_pnl", 0) or 0),
+            "unrealized_pnl_pct": _normalize_unrealized_pnl_pct(position.get("unrealized_pnl_pct")),
+            "side": "short" if quantity < 0 else "long",
+            "asset_type": "option" if contract_meta else "stock",
+            "contract_symbol": raw_symbol if contract_meta else None,
+            "underlying": contract_meta["underlying"] if contract_meta else None,
+            "expiration": contract_meta["expiration"] if contract_meta else None,
+            "strike": contract_meta["strike"] if contract_meta else None,
+            "option_type": contract_meta["option_type"] if contract_meta else None,
+            "avg_premium": avg_entry_price if contract_meta else None,
+            "current_mark": current_price if contract_meta else None,
+        })
+    return positions
+
+
+def _normalize_webull_orders_payload(raw_orders: list[dict]) -> list[dict]:
+    return [
+        {
+            "id": order.get("client_order_id", order.get("order_id", "")),
+            "symbol": order.get("symbol", ""),
+            "direction": order.get("side", "").lower(),
+            "quantity": order.get("quantity", order.get("total_quantity", 0)),
+            "order_type": order.get("order_type", "MKT"),
+            "status": order.get("status", "unknown"),
+            "filled_price": order.get("filled_price"),
+            "submitted_at": order.get("place_time", order.get("created_at", "")),
+        }
+        for order in raw_orders
+    ]
 
 
 def _extract_bot_explanation(cerberus_trade) -> str | None:
@@ -509,41 +763,62 @@ class ExecuteOptionRequest(BaseModel):
 async def get_account(request: Request):
     """Get current account information — routes by active trading mode.
 
-    Priority: Webull (any mode) → Alpaca (mode-matched) → Paper portfolio.
-    For unified_mode brokers (Webull), the same credentials serve both modes.
+    Live mode requires a user-owned active broker selection.
+    Paper and backtest modes always use the local paper portfolio.
     """
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
-    # Try Webull first (works for both paper and live via unified_mode)
-    if user_id:
-        wb = await _get_user_webull_client(user_id, _wb_mode(mode))
-        if wb:
-            summary = await asyncio.to_thread(wb.account.get_summary)
-            if summary:
-                return {
-                    "equity": summary.get("net_liquidation", 0),
-                    "cash": summary.get("cash_balance", 0),
-                    "buying_power": summary.get("buying_power", 0),
-                    "portfolio_value": summary.get("total_market_value", 0),
-                    "unrealized_pnl": summary.get("unrealized_pnl", 0),
-                    "realized_pnl": summary.get("realized_pnl", 0),
-                    "account_id": summary.get("account_id"),
-                    "mode": mode.value.upper(),
-                    "broker": "webull",
-                }
-            # Evict stale cache so next request re-authenticates with current DB credentials
-            invalidate_user_client_cache(user_id, _wb_mode(mode))
-            logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id, mode=mode.value)
-
-    # Check for connected Alpaca broker (mode-aware)
-    if user_id:
-        alpaca_account = await _fetch_alpaca_account(user_id, mode)
-        if alpaca_account:
-            return {**alpaca_account, "mode": mode.value.upper()}
-
-    # Live mode but no live broker found — tell user
     if user_id and mode == TradingModeEnum.LIVE:
+        broker_context = await _resolve_live_broker_context(user_id)
+        provider = broker_context.get("provider")
+        connection = broker_context.get("connection")
+
+        if provider and provider.slug == "webull":
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                summary = await asyncio.to_thread(wb.account.get_summary)
+                if summary:
+                    return {
+                        "equity": summary.get("net_liquidation", 0),
+                        "cash": summary.get("cash_balance", 0),
+                        "buying_power": summary.get("buying_power", 0),
+                        "portfolio_value": summary.get("total_market_value", 0),
+                        "unrealized_pnl": summary.get("unrealized_pnl", 0),
+                        "realized_pnl": summary.get("realized_pnl", 0),
+                        "account_id": summary.get("account_id"),
+                        "mode": mode.value.upper(),
+                        "broker": "webull",
+                    }
+                invalidate_user_client_cache(user_id, "real")
+                logger.warning("webull_account_fetch_failed_evicting_cache", user_id=user_id, mode=mode.value)
+
+        if provider and provider.slug == "alpaca" and connection:
+            try:
+                alpaca_account = await _fetch_alpaca_account_from_connection(connection)
+                return {**alpaca_account, "mode": mode.value.upper()}
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.warning("alpaca_account_fetch_failed", user_id=user_id, connection_id=connection.id, error=str(exc))
+
+        if broker_context.get("legacy_webull"):
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                summary = await asyncio.to_thread(wb.account.get_summary)
+                if summary:
+                    return {
+                        "equity": summary.get("net_liquidation", 0),
+                        "cash": summary.get("cash_balance", 0),
+                        "buying_power": summary.get("buying_power", 0),
+                        "portfolio_value": summary.get("total_market_value", 0),
+                        "unrealized_pnl": summary.get("unrealized_pnl", 0),
+                        "realized_pnl": summary.get("realized_pnl", 0),
+                        "account_id": summary.get("account_id"),
+                        "mode": mode.value.upper(),
+                        "broker": "webull",
+                    }
+
         return {
             "equity": 0,
             "cash": 0,
@@ -552,10 +827,9 @@ async def get_account(request: Request):
             "broker": "none",
             "mode": "LIVE",
             "not_configured": True,
-            "message": "No live trading account configured. Connect a live API key in Settings.",
+            "message": broker_context.get("reason") or "No live trading account configured. Connect a live broker in Settings.",
         }
 
-    # Paper mode — use paper portfolio
     if user_id:
         async with get_session() as session:
             result = await session.execute(
@@ -592,7 +866,7 @@ async def get_account(request: Request):
             }
 
     try:
-        return _get_executor().get_account()
+        return _get_legacy_executor().get_account()
     except Exception as exc:
         logger.warning("get_account_failed", user_id=user_id, mode=mode.value, error=str(exc))
         raise HTTPException(status_code=503, detail="No broker connected")
@@ -604,39 +878,29 @@ async def get_positions(request: Request):
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
-    # Try Webull first (works for both paper and live)
-    if user_id:
-        wb = await _get_user_webull_client(user_id, _wb_mode(mode))
-        if wb:
-            raw = await asyncio.to_thread(wb.account.get_positions)
-            positions = []
-            for p in raw:
-                raw_symbol = p.get("symbol", "")
-                contract_meta = parse_occ_contract_symbol(raw_symbol)
-                quantity = float(p.get("quantity", 0) or 0)
-                avg_entry_price = float(p.get("avg_cost", p.get("cost_price", 0)) or 0)
-                current_price = float(p.get("last_price", p.get("market_price", 0)) or 0)
-                positions.append({
-                    "symbol": contract_meta["underlying"] if contract_meta else raw_symbol,
-                    "quantity": quantity,
-                    "avg_entry_price": avg_entry_price,
-                    "current_price": current_price,
-                    "market_value": float(p.get("market_value", 0) or 0),
-                    "unrealized_pnl": float(p.get("unrealized_pnl", 0) or 0),
-                    "unrealized_pnl_pct": _normalize_unrealized_pnl_pct(p.get("unrealized_pnl_pct")),
-                    "side": "short" if quantity < 0 else "long",
-                    "asset_type": "option" if contract_meta else "stock",
-                    "contract_symbol": raw_symbol if contract_meta else None,
-                    "underlying": contract_meta["underlying"] if contract_meta else None,
-                    "expiration": contract_meta["expiration"] if contract_meta else None,
-                    "strike": contract_meta["strike"] if contract_meta else None,
-                    "option_type": contract_meta["option_type"] if contract_meta else None,
-                    "avg_premium": avg_entry_price if contract_meta else None,
-                    "current_mark": current_price if contract_meta else None,
-                })
+    if user_id and mode == TradingModeEnum.LIVE:
+        broker_context = await _resolve_live_broker_context(user_id)
+        provider = broker_context.get("provider")
+        connection = broker_context.get("connection")
+
+        if provider and provider.slug == "webull":
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                raw = await asyncio.to_thread(wb.account.get_positions)
+                return {"positions": _normalize_webull_positions_payload(raw), "mode": mode.value}
+
+        if provider and provider.slug == "alpaca" and connection:
+            positions = await _fetch_alpaca_positions(connection)
             return {"positions": positions, "mode": mode.value}
 
-    # Paper/backtest mode — paper positions for authenticated users
+        if broker_context.get("legacy_webull"):
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                raw = await asyncio.to_thread(wb.account.get_positions)
+                return {"positions": _normalize_webull_positions_payload(raw), "mode": mode.value}
+
+        return {"positions": [], "mode": mode.value}
+
     if user_id:
         from api.routes.paper_trading import get_paper_positions
         result = await get_paper_positions(request)
@@ -645,7 +909,7 @@ async def get_positions(request: Request):
         return result
 
     try:
-        return _get_executor().get_positions()
+        return _get_legacy_executor().get_positions()
     except Exception as exc:
         logger.warning("get_positions_failed", user_id=user_id, mode=mode.value, error=str(exc))
         raise HTTPException(status_code=503, detail="No broker connected")
@@ -657,30 +921,34 @@ async def get_orders(request: Request, status: str = "open"):
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
 
-    if user_id:
-        wb = await _get_user_webull_client(user_id, _wb_mode(mode))
-        if wb:
-            raw = await asyncio.to_thread(wb.account.get_open_orders)
-            orders = []
-            for o in raw:
-                orders.append({
-                    "id": o.get("client_order_id", o.get("order_id", "")),
-                    "symbol": o.get("symbol", ""),
-                    "direction": o.get("side", "").lower(),
-                    "quantity": o.get("quantity", o.get("total_quantity", 0)),
-                    "order_type": o.get("order_type", "MKT"),
-                    "status": o.get("status", "unknown"),
-                    "filled_price": o.get("filled_price"),
-                    "submitted_at": o.get("place_time", o.get("created_at", "")),
-                })
+    if user_id and mode == TradingModeEnum.LIVE:
+        broker_context = await _resolve_live_broker_context(user_id)
+        provider = broker_context.get("provider")
+        connection = broker_context.get("connection")
+
+        if provider and provider.slug == "webull":
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                raw = await asyncio.to_thread(wb.account.get_open_orders)
+                return {"orders": _normalize_webull_orders_payload(raw), "mode": mode.value}
+
+        if provider and provider.slug == "alpaca" and connection:
+            orders = await _fetch_alpaca_orders(connection, status)
             return {"orders": orders, "mode": mode.value}
 
-    # Paper mode — no open orders mechanism yet, return empty
-    if user_id and mode == TradingModeEnum.PAPER:
+        if broker_context.get("legacy_webull"):
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                raw = await asyncio.to_thread(wb.account.get_open_orders)
+                return {"orders": _normalize_webull_orders_payload(raw), "mode": mode.value}
+
+        return {"orders": [], "mode": mode.value}
+
+    if user_id and mode in (TradingModeEnum.PAPER, TradingModeEnum.BACKTEST):
         return {"orders": [], "mode": "paper"}
 
     try:
-        return _get_executor().get_orders(status=status)
+        return _get_legacy_executor().get_orders(status=status)
     except Exception as e:
         logger.warning("get_orders_failed", error=str(e))
         return {"orders": []}
@@ -873,9 +1141,15 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
             )
 
     if user_id and mode == TradingModeEnum.LIVE:
-        # Live mode — route to Webull
-        wb = await _get_user_webull_client(user_id, "real")
-        if wb:
+        broker_context = await _resolve_live_broker_context(user_id)
+        provider = broker_context.get("provider")
+        connection = broker_context.get("connection")
+
+        if provider and provider.slug == "webull":
+            wb = await _get_user_webull_client(user_id, "real")
+            if not wb:
+                raise HTTPException(status_code=503, detail="Active Webull broker is unavailable")
+
             from data.webull.trading import OrderRequest as WBOrderRequest
             # Map direction to Webull side
             side = req.direction.upper()
@@ -939,6 +1213,115 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                 "resolved_quantity": resolved_quantity,
             }
 
+        if provider and provider.slug == "alpaca" and connection:
+            from models.base import Signal
+
+            signal = Signal(
+                symbol=req.symbol,
+                direction=req.direction,
+                strength=req.strength,
+                model_name=req.model_name,
+            )
+            risk_manager = _get_risk_manager(user_id)
+            account = await _fetch_alpaca_account_from_connection(connection)
+            positions = await _fetch_alpaca_positions(connection)
+            current_exposure = sum(abs(float(position.get("market_value") or 0)) for position in positions)
+            current_price = await _resolve_reference_price(
+                request,
+                req.symbol,
+                req.direction,
+                limit_price=req.limit_price,
+                stop_price=req.stop_price,
+            )
+            approved, adjusted_quantity, reason = risk_manager.validate_trade(
+                signal=signal,
+                proposed_size=resolved_quantity,
+                current_equity=float(account["equity"]),
+                current_exposure=current_exposure,
+                current_price=current_price,
+            )
+            if not approved:
+                raise HTTPException(status_code=422, detail=reason)
+
+            order_result = await _place_alpaca_order(
+                connection,
+                symbol=req.symbol,
+                direction=req.direction,
+                quantity=adjusted_quantity,
+                order_type=req.order_type,
+                limit_price=req.limit_price,
+                stop_price=req.stop_price,
+            )
+            risk_manager.register_position(req.symbol.upper(), current_price, adjusted_quantity, req.direction.strip().lower())
+            await log_event(
+                user_id=user_id,
+                event_type=SystemEventType.TRADE_EXECUTED,
+                mode=TradingModeEnum.LIVE,
+                description=f"LIVE {req.direction.upper()} {float(adjusted_quantity):g} {req.symbol.upper()} via Alpaca",
+            )
+            try:
+                await _persist_legacy_trade_submission(
+                    user_id=user_id,
+                    mode=TradingModeEnum.LIVE,
+                    req=req,
+                    order_result=order_result,
+                    current_price=current_price,
+                    quantity=adjusted_quantity,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "alpaca_trade_persist_failed",
+                    user_id=user_id,
+                    symbol=req.symbol.upper(),
+                    error=str(exc),
+                )
+            order_result["resolved_quantity"] = adjusted_quantity
+            return order_result
+
+        if broker_context.get("legacy_webull"):
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                from data.webull.trading import OrderRequest as WBOrderRequest
+
+                side = req.direction.upper()
+                if side in ("LONG", "BUY"):
+                    side = "BUY"
+                elif side in ("SHORT", "SELL", "FLAT"):
+                    side = "SELL"
+
+                order_type_map = {
+                    "market": "MKT",
+                    "limit": "LMT",
+                    "stop": "STP",
+                    "stop_limit": "STP_LMT",
+                }
+                wb_req = WBOrderRequest(
+                    symbol=req.symbol.upper(),
+                    side=side,
+                    qty=int(resolved_quantity),
+                    order_type=order_type_map.get(req.order_type.lower(), "MKT"),
+                    limit_price=req.limit_price,
+                    stop_price=req.stop_price,
+                )
+                order_result = await asyncio.to_thread(
+                    wb.trading.place_order,
+                    wb_req,
+                    user_confirmed=req.user_confirmed,
+                )
+                if not order_result.success and not order_result.order_id:
+                    raise HTTPException(status_code=400, detail=order_result.error or "Order failed")
+                return {
+                    "executed": True,
+                    "mode": "live",
+                    "success": True,
+                    "status": "pending",
+                    "order_id": order_result.order_id,
+                    "client_order_id": order_result.client_order_id,
+                    "resolved_quantity": resolved_quantity,
+                }
+
+        raise HTTPException(status_code=400, detail=broker_context.get("reason") or "No live broker is configured")
+
     # Paper mode — route through paper trading for authenticated users
     if user_id and mode in (TradingModeEnum.PAPER, TradingModeEnum.BACKTEST):
         from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
@@ -988,12 +1371,12 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
     )
 
     try:
-        account = _get_executor().get_account()
+        account = _get_legacy_executor().get_account()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Broker unavailable: {str(e)}")
 
     current_equity = account["equity"]
-    positions = _get_executor().get_positions()
+    positions = _get_legacy_executor().get_positions()
     current_exposure = sum(abs(float(p["market_value"])) for p in positions)
 
     current_price = req.limit_price or req.stop_price or 0
@@ -1008,7 +1391,7 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
     if current_price == 0:
         raise HTTPException(status_code=400, detail="Price required for execution")
 
-    result = _get_executor().execute_signal(
+    result = _get_legacy_executor().execute_signal(
         signal=signal,
         quantity=resolved_quantity,
         current_price=current_price,
@@ -1121,37 +1504,102 @@ async def get_risk_summary(request: Request):
     """Get current risk status — scoped to active trading mode."""
     user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+    settings = get_settings()
 
     if user_id and mode == TradingModeEnum.LIVE:
-        wb = await _get_user_webull_client(user_id, "real")
-        if wb:
-            summary = await asyncio.to_thread(wb.account.get_summary)
-            equity = summary.get("net_liquidation", 0) if summary else 0
-            settings = get_settings()
-            return {
-                "is_halted": False,
-                "halt_reason": None,
-                "current_drawdown_pct": 0.0,
-                "max_drawdown_limit": settings.max_drawdown_pct,
-                "max_drawdown_limit_pct": settings.max_drawdown_pct,
-                "current_exposure_pct": 0.0,
-                "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
-                "trades_last_hour": 0,
-                "trades_this_hour": 0,
-                "max_trades_per_hour": settings.max_trades_per_hour,
-                "peak_equity": equity,
-                "open_positions": 0,
-                "recent_risk_events": 0,
-                "equity": equity,
-                "mode": "live",
-            }
+        broker_context = await _resolve_live_broker_context(user_id)
+        provider = broker_context.get("provider")
+        connection = broker_context.get("connection")
+        if provider and provider.slug == "webull":
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                summary = await asyncio.to_thread(wb.account.get_summary)
+                equity = summary.get("net_liquidation", 0) if summary else 0
+                return {
+                    "is_halted": False,
+                    "halt_reason": None,
+                    "current_drawdown_pct": 0.0,
+                    "max_drawdown_limit": settings.max_drawdown_pct,
+                    "max_drawdown_limit_pct": settings.max_drawdown_pct,
+                    "current_exposure_pct": 0.0,
+                    "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
+                    "trades_last_hour": 0,
+                    "trades_this_hour": 0,
+                    "max_trades_per_hour": settings.max_trades_per_hour,
+                    "peak_equity": equity,
+                    "open_positions": 0,
+                    "recent_risk_events": 0,
+                    "equity": equity,
+                    "mode": "live",
+                }
+        if provider and provider.slug == "alpaca" and connection:
+            account = await _fetch_alpaca_account_from_connection(connection)
+            summary = _get_risk_manager(user_id).get_risk_summary(float(account["equity"]))
+            summary["equity"] = float(account["equity"])
+            summary["mode"] = "live"
+            return summary
+        if broker_context.get("legacy_webull"):
+            wb = await _get_user_webull_client(user_id, "real")
+            if wb:
+                summary = await asyncio.to_thread(wb.account.get_summary)
+                equity = summary.get("net_liquidation", 0) if summary else 0
+                return {
+                    "is_halted": False,
+                    "halt_reason": None,
+                    "current_drawdown_pct": 0.0,
+                    "max_drawdown_limit": settings.max_drawdown_pct,
+                    "max_drawdown_limit_pct": settings.max_drawdown_pct,
+                    "current_exposure_pct": 0.0,
+                    "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
+                    "trades_last_hour": 0,
+                    "trades_this_hour": 0,
+                    "max_trades_per_hour": settings.max_trades_per_hour,
+                    "peak_equity": equity,
+                    "open_positions": 0,
+                    "recent_risk_events": 0,
+                    "equity": equity,
+                    "mode": "live",
+                }
+        return {
+            "is_halted": False,
+            "halt_reason": None,
+            "current_drawdown_pct": 0.0,
+            "max_drawdown_limit": settings.max_drawdown_pct,
+            "max_drawdown_limit_pct": settings.max_drawdown_pct,
+            "current_exposure_pct": 0.0,
+            "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
+            "trades_last_hour": 0,
+            "trades_this_hour": 0,
+            "max_trades_per_hour": settings.max_trades_per_hour,
+            "peak_equity": 0,
+            "open_positions": 0,
+            "recent_risk_events": 0,
+            "mode": "live",
+        }
+
+    if user_id:
+        return {
+            "is_halted": False,
+            "halt_reason": None,
+            "current_drawdown_pct": 0.0,
+            "max_drawdown_limit": settings.max_drawdown_pct,
+            "max_drawdown_limit_pct": settings.max_drawdown_pct,
+            "current_exposure_pct": 0.0,
+            "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
+            "trades_last_hour": 0,
+            "trades_this_hour": 0,
+            "max_trades_per_hour": settings.max_trades_per_hour,
+            "peak_equity": 0,
+            "open_positions": 0,
+            "recent_risk_events": 0,
+            "mode": mode.value,
+        }
     try:
-        account = _get_executor().get_account()
-        summary = _risk_manager.get_risk_summary(account["equity"])
+        account = _get_legacy_executor().get_account()
+        summary = _legacy_risk_manager.get_risk_summary(account["equity"])
         summary["mode"] = mode.value
         return summary
     except Exception:
-        settings = get_settings()
         return {
             "is_halted": False,
             "halt_reason": None,
@@ -1287,7 +1735,7 @@ async def get_trade_log(request: Request, limit: int = Query(default=100, ge=1, 
 
     # Fallback to executor log
     try:
-        return _get_executor().get_trade_log(limit=limit)
+        return _get_legacy_executor().get_trade_log(limit=limit)
     except Exception:
         return {"trades": [], "mode": mode.value}
 
@@ -1307,34 +1755,38 @@ async def switch_mode(req: SwitchModeRequest, request: Request):
         mode = TradingMode(req.mode)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid mode: {req.mode}")
-    _get_executor().switch_mode(mode)
+    _get_legacy_executor().switch_mode(mode)
     return {"status": "switched", "mode": mode.value}
 
 
 @router.get("/risk-events")
 async def get_risk_events(request: Request, limit: int = Query(default=50, ge=1, le=200)):
     """Get recent risk events filtered by current trading mode."""
+    user_id = getattr(request.state, "user_id", None)
     mode = getattr(request.state, "trading_mode", None)
-    events = _risk_manager.get_risk_events(limit=limit)
+    events = _get_risk_manager(user_id).get_risk_events(limit=limit)
     if mode and isinstance(events, list):
         return [e for e in events if e.get("mode") == mode.value or "mode" not in e]
     return events
 
 
 @router.post("/resume-trading")
-async def resume_trading():
+async def resume_trading(request: Request):
     """Resume trading after a halt."""
-    _risk_manager.resume_trading()
+    user_id = getattr(request.state, "user_id", None)
+    _get_risk_manager(user_id).resume_trading()
     return {"status": "resumed"}
 
 
 @router.get("/verify")
-async def verify_transactions():
+async def verify_transactions(request: Request):
     """Run transaction verification."""
+    if not getattr(request.state, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
     from services.security.verification import TransactionVerifier
     verifier = TransactionVerifier()
     try:
-        report = verifier.verify_execution(_executor)
+        report = verifier.verify_execution(_get_legacy_executor())
         return report
     except Exception as e:
         logger.exception("transaction_verification_failed", error=str(e))

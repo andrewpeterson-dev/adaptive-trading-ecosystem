@@ -15,13 +15,17 @@ router = APIRouter()
 
 @router.get("/equity-curve")
 async def get_equity_curve(request: Request):
-    """Get equity curve data for charting — filtered by active trading mode."""
+    """Get equity curve data for charting — filtered by user and active trading mode."""
+    user_id = request.state.user_id
     mode = request.state.trading_mode
 
     async with get_session() as db:
         result = await db.execute(
             select(PortfolioSnapshot)
-            .where(PortfolioSnapshot.mode == mode)
+            .where(
+                PortfolioSnapshot.mode == mode,
+                PortfolioSnapshot.user_id == user_id,
+            )
             .order_by(PortfolioSnapshot.timestamp.asc())
             .limit(500)
         )

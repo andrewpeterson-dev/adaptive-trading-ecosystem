@@ -1,5 +1,8 @@
 import { useCerberusStore } from '@/stores/cerberus-store';
 import type { StreamEvent, AssistantMessage } from '@/types/cerberus';
+import { getWebSocketToken } from '@/lib/api/auth';
+import { ApiError } from '@/lib/api/client';
+import { getWebSocketOrigin } from '@/lib/websocket-url';
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY_MS = 1000;
@@ -17,44 +20,58 @@ export class CerberusWebSocket {
 
   connect(): void {
     this.intentionalClose = false;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname;
-    const wsUrl = `${protocol}//${host}:8000/api/ai/stream/${this.threadId}`;
+    void this.openSocket();
+  }
 
-    this.ws = new WebSocket(wsUrl);
+  private async openSocket(): Promise<void> {
+    try {
+      const { token } = await getWebSocketToken();
+      const wsOrigin = getWebSocketOrigin();
+      const wsUrl = `${wsOrigin}/api/ai/stream/${this.threadId}?token=${encodeURIComponent(token)}`;
 
-    this.ws.onopen = () => {
-      this.reconnectAttempts = 0;
-      console.log('[CerberusWS] Connected', this.threadId);
-    };
+      this.ws = new WebSocket(wsUrl);
 
-    this.ws.onmessage = (event) => {
-      try {
-        const data: StreamEvent = JSON.parse(event.data);
-        this.handleEvent(data);
-      } catch (e) {
-        console.error('[CerberusWS] Parse error', e);
-      }
-    };
+      this.ws.onopen = () => {
+        this.reconnectAttempts = 0;
+        console.log('[CerberusWS] Connected', this.threadId);
+      };
 
-    this.ws.onclose = (event) => {
-      console.log('[CerberusWS] Disconnected', event.code, event.reason);
+      this.ws.onmessage = (event) => {
+        try {
+          const data: StreamEvent = JSON.parse(event.data);
+          this.handleEvent(data);
+        } catch (e) {
+          console.error('[CerberusWS] Parse error', e);
+        }
+      };
+
+      this.ws.onclose = (event) => {
+        console.log('[CerberusWS] Disconnected', event.code, event.reason);
+        this.ws = null;
+
+        if (this.intentionalClose) return;
+        if (event.code === 1000 || event.code === 1001) return;
+
+        this.scheduleReconnect();
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('[CerberusWS] Error', error);
+        this.ws?.close();
+      };
+    } catch (error) {
+      console.error('[CerberusWS] Failed to create websocket ticket', error);
       this.ws = null;
 
-      // Don't reconnect if intentionally closed or stream completed normally
-      if (this.intentionalClose) return;
-
-      // Normal closure (1000) or going away (1001) after done event — no reconnect
-      if (event.code === 1000 || event.code === 1001) return;
-
+      if (this.intentionalClose) {
+        return;
+      }
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        useCerberusStore.getState().setStreaming(false);
+        return;
+      }
       this.scheduleReconnect();
-    };
-
-    this.ws.onerror = (error) => {
-      console.error('[CerberusWS] Error', error);
-      // Close the socket so onclose fires and handles reconnection
-      this.ws?.close();
-    };
+    }
   }
 
   private scheduleReconnect(): void {

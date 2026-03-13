@@ -28,6 +28,9 @@ router = APIRouter()
 # Per-connection test cooldown: connection_id -> last_tested epoch
 _test_cooldowns: dict[int, float] = {}
 _TEST_COOLDOWN_SECONDS = 10
+_MAX_CREDENTIAL_FIELDS = 16
+_MAX_CREDENTIAL_VALUE_LENGTH = 2048
+_MAX_ERROR_MESSAGE_LENGTH = 256
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -94,6 +97,73 @@ def _settings_dict(s: UserApiSettings) -> dict:
         "options_fallback_enabled": getattr(s, "options_fallback_enabled", False),
         "options_provider_connection_id": getattr(s, "options_provider_connection_id", None),
     }
+
+
+def _provider_credential_keys(provider: ApiProvider) -> set[str]:
+    fields = provider.credential_fields or []
+    allowed: set[str] = set()
+    if isinstance(fields, dict):
+        source = fields.keys()
+    else:
+        source = fields
+    for field in source:
+        if isinstance(field, dict):
+            key = str(field.get("key", "")).strip()
+        else:
+            key = str(field).strip()
+        if key:
+            allowed.add(key)
+    return allowed
+
+
+def _sanitize_credentials(provider: ApiProvider, credentials: dict) -> dict[str, str]:
+    if not isinstance(credentials, dict):
+        raise HTTPException(status_code=400, detail="credentials must be an object")
+    if len(credentials) > _MAX_CREDENTIAL_FIELDS:
+        raise HTTPException(status_code=400, detail="Too many credential fields provided")
+
+    allowed_keys = _provider_credential_keys(provider)
+    unknown_keys = sorted(str(key) for key in credentials.keys() if str(key) not in allowed_keys)
+    if allowed_keys and unknown_keys:
+        raise HTTPException(status_code=400, detail=f"Unsupported credential fields: {', '.join(unknown_keys)}")
+
+    normalized: dict[str, str] = {}
+    for key, value in credentials.items():
+        field_name = str(key).strip()
+        if not field_name:
+            raise HTTPException(status_code=400, detail="Credential field names must be non-empty strings")
+        if isinstance(value, (dict, list, tuple, set)):
+            raise HTTPException(status_code=400, detail=f"{field_name} must be a string value")
+        field_value = str(value).strip()
+        if not field_value:
+            raise HTTPException(status_code=400, detail=f"{field_name} is required")
+        if len(field_value) > _MAX_CREDENTIAL_VALUE_LENGTH:
+            raise HTTPException(status_code=400, detail=f"{field_name} is too long")
+        normalized[field_name] = field_value
+
+    missing_keys = sorted(key for key in allowed_keys if key not in normalized)
+    if missing_keys:
+        raise HTTPException(status_code=400, detail=f"Missing credential fields: {', '.join(missing_keys)}")
+
+    return normalized
+
+
+def _sanitize_connection_error_message(message: Optional[str]) -> Optional[str]:
+    if not message:
+        return None
+    normalized = str(message).strip()
+    if not normalized:
+        return None
+    return normalized[:_MAX_ERROR_MESSAGE_LENGTH]
+
+
+def _sanitized_connection_test_error(slug: str, exc: Exception) -> str:
+    provider_name = slug.replace("_", " ").strip().title() or "Provider"
+    if isinstance(exc, httpx.TimeoutException):
+        return f"{provider_name} request timed out"
+    if isinstance(exc, httpx.NetworkError):
+        return f"Could not reach {provider_name}"
+    return f"{provider_name} connection test failed"
 
 
 # ── Connection tester ─────────────────────────────────────────────────────────
@@ -195,8 +265,8 @@ async def _test_connection_internal(
     except httpx.TimeoutException:
         return {"connected": False, "error": "Connection timed out"}
     except Exception as exc:
-        logger.warning("connection_test_error", slug=slug, error=str(exc))
-        return {"connected": False, "error": str(exc)}
+        logger.warning("connection_test_error", slug=slug, error_type=type(exc).__name__)
+        return {"connected": False, "error": _sanitized_connection_test_error(slug, exc)}
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -266,6 +336,8 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
     user_id = _require_user(request)
     if not req.credentials:
         raise HTTPException(status_code=400, detail="credentials are required")
+    if req.nickname is not None and len(req.nickname.strip()) > 100:
+        raise HTTPException(status_code=400, detail="nickname is too long")
 
     # Validate provider exists and is available
     async with get_session() as db:
@@ -278,14 +350,16 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         raise HTTPException(status_code=404, detail="Provider not found")
     if not provider.is_available:
         raise HTTPException(status_code=400, detail="Provider is not available")
+    credentials = _sanitize_credentials(provider, req.credentials)
+    nickname = req.nickname.strip() if req.nickname and req.nickname.strip() else None
 
     # Save via service (manages its own session)
     conn = await api_connection_manager.save_connection(
         user_id=user_id,
         provider_id=req.provider_id,
-        credentials=req.credentials,
+        credentials=credentials,
         is_paper=req.is_paper,
-        nickname=req.nickname,
+        nickname=nickname,
     )
 
     # Reload with provider relationship for test + response
@@ -297,9 +371,9 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         conn.provider = provider
 
         # Test immediately
-        test_result = await _test_connection_internal(conn, req.credentials)
+        test_result = await _test_connection_internal(conn, credentials)
         conn.status = "connected" if test_result["connected"] else "error"
-        conn.error_message = test_result.get("error")
+        conn.error_message = _sanitize_connection_error_message(test_result.get("error"))
         conn.last_tested_at = datetime.now(timezone.utc)
         # Auto-detect paper vs live for Alpaca
         if "is_paper" in test_result and provider.slug == "alpaca":
@@ -308,42 +382,18 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         await db.refresh(conn)
         conn.provider = provider
 
-    # Sync account data after successful connection
+    # Post-connect provider-specific initialization
     if test_result.get("connected"):
-        # Sync Alpaca account data into PaperPortfolio
-        acct_data = test_result.get("account_data")
-        if acct_data and provider.slug == "alpaca":
-            try:
-                from db.models import PaperPortfolio
-                async with get_session() as db:
-                    result = await db.execute(
-                        select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
-                    )
-                    portfolio = result.scalar_one_or_none()
-                    if portfolio:
-                        portfolio.cash = acct_data["cash"]
-                        portfolio.initial_capital = acct_data["equity"]
-                    else:
-                        db.add(PaperPortfolio(
-                            user_id=user_id,
-                            cash=acct_data["cash"],
-                            initial_capital=acct_data["equity"],
-                        ))
-                    await db.commit()
-                logger.info("alpaca_account_synced", user_id=user_id, equity=acct_data["equity"])
-            except Exception as exc:
-                logger.warning("alpaca_account_sync_failed", error=str(exc))
-
         # Discover and store broker accounts for Webull
         if provider.slug == "webull":
             try:
                 from services.account_discovery import discover_and_store_accounts
                 await discover_and_store_accounts(
-                    user_id=user_id,
-                    connection_id=conn.id,
-                    app_key=req.credentials.get("app_key", ""),
-                    app_secret=req.credentials.get("app_secret", ""),
-                )
+                        user_id=user_id,
+                        connection_id=conn.id,
+                        app_key=credentials.get("app_key", ""),
+                        app_secret=credentials.get("app_secret", ""),
+                    )
             except Exception as exc:
                 logger.warning("account_discovery_failed_on_connect", error=str(exc))
 
@@ -458,7 +508,7 @@ async def test_connection(connection_id: int, request: Request):
 
         # Update status
         conn.status = "connected" if test_result["connected"] else "error"
-        conn.error_message = test_result.get("error")
+        conn.error_message = _sanitize_connection_error_message(test_result.get("error"))
         conn.last_tested_at = datetime.now(timezone.utc)
         conn.updated_at = datetime.now(timezone.utc)
         await db.commit()
@@ -471,7 +521,10 @@ async def test_connection(connection_id: int, request: Request):
         connection_id=connection_id,
         connected=test_result["connected"],
     )
-    return {"connected": test_result["connected"], "error": test_result.get("error")}
+    return {
+        "connected": test_result["connected"],
+        "error": _sanitize_connection_error_message(test_result.get("error")),
+    }
 
 
 @router.get("/api-settings")

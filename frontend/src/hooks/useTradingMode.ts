@@ -11,6 +11,7 @@ import {
 } from "react";
 import React from "react";
 import { getServerMode, setServerMode } from "@/lib/api/mode";
+import { useThemeMode } from "@/hooks/useThemeMode";
 
 export type TradingMode = "paper" | "live";
 
@@ -32,6 +33,10 @@ function resolveStoredMode(): TradingMode {
   return stored === "live" ? "live" : "paper";
 }
 
+function themeForMode(mode: TradingMode): "light" | "dark" {
+  return mode === "live" ? "dark" : "light";
+}
+
 /**
  * Broadcast a custom event so all polling hooks and components know to re-fetch.
  * Components listen via useModeResetListener().
@@ -41,6 +46,7 @@ function broadcastModeReset(): void {
 }
 
 export function TradingModeProvider({ children }: { children: ReactNode }) {
+  const { setTheme } = useThemeMode();
   const [mode, setModeState] = useState<TradingMode>(resolveStoredMode);
   const [switching, setSwitching] = useState(false);
 
@@ -48,19 +54,20 @@ export function TradingModeProvider({ children }: { children: ReactNode }) {
     getServerMode()
       .then((serverMode) => {
         setModeState(serverMode);
-        window.localStorage.setItem(STORAGE_KEY, serverMode);
       })
-      .catch(() => {
-        window.localStorage.setItem(STORAGE_KEY, resolveStoredMode());
-      });
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, mode);
+    setTheme(themeForMode(mode));
+  }, [mode, setTheme]);
 
   const setMode = useCallback(async (next: TradingMode) => {
     setSwitching(true);
     try {
       await setServerMode(next);
       setModeState(next);
-      window.localStorage.setItem(STORAGE_KEY, next);
       broadcastModeReset();
     } catch (err) {
       console.error("Failed to switch mode:", err);

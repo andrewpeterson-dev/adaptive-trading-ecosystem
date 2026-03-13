@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthShell } from "@/components/layout/AuthShell";
+import { stashVerificationPreviewUrl } from "@/lib/auth-preview";
+import {
+  getPasswordPolicyError,
+  PASSWORD_POLICY_MESSAGE,
+} from "@/lib/password-policy";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -25,19 +30,27 @@ export default function RegisterPage() {
       setError("Passwords do not match");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+    const passwordError = getPasswordPolicyError(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
     setLoading(true);
     try {
-      await register(email, password, displayName);
-      router.push("/dashboard");
+      const result = await register(email, password, displayName);
+      if (result.verification_required || !result.user) {
+        stashVerificationPreviewUrl(result.development_verification_url);
+        const targetEmail = result.email || email;
+        router.push(`/verify-email?email=${encodeURIComponent(targetEmail)}`);
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Registration failed";
       setError(message);
+    } finally {
       setLoading(false);
     }
   }
@@ -106,8 +119,11 @@ export default function RegisterPage() {
               required
               autoComplete="new-password"
               className="app-input"
-              placeholder="Min 8 characters"
+              placeholder="Create a strong password"
             />
+            <p className="text-xs text-muted-foreground">
+              {PASSWORD_POLICY_MESSAGE}
+            </p>
           </div>
 
           <div className="space-y-2">

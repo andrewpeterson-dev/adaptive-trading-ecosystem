@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 
 interface OrderFormProps {
   onOrderPlaced: () => void;
@@ -18,15 +19,6 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const getAuthHeaders = useCallback((): Record<string, string> => {
-    const token = typeof window !== "undefined"
-      ? (document.cookie.match(/(?:^|; )auth_token=([^;]*)/)?.[1] || localStorage.getItem("auth_token"))
-      : null;
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) h["Authorization"] = `Bearer ${token}`;
-    return h;
-  }, []);
-
   const fetchPrice = useCallback(async (sym: string) => {
     if (!sym || sym.length < 1) {
       setPrice(null);
@@ -34,21 +26,16 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
     }
     setFetchingPrice(true);
     try {
-      const res = await fetch(`/api/trading/quote?symbol=${sym.toUpperCase()}`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPrice(data.price ?? data.last_price ?? data.close ?? null);
-      } else {
-        setPrice(null);
-      }
+      const data = await apiFetch<{ price?: number; last_price?: number; close?: number }>(
+        `/api/trading/quote?symbol=${sym.toUpperCase()}`
+      );
+      setPrice(data.price ?? data.last_price ?? data.close ?? null);
     } catch {
       setPrice(null);
     } finally {
       setFetchingPrice(false);
     }
-  }, [getAuthHeaders]);
+  }, []);
 
   const handleSymbolBlur = () => {
     if (symbol.trim()) fetchPrice(symbol.trim());
@@ -69,9 +56,8 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/trading/execute", {
+      await apiFetch("/api/trading/execute", {
         method: "POST",
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           symbol: sym,
           direction,
@@ -83,11 +69,6 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
           user_confirmed: true,
         }),
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.detail || `Order failed (${res.status})`);
-      }
 
       setSuccess(`${direction === "long" ? "Buy" : "Sell"} ${qty} ${sym} submitted`);
       setSymbol("");

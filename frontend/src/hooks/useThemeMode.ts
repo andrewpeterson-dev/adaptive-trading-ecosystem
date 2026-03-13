@@ -22,6 +22,7 @@ interface ThemeModeContextValue {
 
 const ThemeModeContext = createContext<ThemeModeContextValue | null>(null);
 const STORAGE_KEY = "workspace_theme";
+const TRADING_MODE_KEY = "trading_mode";
 
 function applyTheme(theme: ThemeMode): void {
   const html = document.documentElement;
@@ -35,6 +36,14 @@ function applyTheme(theme: ThemeMode): void {
 export function ThemeModeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") return "light";
+
+    const storedMode = window.localStorage.getItem(TRADING_MODE_KEY);
+    if (storedMode === "live") {
+      return "dark";
+    }
+    if (storedMode === "paper") {
+      return "light";
+    }
 
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "light" || stored === "dark") {

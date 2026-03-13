@@ -29,7 +29,11 @@ except ImportError:  # pragma: no cover - optional dependency in test/dev
 
 from config.settings import get_settings
 from data.market_data import market_data
-from services.security.jwt_utils import JWTConfigurationError, decode_jwt
+from services.security.request_auth import (
+    AuthenticationError,
+    AuthenticationUnavailableError,
+    authenticate_token,
+)
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -38,22 +42,36 @@ router = APIRouter()
 _subscriptions: dict[int, set[str]] = {}
 
 
-def _decode_token(token: str) -> Optional[int]:
+async def _get_ws_user_id(websocket: WebSocket, token: str) -> Optional[int]:
+    """Authenticate via short-lived websocket ticket or full access token."""
+    candidate = token.strip()
+    allowed_scopes = {"websocket"} if candidate else {"access", "websocket"}
+
+    if not candidate:
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            candidate = auth_header[7:]
+        else:
+            candidate = websocket.cookies.get("access_token") or ""
+
+    if not candidate:
+        return None
+
     try:
-        payload = decode_jwt(token, get_settings())
-        user_id = payload.get("user_id")
-        return int(user_id) if user_id is not None else None
-    except JWTConfigurationError:
+        authenticated = await authenticate_token(candidate, allowed_scopes=allowed_scopes)
+        return authenticated.user.id
+    except AuthenticationUnavailableError:
         logger.error("ws_auth_unavailable")
         return None
-    except Exception:
+    except AuthenticationError as exc:
+        logger.warning("ws_auth_failed", reason=exc.reason)
         return None
 
 
 @router.websocket("/market")
 async def ws_market(websocket: WebSocket, token: str = Query("")):
     # Auth
-    user_id = _decode_token(token)
+    user_id = await _get_ws_user_id(websocket, token)
     if not user_id:
         await websocket.close(code=4001, reason="Unauthorized")
         return

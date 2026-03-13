@@ -21,32 +21,32 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <section className={cn("app-hero", className)}>
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl space-y-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="max-w-[52rem] space-y-3">
           {eyebrow && <p className="app-kicker">{eyebrow}</p>}
 
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-[2.5rem]">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[2rem] font-semibold leading-tight tracking-tight text-foreground sm:text-[2.35rem]">
               {title}
             </h1>
             {badge}
           </div>
 
           {description && (
-            <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-[15px]">
+            <p className="max-w-[44rem] text-sm leading-6 text-muted-foreground sm:text-[15px]">
               {description}
             </p>
           )}
 
           {meta && (
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2.5 text-sm text-muted-foreground">
               {meta}
             </div>
           )}
         </div>
 
         {actions && (
-          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+          <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
             {actions}
           </div>
         )}

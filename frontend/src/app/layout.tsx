@@ -7,11 +7,16 @@ const initialThemeScript = `
 (() => {
   try {
     const html = document.documentElement;
-    const stored = window.localStorage.getItem("workspace_theme");
+    const storedMode = window.localStorage.getItem("trading_mode");
+    const storedTheme = window.localStorage.getItem("workspace_theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const theme =
-      stored === "light" || stored === "dark"
-        ? stored
+      storedMode === "live"
+        ? "dark"
+        : storedMode === "paper"
+          ? "light"
+          : storedTheme === "light" || storedTheme === "dark"
+            ? storedTheme
         : prefersDark
           ? "dark"
           : "light";

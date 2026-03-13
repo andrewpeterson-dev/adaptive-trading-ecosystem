@@ -3,12 +3,15 @@ from __future__ import annotations
 
 from typing import Optional
 
-import jwt
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, field_validator
 
-from services.security.jwt_utils import JWTConfigurationError, decode_jwt
+from services.security.request_auth import (
+    AuthenticationError,
+    AuthenticationUnavailableError,
+    authenticate_token,
+)
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -37,24 +40,26 @@ def _get_controller():
     return _controller
 
 
-def _get_websocket_user_id(websocket: WebSocket) -> Optional[int]:
-    token = websocket.query_params.get("token") or websocket.cookies.get("auth_token")
-
+async def _get_websocket_user_id(websocket: WebSocket) -> Optional[int]:
+    token = (websocket.query_params.get("token") or "").strip()
+    allowed_scopes = {"websocket"} if token else {"access", "websocket"}
     auth_header = websocket.headers.get("authorization", "")
     if not token and auth_header.startswith("Bearer "):
         token = auth_header[7:]
+    if not token:
+        token = websocket.cookies.get("access_token") or ""
 
     if not token:
         return None
 
     try:
-        payload = decode_jwt(token)
-        user_id = payload.get("user_id")
-        return int(user_id) if user_id is not None else None
-    except JWTConfigurationError:
+        authenticated = await authenticate_token(token, allowed_scopes=allowed_scopes)
+        return authenticated.user.id
+    except AuthenticationUnavailableError:
         logger.error("ai_chat_websocket_auth_unavailable")
         return None
-    except (jwt.InvalidTokenError, TypeError, ValueError):
+    except AuthenticationError as exc:
+        logger.warning("ai_chat_websocket_auth_failed", reason=exc.reason)
         return None
 
 
@@ -131,10 +136,27 @@ async def chat(request: Request, body: ChatRequest):
 @router.websocket("/stream/{thread_id}")
 async def stream(websocket: WebSocket, thread_id: str):
     """WebSocket endpoint for streaming Cerberus responses."""
-    user_id = _get_websocket_user_id(websocket)
+    user_id = await _get_websocket_user_id(websocket)
     if user_id is None:
         await websocket.close(code=4401)
         return
+
+    # Verify thread ownership before accepting the connection
+    from db.database import get_session
+    from db.cerberus_models import CerberusConversationThread
+    from sqlalchemy import select as sa_select
+
+    async with get_session() as session:
+        stmt = sa_select(CerberusConversationThread).where(
+            CerberusConversationThread.id == thread_id,
+            CerberusConversationThread.user_id == user_id,
+        )
+        result = await session.execute(stmt)
+        thread = result.scalar_one_or_none()
+        if not thread:
+            # Thread doesn't exist or doesn't belong to this user
+            await websocket.close(code=4403)
+            return
 
     await websocket.accept()
 

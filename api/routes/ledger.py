@@ -43,11 +43,14 @@ async def _load_cerberus_equity_series(user_id: int) -> tuple[float, float, list
     return _series_payload([snap.equity for snap in snapshots if snap.equity is not None])
 
 
-async def _load_core_equity_series(mode) -> tuple[float, float, list[float]]:
+async def _load_core_equity_series(user_id: int, mode) -> tuple[float, float, list[float]]:
     async with get_session() as db:
         result = await db.execute(
             select(PortfolioSnapshot)
-            .where(PortfolioSnapshot.mode == mode)
+            .where(
+                PortfolioSnapshot.mode == mode,
+                PortfolioSnapshot.user_id == user_id,
+            )
             .order_by(PortfolioSnapshot.timestamp.desc())
             .limit(120)
         )
@@ -67,7 +70,7 @@ async def get_combined_ledger(request: Request):
 
     broker_equity, initial_equity, equity_series = await _load_cerberus_equity_series(user_id)
     if not equity_series and mode is not None:
-        broker_equity, initial_equity, equity_series = await _load_core_equity_series(mode)
+        broker_equity, initial_equity, equity_series = await _load_core_equity_series(user_id, mode)
 
     broker_label = "No Broker Connected"
 
@@ -75,7 +78,8 @@ async def get_combined_ledger(request: Request):
         async with get_session() as db:
             r = await db.execute(
                 select(UserApiConnection).join(ApiProvider).where(
-                    UserApiConnection.id == settings.active_equity_broker_id
+                    UserApiConnection.id == settings.active_equity_broker_id,
+                    UserApiConnection.user_id == user_id,
                 )
             )
             conn = r.scalar_one_or_none()
@@ -89,7 +93,8 @@ async def get_combined_ledger(request: Request):
         async with get_session() as db:
             r = await db.execute(
                 select(UserApiConnection).join(ApiProvider).where(
-                    UserApiConnection.id == settings.options_provider_connection_id
+                    UserApiConnection.id == settings.options_provider_connection_id,
+                    UserApiConnection.user_id == user_id,
                 )
             )
             conn = r.scalar_one_or_none()

@@ -153,11 +153,11 @@
 
 @layer components {
   .app-page {
-    @apply space-y-6 md:space-y-7;
+    @apply space-y-5 md:space-y-6;
   }
 
   .app-hero {
-    @apply relative overflow-hidden rounded-[30px] border px-6 py-6 backdrop-blur-2xl sm:px-8 sm:py-7;
+    @apply relative overflow-hidden rounded-[26px] border px-5 py-5 backdrop-blur-2xl sm:px-6 sm:py-5;
     border-color: hsl(var(--border) / 0.75);
     background:
       linear-gradient(180deg, hsl(var(--surface-2) / 0.98), hsl(var(--surface-1) / 0.98)),

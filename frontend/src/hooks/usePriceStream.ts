@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ApiError } from "@/lib/api/client";
+import { getWebSocketToken } from "@/lib/api/auth";
+import { getMarketWebSocketBase } from "@/lib/websocket-url";
 
 export interface PriceData {
   symbol: string;
@@ -24,25 +27,6 @@ interface UsePriceStreamResult {
 const MAX_RECONNECT_ATTEMPTS = 10;
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
-
-function getAuthToken(): string {
-  if (typeof window === "undefined") return "";
-  const match = document.cookie.match(/(?:^|; )auth_token=([^;]*)/);
-  if (match) return decodeURIComponent(match[1]);
-  return localStorage.getItem("auth_token") ?? "";
-}
-
-function getWsBase(): string {
-  if (typeof window === "undefined") return "";
-  // Use NEXT_PUBLIC_WS_URL if set, otherwise derive from current host
-  // In local dev: ws://localhost:8000/ws
-  // In Docker/prod: set NEXT_PUBLIC_WS_URL=ws://your-api-host/ws
-  const envUrl = process.env.NEXT_PUBLIC_WS_URL;
-  if (envUrl) return envUrl;
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const host = window.location.hostname;
-  return `${proto}://${host}:8000/ws`;
-}
 
 export function usePriceStream(initialSymbols: string[] = []): UsePriceStreamResult {
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
@@ -83,58 +67,73 @@ export function usePriceStream(initialSymbols: string[] = []): UsePriceStreamRes
     sendMsg({ unsubscribe: upper });
   }, [sendMsg]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (unmountedRef.current) return;
-    const token = getAuthToken();
-    if (!token) return;
+    try {
+      const { token } = await getWebSocketToken();
+      const url = `${getMarketWebSocketBase()}/market?token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
 
-    const url = `${getWsBase()}/market?token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setConnected(true);
-      reconnectAttempts.current = 0;
-      // Subscribe to all tracked symbols on (re)connect
-      if (subscribedRef.current.size > 0) {
-        ws.send(JSON.stringify({ subscribe: Array.from(subscribedRef.current) }));
-      }
-    };
-
-    ws.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        if (msg.type === "price_update" && msg.data?.symbol) {
-          // Batch: accumulate in ref, schedule single RAF flush
-          pendingUpdates.current[msg.data.symbol] = msg.data;
-          if (rafId.current === null) {
-            rafId.current = requestAnimationFrame(flushUpdates);
-          }
+      ws.onopen = () => {
+        setConnected(true);
+        reconnectAttempts.current = 0;
+        if (subscribedRef.current.size > 0) {
+          ws.send(JSON.stringify({ subscribe: Array.from(subscribedRef.current) }));
         }
-      } catch {
-        // ignore
-      }
-    };
+      };
 
-    ws.onclose = () => {
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type === "price_update" && msg.data?.symbol) {
+            pendingUpdates.current[msg.data.symbol] = msg.data;
+            if (rafId.current === null) {
+              rafId.current = requestAnimationFrame(flushUpdates);
+            }
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        wsRef.current = null;
+        if (!unmountedRef.current && reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+          const delay = Math.min(
+            BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttempts.current,
+            MAX_RECONNECT_DELAY_MS
+          );
+          reconnectAttempts.current++;
+          reconnectTimer.current = setTimeout(() => {
+            void connect();
+          }, delay);
+        }
+      };
+
+      ws.onerror = () => ws.close();
+    } catch (error) {
       setConnected(false);
-      wsRef.current = null;
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        return;
+      }
       if (!unmountedRef.current && reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
         const delay = Math.min(
           BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttempts.current,
           MAX_RECONNECT_DELAY_MS
         );
         reconnectAttempts.current++;
-        reconnectTimer.current = setTimeout(connect, delay);
+        reconnectTimer.current = setTimeout(() => {
+          void connect();
+        }, delay);
       }
-    };
-
-    ws.onerror = () => ws.close();
+    }
   }, [flushUpdates]);
 
   useEffect(() => {
     unmountedRef.current = false;
-    connect();
+    void connect();
     return () => {
       unmountedRef.current = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);

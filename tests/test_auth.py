@@ -73,7 +73,7 @@ async def test_update_profile_requires_current_password_for_password_change():
     user.display_name = "User"
     user.is_admin = False
     user.email_verified = True
-    user.password_hash = _hash_password("current-password")
+    user.password_hash = _hash_password("CurPass123!x")
 
     db = _mock_session(user)
     with (
@@ -81,7 +81,7 @@ async def test_update_profile_requires_current_password_for_password_change():
         pytest.raises(HTTPException) as exc_info,
     ):
         await update_profile(
-            ProfileUpdateRequest(password="new-password"),
+            ProfileUpdateRequest(password="NewPass123!x"),
             _make_request(),
         )
 
@@ -97,17 +97,23 @@ async def test_update_profile_changes_password_with_current_password():
     user.display_name = "User"
     user.is_admin = False
     user.email_verified = True
-    user.password_hash = _hash_password("current-password")
+    user.password_hash = _hash_password("CurPass123!x")
 
     db = _mock_session(user)
     with patch("api.routes.auth.get_session", return_value=db):
         response = await update_profile(
             ProfileUpdateRequest(
-                current_password="current-password",
-                new_password="new-password",
+                current_password="CurPass123!x",
+                new_password="NewPass123!x",
             ),
             _make_request(),
         )
 
-    assert response["success"] is True
-    assert _check_password("new-password", user.password_hash) is True
+    # Response may be a JSONResponse (when password changes) or a dict
+    import json
+    if hasattr(response, "body"):
+        body = json.loads(response.body)
+        assert body["success"] is True
+    else:
+        assert response["success"] is True
+    assert _check_password("NewPass123!x", user.password_hash) is True

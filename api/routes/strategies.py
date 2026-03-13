@@ -29,6 +29,13 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
 
+def _require_admin(request: Request) -> None:
+    if not getattr(request.state, "user_id", None):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not getattr(request.state, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
 # ── Request/Response Models ──────────────────────────────────────────────
 
 class ConditionSchema(BaseModel):
@@ -555,20 +562,22 @@ async def promote_strategy(instance_id: int, req: PromoteRequest, request: Reque
 
 
 @router.post("/diagnose")
-async def diagnose_strategy(req: DiagnoseRequest):
+async def diagnose_strategy(req: DiagnoseRequest, request: Request):
     from services.diagnostics import StrategyDiagnostics
 
+    _ = request.state.user_id  # Ensure authenticated
     conditions = [c.model_dump() for c in req.conditions]
     report = StrategyDiagnostics.run_all(conditions, req.parameters)
     return report.to_dict()
 
 
 @router.post("/compute-indicator")
-async def compute_indicator(req: ComputeRequest):
+async def compute_indicator(req: ComputeRequest, request: Request):
     import math
     import pandas as pd
     from services.indicator_engine import IndicatorEngine
 
+    _ = request.state.user_id  # Ensure authenticated
     df, timeframe = await _load_market_frame(req.symbol, req.timeframe, req.bars)
 
     result = IndicatorEngine.compute(req.indicator, df, req.params)
@@ -615,7 +624,7 @@ async def compute_indicator(req: ComputeRequest):
 
 
 @router.post("/backtest")
-async def run_backtest(req: BacktestRequest, request: Request = None):
+async def run_backtest(req: BacktestRequest, request: Request):
     import json
     import pandas as pd
     import numpy as np
@@ -627,7 +636,7 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
     action = "BUY"
     strategy_timeframe = "1D"
     if req.strategy_id is not None:
-        user_id = getattr(request.state, "user_id", None) if request else None
+        user_id = request.state.user_id
         async with get_session() as session:
             # Try StrategyInstance first (new model)
             if user_id:
@@ -656,7 +665,13 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                     strategy_timeframe = t.timeframe or "1D"
                 else:
                     # Fall back to legacy Strategy table
-                    s = await session.get(Strategy, req.strategy_id)
+                    legacy_result = await session.execute(
+                        select(Strategy).where(
+                            Strategy.id == req.strategy_id,
+                            Strategy.user_id == user_id,
+                        )
+                    )
+                    s = legacy_result.scalar_one_or_none()
                     if not s:
                         raise HTTPException(404, f"Strategy {req.strategy_id} not found")
                     if s.condition_groups:
@@ -671,22 +686,6 @@ async def run_backtest(req: BacktestRequest, request: Request = None):
                     slippage_pct = s.slippage_pct if s.slippage_pct is not None else req.slippage_pct
                     action = s.action or "BUY"
                     strategy_timeframe = s.timeframe or "1D"
-            else:
-                s = await session.get(Strategy, req.strategy_id)
-                if not s:
-                    raise HTTPException(404, f"Strategy {req.strategy_id} not found")
-                if s.condition_groups:
-                    groups = s.condition_groups
-                    conditions = [c for g in groups for c in g.get("conditions", [])]
-                else:
-                    groups = [{"conditions": s.conditions or []}]
-                    conditions = s.conditions or []
-                stop_loss_pct = s.stop_loss_pct
-                take_profit_pct = s.take_profit_pct
-                commission_pct = s.commission_pct if s.commission_pct is not None else req.commission_pct
-                slippage_pct = s.slippage_pct if s.slippage_pct is not None else req.slippage_pct
-                action = s.action or "BUY"
-                strategy_timeframe = s.timeframe or "1D"
     elif req.condition_groups:
         groups = req.condition_groups
         conditions = [c for g in groups for c in g.get("conditions", [])]
@@ -997,8 +996,9 @@ class StrategyConfigUpdate(BaseModel):
 
 
 @router.get("/trading/strategy-config")
-async def get_strategy_config():
+async def get_strategy_config(request: Request):
     """Return the current strategy configuration."""
+    _require_admin(request)
     from trading.strategy_loader import StrategyLoader
 
     loader = StrategyLoader()
@@ -1016,8 +1016,9 @@ async def get_strategy_config():
 
 
 @router.post("/trading/strategy-config")
-async def update_strategy_config(update: StrategyConfigUpdate):
+async def update_strategy_config(update: StrategyConfigUpdate, request: Request):
     """Update the strategy configuration. Merges provided fields into current config."""
+    _require_admin(request)
     from trading.strategy_loader import StrategyLoader
 
     loader = StrategyLoader()

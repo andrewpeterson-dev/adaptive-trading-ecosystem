@@ -18,8 +18,34 @@ export interface RegisterRequest {
 }
 
 export interface LoginResponse {
-  token: string;
   user: User;
+}
+
+export interface RegisterResponse {
+  success: boolean;
+  verification_required?: boolean;
+  email?: string;
+  email_sent?: boolean;
+  message?: string;
+  development_verification_url?: string | null;
+  user?: User;
+}
+
+export interface PasswordResetRequestResponse {
+  success: boolean;
+  email_sent?: boolean;
+  message: string;
+  development_reset_url?: string | null;
+}
+
+export interface AuthActionResponse {
+  success: boolean;
+  message?: string;
+}
+
+export interface WebSocketTokenResponse {
+  token: string;
+  expires_in: number;
 }
 
 export interface AuthState {

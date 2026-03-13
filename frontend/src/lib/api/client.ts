@@ -9,17 +9,10 @@ export class ApiError extends Error {
   }
 }
 
-async function getAuthToken(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-  // Check cookie first, then localStorage
-  const match = document.cookie.match(/(?:^|; )auth_token=([^;]*)/);
-  if (match) return decodeURIComponent(match[1]);
-  return localStorage.getItem("auth_token");
-}
-
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 const MAX_RETRIES = 2;
 const DEFAULT_TIMEOUT_MS = 30_000;
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
 // ── In-memory GET cache with TTL ────────────────────────────────────────
 const _cache = new Map<string, { data: unknown; expiresAt: number }>();
@@ -45,6 +38,21 @@ export function invalidateCache(pathSubstring?: string): void {
   Array.from(_cache.keys()).forEach((key) => {
     if (key.includes(pathSubstring)) _cache.delete(key);
   });
+}
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function shouldAttachJsonContentType(body: BodyInit | null | undefined): boolean {
+  if (!body) return false;
+  if (typeof FormData !== "undefined" && body instanceof FormData) return false;
+  if (typeof Blob !== "undefined" && body instanceof Blob) return false;
+  if (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams) return false;
+  return true;
 }
 
 async function fetchWithTimeout(
@@ -108,19 +116,21 @@ async function _apiFetchInner<T>(
   path: string,
   options: RequestInit & { timeoutMs?: number; maxRetries?: number } = {}
 ): Promise<T> {
-  const token = await getAuthToken();
   const { timeoutMs = DEFAULT_TIMEOUT_MS, maxRetries = MAX_RETRIES, ...fetchOptions } = options;
+  const method = (fetchOptions.method || "GET").toUpperCase();
+  const headers = new Headers(fetchOptions.headers);
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(fetchOptions.headers as Record<string, string>),
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (!headers.has("Content-Type") && shouldAttachJsonContentType(fetchOptions.body)) {
+    headers.set("Content-Type", "application/json");
   }
 
-  const method = (fetchOptions.method || "GET").toUpperCase();
+  if (!SAFE_METHODS.has(method) && !headers.has("X-CSRF-Token")) {
+    const csrfToken = getCookie("csrf_token");
+    if (csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
+  }
+
   // Only retry idempotent methods or explicit opt-in
   const canRetry = method === "GET" || method === "HEAD" || maxRetries > MAX_RETRIES;
 
@@ -129,7 +139,11 @@ async function _apiFetchInner<T>(
     try {
       const res = await fetchWithTimeout(
         path,
-        { ...fetchOptions, headers },
+        {
+          ...fetchOptions,
+          headers,
+          credentials: fetchOptions.credentials ?? "include",
+        },
         timeoutMs
       );
 
