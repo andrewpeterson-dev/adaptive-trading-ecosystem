@@ -11,11 +11,13 @@ export interface ModelDetail {
 }
 
 export interface RegimeData {
-  regime: string;
-  confidence: number;
-  volatility_20d: number;
-  vol_percentile: number;
-  trend_strength: number;
+  regime: string | null;
+  confidence: number | null;
+  volatility_20d: number | null;
+  vol_percentile?: number | null;
+  trend_strength: number | null;
+  timestamp?: string | null;
+  status?: "ready" | "no_data";
 }
 
 export interface EnsembleStatus {
@@ -23,4 +25,6 @@ export interface EnsembleStatus {
   model_count: number;
   weights: Record<string, number>;
   last_updated: string | null;
+  status?: "ready" | "no_data";
+  retraining_supported?: boolean;
 }

@@ -6,6 +6,7 @@ All secrets and tunables come from environment variables or .env file.
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 
 import os
 
@@ -198,6 +199,9 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""  # Gmail app password
     base_url: str = "http://localhost:3000"  # Frontend URL for email links
+    allow_auth_link_preview: bool = False
+    cookie_secure: Optional[bool] = None
+    trust_proxy_headers: bool = False
     use_sqlite: bool = True  # Use SQLite for local dev (no PostgreSQL needed)
 
     # --- CORS ---

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
@@ -41,22 +41,55 @@ async def upload_document(request: Request, body: UploadRequest):
 
 @router.put("/upload/{document_id}/content")
 async def upload_document_content(
+    request: Request,
     document_id: str,
-    token: str = Query(..., min_length=16),
-    content: bytes = Body(...),
 ):
     """Accept direct uploads when S3 is not configured."""
-    from services.ai_core.documents.upload import DocumentUploadService
+    from services.ai_core.documents.upload import DocumentUploadService, MAX_DIRECT_UPLOAD_BYTES
 
     service = DocumentUploadService()
     if service._settings.s3_bucket:
         raise HTTPException(status_code=400, detail="Direct upload is disabled when S3 storage is configured")
+
+    token = request.headers.get("x-upload-token", "").strip()
+    if not token:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing upload token")
 
     try:
         user_id = service.verify_local_upload_token(document_id=document_id, token=token)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
+    try:
+        content_length = int(request.headers.get("content-length", "0") or "0")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Content-Length header") from None
+
+    if content_length > MAX_DIRECT_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Upload exceeds {MAX_DIRECT_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+        )
+
+    chunks: list[bytes] = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        if not chunk:
+            continue
+        total_bytes += len(chunk)
+        if total_bytes > MAX_DIRECT_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Upload exceeds {MAX_DIRECT_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+            )
+        chunks.append(bytes(chunk))
+
+    content = b"".join(chunks)
     if not content:
         raise HTTPException(status_code=400, detail="Upload body is empty")
 
@@ -66,7 +99,8 @@ async def upload_document_content(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        status_code = 413 if "Upload exceeds" in str(exc) else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
 async def _run_document_ingestion(document_id: str, user_id: int) -> None:

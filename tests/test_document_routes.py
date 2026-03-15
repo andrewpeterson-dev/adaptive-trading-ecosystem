@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 import pytest
 from fastapi import FastAPI, Request
@@ -123,6 +123,7 @@ class TestDocumentRoutes:
         assert response.status_code == 200
         payload = response.json()
         assert payload["uploadUrl"].startswith("/api/documents/upload/")
+        assert payload["uploadHeaders"]["X-Upload-Token"]
 
         result = await session.execute(select(CerberusDocumentFile))
         document = result.scalar_one()
@@ -150,17 +151,19 @@ class TestDocumentRoutes:
                 )
 
                 upload_url = create_response.json()["uploadUrl"]
+                upload_headers = create_response.json()["uploadHeaders"]
                 parsed = urlparse(upload_url)
-                token = parse_qs(parsed.query)["token"][0]
                 response = client.put(
                     parsed.path,
-                    params={"token": token},
                     content=b"x" * (MAX_DIRECT_UPLOAD_BYTES + 1),
-                    headers={"Content-Type": "application/octet-stream"},
+                    headers={
+                        "Content-Type": "application/octet-stream",
+                        **upload_headers,
+                    },
                 )
         finally:
             settings.jwt_secret = old_jwt_secret
 
         assert create_response.status_code == 200
-        assert response.status_code == 400
+        assert response.status_code == 413
         assert "Upload exceeds" in response.json()["detail"]

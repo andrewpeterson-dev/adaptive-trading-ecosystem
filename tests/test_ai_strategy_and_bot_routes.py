@@ -15,6 +15,7 @@ from config.settings import get_settings
 from db.cerberus_models import BotStatus, CerberusBot, CerberusBotVersion
 from db.database import Base
 from db.models import StrategyInstance, StrategyTemplate, TradingModeEnum, User
+from services.security.rate_limit import rate_limiter
 
 TEST_DB_URL = "sqlite+aiosqlite:///"
 
@@ -41,6 +42,13 @@ async def session_factory(engine):
 async def session(session_factory):
     async with session_factory() as sess:
         yield sess
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_limiter():
+    rate_limiter.clear()
+    yield
+    rate_limiter.clear()
 
 
 async def _seed_user(session: AsyncSession) -> int:
@@ -153,6 +161,31 @@ class TestAIStrategyGeneration:
         assert payload["compiled_strategy"]["strategy_type"] == "ai_generated"
         assert payload["compiled_strategy"]["condition_groups"]
         assert payload["compiled_strategy"]["symbols"] == ["SPY"]
+
+    @pytest.mark.anyio
+    async def test_generate_strategy_rate_limits_requests(self, session, session_factory):
+        user_id = await _seed_user(session)
+        await session.commit()
+        app, mock_get_session = _build_app(session_factory, user_id)
+
+        with (
+            patch("api.routes.ai_tools.get_session", mock_get_session),
+            patch("services.ai_strategy_service.AIStrategyService.generate", AsyncMock(return_value={"builder_draft": {}, "compiled_strategy": {}})),
+        ):
+            client = TestClient(app)
+            for _ in range(12):
+                response = client.post(
+                    "/api/ai/tools/generate-strategy",
+                    json={"prompt": "Build a momentum strategy."},
+                )
+                assert response.status_code == 200
+
+            response = client.post(
+                "/api/ai/tools/generate-strategy",
+                json={"prompt": "Build a momentum strategy."},
+            )
+
+        assert response.status_code == 429
 
 
 class TestBotDeploymentFromStrategy:

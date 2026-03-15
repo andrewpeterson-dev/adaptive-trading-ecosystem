@@ -1,6 +1,7 @@
 """Focused runtime guardrail tests for recent backend fixes."""
 
 from config.settings import Settings
+from api.main import _is_readiness_exempt_path
 from api.routes.webull import _client_cache, invalidate_user_client_cache
 
 
@@ -25,3 +26,11 @@ def test_invalidate_user_client_cache_clears_all_modes():
     assert (7, "real") not in _client_cache
     assert (8, "paper") in _client_cache
     _client_cache.clear()
+
+
+def test_readiness_guard_exempts_only_public_startup_paths():
+    assert _is_readiness_exempt_path("/health") is True
+    assert _is_readiness_exempt_path("/health/ready") is True
+    assert _is_readiness_exempt_path("/api/auth/login") is True
+    assert _is_readiness_exempt_path("/ws/socket") is True
+    assert _is_readiness_exempt_path("/api/models/list") is False

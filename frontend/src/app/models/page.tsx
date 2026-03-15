@@ -49,7 +49,8 @@ export default function ModelsPage() {
       }
 
       if (regRes.status === "fulfilled") {
-        setRegime(regRes.value);
+        const regimeData = regRes.value;
+        setRegime(regimeData?.status === "no_data" || !regimeData?.regime ? null : regimeData);
         hasData = true;
       } else {
         setRegime(null);
@@ -102,6 +103,7 @@ export default function ModelsPage() {
   };
 
   const ensembleWeightCount = ensemble ? Object.keys(ensemble.weights ?? {}).length : 0;
+  const retrainingSupported = ensemble?.retraining_supported === true;
 
   const renderContent = () => {
     if (loading) {
@@ -170,7 +172,18 @@ export default function ModelsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
-        <RegimeIndicator data={regime} />
+        {regime ? (
+          <RegimeIndicator data={regime} />
+        ) : (
+          <div className="app-panel p-5">
+            <EmptyState
+              icon={<Activity className="h-5 w-5 text-muted-foreground" />}
+              title="No regime data"
+              description="Market regime appears here after the backend records real regime detections."
+              className="py-10"
+            />
+          </div>
+        )}
 
         <div className="app-panel p-5">
           <div className="app-section-title flex items-center gap-2">
@@ -199,8 +212,8 @@ export default function ModelsPage() {
           ) : (
             <EmptyState
               icon={<Activity className="h-5 w-5 text-muted-foreground" />}
-              title="No active ensemble"
-              description="Activate at least one model to populate the ensemble allocation."
+              title="No allocation data"
+              description="The ensemble panel only shows persisted allocation weights. No real allocation snapshot is available yet."
               className="py-10"
             />
           )}
@@ -214,7 +227,7 @@ export default function ModelsPage() {
               key={model.name}
               model={model}
               onRetrain={handleRetrain}
-              retrainAvailable
+              retrainAvailable={retrainingSupported}
             />
           ))}
         </div>

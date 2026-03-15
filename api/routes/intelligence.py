@@ -3,13 +3,13 @@ Intelligence endpoints — LLM analysis, confidence model, ensemble state,
 decision pipeline evaluation, and model accuracy.
 """
 
-import re
+import json
 import time
-from typing import Optional
+from typing import Literal, Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from config.settings import get_settings
 from intelligence.confidence_model import ConfidenceModel
@@ -77,6 +77,32 @@ class AnalyzeRequest(BaseModel):
     context: Optional[str] = None
 
 
+class AnalyzeResponsePayload(BaseModel):
+    direction: Literal["long", "short", "neutral"]
+    confidence_score: float = Field(..., ge=0, le=100)
+    analysis: str = Field(..., min_length=1, max_length=4000)
+    risk_level: Literal["low", "medium", "high"]
+    key_factors: list[str] = Field(default_factory=list, max_length=6)
+
+    @field_validator("analysis")
+    @classmethod
+    def _normalize_analysis(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("analysis is required")
+        return normalized
+
+    @field_validator("key_factors", mode="before")
+    @classmethod
+    def _normalize_key_factors(cls, value) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("key_factors must be a list")
+        normalized = [str(item).strip() for item in value if str(item).strip()]
+        return normalized[:6]
+
+
 class EvaluateRequest(BaseModel):
     symbol: str
     direction: str = Field(..., description="long, short, or flat")
@@ -93,9 +119,10 @@ async def analyze_symbol(req: AnalyzeRequest):
     llm_router = _get_llm_router()
 
     prompt = (
-        f"Analyze the current market conditions and outlook for {req.symbol}. "
-        f"Provide a concise assessment including direction bias (long/short/neutral), "
-        f"confidence level (0-100), key factors, and risk level."
+        "Analyze the symbol and respond with JSON only. "
+        'Return exactly this schema: {"direction":"long|short|neutral","confidence_score":0-100,'
+        '"analysis":"brief summary","risk_level":"low|medium|high","key_factors":["factor 1"]}. '
+        f"Analyze the current market conditions and outlook for {req.symbol}."
     )
     if req.context:
         prompt += f"\n\nAdditional context: {req.context}"
@@ -108,28 +135,33 @@ async def analyze_symbol(req: AnalyzeRequest):
         raise HTTPException(status_code=503, detail=f"LLM unavailable: {str(e)}")
 
     latency_ms = round((time.monotonic() - start) * 1000, 1)
-    response_text = result.get("response", "")
+    response_text = str(result.get("response", "")).strip()
+    if response_text.startswith("```"):
+        response_text = response_text.strip("`")
+        if response_text.lower().startswith("json"):
+            response_text = response_text[4:].strip()
 
-    # Parse a simple direction from the response text
-    lower = response_text.lower()
-    if "long" in lower or "bullish" in lower:
-        direction = "long"
-    elif "short" in lower or "bearish" in lower:
-        direction = "short"
-    else:
-        direction = "neutral"
-
-    # Estimate a confidence score from the response
-    confidence_score = 50.0  # default
-    match = re.search(r"confidence[:\s]*(\d+)", lower)
-    if match:
-        confidence_score = min(100.0, max(0.0, float(match.group(1))))
+    try:
+        payload = AnalyzeResponsePayload.model_validate(json.loads(response_text))
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning(
+            "intelligence_analyze_invalid_payload",
+            symbol=req.symbol,
+            backend=result.get("backend", "unknown"),
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="LLM returned an invalid analysis payload",
+        ) from exc
 
     return {
         "symbol": req.symbol,
-        "analysis": response_text,
-        "confidence_score": confidence_score,
-        "direction": direction,
+        "analysis": payload.analysis,
+        "confidence_score": payload.confidence_score,
+        "direction": payload.direction,
+        "risk_level": payload.risk_level,
+        "key_factors": payload.key_factors,
         "backend_used": result.get("backend", "unknown"),
         "latency_ms": latency_ms,
     }

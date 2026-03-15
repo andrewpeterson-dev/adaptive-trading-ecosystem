@@ -74,7 +74,7 @@ export function ModelCard({
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold text-foreground">{model.name}</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {model.is_active ? "Active in production" : "Inactive model"}
+                {model.is_active ? "Enabled model" : "Inactive model"}
               </p>
             </div>
           </div>

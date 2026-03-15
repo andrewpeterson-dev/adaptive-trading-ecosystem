@@ -102,10 +102,15 @@ class DocumentUploadService:
             session.add(doc)
 
         # Determine upload destination
+        upload_headers: dict[str, str] = {}
         if self._settings.s3_bucket:
             upload_url = await self._generate_presigned_url(storage_key)
         else:
-            upload_url = self._generate_local_upload_url(document_id=doc_id, user_id=user_id)
+            upload_url = self._generate_local_upload_url(document_id=doc_id)
+            upload_headers = self._generate_local_upload_headers(
+                document_id=doc_id,
+                user_id=user_id,
+            )
 
         logger.info(
             "upload_created",
@@ -122,6 +127,8 @@ class DocumentUploadService:
             "mimeType": normalized_mime,
             "documentId": doc_id,
             "uploadUrl": upload_url,
+            "upload_headers": upload_headers,
+            "uploadHeaders": upload_headers,
         }
 
     async def finalize_upload(self, document_id: str, user_id: int) -> dict:
@@ -163,7 +170,10 @@ class DocumentUploadService:
         ingestion = DocumentIngestionService()
         return await ingestion.ingest(document_id, user_id)
 
-    def _generate_local_upload_url(self, *, document_id: str, user_id: int) -> str:
+    def _generate_local_upload_url(self, *, document_id: str) -> str:
+        return f"/api/documents/upload/{document_id}/content"
+
+    def _generate_local_upload_headers(self, *, document_id: str, user_id: int) -> dict[str, str]:
         try:
             token = encode_jwt(
                 {
@@ -178,7 +188,7 @@ class DocumentUploadService:
             raise RuntimeError(
                 "Document upload tokens are unavailable until JWT_SECRET is configured"
             ) from exc
-        return f"/api/documents/upload/{document_id}/content?token={token}"
+        return {"X-Upload-Token": token}
 
     def verify_local_upload_token(self, *, document_id: str, token: str) -> int:
         try:

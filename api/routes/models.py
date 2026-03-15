@@ -1,10 +1,7 @@
 """
 Model management endpoints — list models, allocation, regime, performance.
-Queries the database and seeds reasonable defaults when tables are empty.
+Returns only persisted analytics data; it does not synthesize portfolio state.
 """
-
-from datetime import datetime
-from typing import Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
@@ -21,39 +18,6 @@ from db.models import (
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
-
-# The 11 registered models with their types
-_DEFAULT_MODELS = [
-    {"name": "momentum_fast", "model_type": "MomentumModel"},
-    {"name": "momentum_slow", "model_type": "MomentumModel"},
-    {"name": "mean_reversion_tight", "model_type": "MeanReversionModel"},
-    {"name": "mean_reversion_wide", "model_type": "MeanReversionModel"},
-    {"name": "volatility_squeeze", "model_type": "VolatilityModel"},
-    {"name": "breakout_sr", "model_type": "BreakoutModel"},
-    {"name": "iv_crush", "model_type": "IVCrushModel"},
-    {"name": "earnings_momentum", "model_type": "EarningsMomentumModel"},
-    {"name": "pairs_statarb", "model_type": "PairsModel"},
-    {"name": "ml_xgboost", "model_type": "MLModel"},
-    {"name": "ml_random_forest", "model_type": "MLModel"},
-]
-
-STARTING_CAPITAL = 8082.72
-
-
-async def _seed_models(db):
-    """Insert default trading models into the database if none exist."""
-    for m in _DEFAULT_MODELS:
-        model = TradingModel(
-            name=m["name"],
-            model_type=m["model_type"],
-            is_active=True,
-        )
-        db.add(model)
-    await db.flush()
-    logger.info("seeded_trading_models", count=len(_DEFAULT_MODELS))
-
-    result = await db.execute(select(TradingModel))
-    return result.scalars().all()
 
 
 @router.get("/list")
@@ -144,35 +108,19 @@ async def get_allocation(request: Request):
                 }
                 for row in rows
             ]
-            return {"allocations": allocations, "mode": mode.value}
-
-        # No allocation data — return equal weight across active models for this mode
-        result = await db.execute(
-            select(TradingModel).where(
-                TradingModel.is_active == True,
-                TradingModel.mode == mode,
-            )
-        )
-        active_models = result.scalars().all()
-
-        if not active_models:
-            return {"allocations": [], "mode": mode.value}
-
-        n = len(active_models)
-        equal_weight = round(1.0 / n, 4) if n > 0 else 0.0
-        per_model_capital = round(STARTING_CAPITAL / n, 2) if n > 0 else 0.0
-
-        allocations = [
-            {
-                "model_name": m.name,
-                "weight": equal_weight,
-                "allocated_capital": per_model_capital,
+            return {
+                "allocations": allocations,
+                "mode": mode.value,
+                "status": "ready",
+                "last_updated": max_ts.isoformat() if max_ts else None,
             }
-            for m in active_models
-        ]
 
-    logger.info("allocation_seed_data", reason="no allocations in db", count=len(allocations), mode=mode.value)
-    return {"allocations": allocations, "mode": mode.value}
+    return {
+        "allocations": [],
+        "mode": mode.value,
+        "status": "no_data",
+        "last_updated": None,
+    }
 
 
 @router.get("/regime")
@@ -193,16 +141,16 @@ async def get_current_regime(request: Request):
             "volatility_20d": record.volatility_20d,
             "trend_strength": record.trend_strength,
             "timestamp": record.timestamp.isoformat() if record.timestamp else None,
+            "status": "ready",
         }
 
-    # No regime data — return default
-    logger.info("regime_seed_data", reason="no regime records")
     return {
-        "regime": "sideways",
-        "confidence": 0.5,
+        "regime": None,
+        "confidence": None,
         "volatility_20d": None,
         "trend_strength": None,
         "timestamp": None,
+        "status": "no_data",
     }
 
 
@@ -256,14 +204,11 @@ async def get_model_performance(model_name: str, request: Request):
 
 @router.post("/retrain")
 async def retrain_model(model_name: str = None, request: Request = None):
-    """Trigger model retraining. Returns job status."""
-    # Stub — real training runs async in production
-    return {
-        "status": "queued",
-        "model": model_name or "all",
-        "message": "Retraining queued. Results will be available after training completes.",
-        "job_id": f"retrain_{int(__import__('time').time())}"
-    }
+    """Trigger model retraining when the backend supports it."""
+    raise HTTPException(
+        status_code=501,
+        detail="Model retraining is not implemented in this environment",
+    )
 
 
 @router.get("/ensemble-status")
@@ -299,15 +244,13 @@ async def get_ensemble_status(request: Request = None):
             )
             for row in alloc_result.all():
                 weights[row.name] = round(row.CapitalAllocation.weight, 4)
-        elif models:
-            # Equal weight fallback
-            eq = round(1.0 / len(models), 4)
-            weights = {m.name: eq for m in models}
 
         return {
-            "ensemble_active": len(models) > 0,
+            "ensemble_active": bool(weights),
             "model_count": len(models),
             "weights": weights,
             "mode": mode.value,
-            "last_updated": models[0].updated_at.isoformat() if models and models[0].updated_at else None,
+            "last_updated": max_ts.isoformat() if max_ts else None,
+            "status": "ready" if weights else "no_data",
+            "retraining_supported": False,
         }

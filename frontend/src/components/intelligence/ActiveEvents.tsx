@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Zap } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
+import { usePolling } from "@/hooks/usePolling";
 
 const IMPACT_STYLES: Record<string, string> = {
   HIGH: "border-rose-400/25 bg-rose-400/10 text-rose-400",
@@ -22,17 +23,16 @@ function timeAgo(iso: string | null): string {
 }
 
 export function ActiveEvents() {
-  const [events, setEvents] = useState<MarketEvent[]>([]);
   const [filter, setFilter] = useState<string | null>(null);
+  const { data, loading, error, refresh } = usePolling<MarketEvent[]>({
+    fetcher: () => getMarketEvents({ impact: filter ?? undefined, limit: 50 }),
+    interval: 30_000,
+  });
+  const events = data ?? [];
 
   useEffect(() => {
-    const params = filter ? { impact: filter } : undefined;
-    getMarketEvents({ ...params, limit: 50 }).then(setEvents).catch(() => {});
-    const interval = setInterval(() => {
-      getMarketEvents({ ...params, limit: 50 }).then(setEvents).catch(() => {});
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [filter]);
+    refresh();
+  }, [filter, refresh]);
 
   return (
     <div className="app-panel p-5 sm:p-6">
@@ -59,7 +59,15 @@ export function ActiveEvents() {
       </div>
 
       <div className="mt-4 max-h-[480px] space-y-2 overflow-y-auto">
-        {events.length === 0 ? (
+        {loading ? (
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
+            Loading market events…
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-6 text-center text-sm text-rose-300">
+            Market events unavailable. {error}
+          </div>
+        ) : events.length === 0 ? (
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
             No active market events
           </div>

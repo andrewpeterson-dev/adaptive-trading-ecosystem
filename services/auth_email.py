@@ -31,12 +31,7 @@ def email_delivery_enabled(settings: Settings | None = None) -> bool:
 
 
 def _allow_local_preview(settings: Settings) -> bool:
-    base_url = settings.base_url.strip().lower()
-    return (
-        settings.use_sqlite
-        or "localhost" in base_url
-        or "127.0.0.1" in base_url
-    )
+    return bool(settings.allow_auth_link_preview)
 
 
 def auth_email_flow_available(settings: Settings | None = None) -> bool:

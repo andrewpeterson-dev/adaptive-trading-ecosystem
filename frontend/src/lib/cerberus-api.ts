@@ -200,24 +200,31 @@ export async function listProposals(status?: string): Promise<TradeProposal[]> {
   return apiFetch(`/api/ai/tools/proposals${params}`);
 }
 
-export async function uploadDocument(filename: string, mimeType: string): Promise<{ documentId: string; uploadUrl: string }> {
+export async function uploadDocument(
+  filename: string,
+  mimeType: string
+): Promise<{ documentId: string; uploadUrl: string; uploadHeaders: Record<string, string> }> {
   const response = await apiFetch<{
     documentId?: string;
     uploadUrl?: string;
+    uploadHeaders?: Record<string, string>;
     document_id?: string;
     upload_url?: string;
+    upload_headers?: Record<string, string>;
   }>('/api/documents/upload', {
     method: 'POST',
     body: JSON.stringify({ filename, mimeType }),
   });
   const documentId = response.documentId ?? response.document_id ?? '';
   const uploadUrl = response.uploadUrl ?? response.upload_url ?? '';
+  const uploadHeaders = response.uploadHeaders ?? response.upload_headers ?? {};
   if (!documentId || !uploadUrl) {
     throw new Error('Upload service returned an incomplete response');
   }
   return {
     documentId,
     uploadUrl,
+    uploadHeaders,
   };
 }
 

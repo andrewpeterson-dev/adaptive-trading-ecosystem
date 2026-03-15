@@ -10,6 +10,7 @@ export interface MarketEvent {
   sectors: string[];
   headline: string;
   source: string;
+  raw_data: Record<string, unknown>;
   detected_at: string | null;
   expires_at: string | null;
 }

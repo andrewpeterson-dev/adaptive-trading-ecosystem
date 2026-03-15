@@ -23,6 +23,8 @@ def hash_token(token: str) -> str:
 
 def should_use_secure_cookies(settings: Settings | None = None) -> bool:
     active_settings = settings or get_settings()
+    if active_settings.cookie_secure is not None:
+        return bool(active_settings.cookie_secure)
     return active_settings.base_url.strip().lower().startswith("https://")
 
 

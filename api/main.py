@@ -34,6 +34,17 @@ from services.security.access_control import require_admin
 
 logger = structlog.get_logger(__name__)
 _db_init_state = {"ready": False, "failed": False}
+_READINESS_PUBLIC_PATHS = frozenset({
+    "/health",
+    "/health/ready",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+})
+_READINESS_PUBLIC_PREFIXES = (
+    "/api/auth/",
+    "/ws/",
+)
 
 
 def _spawn_background_task(
@@ -111,6 +122,34 @@ async def _init_db_with_retry() -> None:
     logger.error("db_init_failed_permanently")
 
 
+def _is_readiness_exempt_path(path: str) -> bool:
+    return path in _READINESS_PUBLIC_PATHS or any(
+        path.startswith(prefix) for prefix in _READINESS_PUBLIC_PREFIXES
+    )
+
+
+async def _start_runtime_services_after_db_ready(
+    background_tasks: set[asyncio.Task],
+    *,
+    bot_runner,
+    learning_engine,
+    context_monitor,
+    universe_scanner,
+) -> None:
+    while not _db_init_state["ready"] and not _db_init_state["failed"]:
+        await asyncio.sleep(1)
+
+    if _db_init_state["failed"]:
+        logger.error("runtime_services_not_started", reason="db_init_failed")
+        return
+
+    await bot_runner.start()
+    _spawn_background_task(background_tasks, coro=learning_engine.start(), name="strategy_learning_engine")
+    _spawn_background_task(background_tasks, coro=context_monitor.start(), name="context_monitor")
+    _spawn_background_task(background_tasks, coro=universe_scanner.start(), name="universe_scanner")
+    logger.info("runtime_services_started_after_db_ready")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
@@ -137,10 +176,17 @@ async def lifespan(app: FastAPI):
     learning_engine = StrategyLearningEngine()
     context_monitor = ContextMonitor()
     universe_scanner = UniverseScanner()
-    _spawn_background_task(background_tasks, coro=bot_runner.start(), name="bot_runner")
-    _spawn_background_task(background_tasks, coro=learning_engine.start(), name="strategy_learning_engine")
-    _spawn_background_task(background_tasks, coro=context_monitor.start(), name="context_monitor")
-    _spawn_background_task(background_tasks, coro=universe_scanner.start(), name="universe_scanner")
+    _spawn_background_task(
+        background_tasks,
+        coro=_start_runtime_services_after_db_ready(
+            background_tasks,
+            bot_runner=bot_runner,
+            learning_engine=learning_engine,
+            context_monitor=context_monitor,
+            universe_scanner=universe_scanner,
+        ),
+        name="runtime_service_startup",
+    )
 
     yield
 
@@ -174,6 +220,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def startup_readiness_guard(request: Request, call_next):
+    if _db_init_state["ready"] or _is_readiness_exempt_path(request.url.path):
+        return await call_next(request)
+
+    status = "failed" if _db_init_state["failed"] else "starting"
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Service starting up", "database": status},
+    )
 
 
 # Security headers middleware

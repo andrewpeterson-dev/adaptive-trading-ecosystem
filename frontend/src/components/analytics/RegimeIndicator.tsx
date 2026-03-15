@@ -22,6 +22,7 @@ const REGIME_CONFIG: Record<string, { label: string; color: string; bgColor: str
 
 export function RegimeIndicator({ data }: { data: RegimeData | null }) {
   if (!data) return null;
+  if (!data.regime || data.confidence == null) return null;
 
   const config = REGIME_CONFIG[data.regime] || REGIME_CONFIG.sideways;
   const Icon = config.icon;

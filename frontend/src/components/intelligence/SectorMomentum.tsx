@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
+import { usePolling } from "@/hooks/usePolling";
 
 interface SectorData {
   symbol: string;
@@ -12,30 +12,22 @@ interface SectorData {
 function parseSectorEvents(events: MarketEvent[]): SectorData[] {
   const sectors: SectorData[] = [];
   for (const evt of events) {
-    if (evt.source?.startsWith("sector_etf")) {
-      // Headline format: "SYMBOL +X.XX% — sector description"
-      const match = evt.headline.match(/^(\w+)\s+([+-]?\d+\.?\d*)%/);
-      if (match) {
-        sectors.push({ symbol: match[1], move: parseFloat(match[2]) });
-      }
-    }
+    if (evt.event_type !== "sector_move") continue;
+    const symbol = String(evt.raw_data?.symbol ?? evt.symbols?.[0] ?? "").toUpperCase();
+    const move = Number(evt.raw_data?.change_pct);
+    if (!symbol || Number.isNaN(move)) continue;
+    sectors.push({ symbol, move });
   }
   // Sort by absolute move descending
   return sectors.sort((a, b) => Math.abs(b.move) - Math.abs(a.move));
 }
 
 export function SectorMomentum() {
-  const [sectors, setSectors] = useState<SectorData[]>([]);
-
-  useEffect(() => {
-    const fetch = () =>
-      getMarketEvents({ event_type: "SECTOR_ROTATION", limit: 50 })
-        .then((events) => setSectors(parseSectorEvents(events)))
-        .catch(() => {});
-    fetch();
-    const interval = setInterval(fetch, 30_000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data, loading, error } = usePolling<MarketEvent[]>({
+    fetcher: () => getMarketEvents({ event_type: "sector_move", limit: 50 }),
+    interval: 30_000,
+  });
+  const sectors = parseSectorEvents(data ?? []);
 
   const maxMove = Math.max(...sectors.map((s) => Math.abs(s.move)), 1);
 
@@ -47,7 +39,15 @@ export function SectorMomentum() {
       </div>
 
       <div className="mt-4 space-y-2">
-        {sectors.length === 0 ? (
+        {loading ? (
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+            Loading sector momentum…
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
+            Sector momentum unavailable. {error}
+          </div>
+        ) : sectors.length === 0 ? (
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
             No significant sector moves
           </div>

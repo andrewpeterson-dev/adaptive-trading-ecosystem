@@ -1,19 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { getRiskScore, type RiskScore } from "@/lib/reasoning-api";
+import { usePolling } from "@/hooks/usePolling";
 
 export function RiskGauge() {
-  const [data, setData] = useState<RiskScore | null>(null);
-
-  useEffect(() => {
-    getRiskScore().then(setData).catch(() => {});
-    const interval = setInterval(() => {
-      getRiskScore().then(setData).catch(() => {});
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data, loading, error } = usePolling<RiskScore>({
+    fetcher: () => getRiskScore(),
+    interval: 30_000,
+  });
 
   const score = data?.score ?? 0;
   const level = data?.level ?? "low";
@@ -38,28 +33,40 @@ export function RiskGauge() {
       </div>
 
       <div className="mt-4 flex items-end gap-4">
-        <div className={`rounded-2xl border px-4 py-3 ${colorMap[level]}`}>
-          <div className="text-3xl font-bold tabular-nums">{Math.round(score)}</div>
-          <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em]">
-            {level}
+        {loading ? (
+          <div className="w-full rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+            Loading risk score…
           </div>
-        </div>
+        ) : error ? (
+          <div className="w-full rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
+            Risk score unavailable. {error}
+          </div>
+        ) : (
+          <>
+            <div className={`rounded-2xl border px-4 py-3 ${colorMap[level]}`}>
+              <div className="text-3xl font-bold tabular-nums">{Math.round(score)}</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em]">
+                {level}
+              </div>
+            </div>
 
-        <div className="flex-1">
-          <div className="h-3 w-full overflow-hidden rounded-full bg-muted/30">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${barColor[level]}`}
-              style={{ width: `${Math.min(100, score)}%` }}
-            />
-          </div>
-          <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-            <span>0 — Calm</span>
-            <span>100 — Crisis</span>
-          </div>
-        </div>
+            <div className="flex-1">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-muted/30">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${barColor[level]}`}
+                  style={{ width: `${Math.min(100, score)}%` }}
+                />
+              </div>
+              <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+                <span>0 - Calm</span>
+                <span>100 - Crisis</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {data ? (
+      {data && !loading && !error ? (
         <div className="mt-4 grid grid-cols-3 gap-3">
           {vix ? (
             <div className="rounded-2xl border border-border/60 bg-muted/10 px-3 py-2.5">

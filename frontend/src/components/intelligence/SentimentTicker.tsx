@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
+import { usePolling } from "@/hooks/usePolling";
 
 interface TickerSentiment {
   symbol: string;
@@ -13,18 +13,20 @@ interface TickerSentiment {
 function parseSentimentEvents(events: MarketEvent[]): TickerSentiment[] {
   const sentiments: TickerSentiment[] = [];
   for (const evt of events) {
-    if (!evt.source?.startsWith("stocktwits")) continue;
-    // Headline format: "SYMBOL sentiment: bullish (score: 72)" or similar
-    const symbolMatch = evt.headline.match(/^(\w+)\s+sentiment/i);
-    const sentimentMatch = evt.headline.match(/sentiment:\s*(bullish|bearish|neutral)/i);
-    const scoreMatch = evt.headline.match(/score:\s*(\d+)/i);
-    if (symbolMatch) {
-      sentiments.push({
-        symbol: symbolMatch[1],
-        sentiment: (sentimentMatch?.[1]?.toLowerCase() as "bullish" | "bearish" | "neutral") ?? "neutral",
-        score: scoreMatch ? parseInt(scoreMatch[1]) : 50,
-      });
-    }
+    if (evt.event_type !== "sentiment" || evt.source !== "stocktwits") continue;
+    const symbol = String(evt.symbols?.[0] ?? "").toUpperCase();
+    const bullish = Number(evt.raw_data?.bullish ?? 0);
+    const bearish = Number(evt.raw_data?.bearish ?? 0);
+    const total = Number(evt.raw_data?.total ?? bullish + bearish);
+    if (!symbol || total <= 0) continue;
+
+    const bullishScore = Math.round((bullish / total) * 100);
+    const isBullish = bullishScore >= 50;
+    sentiments.push({
+      symbol,
+      sentiment: isBullish ? "bullish" : "bearish",
+      score: isBullish ? bullishScore : 100 - bullishScore,
+    });
   }
   return sentiments;
 }
@@ -36,17 +38,11 @@ const SENTIMENT_COLORS = {
 };
 
 export function SentimentTicker() {
-  const [sentiments, setSentiments] = useState<TickerSentiment[]>([]);
-
-  useEffect(() => {
-    const fetch = () =>
-      getMarketEvents({ event_type: "SENTIMENT", limit: 50 })
-        .then((events) => setSentiments(parseSentimentEvents(events)))
-        .catch(() => {});
-    fetch();
-    const interval = setInterval(fetch, 30_000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data, loading, error } = usePolling<MarketEvent[]>({
+    fetcher: () => getMarketEvents({ event_type: "sentiment", limit: 50 }),
+    interval: 30_000,
+  });
+  const sentiments = parseSentimentEvents(data ?? []);
 
   return (
     <div className="app-panel p-5 sm:p-6">
@@ -56,7 +52,15 @@ export function SentimentTicker() {
       </div>
 
       <div className="mt-4">
-        {sentiments.length === 0 ? (
+        {loading ? (
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+            Loading sentiment signals…
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
+            Sentiment feed unavailable. {error}
+          </div>
+        ) : sentiments.length === 0 ? (
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
             No sentiment signals detected
           </div>
@@ -74,6 +78,9 @@ export function SentimentTicker() {
                   </div>
                   <div className={`mt-1 text-xs font-semibold uppercase tracking-wider ${colors.text}`}>
                     {s.sentiment}
+                  </div>
+                  <div className="mt-1 text-[10px] font-mono text-muted-foreground">
+                    {s.score}% {s.sentiment === "bullish" ? "bull" : "bear"}
                   </div>
                 </div>
               );

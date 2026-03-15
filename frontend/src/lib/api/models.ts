@@ -6,11 +6,12 @@ import type {
 } from "@/types/portfolio";
 
 export interface MarketRegime {
-  regime: string;
-  confidence: number;
-  volatility: number;
-  trend: string;
+  regime: string | null;
+  confidence: number | null;
+  volatility?: number | null;
+  trend?: string | null;
   details?: Record<string, unknown>;
+  status?: "ready" | "no_data";
 }
 
 export interface EnsembleStatus {
@@ -19,6 +20,8 @@ export interface EnsembleStatus {
   weights: Record<string, number>;
   last_updated: string | null;
   mode?: string;
+  status?: "ready" | "no_data";
+  retraining_supported?: boolean;
 }
 
 export interface RetrainResponse {

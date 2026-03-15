@@ -22,6 +22,7 @@ from db.cerberus_models import (
 from db.database import get_session
 from db.models import Strategy, StrategyInstance
 from services.ai_strategy_service import AIStrategyService, strategy_record_to_bot_config
+from services.security.rate_limit import RateLimitExceeded, rate_limiter
 from services.strategy_learning_engine import (
     build_equity_curve_from_trades,
     calculate_trade_metrics,
@@ -30,6 +31,26 @@ from services.strategy_learning_engine import (
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
+
+
+def _client_ip(request: Request) -> str:
+    settings = get_settings()
+    if settings.trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _apply_rate_limit(bucket: str, key: str, *, limit: int, window_seconds: int) -> None:
+    try:
+        rate_limiter.check(bucket, key, limit=limit, window_seconds=window_seconds)
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many requests. Try again in {exc.retry_after} seconds.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
 
 
 class CreateBotRequest(BaseModel):
@@ -398,6 +419,8 @@ async def _load_strategy_record(session, user_id: int, strategy_id: int) -> dict
 async def generate_strategy(request: Request, body: GenerateStrategyRequest):
     """Generate a structured strategy from a plain-language prompt."""
     user_id = request.state.user_id
+    _apply_rate_limit("ai:generate-strategy:user", str(user_id), limit=12, window_seconds=300)
+    _apply_rate_limit("ai:generate-strategy:ip", _client_ip(request), limit=24, window_seconds=300)
     service = AIStrategyService()
     prompt = body.prompt.strip()
     if not prompt:
@@ -414,6 +437,8 @@ async def generate_strategy(request: Request, body: GenerateStrategyRequest):
 async def create_bot(request: Request, body: CreateBotRequest):
     """Create a trading bot from a strategy spec."""
     user_id = request.state.user_id
+    _apply_rate_limit("ai:create-bot:user", str(user_id), limit=30, window_seconds=300)
+    _apply_rate_limit("ai:create-bot:ip", _client_ip(request), limit=60, window_seconds=300)
     bot_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
     bot_name = _clean_name(body.name)
@@ -513,6 +538,8 @@ async def list_bots(request: Request):
 async def create_bot_from_strategy(request: Request, body: DeployFromStrategyRequest):
     """Create and immediately deploy a bot from a saved strategy."""
     user_id = request.state.user_id
+    _apply_rate_limit("ai:deploy-from-strategy:user", str(user_id), limit=20, window_seconds=300)
+    _apply_rate_limit("ai:deploy-from-strategy:ip", _client_ip(request), limit=40, window_seconds=300)
 
     async with get_session() as session:
         strategy_record = await _load_strategy_record(session, user_id, body.strategy_id)
@@ -644,6 +671,8 @@ async def get_bot_detail(bot_id: str, request: Request):
 async def deploy_bot(bot_id: str, request: Request):
     """Deploy (start running) a bot."""
     user_id = request.state.user_id
+    _apply_rate_limit("ai:deploy-bot:user", str(user_id), limit=20, window_seconds=300)
+    _apply_rate_limit("ai:deploy-bot:ip", _client_ip(request), limit=40, window_seconds=300)
     async with get_session() as session:
         result = await session.execute(
             select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
@@ -695,6 +724,8 @@ async def deploy_bot(bot_id: str, request: Request):
 async def stop_bot(bot_id: str, request: Request):
     """Stop a running bot."""
     user_id = request.state.user_id
+    _apply_rate_limit("ai:stop-bot:user", str(user_id), limit=40, window_seconds=300)
+    _apply_rate_limit("ai:stop-bot:ip", _client_ip(request), limit=80, window_seconds=300)
     async with get_session() as session:
         result = await session.execute(
             select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
@@ -714,6 +745,8 @@ async def confirm_trade(request: Request, body: ConfirmTradeRequest):
     from services.ai_core.proposals.confirmation_service import ConfirmationService
 
     user_id = request.state.user_id
+    _apply_rate_limit("ai:confirm-trade:user", str(user_id), limit=20, window_seconds=60)
+    _apply_rate_limit("ai:confirm-trade:ip", _client_ip(request), limit=40, window_seconds=60)
     service = ConfirmationService()
 
     try:
@@ -730,6 +763,8 @@ async def execute_trade(request: Request, body: ExecuteTradeRequest):
     from services.ai_core.proposals.confirmation_service import ConfirmationService
 
     user_id = request.state.user_id
+    _apply_rate_limit("ai:execute-trade:user", str(user_id), limit=20, window_seconds=60)
+    _apply_rate_limit("ai:execute-trade:ip", _client_ip(request), limit=40, window_seconds=60)
     service = ConfirmationService()
 
     try:

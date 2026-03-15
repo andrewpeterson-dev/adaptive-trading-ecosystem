@@ -103,11 +103,15 @@ export function ResearchPanel() {
       ]);
 
       try {
-        const { documentId, uploadUrl } = await uploadDocument(file.name, file.type || 'application/octet-stream');
+        const { documentId, uploadUrl, uploadHeaders } = await uploadDocument(
+          file.name,
+          file.type || 'application/octet-stream'
+        );
         const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
           headers: {
             'Content-Type': file.type || 'application/octet-stream',
+            ...uploadHeaders,
           },
           body: file,
         });

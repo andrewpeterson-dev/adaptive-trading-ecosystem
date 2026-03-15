@@ -7,11 +7,14 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, field_validator
 
+from config.settings import get_settings
+from services.security.rate_limit import RateLimitExceeded, rate_limiter
 from services.security.request_auth import (
     AuthenticationError,
     AuthenticationUnavailableError,
     authenticate_token,
 )
+from services.security.request_origin import websocket_origin_allowed
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -40,14 +43,34 @@ def _get_controller():
     return _controller
 
 
+def _client_ip(request_like: Request | WebSocket) -> str:
+    settings = get_settings()
+    if settings.trust_proxy_headers:
+        forwarded = request_like.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+
+    client = getattr(request_like, "client", None)
+    return getattr(client, "host", None) or "unknown"
+
+
+def _apply_rate_limit(bucket: str, key: str, *, limit: int, window_seconds: int) -> None:
+    try:
+        rate_limiter.check(bucket, key, limit=limit, window_seconds=window_seconds)
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many requests. Try again in {exc.retry_after} seconds.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
+
 async def _get_websocket_user_id(websocket: WebSocket) -> Optional[int]:
     token = (websocket.query_params.get("token") or "").strip()
     allowed_scopes = {"websocket"} if token else {"access", "websocket"}
     auth_header = websocket.headers.get("authorization", "")
     if not token and auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        token = websocket.cookies.get("access_token") or ""
+        token = auth_header[7:].strip()
 
     if not token:
         return None
@@ -105,6 +128,8 @@ class ChatResponse(BaseModel):
 async def chat(request: Request, body: ChatRequest):
     """Initiate a Cerberus chat turn. Returns thread ID and stream channel."""
     user_id = request.state.user_id
+    _apply_rate_limit("ai:chat:user", str(user_id), limit=30, window_seconds=60)
+    _apply_rate_limit("ai:chat:ip", _client_ip(request), limit=60, window_seconds=60)
     controller = _get_controller()
     message = body.message.strip()
     if not message:
@@ -136,6 +161,10 @@ async def chat(request: Request, body: ChatRequest):
 @router.websocket("/stream/{thread_id}")
 async def stream(websocket: WebSocket, thread_id: str):
     """WebSocket endpoint for streaming Cerberus responses."""
+    if not websocket_origin_allowed(websocket):
+        await websocket.close(code=4403)
+        return
+
     user_id = await _get_websocket_user_id(websocket)
     if user_id is None:
         await websocket.close(code=4401)
@@ -169,6 +198,15 @@ async def stream(websocket: WebSocket, thread_id: str):
             if not message:
                 await websocket.send_json(
                     {"type": "error", "data": {"message": "Missing message"}}
+                )
+                continue
+
+            try:
+                _apply_rate_limit("ai:stream:user", str(user_id), limit=30, window_seconds=60)
+                _apply_rate_limit("ai:stream:ip", _client_ip(websocket), limit=60, window_seconds=60)
+            except HTTPException as exc:
+                await websocket.send_json(
+                    {"type": "error", "data": {"message": exc.detail}}
                 )
                 continue
 

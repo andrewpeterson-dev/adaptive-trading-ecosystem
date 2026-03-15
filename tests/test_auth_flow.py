@@ -35,6 +35,7 @@ def _auth_test_settings(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "unit-test-secret-0123456789abcdef")
     monkeypatch.setenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
     monkeypatch.setenv("BASE_URL", "http://localhost:3000")
+    monkeypatch.setenv("ALLOW_AUTH_LINK_PREVIEW", "true")
     monkeypatch.setenv("USE_SQLITE", "true")
     get_settings.cache_clear()
     rate_limiter._buckets.clear()
@@ -310,6 +311,7 @@ async def test_inactive_user_token_is_rejected(session_factory):
 
 def test_register_requires_email_delivery_when_preview_is_unavailable(session_factory, monkeypatch):
     monkeypatch.setenv("BASE_URL", "https://app.example.com")
+    monkeypatch.setenv("ALLOW_AUTH_LINK_PREVIEW", "false")
     monkeypatch.setenv("USE_SQLITE", "false")
     monkeypatch.delenv("SMTP_USER", raising=False)
     monkeypatch.delenv("SMTP_PASSWORD", raising=False)
@@ -323,6 +325,28 @@ def test_register_requires_email_delivery_when_preview_is_unavailable(session_fa
                 "email": "prod-user@example.com",
                 "password": "Strong-pass1!",
                 "display_name": "Prod User",
+            },
+        )
+        assert response.status_code == 503
+        assert "Email delivery" in response.json()["detail"]
+
+
+def test_register_requires_explicit_preview_flag_even_on_localhost(session_factory, monkeypatch):
+    monkeypatch.setenv("BASE_URL", "http://localhost:3000")
+    monkeypatch.setenv("USE_SQLITE", "true")
+    monkeypatch.setenv("ALLOW_AUTH_LINK_PREVIEW", "false")
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+    get_settings.cache_clear()
+
+    app, patches = _client(session_factory)
+    with patches[0], patches[1], TestClient(app) as client:
+        response = client.post(
+            "/api/auth/register",
+            json={
+                "email": "no-preview@example.com",
+                "password": "Strong-pass1!",
+                "display_name": "No Preview",
             },
         )
         assert response.status_code == 503

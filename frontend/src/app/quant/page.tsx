@@ -194,9 +194,15 @@ export default function QuantPage() {
 
   // Build radar data
   const hasPerfData = hasAnyPerfData(compareData);
+  const comparableRadarMetrics =
+    compareData.length > 0
+      ? RADAR_METRICS.filter(({ key }) =>
+          compareData.every((strategy) => strategy.performance[key] != null)
+        )
+      : [];
   const radarData =
     compareData.length > 0 && hasPerfData
-      ? RADAR_METRICS.map(({ key, label }) => {
+      ? comparableRadarMetrics.map(({ key, label }) => {
           const entry: Record<string, string | number> = { metric: label };
           compareData.forEach((s) => {
             entry[s.name] = normalise(s.performance[key] as number | null, key, compareData);
@@ -391,39 +397,48 @@ export default function QuantPage() {
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                 Performance Radar
               </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <RadarChart data={radarData} outerRadius={100}>
-                  <PolarGrid stroke="hsl(var(--border))" />
-                  <PolarAngleAxis
-                    dataKey="metric"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  <PolarRadiusAxis
-                    angle={30}
-                    domain={[0, 100]}
-                    tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  {compareData.map((s, i) => (
-                    <Radar
-                      key={s.id}
-                      name={s.name}
-                      dataKey={s.name}
-                      stroke={PALETTE[i % PALETTE.length]}
-                      fill={PALETTE[i % PALETTE.length]}
-                      fillOpacity={0.12}
-                      strokeWidth={2}
+              {radarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <RadarChart data={radarData} outerRadius={100}>
+                    <PolarGrid stroke="hsl(var(--border))" />
+                    <PolarAngleAxis
+                      dataKey="metric"
+                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                     />
-                  ))}
-                  <Tooltip
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      fontSize: 11,
-                      borderRadius: 6,
-                    }}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+                    <PolarRadiusAxis
+                      angle={30}
+                      domain={[0, 100]}
+                      tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    {compareData.map((s, i) => (
+                      <Radar
+                        key={s.id}
+                        name={s.name}
+                        dataKey={s.name}
+                        stroke={PALETTE[i % PALETTE.length]}
+                        fill={PALETTE[i % PALETTE.length]}
+                        fillOpacity={0.12}
+                        strokeWidth={2}
+                      />
+                    ))}
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        fontSize: 11,
+                        borderRadius: 6,
+                      }}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState
+                  icon={<Brain className="h-5 w-5 text-muted-foreground/70" />}
+                  title="No comparable radar metrics"
+                  description="The radar chart only renders metrics that are available for every selected strategy."
+                  className="py-12"
+                />
+              )}
             </div>
 
             <div className="app-panel p-4 md:p-5 space-y-4">

@@ -28,7 +28,7 @@ export default function AIIntelligencePage() {
         meta={
           <span className="app-pill font-mono tracking-normal">
             <Brain className="mr-1.5 inline h-3 w-3" />
-            Live
+            Context Monitor
           </span>
         }
       />

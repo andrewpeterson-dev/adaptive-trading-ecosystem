@@ -61,9 +61,9 @@ async def get_market_events(
             )
         )
         if event_type:
-            query = query.where(MarketEvent.event_type == event_type)
+            query = query.where(func.lower(MarketEvent.event_type) == event_type.lower())
         if impact:
-            query = query.where(MarketEvent.impact == impact)
+            query = query.where(func.upper(MarketEvent.impact) == impact.upper())
 
         query = query.order_by(desc(MarketEvent.detected_at)).limit(limit)
         result = await session.execute(query)
@@ -72,12 +72,13 @@ async def get_market_events(
     return [
         {
             "id": e.id,
-            "event_type": e.event_type,
-            "impact": e.impact,
+            "event_type": str(e.event_type or "").lower(),
+            "impact": str(e.impact or "").upper(),
             "symbols": e.symbols or [],
             "sectors": e.sectors or [],
             "headline": e.headline,
             "source": e.source,
+            "raw_data": e.raw_data or {},
             "detected_at": e.detected_at.isoformat() if e.detected_at else None,
             "expires_at": e.expires_at.isoformat() if e.expires_at else None,
         }

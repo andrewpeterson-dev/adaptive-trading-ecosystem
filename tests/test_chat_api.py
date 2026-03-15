@@ -21,6 +21,7 @@ from db.cerberus_models import (
     ConversationMode,
     MessageRole,
 )
+from services.security.rate_limit import rate_limiter
 
 TEST_DB_URL = "sqlite+aiosqlite:///"
 
@@ -51,6 +52,13 @@ async def session_factory(engine):
 async def session(session_factory):
     async with session_factory() as sess:
         yield sess
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_limiter():
+    rate_limiter.clear()
+    yield
+    rate_limiter.clear()
 
 
 async def _seed_user(session: AsyncSession) -> int:
@@ -235,6 +243,37 @@ class TestChatEndpoint:
 
         assert response.status_code == 422
         mock_controller.handle_turn.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_chat_rate_limits_turn_creation(self, session, session_factory):
+        uid = await _seed_user(session)
+        await session.commit()
+
+        mock_result = MagicMock()
+        mock_result.thread_id = "thread-rl"
+        mock_result.turn_id = "turn-rl"
+        mock_result.to_message_dict.return_value = {"markdown": "response"}
+
+        mock_controller = MagicMock()
+        mock_controller.handle_turn = AsyncMock(return_value=mock_result)
+
+        app, _mock_get_session = _build_app(session_factory)
+        client = TestClient(app)
+
+        with patch("api.routes.ai_chat._get_controller", return_value=mock_controller):
+            for _ in range(30):
+                response = client.post(
+                    "/api/ai/chat",
+                    json={"message": "Hello", "mode": "chat"},
+                )
+                assert response.status_code == 200
+
+            response = client.post(
+                "/api/ai/chat",
+                json={"message": "Hello", "mode": "chat"},
+            )
+
+        assert response.status_code == 429
 
 
 # ---------------------------------------------------------------------------

@@ -125,6 +125,7 @@ interface MonteCarlo {
 
 interface FeatureImportance {
   features: { feature: string; importance: number }[];
+  status?: string | null;
 }
 
 interface HeatmapData {
@@ -766,6 +767,7 @@ export default function IntelligencePage() {
   const [logs, setLogs] = useState<ReasoningLog[]>([]);
   const [mc, setMc] = useState<MonteCarlo | null>(null);
   const [features, setFeatures] = useState<{ feature: string; importance: number }[]>([]);
+  const [featureStatus, setFeatureStatus] = useState<string>("not_available");
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -792,6 +794,7 @@ export default function IntelligencePage() {
       setLogs(logsData.logs ?? []);
       setMc(mcData && mcData.dates ? mcData : null);
       setFeatures(featData.features ?? []);
+      setFeatureStatus(featData.status ?? ((featData.features ?? []).length > 0 ? "available" : "not_available"));
       setHeatmap(hmData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load intelligence data");
@@ -1058,7 +1061,7 @@ export default function IntelligencePage() {
 
             <div className="rounded-xl border border-border/50 bg-card p-4">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Feature Importance
+                Feature Attribution
               </div>
               {features.length > 0 ? (
                 <ResponsiveContainer width="100%" height={200}>
@@ -1094,7 +1097,14 @@ export default function IntelligencePage() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState icon={BarChart3} message="No feature data available" />
+                <EmptyState
+                  icon={BarChart3}
+                  message={
+                    featureStatus === "not_available"
+                      ? "Feature attribution is not available for this strategy yet."
+                      : "No feature data available"
+                  }
+                />
               )}
             </div>
           </div>

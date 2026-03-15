@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
+import { usePolling } from "@/hooks/usePolling";
 
 const IMPACT_DOT = {
   HIGH: "bg-rose-400",
@@ -11,15 +11,11 @@ const IMPACT_DOT = {
 };
 
 export function EarningsCalendar() {
-  const [events, setEvents] = useState<MarketEvent[]>([]);
-
-  useEffect(() => {
-    const fetch = () =>
-      getMarketEvents({ event_type: "EARNINGS", limit: 20 }).then(setEvents).catch(() => {});
-    fetch();
-    const interval = setInterval(fetch, 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data, loading, error } = usePolling<MarketEvent[]>({
+    fetcher: () => getMarketEvents({ event_type: "earnings", limit: 20 }),
+    interval: 60_000,
+  });
+  const events = data ?? [];
 
   return (
     <div className="app-panel p-5 sm:p-6">
@@ -29,7 +25,15 @@ export function EarningsCalendar() {
       </div>
 
       <div className="mt-4 max-h-[320px] space-y-2 overflow-y-auto">
-        {events.length === 0 ? (
+        {loading ? (
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+            Loading earnings calendar…
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
+            Earnings calendar unavailable. {error}
+          </div>
+        ) : events.length === 0 ? (
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
             No upcoming earnings events
           </div>
@@ -44,6 +48,9 @@ export function EarningsCalendar() {
                 <p className="truncate text-sm font-medium text-foreground">
                   {evt.headline}
                 </p>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                  {String(evt.raw_data?.date ?? "Date unavailable")}
+                </div>
                 {evt.symbols.length > 0 && (
                   <div className="mt-0.5 flex gap-1">
                     {evt.symbols.slice(0, 3).map((s) => (

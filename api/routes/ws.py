@@ -34,6 +34,7 @@ from services.security.request_auth import (
     AuthenticationUnavailableError,
     authenticate_token,
 )
+from services.security.request_origin import websocket_origin_allowed
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -43,16 +44,15 @@ _subscriptions: dict[int, set[str]] = {}
 
 
 async def _get_ws_user_id(websocket: WebSocket, token: str) -> Optional[int]:
-    """Authenticate via short-lived websocket ticket or full access token."""
+    """Authenticate via short-lived websocket ticket or auth header."""
     candidate = token.strip()
-    allowed_scopes = {"websocket"} if candidate else {"access", "websocket"}
+    allowed_scopes = {"websocket"}
 
     if not candidate:
         auth_header = websocket.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
-            candidate = auth_header[7:]
-        else:
-            candidate = websocket.cookies.get("access_token") or ""
+            candidate = auth_header[7:].strip()
+            allowed_scopes = {"access", "websocket"}
 
     if not candidate:
         return None
@@ -70,10 +70,14 @@ async def _get_ws_user_id(websocket: WebSocket, token: str) -> Optional[int]:
 
 @router.websocket("/market")
 async def ws_market(websocket: WebSocket, token: str = Query("")):
+    if not websocket_origin_allowed(websocket):
+        await websocket.close(code=4403, reason="Origin not allowed")
+        return
+
     # Auth
     user_id = await _get_ws_user_id(websocket, token)
     if not user_id:
-        await websocket.close(code=4001, reason="Unauthorized")
+        await websocket.close(code=4401, reason="Unauthorized")
         return
 
     await websocket.accept()

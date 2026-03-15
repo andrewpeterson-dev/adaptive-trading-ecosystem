@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Newspaper } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
+import { usePolling } from "@/hooks/usePolling";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "";
@@ -16,15 +16,11 @@ function timeAgo(iso: string | null): string {
 }
 
 export function NewsFeed() {
-  const [news, setNews] = useState<MarketEvent[]>([]);
-
-  useEffect(() => {
-    const fetch = () =>
-      getMarketEvents({ event_type: "NEWS", limit: 15 }).then(setNews).catch(() => {});
-    fetch();
-    const interval = setInterval(fetch, 30_000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data, loading, error } = usePolling<MarketEvent[]>({
+    fetcher: () => getMarketEvents({ event_type: "news", limit: 15 }),
+    interval: 30_000,
+  });
+  const news = data ?? [];
 
   return (
     <div className="app-panel p-5 sm:p-6">
@@ -34,7 +30,15 @@ export function NewsFeed() {
       </div>
 
       <div className="mt-4 max-h-[400px] space-y-2.5 overflow-y-auto">
-        {news.length === 0 ? (
+        {loading ? (
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+            Loading news events…
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
+            News feed unavailable. {error}
+          </div>
+        ) : news.length === 0 ? (
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
             No news events detected yet
           </div>
