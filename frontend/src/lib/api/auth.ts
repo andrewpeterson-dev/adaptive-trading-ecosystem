@@ -15,6 +15,7 @@ export async function login(
   return apiFetch<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
+    timeoutMs: 12_000,
   });
 }
 

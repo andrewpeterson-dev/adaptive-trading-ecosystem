@@ -2,14 +2,13 @@
 
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthShell } from "@/components/layout/AuthShell";
 import { ApiError } from "@/lib/api/client";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
@@ -26,9 +25,17 @@ function LoginForm() {
     try {
       await login(email, password);
       const from = searchParams?.get("from");
-      router.push(from && from.startsWith("/") ? from : "/dashboard");
+      const destination = from && from.startsWith("/") ? from : "/dashboard";
+      // Force a full navigation so middleware-protected routes see the fresh auth cookie immediately.
+      window.location.assign(destination);
+      return;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Login failed";
+      const message =
+        err instanceof Error && err.message === "Request timed out"
+          ? "Sign-in timed out. Please try again."
+          : err instanceof Error
+            ? err.message
+            : "Login failed";
       if (
         err instanceof ApiError &&
         err.status === 403 &&
