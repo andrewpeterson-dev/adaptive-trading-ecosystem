@@ -2,9 +2,10 @@
 System administration endpoints — health, config, monitoring, scheduler controls.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from config.settings import get_settings
+from services.security.access_control import require_admin
 
 router = APIRouter()
 
@@ -39,8 +40,9 @@ def _get_scheduler():
 
 
 @router.get("/config")
-async def get_config():
+async def get_config(request: Request):
     """Get current system configuration (non-sensitive)."""
+    await require_admin(request)
     s = get_settings()
     return {
         "trading_mode": s.trading_mode.value,
@@ -63,15 +65,17 @@ async def get_version():
 
 
 @router.get("/health/detailed")
-async def detailed_health_check():
+async def detailed_health_check(request: Request):
     """Comprehensive health check — database, Redis, broker, disk, memory."""
+    await require_admin(request)
     checker = _get_health_checker()
     return await checker.check_all()
 
 
 @router.get("/monitor/stats")
-async def monitor_stats():
+async def monitor_stats(request: Request):
     """Get watchdog and scheduler statistics."""
+    await require_admin(request)
     watchdog = _get_watchdog()
     scheduler = _get_scheduler()
     return {

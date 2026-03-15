@@ -671,6 +671,11 @@ async def deploy_bot(bot_id: str, request: Request):
                 version_id=bot.current_version_id,
             )
             raise HTTPException(status_code=400, detail="Bot has no deployable version")
+        if version.backtest_required:
+            raise HTTPException(
+                status_code=409,
+                detail="Bot version is awaiting backtest validation before deployment",
+            )
 
         try:
             config = _ensure_valid_bot_config(version.config_json)

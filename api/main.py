@@ -30,6 +30,7 @@ from api.middleware.auth import JWTAuthMiddleware
 from api.middleware.trading_mode import TradingModeMiddleware
 from config.settings import get_settings
 from db.database import init_db, close_db
+from services.security.access_control import require_admin
 
 logger = structlog.get_logger(__name__)
 _db_init_state = {"ready": False, "failed": False}
@@ -243,8 +244,9 @@ async def readiness_check():
 
 
 @app.get("/health/detailed")
-async def health_check_detailed():
+async def health_check_detailed(request):
     """Comprehensive health check — database, Redis, broker, disk, memory."""
+    await require_admin(request)
     from monitor.health_check import HealthChecker
 
     checker = HealthChecker()

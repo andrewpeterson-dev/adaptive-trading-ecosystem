@@ -5,13 +5,14 @@ API routes for the autonomous self-improvement loop.
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from autonomous.task_queue import TaskQueue, VALID_TYPES
 from autonomous.loop import AutonomousLoop
 from autonomous.seed_tasks import seed_initial_tasks
 from config.settings import get_settings
+from services.security.access_control import require_admin
 
 logger = structlog.get_logger(__name__)
 
@@ -47,8 +48,9 @@ class AddTaskRequest(BaseModel):
 
 
 @router.get("/auto-loop/status")
-async def get_status():
+async def get_status(request: Request):
     """Get current loop status and queue stats."""
+    await require_admin(request)
     settings = get_settings()
     loop = _get_loop()
     queue = _get_queue()
@@ -61,15 +63,17 @@ async def get_status():
 
 
 @router.get("/auto-loop/queue")
-async def get_queue():
+async def get_queue(request: Request):
     """List all tasks in the queue."""
+    await require_admin(request)
     queue = _get_queue()
     return queue.load()
 
 
 @router.post("/auto-loop/queue")
-async def add_task(body: AddTaskRequest):
+async def add_task(body: AddTaskRequest, request: Request):
     """Add a new task to the queue."""
+    await require_admin(request)
     if body.type not in VALID_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid type. Must be one of: {VALID_TYPES}")
 
@@ -86,10 +90,12 @@ async def add_task(body: AddTaskRequest):
 
 @router.post("/auto-loop/run")
 async def run_loop(
+    request: Request,
     max_tasks: int = Query(default=1, ge=1, le=10),
     dry_run: bool = Query(default=True),
 ):
     """Trigger execution of pending tasks."""
+    await require_admin(request)
     settings = get_settings()
     if not settings.auto_loop_enabled:
         raise HTTPException(status_code=403, detail="Autonomous loop is disabled in settings")
@@ -105,15 +111,17 @@ async def run_loop(
 
 
 @router.get("/auto-loop/history")
-async def get_history(limit: int = Query(default=20, ge=1, le=100)):
+async def get_history(request: Request, limit: int = Query(default=20, ge=1, le=100)):
     """Get recent completed/failed tasks."""
+    await require_admin(request)
     loop = _get_loop()
     return loop.get_history(limit=limit)
 
 
 @router.post("/auto-loop/seed")
-async def seed_tasks():
+async def seed_tasks(request: Request):
     """Seed the queue with initial improvement tasks (only if empty)."""
+    await require_admin(request)
     queue = _get_queue()
     created = seed_initial_tasks(queue)
     return {"seeded": len(created), "tasks": created}

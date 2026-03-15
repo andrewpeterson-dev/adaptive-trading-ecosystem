@@ -18,7 +18,6 @@ logger = structlog.get_logger(__name__)
 _PUBLIC_PATHS = frozenset({
     "/health",
     "/health/ready",
-    "/health/detailed",
     "/api/auth/login",
     "/api/auth/register",
     "/docs",

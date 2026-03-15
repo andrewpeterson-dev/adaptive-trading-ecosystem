@@ -104,6 +104,10 @@ def normalize_bot_config(config: dict[str, Any] | None) -> dict[str, Any]:
     normalized.setdefault("conditions", [])
     normalized.setdefault("condition_groups", [])
     normalized.setdefault("symbols", ["SPY"])
+    normalized.setdefault(
+        "exit_conditions",
+        deepcopy((normalized.get("ai_context") or {}).get("exit_conditions") or []),
+    )
     normalized.setdefault("strategy_type", "manual")
     normalized.setdefault("feature_signals", derive_feature_signals(normalized.get("conditions") or []))
     normalized.setdefault("learning", default_learning_plan(normalized.get("strategy_type", "manual")))
@@ -290,11 +294,10 @@ class StrategyLearningEngine:
                         backtest_required=True,
                     )
                 )
-                bot.current_version_id = new_version_id
 
             bot.last_optimization_at = datetime.utcnow()
             bot.learning_status_json = {
-                "status": "learning" if adjustments else "monitoring",
+                "status": "awaiting_backtest" if adjustments else "monitoring",
                 "lastOptimizationAt": bot.last_optimization_at.isoformat(),
                 "nextOptimizationAt": (bot.last_optimization_at + timedelta(minutes=cadence_minutes)).isoformat(),
                 "method": method,
@@ -303,6 +306,7 @@ class StrategyLearningEngine:
                 "featureSignals": metrics["feature_signals"],
                 "parameterAdjustments": adjustments,
                 "methods": learning.get("methods", []),
+                "stagedVersionId": new_version_id,
             }
 
             session.add(
@@ -312,7 +316,7 @@ class StrategyLearningEngine:
                     source_version_id=version.id,
                     result_version_id=new_version_id,
                     method=method,
-                    status="completed" if adjustments else "monitoring",
+                    status="awaiting_backtest" if adjustments else "monitoring",
                     metrics_json=metrics,
                     adjustments_json={"parameter_adjustments": adjustments},
                     summary=summary,

@@ -4,12 +4,13 @@ Lighthouse audit API endpoints — view reports, trigger audits, browse history.
 
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from config.settings import get_settings
 from monitor.lighthouse import LighthouseAuditor
 from monitor.lighthouse_scheduler import trigger_lighthouse_audit
 from monitor.scheduler import JobScheduler
+from services.security.access_control import require_admin
 
 router = APIRouter()
 
@@ -33,8 +34,9 @@ def _get_scheduler() -> JobScheduler:
 
 
 @router.get("/lighthouse")
-async def get_latest_lighthouse():
+async def get_latest_lighthouse(request: Request):
     """Return the most recent Lighthouse audit report."""
+    await require_admin(request)
     auditor = _get_auditor()
     report = auditor.get_latest_report()
     if report is None:
@@ -43,8 +45,9 @@ async def get_latest_lighthouse():
 
 
 @router.post("/lighthouse/run")
-async def trigger_audit():
+async def trigger_audit(request: Request):
     """Queue an on-demand Lighthouse audit and return the job name."""
+    await require_admin(request)
     settings = get_settings()
     auditor = _get_auditor()
     scheduler = _get_scheduler()
@@ -53,8 +56,9 @@ async def trigger_audit():
 
 
 @router.get("/lighthouse/history")
-async def get_lighthouse_history(limit: int = 10):
+async def get_lighthouse_history(request: Request, limit: int = 10):
     """Return recent Lighthouse audit history."""
+    await require_admin(request)
     auditor = _get_auditor()
     history = auditor.get_history(limit=limit)
     return {"count": len(history), "reports": history}

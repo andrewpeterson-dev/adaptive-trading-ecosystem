@@ -21,6 +21,7 @@ from db.cerberus_models import (
     BotAdaptation,
     CerberusBot,
 )
+from services.security.access_control import require_owned_bot
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -31,6 +32,11 @@ def _get_user_id(request: Request) -> int:
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user_id
+
+
+async def _require_owned_bot(request: Request, bot_id: str) -> CerberusBot:
+    bot = await require_owned_bot(request, bot_id)
+    return bot
 
 
 # ── Market Events ────────────────────────────────────────────────────────────
@@ -150,12 +156,12 @@ async def get_bot_decisions(
     limit: int = Query(20, ge=1, le=100),
 ):
     """Get trade decision history for a bot."""
-    _get_user_id(request)
+    bot = await _require_owned_bot(request, bot_id)
 
     async with get_session() as session:
         result = await session.execute(
             select(TradeDecision)
-            .where(TradeDecision.bot_id == bot_id)
+            .where(TradeDecision.bot_id == bot.id)
             .order_by(desc(TradeDecision.created_at))
             .limit(limit)
         )
@@ -190,12 +196,12 @@ async def get_bot_journal(
     limit: int = Query(20, ge=1, le=100),
 ):
     """Get trade journal entries for a bot."""
-    _get_user_id(request)
+    bot = await _require_owned_bot(request, bot_id)
 
     async with get_session() as session:
         result = await session.execute(
             select(BotTradeJournal)
-            .where(BotTradeJournal.bot_id == bot_id)
+            .where(BotTradeJournal.bot_id == bot.id)
             .order_by(desc(BotTradeJournal.created_at))
             .limit(limit)
         )
@@ -227,11 +233,11 @@ async def get_bot_journal(
 @router.get("/bots/{bot_id}/regime-stats")
 async def get_bot_regime_stats(request: Request, bot_id: str):
     """Get per-regime performance stats for a bot."""
-    _get_user_id(request)
+    bot = await _require_owned_bot(request, bot_id)
 
     async with get_session() as session:
         result = await session.execute(
-            select(BotRegimeStats).where(BotRegimeStats.bot_id == bot_id)
+            select(BotRegimeStats).where(BotRegimeStats.bot_id == bot.id)
         )
         stats = result.scalars().all()
 
@@ -256,12 +262,12 @@ async def get_bot_adaptations(
     limit: int = Query(20, ge=1, le=100),
 ):
     """Get learning adaptation history for a bot."""
-    _get_user_id(request)
+    bot = await _require_owned_bot(request, bot_id)
 
     async with get_session() as session:
         result = await session.execute(
             select(BotAdaptation)
-            .where(BotAdaptation.bot_id == bot_id)
+            .where(BotAdaptation.bot_id == bot.id)
             .order_by(desc(BotAdaptation.created_at))
             .limit(limit)
         )
@@ -288,12 +294,12 @@ async def get_bot_adaptations(
 @router.get("/bots/{bot_id}/universe")
 async def get_bot_universe(request: Request, bot_id: str):
     """Get current universe candidates for a bot."""
-    _get_user_id(request)
+    bot = await _require_owned_bot(request, bot_id)
 
     async with get_session() as session:
         result = await session.execute(
             select(UniverseCandidate)
-            .where(UniverseCandidate.bot_id == bot_id)
+            .where(UniverseCandidate.bot_id == bot.id)
             .order_by(desc(UniverseCandidate.score))
         )
         candidates = result.scalars().all()

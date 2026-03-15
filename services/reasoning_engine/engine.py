@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime
 
@@ -12,12 +13,14 @@ from db.database import get_session
 from db.cerberus_models import (
     MarketEvent, TradeDecision, BotRegimeStats, BotTradeJournal, CerberusBot,
 )
+from services.ai_core.providers.base import ProviderMessage
 from services.reasoning_engine.safety import (
     check_hard_blockers, check_soft_guardrails, classify_vix, SafetyResult,
 )
 from services.reasoning_engine.prompts import TRADE_DECISION_SYSTEM, build_trade_decision_prompt
 
 logger = structlog.get_logger(__name__)
+_ALLOWED_DECISIONS = {"EXECUTE", "REDUCE_SIZE", "DELAY_TRADE", "PAUSE_BOT", "EXIT_POSITION"}
 
 
 class ReasoningEngine:
@@ -147,45 +150,119 @@ class ReasoningEngine:
                 bot_name=bot.name, symbol=symbol, signal=signal,
                 strategy_config=strategy_config, active_events=events_dicts,
                 regime_stats=regime_stats, recent_trades=recent_trades,
-                vix=vix, ai_thinking=strategy_config.get("aiThinking"),
+                vix=vix,
+                ai_thinking=(
+                    strategy_config.get("aiThinking")
+                    or (strategy_config.get("ai_context") or {}).get("ai_thinking")
+                ),
             )
 
             router = ModelRouter()
-            response = await router.generate(
-                model=model_name,
-                system_prompt=TRADE_DECISION_SYSTEM,
-                user_prompt=prompt,
+            routing = router.route(
+                mode="strategy",
+                message=prompt,
+                has_tools=False,
+            )
+            provider = routing.provider
+            resolved_model = model_name or routing.model
+            response = await provider.complete(
+                messages=[
+                    ProviderMessage(role="system", content=TRADE_DECISION_SYSTEM),
+                    ProviderMessage(role="user", content=prompt),
+                ],
+                model=resolved_model,
                 temperature=0.3,
                 max_tokens=500,
-                user_id=bot.user_id,
+                store=False,
             )
 
             # Parse JSON from response
-            text = response if isinstance(response, str) else response.get("content", "")
-            # Try to extract JSON from the response
-            import re
-            json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
-            if json_match:
-                parsed = json.loads(json_match.group())
-                return {
-                    "decision": parsed.get("decision", "EXECUTE"),
-                    "confidence": float(parsed.get("confidence", 0.7)),
-                    "reasoning": parsed.get("reasoning", ""),
-                    "size_adjustment": float(parsed.get("size_adjustment", 1.0)),
-                    "delay_seconds": int(parsed.get("delay_seconds", 0)),
-                    "model_used": model_name,
-                }
+            text = response.content if hasattr(response, "content") else str(response)
+            parsed = self._extract_reasoning_payload(text)
+            if parsed is None:
+                return self._fail_closed_reasoning(
+                    reasoning="LLM response unparseable — delaying trade until a valid decision is available",
+                    model_used=resolved_model,
+                )
 
-            return {"decision": "EXECUTE", "confidence": 0.7, "reasoning": "LLM response unparseable — defaulting to execute", "size_adjustment": 1.0, "delay_seconds": 0, "model_used": "safety_rules_fallback"}
+            return {
+                "decision": self._normalize_decision(parsed.get("decision")),
+                "confidence": self._bounded_float(parsed.get("confidence"), default=0.0, minimum=0.0, maximum=1.0),
+                "reasoning": str(parsed.get("reasoning") or "").strip(),
+                "size_adjustment": self._bounded_float(parsed.get("size_adjustment"), default=1.0, minimum=0.0, maximum=1.0),
+                "delay_seconds": self._bounded_int(parsed.get("delay_seconds"), default=0, minimum=0),
+                "model_used": resolved_model,
+            }
 
         except Exception as e:
             logger.warning("reasoning_llm_failed", error=str(e), bot_id=bot.id)
-            return {
-                "decision": "EXECUTE", "confidence": 0.5,
-                "reasoning": f"LLM unavailable ({e}) — safety rules only",
-                "size_adjustment": 1.0, "delay_seconds": 0,
-                "model_used": "safety_rules_fallback",
-            }
+            return self._fail_closed_reasoning(
+                reasoning=f"LLM unavailable ({e}) — delaying trade until reasoning recovers",
+                model_used="safety_rules_fallback",
+            )
+
+    @staticmethod
+    def _bounded_float(
+        value: object,
+        *,
+        default: float,
+        minimum: float,
+        maximum: float,
+    ) -> float:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return default
+        return max(minimum, min(maximum, numeric))
+
+    @staticmethod
+    def _bounded_int(value: object, *, default: int, minimum: int = 0) -> int:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            return default
+        return max(minimum, numeric)
+
+    @staticmethod
+    def _normalize_decision(value: object) -> str:
+        decision = str(value or "").strip().upper()
+        if decision in _ALLOWED_DECISIONS:
+            return decision
+        return "DELAY_TRADE"
+
+    @staticmethod
+    def _extract_reasoning_payload(text: str) -> dict | None:
+        stripped = str(text or "").strip()
+        if not stripped:
+            return None
+
+        candidates = [stripped]
+        fenced_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", stripped, re.DOTALL)
+        if fenced_match:
+            candidates.insert(0, fenced_match.group(1))
+
+        object_matches = re.findall(r"\{.*\}", stripped, re.DOTALL)
+        candidates.extend(object_matches)
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+        return None
+
+    @staticmethod
+    def _fail_closed_reasoning(*, reasoning: str, model_used: str) -> dict:
+        return {
+            "decision": "DELAY_TRADE",
+            "confidence": 0.0,
+            "reasoning": reasoning,
+            "size_adjustment": 0.0,
+            "delay_seconds": 300,
+            "model_used": model_used,
+        }
 
     async def _merge_reasoning(
         self, *, bot_id, symbol, signal, vix, llm_result, soft, events_considered,

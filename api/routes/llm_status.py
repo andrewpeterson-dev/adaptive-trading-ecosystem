@@ -2,11 +2,12 @@
 LLM status endpoint — reports which backend is active and health stats.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from config.settings import get_settings
 from typing import Optional
 from intelligence.ollama_client import OllamaClient
+from services.security.access_control import require_admin
 
 router = APIRouter()
 
@@ -21,8 +22,9 @@ def _get_ollama_client() -> OllamaClient:
 
 
 @router.get("/llm-status")
-async def llm_status():
+async def llm_status(request: Request):
     """Return LLM backend status, health, and availability."""
+    await require_admin(request)
     settings = get_settings()
     ollama = _get_ollama_client()
 
