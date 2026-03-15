@@ -331,13 +331,23 @@ class StrategyLearningEngine:
                 adjustments=len(adjustments),
             )
 
-            return {
+            optimization_result = {
                 "bot_id": bot.id,
                 "method": method,
                 "summary": summary,
                 "adjustments": adjustments,
                 "metrics": metrics,
             }
+
+        # Dispatch adaptation review outside the session block
+        try:
+            from services.workers.tasks import run_adaptation_review_task
+            run_adaptation_review_task.delay(bot_id)
+            logger.info("adaptation_review_dispatched", bot_id=bot_id)
+        except Exception as exc:
+            logger.warning("adaptation_review_dispatch_failed", bot_id=bot_id, error=str(exc))
+
+        return optimization_result
 
     def _propose_adjustments(
         self,

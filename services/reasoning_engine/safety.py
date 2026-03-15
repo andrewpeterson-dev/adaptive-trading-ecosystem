@@ -74,6 +74,63 @@ def check_hard_blockers(
         result.blocked = True
         result.reasons.append(f"Daily loss {daily_pnl_pct:.1f}% exceeds -5% limit — bot paused")
 
+    # Circuit breaker: market-wide crash protection
+    try:
+        import yfinance as yf
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="1d", interval="1m")
+        if len(hist) >= 2:
+            open_price = hist["Open"].iloc[0]
+            current_price = hist["Close"].iloc[-1]
+            intraday_change_pct = ((current_price - open_price) / open_price) * 100
+            if intraday_change_pct < -7.0:
+                result.blocked = True
+                result.reasons.append(
+                    f"Circuit breaker: SPY down {abs(intraday_change_pct):.1f}% intraday (>7% threshold). All new entries blocked."
+                )
+    except Exception:
+        pass  # Don't block on data fetch failure — handled by API failure gate
+
+    # Liquidity check
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        info = ticker.fast_info
+        volume = getattr(info, "last_volume", None)
+        if volume is not None and volume < 10_000:
+            result.blocked = True
+            result.reasons.append(
+                f"Liquidity block: {symbol} volume {volume:,} is below 10,000 minimum."
+            )
+        # Check bid-ask spread if available
+        bid = getattr(info, "bid", None) or (ticker.info or {}).get("bid")
+        ask = getattr(info, "ask", None) or (ticker.info or {}).get("ask")
+        if bid and ask and bid > 0:
+            spread_pct = ((ask - bid) / bid) * 100
+            if spread_pct > 2.0:
+                result.blocked = True
+                result.reasons.append(
+                    f"Liquidity block: {symbol} spread {spread_pct:.1f}% exceeds 2% maximum."
+                )
+    except Exception:
+        pass
+
+    # API failure gate: don't trade blind
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period="1d")
+        if hist.empty:
+            result.blocked = True
+            result.reasons.append(
+                f"API failure: Cannot fetch market data for {symbol}. Pausing evaluation."
+            )
+    except Exception as e:
+        result.blocked = True
+        result.reasons.append(
+            f"API failure: Market data unreachable for {symbol} ({e}). Pausing evaluation."
+        )
+
     return result
 
 def check_soft_guardrails(
@@ -83,6 +140,7 @@ def check_soft_guardrails(
     ai_confidence: float = 1.0,
     consecutive_losses: int = 0,
     override_level: str = "soft",
+    open_positions: list[dict] | None = None,
 ) -> SafetyResult:
     """Check soft guardrails — respect bot's override_level."""
     result = SafetyResult()
@@ -109,5 +167,27 @@ def check_soft_guardrails(
     if consecutive_losses >= 3:
         result.reduce_size = min(result.reduce_size, 0.5)
         result.reasons.append(f"Losing streak ({consecutive_losses} consecutive losses)")
+
+    # Correlation risk: check cross-bot sector exposure
+    if open_positions:
+        try:
+            import yfinance as yf
+            ticker_info = yf.Ticker(symbol).info or {}
+            sector = ticker_info.get("sector", "")
+            if sector:
+                # Count distinct bots with open positions in the same sector
+                bots_in_sector: set[str] = set()
+                for pos in open_positions:
+                    pos_sector = pos.get("sector", "")
+                    pos_bot_id = pos.get("bot_id", "")
+                    if pos_sector == sector and pos_bot_id:
+                        bots_in_sector.add(pos_bot_id)
+                if len(bots_in_sector) >= 2:
+                    result.reduce_size = min(result.reduce_size, 0.5)
+                    result.reasons.append(
+                        f"Correlation risk: {len(bots_in_sector)} bots already have open positions in {sector}. Size capped at 50%."
+                    )
+        except Exception:
+            pass  # Don't penalize on lookup failure
 
     return result

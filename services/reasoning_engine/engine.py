@@ -13,6 +13,7 @@ from db.database import get_session
 from db.cerberus_models import (
     MarketEvent, TradeDecision, BotRegimeStats, BotTradeJournal, CerberusBot,
 )
+from db.models import User
 from services.ai_core.providers.base import ProviderMessage
 from services.reasoning_engine.safety import (
     check_hard_blockers, check_soft_guardrails, classify_vix, SafetyResult,
@@ -26,6 +27,22 @@ _ALLOWED_DECISIONS = {"EXECUTE", "REDUCE_SIZE", "DELAY_TRADE", "PAUSE_BOT", "EXI
 class ReasoningEngine:
     """Per-bot reasoning: safety checks + optional LLM evaluation."""
 
+    _TIER_LIMITS: dict[str, dict] = {
+        "free": {"tier": "free", "reasoning_limit": 200, "bot_limit": 10, "use_platform_keys": False},
+        "pro": {"tier": "pro", "reasoning_limit": 50, "bot_limit": 25, "use_platform_keys": True},
+        "admin": {"tier": "admin", "reasoning_limit": 0, "bot_limit": 0, "use_platform_keys": True},
+    }
+
+    async def _check_tier_limits(self, user_id: int) -> dict:
+        """Look up user subscription tier and return the corresponding limits."""
+        async with get_session() as session:
+            result = await session.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+        tier = (user.subscription_tier if user else "free") or "free"
+        return dict(self._TIER_LIMITS.get(tier, self._TIER_LIMITS["free"]))
+
     async def evaluate(
         self,
         *,
@@ -37,6 +54,32 @@ class ReasoningEngine:
         portfolio_exposure: float = 0.0,
         daily_pnl_pct: float = 0.0,
     ) -> TradeDecision:
+        # ── Tier-aware rate limiting ────────────────────────────────────
+        tier_info = await self._check_tier_limits(bot.user_id)
+        if tier_info["reasoning_limit"] > 0:
+            from services.security.rate_limit import rate_limiter, RateLimitExceeded
+            try:
+                rate_limiter.check(
+                    "reasoning:calls",
+                    str(bot.user_id),
+                    limit=tier_info["reasoning_limit"],
+                    window_seconds=3600,
+                )
+            except RateLimitExceeded:
+                return await self._build_result(
+                    bot_id=bot.id,
+                    symbol=symbol,
+                    signal=signal,
+                    vix=vix,
+                    decision="DELAY_TRADE",
+                    confidence=0.0,
+                    reasoning=f"Reasoning rate limit exceeded ({tier_info['tier']} tier: {tier_info['reasoning_limit']}/hr)",
+                    size_adjustment=0.0,
+                    delay_seconds=300,
+                    events_considered=[],
+                    model_used="rate_limit",
+                )
+
         override_level = "soft"
         if bot.current_version_id:
             async with get_session() as session:
@@ -82,11 +125,15 @@ class ReasoningEngine:
             vix=vix,
         )
 
+        # Fetch open positions across all bots for correlation risk check
+        open_positions = await self._get_open_positions_with_sector(bot.user_id)
+
         # Soft guardrails
         soft = check_soft_guardrails(
             vix=vix, events=events_dicts, symbol=symbol,
             ai_confidence=llm_result.get("confidence", 0.7),
             override_level=override_level,
+            open_positions=open_positions,
         )
 
         # Merge LLM + safety
@@ -94,7 +141,49 @@ class ReasoningEngine:
             bot_id=bot.id, symbol=symbol, signal=signal, vix=vix,
             llm_result=llm_result, soft=soft,
             events_considered=[e["id"] for e in events_dicts[:20]],
+            override_level=override_level,
+            events=events_dicts,
         )
+
+    async def _get_open_positions_with_sector(self, user_id: int) -> list[dict]:
+        """Fetch open trades across all bots for this user, with sector info."""
+        from db.cerberus_models import CerberusTrade
+        try:
+            async with get_session() as session:
+                result = await session.execute(
+                    select(CerberusTrade.bot_id, CerberusTrade.symbol).where(
+                        and_(
+                            CerberusTrade.user_id == user_id,
+                            CerberusTrade.exit_ts.is_(None),
+                            CerberusTrade.bot_id.is_not(None),
+                        )
+                    )
+                )
+                rows = result.all()
+
+            if not rows:
+                return []
+
+            # Look up sectors via yfinance (deduplicate symbols first)
+            unique_symbols = {row[1] for row in rows}
+            symbol_sector: dict[str, str] = {}
+            try:
+                import yfinance as yf
+                for sym in unique_symbols:
+                    try:
+                        info = yf.Ticker(sym).info or {}
+                        symbol_sector[sym] = info.get("sector", "")
+                    except Exception:
+                        symbol_sector[sym] = ""
+            except Exception:
+                pass
+
+            return [
+                {"bot_id": row[0], "symbol": row[1], "sector": symbol_sector.get(row[1], "")}
+                for row in rows
+            ]
+        except Exception:
+            return []
 
     async def _get_active_events(self, user_id: int, symbol: str) -> list[MarketEvent]:
         now = datetime.utcnow()
@@ -266,8 +355,10 @@ class ReasoningEngine:
 
     async def _merge_reasoning(
         self, *, bot_id, symbol, signal, vix, llm_result, soft, events_considered,
+        override_level: str = "soft", events: list[dict] | None = None,
     ) -> TradeDecision:
         decision = llm_result.get("decision", "EXECUTE")
+        confidence = llm_result.get("confidence", 0.7)
         size_adj = llm_result.get("size_adjustment", 1.0)
         delay = llm_result.get("delay_seconds", 0)
         reasons = [llm_result.get("reasoning", "")]
@@ -279,9 +370,22 @@ class ReasoningEngine:
         if soft.reasons:
             reasons.extend(soft.reasons)
 
+        # Full autonomy: allow aggressive decisions the engine wouldn't
+        # otherwise make under advisory or soft override levels.
+        if override_level == "full":
+            has_high_impact = any(
+                e.get("impact") == "HIGH" for e in (events or [])
+            )
+            if confidence < 0.2 and has_high_impact:
+                decision = "EXIT_POSITION"
+                size_adj = 0.0
+                reasons.append(
+                    "Full autonomy: very low confidence + HIGH impact event — proactively exiting position"
+                )
+
         return await self._build_result(
             bot_id=bot_id, symbol=symbol, signal=signal, vix=vix,
-            decision=decision, confidence=llm_result.get("confidence", 0.7),
+            decision=decision, confidence=confidence,
             reasoning="; ".join(r for r in reasons if r),
             size_adjustment=size_adj, delay_seconds=delay,
             events_considered=events_considered,

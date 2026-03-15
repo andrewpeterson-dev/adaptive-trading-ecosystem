@@ -9,6 +9,7 @@ import { NewsFeed } from "@/components/intelligence/NewsFeed";
 import { SectorMomentum } from "@/components/intelligence/SectorMomentum";
 import { SentimentTicker } from "@/components/intelligence/SentimentTicker";
 import { EarningsCalendar } from "@/components/intelligence/EarningsCalendar";
+import { BotActivityFeed } from "@/components/intelligence/BotActivityFeed";
 
 export default function AIIntelligencePage() {
   return (
@@ -50,6 +51,9 @@ export default function AIIntelligencePage() {
         <EarningsCalendar />
         <ActiveEvents />
       </div>
+
+      {/* Row 4: Bot Activity Feed */}
+      <BotActivityFeed />
     </div>
   );
 }

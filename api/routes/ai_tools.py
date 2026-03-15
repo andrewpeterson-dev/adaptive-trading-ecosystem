@@ -8,7 +8,7 @@ from typing import Any, Optional
 import structlog
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, func, desc
 from sqlalchemy.orm import selectinload
 
 from config.settings import get_settings
@@ -18,6 +18,7 @@ from db.cerberus_models import (
     CerberusBotOptimizationRun,
     CerberusBotVersion,
     CerberusTrade,
+    TradeDecision,
 )
 from db.database import get_session
 from db.models import Strategy, StrategyInstance
@@ -53,6 +54,32 @@ def _apply_rate_limit(bucket: str, key: str, *, limit: int, window_seconds: int)
         ) from exc
 
 
+async def _check_bot_limit(user_id: int) -> None:
+    """Enforce per-tier bot count limit."""
+    from db.models import User
+
+    async with get_session() as session:
+        user_result = await session.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one_or_none()
+        tier = (user.subscription_tier if user else "free") or "free"
+
+        bot_result = await session.execute(
+            select(func.count(CerberusBot.id)).where(
+                CerberusBot.user_id == user_id,
+                CerberusBot.status != BotStatus.DELETED,
+            )
+        )
+        count = bot_result.scalar() or 0
+
+    limits = {"free": 10, "pro": 25, "admin": 0}
+    limit = limits.get(tier, 10)
+    if limit > 0 and count >= limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Bot limit reached ({count}/{limit} for {tier} tier). Upgrade to create more bots.",
+        )
+
+
 class CreateBotRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     strategy_json: dict[str, Any]
@@ -71,9 +98,16 @@ class ExecuteTradeRequest(BaseModel):
     confirmationToken: str = Field(..., min_length=1)
 
 
+class DeployBotRequest(BaseModel):
+    universe_config: Optional[dict[str, Any]] = Field(default=None)
+    override_level: Optional[str] = Field(default=None, pattern=r"^(advisory|soft|full)$")
+
+
 class DeployFromStrategyRequest(BaseModel):
     strategy_id: int
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    universe_config: Optional[dict[str, Any]] = Field(default=None)
+    override_level: Optional[str] = Field(default=None, pattern=r"^(advisory|soft|full)$")
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -439,6 +473,7 @@ async def create_bot(request: Request, body: CreateBotRequest):
     user_id = request.state.user_id
     _apply_rate_limit("ai:create-bot:user", str(user_id), limit=30, window_seconds=300)
     _apply_rate_limit("ai:create-bot:ip", _client_ip(request), limit=60, window_seconds=300)
+    await _check_bot_limit(user_id)
     bot_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
     bot_name = _clean_name(body.name)
@@ -514,6 +549,24 @@ async def list_bots(request: Request):
                 version = version_result.scalar_one_or_none()
                 config = normalize_bot_config(version.config_json if version else {})
             metrics = await _fetch_bot_metrics(session, bot.id, config or {}, user_id=user_id)
+
+            # Fetch latest TradeDecision for AI confidence + risk badges
+            latest_decision_dict = None
+            td_result = await session.execute(
+                select(TradeDecision)
+                .where(TradeDecision.bot_id == bot.id)
+                .order_by(desc(TradeDecision.created_at))
+                .limit(1)
+            )
+            latest_td = td_result.scalar_one_or_none()
+            if latest_td:
+                latest_decision_dict = {
+                    "ai_confidence": latest_td.ai_confidence,
+                    "context_risk_level": latest_td.context_risk_level,
+                    "decision": latest_td.decision,
+                    "created_at": latest_td.created_at.isoformat() if latest_td.created_at else None,
+                }
+
             bot_list.append(
                 {
                     "id": bot.id,
@@ -528,6 +581,7 @@ async def list_bots(request: Request):
                     "performance": metrics,
                     "learningStatus": _learning_status(bot, config or {}, metrics),
                     "currentVersion": _version_to_dict(version) if version else None,
+                    "latestDecision": latest_decision_dict,
                 }
             )
 
@@ -540,6 +594,7 @@ async def create_bot_from_strategy(request: Request, body: DeployFromStrategyReq
     user_id = request.state.user_id
     _apply_rate_limit("ai:deploy-from-strategy:user", str(user_id), limit=20, window_seconds=300)
     _apply_rate_limit("ai:deploy-from-strategy:ip", _client_ip(request), limit=40, window_seconds=300)
+    await _check_bot_limit(user_id)
 
     async with get_session() as session:
         strategy_record = await _load_strategy_record(session, user_id, body.strategy_id)
@@ -590,6 +645,8 @@ async def create_bot_from_strategy(request: Request, body: DeployFromStrategyReq
             config_json=config,
             diff_summary="Initial deployment from saved strategy",
             created_by="system",
+            universe_config=body.universe_config or {},
+            override_level=body.override_level or "soft",
         )
         bot.current_version_id = version_id
         session.add(bot)
@@ -668,11 +725,16 @@ async def get_bot_detail(bot_id: str, request: Request):
 
 
 @router.post("/bots/{bot_id}/deploy")
-async def deploy_bot(bot_id: str, request: Request):
+async def deploy_bot(bot_id: str, request: Request, body: Optional[DeployBotRequest] = None):
     """Deploy (start running) a bot."""
     user_id = request.state.user_id
     _apply_rate_limit("ai:deploy-bot:user", str(user_id), limit=20, window_seconds=300)
     _apply_rate_limit("ai:deploy-bot:ip", _client_ip(request), limit=40, window_seconds=300)
+
+    # Parse body if not injected by FastAPI (e.g. empty body)
+    if body is None:
+        body = DeployBotRequest()
+
     async with get_session() as session:
         result = await session.execute(
             select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
@@ -713,6 +775,10 @@ async def deploy_bot(bot_id: str, request: Request):
             raise
 
         version.config_json = config
+        if body.universe_config is not None:
+            version.universe_config = body.universe_config
+        if body.override_level is not None:
+            version.override_level = body.override_level
         bot.learning_enabled = bool((config.get("learning") or {}).get("enabled", False))
         bot.status = BotStatus.RUNNING
 

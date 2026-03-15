@@ -224,6 +224,11 @@ def compile_strategy_payload(spec: GeneratedStrategySpec) -> dict[str, Any]:
         "strategy_type": spec.strategyType,
         "source_prompt": spec.sourcePrompt,
         "ai_context": ai_context,
+        "universe_config": {
+            "mode": "ai_selected",
+            "fixed_symbols": list(spec.symbols or ["SPY"]),
+            "max_symbols": 10,
+        },
     }
 
 

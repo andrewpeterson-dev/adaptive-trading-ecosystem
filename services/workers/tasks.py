@@ -85,6 +85,20 @@ def summarize_thread(thread_id: str, user_id: int):
         logger.error("task_summarize_failed", thread_id=thread_id, error=str(exc))
 
 
+@app.task(bind=True, name="services.workers.tasks.run_adaptation_review", max_retries=2)
+def run_adaptation_review_task(self, bot_id: str):
+    """Run AI adaptation review for a bot's recent trades."""
+    logger.info("task_adaptation_review", bot_id=bot_id)
+    try:
+        from services.bot_memory.learning import run_adaptation_review
+        result = _run_async(run_adaptation_review(bot_id))
+        logger.info("task_adaptation_complete", bot_id=bot_id, adaptations=len(result))
+        return {"bot_id": bot_id, "adaptations": len(result)}
+    except Exception as exc:
+        logger.error("task_adaptation_failed", bot_id=bot_id, error=str(exc))
+        raise self.retry(exc=exc, countdown=120)
+
+
 @app.task(name="services.workers.tasks.run_research_job")
 def run_research_job(query: str, user_id: int, document_ids: list[str] | None = None):
     """Run a long research job (Perplexity deep research + document analysis)."""

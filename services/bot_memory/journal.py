@@ -49,6 +49,29 @@ async def record_trade(
     if entry_at and exit_at:
         hold_duration = int((exit_at - entry_at).total_seconds())
 
+    # Fetch sector momentum at time of entry
+    sector_momentum = None
+    try:
+        import yfinance as yf
+        ticker_info = yf.Ticker(symbol).info or {}
+        sector = ticker_info.get("sector", "")
+        if sector:
+            sector_etfs = {
+                "Technology": "XLK", "Healthcare": "XLV", "Financial Services": "XLF",
+                "Energy": "XLE", "Consumer Cyclical": "XLY", "Industrials": "XLI",
+                "Basic Materials": "XLB", "Utilities": "XLU", "Real Estate": "XLRE",
+                "Communication Services": "XLC", "Consumer Defensive": "XLP",
+            }
+            etf = sector_etfs.get(sector)
+            if etf:
+                etf_hist = yf.Ticker(etf).history(period="5d")
+                if len(etf_hist) >= 2:
+                    sector_momentum = float(
+                        (etf_hist["Close"].iloc[-1] / etf_hist["Close"].iloc[0] - 1) * 100
+                    )
+    except Exception:
+        pass
+
     journal_entry = BotTradeJournal(
         id=str(uuid.uuid4()),
         bot_id=bot_id,
@@ -68,6 +91,7 @@ async def record_trade(
         ai_decision=trade_decision.decision if trade_decision else None,
         ai_reasoning=trade_decision.reasoning if trade_decision else None,
         regime_at_entry=regime,
+        sector_momentum_at_entry=sector_momentum,
         created_at=datetime.utcnow(),
     )
 

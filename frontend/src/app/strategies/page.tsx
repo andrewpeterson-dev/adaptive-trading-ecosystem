@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { deployBotFromStrategy } from "@/lib/cerberus-api";
+import {
+  DeployConfigModal,
+  type DeployConfig,
+} from "@/components/bots/DeployConfigModal";
 import type { StrategyRecord } from "@/types/strategy";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +85,7 @@ export default function StrategiesPage() {
   const [cloningId, setCloningId] = useState<number | null>(null);
   const [deployingId, setDeployingId] = useState<number | null>(null);
   const [deployedIds, setDeployedIds] = useState<Set<number>>(new Set());
+  const [deployTarget, setDeployTarget] = useState<StrategyRecord | null>(null);
   const { toast } = useToast();
 
   const fetchStrategies = useCallback(async () => {
@@ -107,13 +112,25 @@ export default function StrategiesPage() {
     }
   };
 
-  const deployStrategy = async (strategy: StrategyRecord, event: React.MouseEvent) => {
+  const deployStrategy = (strategy: StrategyRecord, event: React.MouseEvent) => {
     event.stopPropagation();
+    setDeployTarget(strategy);
+  };
+
+  const handleDeployConfirm = async (config: DeployConfig) => {
+    if (!deployTarget) return;
+    const strategy = deployTarget;
     setDeployingId(strategy.id);
     try {
-      await deployBotFromStrategy(strategy.id, strategy.name);
+      await deployBotFromStrategy(
+        strategy.id,
+        strategy.name,
+        config.universeConfig as unknown as Record<string, unknown>,
+        config.overrideLevel,
+      );
       setDeployedIds((prev) => new Set(prev).add(strategy.id));
       toast(`"${strategy.name}" deployed as bot`, "success");
+      setDeployTarget(null);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to deploy bot";
       toast(msg, "error");
@@ -343,6 +360,14 @@ export default function StrategiesPage() {
           ))}
         </div>
       )}
+
+      <DeployConfigModal
+        open={deployTarget !== null}
+        onClose={() => setDeployTarget(null)}
+        onDeploy={(config) => void handleDeployConfirm(config)}
+        botName={deployTarget?.name}
+        isDeploying={deployingId !== null}
+      />
     </div>
   );
 }

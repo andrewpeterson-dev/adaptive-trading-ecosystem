@@ -22,6 +22,7 @@ from db.cerberus_models import (
     UniverseCandidate,
     BotStatus,
 )
+from services.activity_bus import BotActivityEvent, activity_bus
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
 from services.reasoning_engine import ReasoningEngine
@@ -275,6 +276,11 @@ class BotRunner:
                         symbol=symbol,
                         reasoning=decision.reasoning,
                     )
+                    self._publish_activity(
+                        "bot_paused", bot, symbol,
+                        f"{bot.name} paused — {decision.reasoning}",
+                        {"decision": decision.decision, "reasoning": decision.reasoning},
+                    )
                     return
 
                 if decision.decision in ("EXIT_POSITION", "DELAY_TRADE"):
@@ -283,12 +289,23 @@ class BotRunner:
                         bot_id=bot.id, symbol=symbol,
                         decision=decision.decision, reasoning=decision.reasoning,
                     )
+                    self._publish_activity(
+                        "trade_delayed" if decision.decision == "DELAY_TRADE" else "safety_block",
+                        bot, symbol,
+                        f"{bot.name} {symbol} {decision.decision.lower().replace('_', ' ')} — {decision.reasoning}",
+                        {"decision": decision.decision, "reasoning": decision.reasoning, "confidence": decision.ai_confidence},
+                    )
                     return
                 if decision.delay_seconds > 0:
                     logger.info(
                         "bot_trade_delayed_by_reasoning",
                         bot_id=bot.id, symbol=symbol,
                         delay=decision.delay_seconds, reasoning=decision.reasoning,
+                    )
+                    self._publish_activity(
+                        "trade_delayed", bot, symbol,
+                        f"{bot.name} {symbol} delayed {decision.delay_seconds}s — {decision.reasoning}",
+                        {"delay_seconds": decision.delay_seconds, "reasoning": decision.reasoning},
                     )
                     return  # Will re-evaluate on next cycle
 
@@ -308,6 +325,12 @@ class BotRunner:
             )
             if not executed_trade:
                 return
+
+            self._publish_activity(
+                "trade_executed", bot, symbol,
+                f"{bot.name} {action} {symbol} @ ${current_price:.2f} (conf: {decision.ai_confidence:.0%})",
+                {"action": action, "price": current_price, "size_pct": adjusted_size, "confidence": decision.ai_confidence},
+            )
 
             # Record in trade journal
             try:
@@ -744,6 +767,28 @@ class BotRunner:
         if position_size_pct <= 1:
             return position_size_pct
         return position_size_pct / 100.0
+
+    @staticmethod
+    def _publish_activity(
+        event_type: str,
+        bot: CerberusBot,
+        symbol: str | None,
+        headline: str,
+        detail: dict | None = None,
+    ) -> None:
+        """Publish a bot activity event to the activity bus."""
+        try:
+            activity_bus.publish(BotActivityEvent(
+                event_type=event_type,
+                bot_id=bot.id,
+                bot_name=bot.name or "Unnamed Bot",
+                symbol=symbol,
+                headline=headline,
+                detail=detail or {},
+                user_id=bot.user_id,
+            ))
+        except Exception:
+            pass  # Never let event publishing break the bot loop
 
 
 # Singleton instance

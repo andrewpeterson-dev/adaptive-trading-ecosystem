@@ -1,5 +1,5 @@
 """
-WebSocket endpoint for real-time market data streaming.
+WebSocket endpoint for real-time market data streaming and bot activity.
 
 ws://localhost:8000/ws/market?token=<JWT>
 
@@ -7,11 +7,13 @@ Protocol:
   Client → Server:  {"subscribe": ["AAPL", "TSLA"]}
                     {"unsubscribe": ["AAPL"]}
   Server → Client:  {"type": "price_update", "data": {symbol, price, bid, ask, ...}}
+                    {"type": "bot_activity", "data": {event_type, bot_id, bot_name, headline, ...}}
                     {"type": "connected", "message": "..."}
                     {"type": "error", "message": "..."}
 
 On connect, the server immediately fetches quotes for subscribed symbols
-then streams Redis pub/sub updates as they arrive.
+then streams Redis pub/sub updates as they arrive. Bot activity events
+(safety blocks, trade executions, delays) are pushed automatically.
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ except ImportError:  # pragma: no cover - optional dependency in test/dev
 
 from config.settings import get_settings
 from data.market_data import market_data
+from services.activity_bus import activity_bus
 from services.security.request_auth import (
     AuthenticationError,
     AuthenticationUnavailableError,
@@ -176,19 +179,49 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
                 except Exception:
                     pass
 
+    async def activity_listener():
+        """Forward bot activity events to this WebSocket client."""
+        activity_queue = activity_bus.subscribe(user_id)
+        try:
+            while not stop_event.is_set():
+                try:
+                    event = await asyncio.wait_for(activity_queue.get(), timeout=2.0)
+                    await websocket.send_json({
+                        "type": "bot_activity",
+                        "data": {
+                            "event_type": event.event_type,
+                            "bot_id": event.bot_id,
+                            "bot_name": event.bot_name,
+                            "symbol": event.symbol,
+                            "headline": event.headline,
+                            "detail": event.detail,
+                            "timestamp": event.timestamp,
+                        },
+                    })
+                except asyncio.TimeoutError:
+                    continue
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.debug("ws_activity_listener_error", error=str(e))
+        finally:
+            activity_bus.unsubscribe(user_id, activity_queue)
+
+    activity_task: Optional[asyncio.Task] = None
     try:
         listener_task = asyncio.create_task(redis_listener())
         poll_task = asyncio.create_task(poll_subscribed())
+        activity_task = asyncio.create_task(activity_listener())
         await message_handler()
     except WebSocketDisconnect:
         pass
     finally:
         stop_event.set()
-        for task in (listener_task, poll_task):
+        for task in (listener_task, poll_task, activity_task):
             if task is not None:
                 task.cancel()
         await asyncio.gather(
-            *(task for task in (listener_task, poll_task) if task is not None),
+            *(task for task in (listener_task, poll_task, activity_task) if task is not None),
             return_exceptions=True,
         )
         _subscriptions.pop(ws_id, None)

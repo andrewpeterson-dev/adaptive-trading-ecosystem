@@ -31,6 +31,13 @@ export interface BotLearningStatus {
   cadenceMinutes?: number;
 }
 
+export interface BotLatestDecision {
+  ai_confidence: number;
+  context_risk_level: string;
+  decision: string;
+  created_at: string | null;
+}
+
 export interface BotSummary {
   id: string;
   name: string;
@@ -44,6 +51,7 @@ export interface BotSummary {
   performance: BotPerformanceSummary;
   learningStatus: BotLearningStatus;
   currentVersion: BotVersionSummary | null;
+  latestDecision: BotLatestDecision | null;
 }
 
 export interface BotVersionSummary {
@@ -172,15 +180,35 @@ export async function generateStrategyWithAI(prompt: string): Promise<GeneratedS
   });
 }
 
-export async function deployBotFromStrategy(strategyId: number, name?: string): Promise<{ bot_id: string; name: string; status: string }> {
+export async function deployBotFromStrategy(
+  strategyId: number,
+  name?: string,
+  universeConfig?: Record<string, unknown>,
+  overrideLevel?: string,
+): Promise<{ bot_id: string; name: string; status: string }> {
   return apiFetch('/api/ai/tools/bots/from-strategy', {
     method: 'POST',
-    body: JSON.stringify({ strategy_id: strategyId, name }),
+    body: JSON.stringify({
+      strategy_id: strategyId,
+      name,
+      ...(universeConfig ? { universe_config: universeConfig } : {}),
+      ...(overrideLevel ? { override_level: overrideLevel } : {}),
+    }),
   });
 }
 
-export async function deployBot(botId: string): Promise<{ bot_id: string; status: string }> {
-  return apiFetch(`/api/ai/tools/bots/${botId}/deploy`, { method: 'POST' });
+export async function deployBot(
+  botId: string,
+  universeConfig?: Record<string, unknown>,
+  overrideLevel?: string,
+): Promise<{ bot_id: string; status: string }> {
+  return apiFetch(`/api/ai/tools/bots/${botId}/deploy`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(universeConfig ? { universe_config: universeConfig } : {}),
+      ...(overrideLevel ? { override_level: overrideLevel } : {}),
+    }),
+  });
 }
 
 export async function stopBot(botId: string): Promise<{ bot_id: string; status: string }> {

@@ -10,6 +10,10 @@ import {
   type BotSummary,
 } from "@/lib/cerberus-api";
 import {
+  DeployConfigModal,
+  type DeployConfig,
+} from "@/components/bots/DeployConfigModal";
+import {
   Bot,
   Play,
   Square,
@@ -47,6 +51,7 @@ export function BotControlPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [deployTarget, setDeployTarget] = useState<BotSummary | null>(null);
 
   const fetchBots = useCallback(async () => {
     setIsLoading(true);
@@ -68,10 +73,20 @@ export function BotControlPanel() {
     fetchBots();
   }, [fetchBots]);
 
-  const handleDeploy = async (bot: BotSummary) => {
+  const handleDeployClick = (bot: BotSummary) => {
+    setDeployTarget(bot);
+  };
+
+  const handleDeployConfirm = async (config: DeployConfig) => {
+    if (!deployTarget) return;
+    const bot = deployTarget;
     setActioningId(bot.id);
     try {
-      await deployBot(bot.id);
+      await deployBot(
+        bot.id,
+        config.universeConfig as unknown as Record<string, unknown>,
+        config.overrideLevel,
+      );
       setBots((prev) =>
         prev.map((item) =>
           item.id === bot.id ? { ...item, status: "running" } : item
@@ -81,6 +96,7 @@ export function BotControlPanel() {
         bot.status === "paused" ? `${bot.name} resumed` : `${bot.name} deployed`,
         "success"
       );
+      setDeployTarget(null);
     } catch (error) {
       console.error("Deploy error:", error);
       const actionLabel = bot.status === "paused" ? "resume" : "deploy";
@@ -212,6 +228,32 @@ export function BotControlPanel() {
                       <Badge variant={STATUS_COLOR[bot.status] || "neutral"}>
                         {bot.status}
                       </Badge>
+                      {bot.latestDecision && (
+                        <>
+                          <Badge
+                            variant={
+                              bot.latestDecision.ai_confidence > 0.7
+                                ? "positive"
+                                : bot.latestDecision.ai_confidence >= 0.4
+                                  ? "warning"
+                                  : "negative"
+                            }
+                          >
+                            AI {(bot.latestDecision.ai_confidence * 100).toFixed(0)}%
+                          </Badge>
+                          <Badge
+                            variant={
+                              bot.latestDecision.context_risk_level === "LOW"
+                                ? "positive"
+                                : bot.latestDecision.context_risk_level === "MEDIUM"
+                                  ? "warning"
+                                  : "negative"
+                            }
+                          >
+                            {bot.latestDecision.context_risk_level.toLowerCase()} risk
+                          </Badge>
+                        </>
+                      )}
                     </div>
                     {bot.config && (
                       <p className="font-mono text-xs text-muted-foreground">
@@ -239,7 +281,7 @@ export function BotControlPanel() {
                         size="sm"
                         onClick={(event) => {
                           event.stopPropagation();
-                          void handleDeploy(bot);
+                          void handleDeployClick(bot);
                         }}
                         disabled={actioningId === bot.id}
                       >
@@ -275,7 +317,7 @@ export function BotControlPanel() {
                         size="sm"
                         onClick={(event) => {
                           event.stopPropagation();
-                          void handleDeploy(bot);
+                          void handleDeployClick(bot);
                         }}
                         disabled={actioningId === bot.id}
                       >
@@ -322,6 +364,14 @@ export function BotControlPanel() {
           ))}
         </div>
       )}
+
+      <DeployConfigModal
+        open={deployTarget !== null}
+        onClose={() => setDeployTarget(null)}
+        onDeploy={(config) => void handleDeployConfirm(config)}
+        botName={deployTarget?.name}
+        isDeploying={actioningId !== null}
+      />
     </div>
   );
 }

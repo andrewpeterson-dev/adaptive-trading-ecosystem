@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func, and_, desc
 
 from db.database import get_session
+from pydantic import BaseModel
+
 from db.cerberus_models import (
     MarketEvent,
     TradeDecision,
@@ -20,11 +22,16 @@ from db.cerberus_models import (
     BotRegimeStats,
     BotAdaptation,
     CerberusBot,
+    CerberusBotVersion,
 )
 from services.security.access_control import require_owned_bot
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
+
+
+class AdaptationAction(BaseModel):
+    action: str  # "approve" or "reject"
 
 
 def _get_user_id(request: Request) -> int:
@@ -315,3 +322,84 @@ async def get_bot_universe(request: Request, bot_id: str):
         }
         for c in candidates
     ]
+
+
+# ── Adaptation & Version Approval ────────────────────────────────────────────
+
+
+@router.post("/bots/{bot_id}/adaptations/{adaptation_id}/review")
+async def review_adaptation(
+    request: Request,
+    bot_id: str,
+    adaptation_id: str,
+    body: AdaptationAction,
+):
+    """Approve or reject a pending adaptation."""
+    bot = await _require_owned_bot(request, bot_id)
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(BotAdaptation).where(
+                BotAdaptation.id == adaptation_id,
+                BotAdaptation.bot_id == bot.id,
+            )
+        )
+        adaptation = result.scalar_one_or_none()
+        if not adaptation:
+            raise HTTPException(status_code=404, detail="Adaptation not found")
+        if adaptation.auto_applied:
+            raise HTTPException(status_code=409, detail="Adaptation was already auto-applied")
+
+        if body.action == "approve":
+            from services.bot_memory.learning import _apply_adaptation
+            await _apply_adaptation(bot.id, {
+                "type": adaptation.adaptation_type,
+                "old": adaptation.old_value,
+                "new": adaptation.new_value,
+            })
+            adaptation.auto_applied = True
+            logger.info("adaptation_approved", bot_id=bot.id, adaptation_id=adaptation_id)
+            return {"status": "approved", "adaptation_id": adaptation_id}
+        elif body.action == "reject":
+            await session.delete(adaptation)
+            logger.info("adaptation_rejected", bot_id=bot.id, adaptation_id=adaptation_id)
+            return {"status": "rejected", "adaptation_id": adaptation_id}
+        else:
+            raise HTTPException(status_code=400, detail="action must be 'approve' or 'reject'")
+
+
+@router.post("/bots/{bot_id}/versions/{version_id}/approve")
+async def approve_version(request: Request, bot_id: str, version_id: str):
+    """Clear backtest_required on a version and promote it as current."""
+    bot = await _require_owned_bot(request, bot_id)
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBotVersion).where(
+                CerberusBotVersion.id == version_id,
+                CerberusBotVersion.bot_id == bot.id,
+            )
+        )
+        version = result.scalar_one_or_none()
+        if not version:
+            raise HTTPException(status_code=404, detail="Version not found")
+        if not version.backtest_required:
+            raise HTTPException(status_code=409, detail="Version does not require backtest approval")
+
+        version.backtest_required = False
+
+        # Also update bot reference
+        bot_result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot.id)
+        )
+        bot_record = bot_result.scalar_one()
+        bot_record.current_version_id = version.id
+
+        # Update learning status
+        status = bot_record.learning_status_json or {}
+        status["status"] = "monitoring"
+        status.pop("stagedVersionId", None)
+        bot_record.learning_status_json = status
+
+    logger.info("version_approved", bot_id=bot.id, version_id=version_id)
+    return {"status": "approved", "version_id": version_id, "promoted": True}

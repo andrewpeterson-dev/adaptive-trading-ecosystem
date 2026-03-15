@@ -53,6 +53,7 @@ class BotStatus(str, enum.Enum):
     PAUSED = "paused"
     STOPPED = "stopped"
     ERROR = "error"
+    DELETED = "deleted"
 
 
 class ConversationMode(str, enum.Enum):
