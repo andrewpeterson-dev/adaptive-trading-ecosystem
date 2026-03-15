@@ -134,8 +134,8 @@ function DrawdownChart({
 }
 
 export default function BacktestPage() {
-  const params = useParams();
-  const id = params.id as string;
+  const params = useParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
   const [strategy, setStrategy] = useState<StrategyRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -151,6 +151,11 @@ export default function BacktestPage() {
 
   useEffect(() => {
     async function load() {
+      if (!id) {
+        setLoadError("Missing strategy ID");
+        setLoading(false);
+        return;
+      }
       try {
         const data = await apiFetch<StrategyRecord>(`/api/strategies/${id}`);
         setStrategy(data);
@@ -166,6 +171,10 @@ export default function BacktestPage() {
   }, [id]);
 
   const runBacktest = async () => {
+    if (!id) {
+      setRunError("Missing strategy ID");
+      return;
+    }
     setRunning(true);
     setResult(null);
     setRunError(null);

@@ -1,7 +1,13 @@
+const isProduction = process.env.NODE_ENV === "production";
+const isVercel = Boolean(process.env.VERCEL);
+const useStandaloneOutput =
+  process.env.NEXT_OUTPUT_MODE === "standalone" ||
+  process.env.NEXT_STANDALONE === "1";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // standalone output for Docker; Vercel ignores this and uses its own builder
-  ...(process.env.VERCEL ? {} : { output: "standalone" }),
+  // Standalone packaging is opt-in so local production builds stay stable.
+  ...(isProduction && !isVercel && useStandaloneOutput ? { output: "standalone" } : {}),
 
   images: {
     dangerouslyAllowSVG: true,
@@ -9,10 +15,8 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
 
-  // Optimize CSS — removes unused rules from the final CSS bundle
-  experimental: {
-    optimizeCss: true,
-  },
+  // Keep the dev server predictable; CSS optimization belongs in production builds.
+  experimental: isProduction ? { optimizeCss: true } : {},
 
   // Strip console.log in production to avoid noisy dev logs leaking
   compiler: {
@@ -31,10 +35,15 @@ const nextConfig = {
         ],
       },
       {
-        // Long-cache immutable static assets (Next.js hashes filenames)
+        // Never long-cache dev assets; stale chunk caches cause route/module mismatches.
         source: "/_next/static/(.*)",
         headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          {
+            key: "Cache-Control",
+            value: isProduction
+              ? "public, max-age=31536000, immutable"
+              : "no-store, must-revalidate",
+          },
         ],
       },
     ];

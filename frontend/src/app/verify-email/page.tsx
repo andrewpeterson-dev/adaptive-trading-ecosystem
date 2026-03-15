@@ -12,8 +12,8 @@ type VerificationState = "idle" | "verifying" | "verified" | "resent" | "error";
 
 function VerifyEmailContent() {
   const params = useSearchParams();
-  const token = params.get("token");
-  const initialEmail = params.get("email") || "";
+  const token = params?.get("token") ?? null;
+  const initialEmail = params?.get("email") || "";
 
   const [email, setEmail] = useState(initialEmail);
   const [state, setState] = useState<VerificationState>(token ? "verifying" : "idle");

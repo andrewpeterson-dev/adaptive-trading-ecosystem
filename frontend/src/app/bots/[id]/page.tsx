@@ -41,8 +41,8 @@ function clampIndex(index: number, length: number) {
 }
 
 export default function BotDetailPage() {
-  const params = useParams();
-  const botId = params.id as string;
+  const params = useParams<{ id?: string | string[] }>();
+  const botId = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
 
   const [detail, setDetail] = useState<BotDetail | null>(null);
   const [loading, setLoading] = useState(true);

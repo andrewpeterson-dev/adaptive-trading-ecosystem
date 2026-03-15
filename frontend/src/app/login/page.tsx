@@ -25,7 +25,7 @@ function LoginForm() {
     setLoading(true);
     try {
       await login(email, password);
-      const from = searchParams.get("from");
+      const from = searchParams?.get("from");
       router.push(from && from.startsWith("/") ? from : "/dashboard");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Login failed";

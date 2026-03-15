@@ -2,25 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { NavHeader } from "@/components/layout/NavHeader";
 import { cn } from "@/lib/utils";
-
-function HeaderPlaceholder() {
-  return (
-    <div className="px-4 pt-4 sm:px-6 lg:px-8" aria-hidden="true">
-      <div className="mx-auto max-w-[1440px]">
-        <div className="app-panel h-[92px] px-4 py-3 opacity-0 sm:h-[96px] sm:px-5" />
-      </div>
-    </div>
-  );
-}
-
-const NavHeader = dynamic(
-  () => import("@/components/layout/NavHeader").then((m) => m.NavHeader),
-  {
-    ssr: false,
-    loading: () => <HeaderPlaceholder />,
-  }
-);
 
 // Lazy-load heavy Cerberus components — they include markdown renderer,
 // chart libraries, and WebSocket logic that aren't needed at initial paint.
@@ -38,6 +22,11 @@ const AUTH_ROUTES = new Set(["/login", "/register", "/forgot-password", "/reset-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAuthRoute = pathname ? AUTH_ROUTES.has(pathname) : false;
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -59,7 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {!isAuthRoute && (
+      {!isAuthRoute && isHydrated && (
         <>
           <AIWidget />
           <ConfirmationModal />

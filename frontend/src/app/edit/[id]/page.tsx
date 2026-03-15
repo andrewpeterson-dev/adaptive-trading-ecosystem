@@ -8,14 +8,19 @@ import type { StrategyRecord } from "@/types/strategy";
 import { Loader2 } from "lucide-react";
 
 export default function EditStrategyPage() {
-  const params = useParams();
-  const id = params.id as string;
+  const params = useParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
   const [strategy, setStrategy] = useState<StrategyRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
+      if (!id) {
+        setError("Missing strategy ID");
+        setLoading(false);
+        return;
+      }
       try {
         const data = await apiFetch<StrategyRecord>(`/api/strategies/${id}`);
         setStrategy(data);

@@ -14,7 +14,7 @@ import {
 
 function ResetPasswordContent() {
   const params = useSearchParams();
-  const token = params.get("token") || "";
+  const token = params?.get("token") || "";
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

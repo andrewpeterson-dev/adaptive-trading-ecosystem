@@ -755,9 +755,10 @@ function PageSkeleton() {
 type TabKey = "overview" | "trades" | "risk" | "logs";
 
 export default function IntelligencePage() {
-  const params = useParams();
+  const params = useParams<{ id?: string | string[] }>();
   const router = useRouter();
-  const strategyId = Number(params.id);
+  const strategyIdParam = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const strategyId = Number(strategyIdParam);
 
   const [tab, setTab] = useState<TabKey>("overview");
   const [bundle, setBundle] = useState<IntelligenceBundle | null>(null);
