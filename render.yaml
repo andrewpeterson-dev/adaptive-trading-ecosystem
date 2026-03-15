@@ -3,13 +3,13 @@ services:
     name: adaptive-trading-ecosystem
     runtime: docker
     plan: free
-    healthCheckPath: /health
+    healthCheckPath: /health/ready
     envVars:
       - key: USE_SQLITE
         value: "true"
       - key: TRADING_MODE
         value: "paper"
-      - key: SECRET_KEY
+      - key: JWT_SECRET
         generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false
