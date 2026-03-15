@@ -118,6 +118,10 @@ async def _ensure_auth_schema() -> None:
                 user_columns = {column["name"] for column in inspector.get_columns("users")}
                 if "session_version" not in user_columns:
                     sync_conn.execute(text("ALTER TABLE users ADD COLUMN session_version INTEGER DEFAULT 0"))
+                if "email_verified" not in user_columns:
+                    # Existing users predate email verification — mark them verified.
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT TRUE"))
+                    sync_conn.execute(text("UPDATE users SET email_verified = TRUE WHERE email_verified IS NULL"))
 
         await conn.run_sync(_ensure)
 
