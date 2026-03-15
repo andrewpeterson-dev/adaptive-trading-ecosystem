@@ -43,6 +43,7 @@ node_modules/
 .next/
 package-lock.json
 frontend/tsconfig.tsbuildinfo
+frontend/src/pages/
 
 # Runtime data
 risk/portfolio-risk.json
