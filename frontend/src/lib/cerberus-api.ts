@@ -210,9 +210,14 @@ export async function uploadDocument(filename: string, mimeType: string): Promis
     method: 'POST',
     body: JSON.stringify({ filename, mimeType }),
   });
+  const documentId = response.documentId ?? response.document_id ?? '';
+  const uploadUrl = response.uploadUrl ?? response.upload_url ?? '';
+  if (!documentId || !uploadUrl) {
+    throw new Error('Upload service returned an incomplete response');
+  }
   return {
-    documentId: response.documentId ?? response.document_id ?? '',
-    uploadUrl: response.uploadUrl ?? response.upload_url ?? '',
+    documentId,
+    uploadUrl,
   };
 }
 

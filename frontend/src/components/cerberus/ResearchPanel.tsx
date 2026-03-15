@@ -37,6 +37,9 @@ export function ResearchPanel() {
     setStrategySeedPrompt,
   } = useCerberusStore();
   const { pageContext } = useUIContextStore();
+  const indexedDocumentIds = uploadedDocs
+    .filter((doc) => doc.status === 'indexed')
+    .map((doc) => doc.id);
 
   const handleResearch = async () => {
     if (!query.trim() || isResearching) return;
@@ -61,7 +64,7 @@ export function ResearchPanel() {
         mode: 'research',
         message: query,
         pageContext,
-        attachments: uploadedDocs.length > 0 ? uploadedDocs.map((doc) => doc.id) : undefined,
+        attachments: indexedDocumentIds.length > 0 ? indexedDocumentIds : undefined,
       });
       shouldClearQuery = true;
       if (!activeThreadId) setActiveThread(response.threadId);
@@ -90,6 +93,7 @@ export function ResearchPanel() {
 
   const uploadFiles = async (files: FileList | File[]) => {
     const list = Array.from(files);
+    setError(null);
 
     for (const file of list) {
       const tempId = `upload-${Date.now()}-${file.name}`;
@@ -134,6 +138,7 @@ export function ResearchPanel() {
         );
       } catch (error) {
         console.error('Upload error:', error);
+        setError(error instanceof Error ? error.message : 'Document upload failed');
         setUploadedDocs((prev) =>
           prev.map((doc) =>
             doc.id === tempId ? { ...doc, status: 'failed' } : doc
@@ -151,10 +156,16 @@ export function ResearchPanel() {
   };
 
   const handleImplementStrategy = () => {
-    const docNames = uploadedDocs.map((doc) => doc.name).join(', ');
+    const readyDocs = uploadedDocs.filter((doc) => doc.status === 'indexed');
+    if (!readyDocs.length) {
+      setError('Index at least one research document before seeding a strategy.');
+      return;
+    }
+    const docNames = readyDocs.map((doc) => doc.name).join(', ');
     setStrategySeedPrompt(
       `Create a builder-ready trading strategy from these uploaded research documents: ${docNames}. Preserve assumptions, cite document-specific constraints, and translate the result into executable entry, exit, and risk rules.`
     );
+    setError(null);
     setActiveTab('strategy');
   };
 

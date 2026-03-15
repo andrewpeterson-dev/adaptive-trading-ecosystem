@@ -132,7 +132,7 @@ export function NavHeader() {
               </nav>
 
               <div className="ml-auto flex items-center gap-2">
-                <div className="hidden items-center gap-2 rounded-[22px] border border-border/60 bg-muted/30 px-2 py-1.5 xl:flex">
+                <div className="hidden items-center gap-2 rounded-[22px] border border-border/60 bg-muted/30 px-2 py-1.5 lg:flex">
                   <div className="px-2">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Live Trading

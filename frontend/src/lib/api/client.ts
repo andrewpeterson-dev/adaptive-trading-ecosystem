@@ -19,6 +19,18 @@ const _cache = new Map<string, { data: unknown; expiresAt: number }>();
 const _inflight = new Map<string, Promise<unknown>>();
 const DEFAULT_CACHE_TTL_MS = 5_000; // 5s — prevents redundant calls within polling cycles
 
+export function getCacheInvalidationTargets(path: string): string[] {
+  const [pathname] = path.split("?");
+  const segments = pathname.split("/").filter(Boolean);
+  const targets = new Set<string>();
+
+  for (let depth = segments.length; depth >= 2; depth -= 1) {
+    targets.add(`/${segments.slice(0, depth).join("/")}`);
+  }
+
+  return Array.from(targets);
+}
+
 function getCached<T>(key: string): T | null {
   const entry = _cache.get(key);
   if (!entry) return null;
@@ -106,8 +118,7 @@ export async function apiFetch<T>(
   }
 
   // Invalidate relevant caches on mutations
-  const segment = path.split("/").slice(0, 4).join("/");
-  invalidateCache(segment);
+  getCacheInvalidationTargets(path).forEach((target) => invalidateCache(target));
 
   return _apiFetchInner<T>(path, { ...fetchOptions, timeoutMs, maxRetries });
 }

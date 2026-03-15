@@ -155,7 +155,7 @@ class TestDocumentRoutes:
                 response = client.put(
                     parsed.path,
                     params={"token": token},
-                    data=b"x" * (MAX_DIRECT_UPLOAD_BYTES + 1),
+                    content=b"x" * (MAX_DIRECT_UPLOAD_BYTES + 1),
                     headers={"Content-Type": "application/octet-stream"},
                 )
         finally:

@@ -14,6 +14,12 @@ import type {
 } from '@/types/trading';
 
 const DEFAULT_WATCHLIST = ['SPY', 'QQQ', 'AAPL', 'NVDA', 'MSFT'];
+let latestQuoteRequestId = 0;
+let latestWorkspaceRequestId = 0;
+
+function normalizeSymbol(symbol?: string): string {
+  return symbol?.trim().toUpperCase() ?? '';
+}
 
 interface TradeState {
   symbol: string;
@@ -81,7 +87,7 @@ export const useTradeStore = create<TradeState>()(
       rightDrawerOpen: true,
 
       setSymbol: (symbol: string) => {
-        const upper = symbol.trim().toUpperCase();
+        const upper = normalizeSymbol(symbol);
         if (!upper || upper === get().symbol) return;
         set({ symbol: upper, highlightedTradeId: null, errorMessage: null });
         void get().fetchSymbolWorkspace(upper);
@@ -99,7 +105,7 @@ export const useTradeStore = create<TradeState>()(
       toggleRightDrawer: () => set((state) => ({ rightDrawerOpen: !state.rightDrawerOpen })),
 
       addToWatchlist: (symbol: string) => {
-        const upper = symbol.trim().toUpperCase();
+        const upper = normalizeSymbol(symbol);
         if (!upper) return;
         set((state) => ({
           watchlist: state.watchlist.includes(upper)
@@ -109,20 +115,29 @@ export const useTradeStore = create<TradeState>()(
       },
 
       removeFromWatchlist: (symbol: string) => {
-        const upper = symbol.trim().toUpperCase();
+        const upper = normalizeSymbol(symbol);
         set((state) => ({
           watchlist: state.watchlist.filter((item) => item !== upper),
         }));
       },
 
       fetchQuote: async (symbol?: string) => {
-        const sym = symbol || get().symbol;
+        const sym = normalizeSymbol(symbol || get().symbol);
         if (!sym) return;
+        const requestId = ++latestQuoteRequestId;
         set({ quoteLoading: true });
         try {
           const quote = await apiFetch<Quote>(`/api/trading/quote?symbol=${encodeURIComponent(sym)}`);
+          if (requestId !== latestQuoteRequestId || get().symbol !== sym) {
+            set({ quoteLoading: false });
+            return;
+          }
           set({ quote, quoteLoading: false });
         } catch (error) {
+          if (requestId !== latestQuoteRequestId || get().symbol !== sym) {
+            set({ quoteLoading: false });
+            return;
+          }
           set({
             quoteLoading: false,
             errorMessage: error instanceof Error ? error.message : null,
@@ -131,8 +146,9 @@ export const useTradeStore = create<TradeState>()(
       },
 
       fetchSymbolWorkspace: async (symbol?: string) => {
-        const sym = symbol || get().symbol;
+        const sym = normalizeSymbol(symbol || get().symbol);
         if (!sym) return;
+        const requestId = ++latestWorkspaceRequestId;
 
         set({
           quoteLoading: true,
@@ -204,6 +220,11 @@ export const useTradeStore = create<TradeState>()(
               ? firstFailure.reason.message
               : 'Could not refresh symbol workspace'
             : null;
+
+        if (requestId !== latestWorkspaceRequestId || get().symbol !== sym) {
+          set({ quoteLoading: false, symbolDetailsLoading: false, newsLoading: false, statusLoading: false });
+          return;
+        }
 
         set(nextState as Partial<TradeState>);
       },
