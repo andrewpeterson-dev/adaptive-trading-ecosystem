@@ -61,7 +61,7 @@ class LedgerAggregator:
             r2 = await db.execute(
                 select(OptionSimTrade).where(
                     OptionSimTrade.user_id == user_id, OptionSimTrade.status == "open"
-                )
+                ).limit(200)
             )
             open_trades = r2.scalars().all()
             open_positions = [
