@@ -25,6 +25,7 @@ from db.cerberus_models import (
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
 from services.reasoning_engine import ReasoningEngine
+from services.strategy_learning_engine import normalize_bot_config
 
 logger = structlog.get_logger(__name__)
 _MARKET_TIMEZONE = ZoneInfo("America/New_York")
@@ -111,7 +112,15 @@ class BotRunner:
         self, bot: CerberusBot, version: CerberusBotVersion
     ) -> None:
         """Evaluate a single bot's conditions and execute if triggered."""
-        config = version.config_json or {}
+        if version.backtest_required:
+            logger.warning(
+                "bot_skipped_unvalidated_version",
+                bot_id=bot.id,
+                version_id=version.id,
+            )
+            return
+
+        config = normalize_bot_config(version.config_json or {})
         symbols = config.get("symbols", [])
         conditions = config.get("conditions", [])
         action = config.get("action", "BUY")
@@ -146,10 +155,17 @@ class BotRunner:
         if last and (datetime.utcnow() - last).total_seconds() < interval_seconds:
             return
 
+        risk_context = await self._build_risk_context(bot)
         for symbol in symbols:
             try:
                 await self._evaluate_symbol(
-                    bot, config, symbol, conditions, action, position_size_pct
+                    bot,
+                    config,
+                    symbol,
+                    conditions,
+                    action,
+                    position_size_pct,
+                    risk_context,
                 )
             except Exception as e:
                 logger.error(
@@ -169,6 +185,7 @@ class BotRunner:
         conditions: list[dict],
         action: str,
         position_size_pct: float,
+        risk_context: dict,
     ) -> None:
         """Evaluate conditions for one symbol and execute if triggered."""
         # Fetch OHLCV bars using yfinance
@@ -182,15 +199,44 @@ class BotRunner:
             )
             return
 
+        exit_conditions = config.get("exit_conditions") or []
+
         # Compute indicators
         indicators_needed = [
             {"indicator": c["indicator"], "params": c.get("params", {})}
-            for c in conditions
+            for c in [*conditions, *exit_conditions]
+            if isinstance(c, dict) and c.get("indicator")
         ]
         indicator_values = compute_indicators(bars, indicators_needed)
 
         # Inject current close price so evaluator can use compare_to="PRICE"
-        indicator_values["CLOSE"] = bars[-1].get("close", 0)
+        current_price = float(bars[-1].get("close", 0) or 0)
+        indicator_values["CLOSE"] = current_price
+
+        open_trades = await self._get_open_trades(bot.id, symbol)
+        if open_trades:
+            should_exit, exit_reasons = self._should_exit_position(
+                open_trades=open_trades,
+                config=config,
+                indicator_values=indicator_values,
+                current_price=current_price,
+            )
+            if should_exit:
+                await self._close_open_trades(
+                    bot=bot,
+                    symbol=symbol,
+                    open_trades=open_trades,
+                    current_price=current_price,
+                    reasons=exit_reasons,
+                )
+            else:
+                logger.debug(
+                    "bot_position_held",
+                    bot_id=bot.id,
+                    symbol=symbol,
+                    open_trades=len(open_trades),
+                )
+            return
 
         # Evaluate conditions
         all_passed, reasons = evaluate_conditions(conditions, indicator_values)
@@ -205,15 +251,33 @@ class BotRunner:
             )
 
             # Gate through Reasoning Engine before execution
+            decision = None
             try:
                 decision = await self._reasoning_engine.evaluate(
                     bot=bot,
                     symbol=symbol,
                     signal=action,
                     strategy_config=config,
+                    vix=risk_context.get("vix"),
+                    portfolio_exposure=self._calculate_symbol_exposure(
+                        risk_context,
+                        symbol,
+                        current_price,
+                    ),
+                    daily_pnl_pct=float(risk_context.get("daily_pnl_pct") or 0.0),
                 )
 
-                if decision.decision in ("PAUSE_BOT", "EXIT_POSITION"):
+                if decision.decision == "PAUSE_BOT":
+                    await self._pause_bot(bot.id, decision.reasoning)
+                    logger.info(
+                        "bot_paused_by_reasoning",
+                        bot_id=bot.id,
+                        symbol=symbol,
+                        reasoning=decision.reasoning,
+                    )
+                    return
+
+                if decision.decision in ("EXIT_POSITION", "DELAY_TRADE"):
                     logger.info(
                         "bot_trade_blocked_by_reasoning",
                         bot_id=bot.id, symbol=symbol,
@@ -232,27 +296,31 @@ class BotRunner:
                 adjusted_size = position_size_pct * decision.size_adjustment
             except Exception as e:
                 logger.warning("reasoning_engine_error", bot_id=bot.id, error=str(e))
-                adjusted_size = position_size_pct
+                return
 
-            await self._execute_trade(
+            executed_trade = await self._execute_trade(
                 bot,
                 symbol,
                 action,
                 adjusted_size,
-                bars[-1].get("close", 0),
+                current_price,
                 reasons=reasons,
             )
+            if not executed_trade:
+                return
 
             # Record in trade journal
             try:
                 from services.bot_memory.journal import record_trade
                 await record_trade(
                     bot_id=bot.id,
-                    trade_id=str(uuid.uuid4()),
+                    trade_id=executed_trade.id,
                     symbol=symbol,
                     side=action,
-                    entry_price=bars[-1].get("close", 0),
-                    trade_decision=decision if 'decision' in dir() else None,
+                    entry_price=current_price,
+                    vix=risk_context.get("vix"),
+                    entry_at=executed_trade.entry_ts,
+                    trade_decision=decision,
                 )
             except Exception as e:
                 logger.warning("journal_record_error", bot_id=bot.id, error=str(e))
@@ -260,6 +328,229 @@ class BotRunner:
             logger.debug(
                 "bot_conditions_not_met", bot_id=bot.id, symbol=symbol
             )
+
+    async def _get_open_trades(self, bot_id: str, symbol: str) -> list[CerberusTrade]:
+        async with get_session() as session:
+            result = await session.execute(
+                select(CerberusTrade)
+                .where(
+                    CerberusTrade.bot_id == bot_id,
+                    CerberusTrade.symbol == symbol.upper(),
+                    CerberusTrade.exit_ts.is_(None),
+                )
+                .order_by(CerberusTrade.created_at.asc())
+            )
+            return list(result.scalars().all())
+
+    async def _build_risk_context(self, bot: CerberusBot) -> dict:
+        from db.models import PaperPortfolio, PaperPosition, PaperTrade
+
+        positions: dict[str, dict[str, float]] = {}
+        total_equity = 0.0
+        daily_pnl_pct = 0.0
+
+        async with get_session() as session:
+            portfolio_result = await session.execute(
+                select(PaperPortfolio).where(PaperPortfolio.user_id == bot.user_id)
+            )
+            portfolio = portfolio_result.scalar_one_or_none()
+
+            position_result = await session.execute(
+                select(PaperPosition).where(PaperPosition.user_id == bot.user_id)
+            )
+            portfolio_positions = list(position_result.scalars().all())
+
+            for position in portfolio_positions:
+                mark_price = float(position.current_price or position.avg_entry_price or 0.0)
+                positions[position.symbol.upper()] = {
+                    "quantity": float(position.quantity or 0.0),
+                    "mark_price": mark_price,
+                }
+
+            if portfolio:
+                positions_value = sum(
+                    abs(float(position.quantity or 0.0))
+                    * float(position.current_price or position.avg_entry_price or 0.0)
+                    for position in portfolio_positions
+                )
+                total_equity = float(portfolio.cash or 0.0) + positions_value
+
+                start_of_day = datetime.utcnow().replace(
+                    hour=0,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
+                trade_result = await session.execute(
+                    select(PaperTrade.pnl).where(
+                        PaperTrade.user_id == bot.user_id,
+                        PaperTrade.exit_time.is_not(None),
+                        PaperTrade.exit_time >= start_of_day,
+                    )
+                )
+                realized_today = sum(float(row[0] or 0.0) for row in trade_result.all())
+                initial_capital = float(portfolio.initial_capital or 0.0)
+                if initial_capital > 0:
+                    daily_pnl_pct = realized_today / initial_capital * 100.0
+
+        vix = await self._fetch_reference_price("^VIX")
+        return {
+            "vix": vix,
+            "daily_pnl_pct": daily_pnl_pct,
+            "total_equity": total_equity,
+            "positions": positions,
+        }
+
+    def _calculate_symbol_exposure(
+        self,
+        risk_context: dict,
+        symbol: str,
+        current_price: float,
+    ) -> float:
+        positions = risk_context.get("positions") or {}
+        total_equity = float(risk_context.get("total_equity") or 0.0)
+        if total_equity <= 0:
+            return 0.0
+
+        position = positions.get(symbol.upper()) or {}
+        quantity = abs(float(position.get("quantity") or 0.0))
+        price = float(position.get("mark_price") or current_price or 0.0)
+        if quantity <= 0 or price <= 0:
+            return 0.0
+        return (quantity * price) / total_equity
+
+    async def _fetch_reference_price(self, symbol: str) -> float | None:
+        bars = await self._fetch_bars(symbol, "1D")
+        if not bars:
+            return None
+        try:
+            return float(bars[-1].get("close", 0) or 0)
+        except (TypeError, ValueError):
+            return None
+
+    def _should_exit_position(
+        self,
+        *,
+        open_trades: list[CerberusTrade],
+        config: dict,
+        indicator_values: dict,
+        current_price: float,
+    ) -> tuple[bool, list[str]]:
+        reasons: list[str] = []
+        stop_loss_pct = float(config.get("stop_loss_pct") or 0.0)
+        take_profit_pct = float(config.get("take_profit_pct") or 0.0)
+
+        for trade in open_trades:
+            entry_price = float(trade.entry_price or 0.0)
+            if entry_price <= 0 or current_price <= 0:
+                continue
+
+            is_short = str(trade.side or "").lower().startswith("sell")
+            if stop_loss_pct > 0:
+                stop_price = entry_price * (1 + stop_loss_pct if is_short else 1 - stop_loss_pct)
+                if (is_short and current_price >= stop_price) or (not is_short and current_price <= stop_price):
+                    reasons.append(f"Stop loss triggered at {current_price:.2f}")
+
+            if take_profit_pct > 0:
+                target_price = entry_price * (1 - take_profit_pct if is_short else 1 + take_profit_pct)
+                if (is_short and current_price <= target_price) or (not is_short and current_price >= target_price):
+                    reasons.append(f"Take profit triggered at {current_price:.2f}")
+
+        exit_conditions = config.get("exit_conditions") or []
+        if exit_conditions:
+            exit_passed, exit_reasons = evaluate_conditions(exit_conditions, indicator_values)
+            if exit_passed:
+                reasons.extend(exit_reasons)
+
+        unique_reasons = [reason for reason in dict.fromkeys(reason.strip() for reason in reasons if reason.strip())]
+        return (bool(unique_reasons), unique_reasons)
+
+    async def _close_open_trades(
+        self,
+        *,
+        bot: CerberusBot,
+        symbol: str,
+        open_trades: list[CerberusTrade],
+        current_price: float,
+        reasons: list[str],
+    ) -> None:
+        closed_count = 0
+        for open_trade in open_trades:
+            exit_side = "BUY" if str(open_trade.side or "").lower().startswith("sell") else "SELL"
+            trade_result = await self._submit_paper_trade(
+                user_id=bot.user_id,
+                symbol=symbol,
+                side=exit_side,
+                quantity=float(open_trade.quantity or 0.0),
+            )
+            if not trade_result:
+                continue
+
+            pnl = self._calculate_realized_pnl(open_trade, current_price)
+            return_pct = self._calculate_return_pct(open_trade, pnl)
+            explanation = "; ".join(reason.strip() for reason in reasons if reason.strip()) or None
+
+            async with get_session() as session:
+                result = await session.execute(
+                    select(CerberusTrade).where(CerberusTrade.id == open_trade.id)
+                )
+                db_trade = result.scalar_one_or_none()
+                if not db_trade:
+                    continue
+
+                payload = db_trade.payload_json if isinstance(db_trade.payload_json, dict) else {}
+                payload["exit_reasons"] = reasons
+                db_trade.exit_ts = datetime.utcnow()
+                db_trade.exit_price = current_price
+                db_trade.gross_pnl = pnl
+                db_trade.net_pnl = pnl
+                db_trade.return_pct = return_pct
+                db_trade.notes = explanation or db_trade.notes
+                db_trade.payload_json = payload
+
+            closed_count += 1
+
+        if closed_count:
+            logger.info(
+                "bot_position_closed",
+                bot_id=bot.id,
+                symbol=symbol,
+                closed_trades=closed_count,
+                reasons=reasons,
+            )
+
+    def _calculate_realized_pnl(self, trade: CerberusTrade, current_price: float) -> float:
+        entry_price = float(trade.entry_price or 0.0)
+        quantity = float(trade.quantity or 0.0)
+        if entry_price <= 0 or quantity <= 0 or current_price <= 0:
+            return 0.0
+
+        is_short = str(trade.side or "").lower().startswith("sell")
+        if is_short:
+            return round((entry_price - current_price) * quantity, 2)
+        return round((current_price - entry_price) * quantity, 2)
+
+    def _calculate_return_pct(self, trade: CerberusTrade, pnl: float) -> float | None:
+        entry_price = float(trade.entry_price or 0.0)
+        quantity = float(trade.quantity or 0.0)
+        basis = entry_price * quantity
+        if basis <= 0:
+            return None
+        return round(pnl / basis, 4)
+
+    async def _pause_bot(self, bot_id: str, reason: str) -> None:
+        async with get_session() as session:
+            result = await session.execute(
+                select(CerberusBot).where(CerberusBot.id == bot_id)
+            )
+            db_bot = result.scalar_one_or_none()
+            if not db_bot:
+                return
+            db_bot.status = BotStatus.PAUSED
+            learning_status = db_bot.learning_status_json if isinstance(db_bot.learning_status_json, dict) else {}
+            learning_status["status"] = "paused"
+            learning_status["summary"] = reason or learning_status.get("summary") or "Paused by AI reasoning."
+            db_bot.learning_status_json = learning_status
 
     async def _fetch_bars(self, symbol: str, timeframe: str) -> list[dict]:
         """Fetch OHLCV bars using yfinance (run in thread to avoid blocking)."""
@@ -312,9 +603,8 @@ class BotRunner:
         position_size_pct: float,
         current_price: float,
         reasons: list[str] | None = None,
-    ) -> None:
+    ) -> CerberusTrade | None:
         """Execute a trade for a bot via paper trading."""
-        from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
         from db.models import PaperPortfolio
 
         user_id = bot.user_id
@@ -358,17 +648,12 @@ class BotRunner:
 
         # Execute via paper trading (bots always use paper mode for safety)
         try:
-            mock_request = SimpleNamespace(
-                state=SimpleNamespace(user_id=user_id, trading_mode=None)
-            )
-
-            paper_req = PaperTradeRequest(
-                symbol=symbol.upper(),
+            trade_result = await self._submit_paper_trade(
+                user_id=user_id,
+                symbol=symbol,
                 side=side,
                 quantity=quantity,
-                user_confirmed=True,  # Bot deployment = user pre-confirmed
             )
-            trade_result = await execute_paper_trade(mock_request, paper_req)
 
             logger.info(
                 "bot_trade_executed",
@@ -390,6 +675,7 @@ class BotRunner:
                     symbol=symbol.upper(),
                     side=side.lower(),
                     quantity=quantity,
+                    entry_ts=datetime.utcnow(),
                     entry_price=current_price,
                     strategy_tag=bot.name,
                     notes=explanation,
@@ -397,11 +683,36 @@ class BotRunner:
                     created_at=datetime.utcnow(),
                 )
                 session.add(trade)
+                await session.flush()
+                await session.refresh(trade)
+                return trade
 
         except Exception as e:
             logger.error(
                 "bot_trade_failed", bot_id=bot.id, symbol=symbol, error=str(e)
             )
+        return None
+
+    async def _submit_paper_trade(
+        self,
+        *,
+        user_id: int,
+        symbol: str,
+        side: str,
+        quantity: float,
+    ) -> dict | None:
+        from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
+
+        mock_request = SimpleNamespace(
+            state=SimpleNamespace(user_id=user_id, trading_mode=None)
+        )
+        paper_req = PaperTradeRequest(
+            symbol=symbol.upper(),
+            side=side,
+            quantity=quantity,
+            user_confirmed=True,
+        )
+        return await execute_paper_trade(mock_request, paper_req)
 
     def _is_market_open(self) -> bool:
         """Check if US stock market is currently open (rough check)."""

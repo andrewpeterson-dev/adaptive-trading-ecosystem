@@ -102,6 +102,7 @@ async def _analyze_patterns(
 
     try:
         from services.ai_core.model_router import ModelRouter
+        from services.ai_core.providers.base import ProviderMessage
 
         trade_summaries = []
         for t in trades:
@@ -134,16 +135,26 @@ Return a JSON array of adjustments (empty array if none needed):
 Be conservative. Only suggest changes with clear evidence from the trade data. With fewer than 5 trades, return []."""
 
         router = ModelRouter()
-        response = await router.generate(
-            model="gpt-4.1",
-            system_prompt="You are a quantitative trading analyst reviewing bot performance and suggesting parameter optimizations. Return only valid JSON.",
-            user_prompt=prompt,
+        routing = router.route(
+            mode="strategy",
+            message=prompt,
+            has_tools=False,
+        )
+        response = await routing.provider.complete(
+            messages=[
+                ProviderMessage(
+                    role="system",
+                    content="You are a quantitative trading analyst reviewing bot performance and suggesting parameter optimizations. Return only valid JSON.",
+                ),
+                ProviderMessage(role="user", content=prompt),
+            ],
+            model=routing.model,
             temperature=0.3,
             max_tokens=1000,
-            user_id=bot.user_id,
+            store=False,
         )
 
-        text = response if isinstance(response, str) else response.get("content", "")
+        text = response.content if hasattr(response, "content") else str(response)
         import re
         json_match = re.search(r'\[.*\]', text, re.DOTALL)
         if json_match:
