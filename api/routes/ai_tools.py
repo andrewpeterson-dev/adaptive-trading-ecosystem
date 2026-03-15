@@ -784,7 +784,9 @@ async def get_bot_activity(bot_id: str, request: Request, limit: int = 50):
             .where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
         )
         bot_row = bot_result.first()
-        config = bot_row[1].config_json if bot_row and bot_row[1] else {}
+        if not bot_row:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        config = bot_row[1].config_json if bot_row[1] else {}
 
         result = await session.execute(
             select(CerberusTrade)

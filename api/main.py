@@ -6,7 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -244,7 +244,7 @@ async def readiness_check():
 
 
 @app.get("/health/detailed")
-async def health_check_detailed(request):
+async def health_check_detailed(request: Request):
     """Comprehensive health check — database, Redis, broker, disk, memory."""
     await require_admin(request)
     from monitor.health_check import HealthChecker

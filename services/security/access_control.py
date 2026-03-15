@@ -15,7 +15,7 @@ logger = structlog.get_logger(__name__)
 async def require_admin(request: Request) -> int:
     """Return the authenticated user id when the caller is an active admin."""
     user_id = getattr(request.state, "user_id", None)
-    if not user_id:
+    if user_id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     async with get_session() as db:
@@ -36,7 +36,7 @@ async def require_owned_bot(request: Request, bot_id: str):
     from db.cerberus_models import CerberusBot
 
     user_id = getattr(request.state, "user_id", None)
-    if not user_id:
+    if user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required")
 
     async with get_session() as session:
