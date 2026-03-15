@@ -116,57 +116,30 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const drawdownRatio = risk ? risk.current_drawdown_pct / risk.max_drawdown_limit_pct : 0;
+  const exposureRatio = risk ? risk.current_exposure_pct / risk.max_exposure_limit_pct : 0;
 
-  if (account?.not_configured) {
-    return (
-      <div className="text-center py-32 space-y-4">
-        <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto">
-          <Unplug className="h-6 w-6 text-amber-400" />
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-32">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-        <div>
-          <h2 className="text-base font-semibold">No live trading configured</h2>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            {account.message || "Connect a live API key in Settings to trade with real money."}
-          </p>
-        </div>
-        <Link
-          href="/settings"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          <Settings className="h-4 w-4" />
-          Go to Settings
-        </Link>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (error && !account) {
-    return (
-      <div className="text-center py-32 space-y-4">
-        <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/50 border border-border/50 mx-auto">
-          <Unplug className="h-6 w-6 text-muted-foreground/60" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold">Broker not responding</h2>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            Could not load account data. Your API key may need to be re-entered.
-          </p>
-        </div>
-        <div className="flex items-center justify-center gap-3">
-          <button
-            onClick={fetchAll}
-            className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Retry
-          </button>
+    if (account?.not_configured) {
+      return (
+        <div className="text-center py-32 space-y-4">
+          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto">
+            <Unplug className="h-6 w-6 text-amber-400" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold">No live trading configured</h2>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+              {account.message || "Connect a live API key in Settings to trade with real money."}
+            </p>
+          </div>
           <Link
             href="/settings"
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -175,12 +148,45 @@ export default function DashboardPage() {
             Go to Settings
           </Link>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  const drawdownRatio = risk ? risk.current_drawdown_pct / risk.max_drawdown_limit_pct : 0;
-  const exposureRatio = risk ? risk.current_exposure_pct / risk.max_exposure_limit_pct : 0;
+    if (error && !account) {
+      return (
+        <div className="text-center py-32 space-y-4">
+          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/50 border border-border/50 mx-auto">
+            <Unplug className="h-6 w-6 text-muted-foreground/60" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold">Broker not responding</h2>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+              Could not load account data. Your API key may need to be re-entered.
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={fetchAll}
+              className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </button>
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+              Go to Settings
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const earlyContent = renderContent();
 
   return (
     <div className="app-page">
@@ -189,6 +195,9 @@ export default function DashboardPage() {
         { href: "/portfolio", label: "Portfolio" },
         { href: "/risk", label: "Risk" },
       ]} />
+
+      {earlyContent ? earlyContent : (
+      <>
 
       <PageHeader
         eyebrow="Overview"
@@ -413,6 +422,8 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

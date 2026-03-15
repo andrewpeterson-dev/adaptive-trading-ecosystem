@@ -103,23 +103,27 @@ export default function ModelsPage() {
 
   const ensembleWeightCount = ensemble ? Object.keys(ensemble.weights ?? {}).length : 0;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (error && models.length === 0) {
+      return (
+        <EmptyState
+          icon={<Unplug className="h-5 w-5 text-muted-foreground" />}
+          title="No model data available"
+          description="Train models and bring the backend online to view performance, regime detection, and allocation analytics."
+        />
+      );
+    }
+    return null;
+  };
 
-  if (error && models.length === 0) {
-    return (
-      <EmptyState
-        icon={<Unplug className="h-5 w-5 text-muted-foreground" />}
-        title="No model data available"
-        description="Train models and bring the backend online to view performance, regime detection, and allocation analytics."
-      />
-    );
-  }
+  const earlyContent = renderContent();
 
   return (
     <div className="app-page">
@@ -129,6 +133,8 @@ export default function ModelsPage() {
         { href: "/quant", label: "Quant" },
       ]} />
 
+      {earlyContent ? earlyContent : (
+      <>
       <PageHeader
         eyebrow="Signals"
         title="Model Performance"
@@ -297,6 +303,8 @@ export default function ModelsPage() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -57,5 +57,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-full.txt
 
+      - name: Postgres initialization smoke test
+        env:
+          USE_SQLITE: "false"
+        run: |
+          python - <<'PY'
+          import asyncio
+          from db.database import init_db, close_db
+
+          async def main():
+              await init_db()
+              await close_db()
+
+          asyncio.run(main())
+          PY
+
       - name: Run tests
         run: pytest tests/ -v --tb=short
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package.json
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run frontend tests
+        run: npm run test
+
+      - name: Build frontend
+        run: npm run build

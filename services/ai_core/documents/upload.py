@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +20,23 @@ logger = structlog.get_logger(__name__)
 
 # Local upload directory for dev (when S3 is not configured)
 _LOCAL_UPLOAD_DIR = Path("uploads/documents")
+MAX_DIRECT_UPLOAD_BYTES = 10 * 1024 * 1024
+_SUPPORTED_UPLOAD_TYPES: dict[str, set[str]] = {
+    "application/pdf": {".pdf"},
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {".docx"},
+    "text/csv": {".csv"},
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {".xlsx"},
+    "application/vnd.ms-excel": {".xls", ".xlsx"},
+    "text/plain": {".txt"},
+    "text/markdown": {".md", ".markdown", ".txt"},
+    "application/json": {".json"},
+}
+_MIME_BY_EXTENSION = {
+    extension: mime_type
+    for mime_type, extensions in _SUPPORTED_UPLOAD_TYPES.items()
+    for extension in extensions
+}
+_INVALID_FILENAME_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class DocumentUploadService:
@@ -26,6 +44,33 @@ class DocumentUploadService:
 
     def __init__(self):
         self._settings = get_settings()
+
+    def _normalize_upload_metadata(
+        self,
+        filename: str,
+        mime_type: Optional[str],
+    ) -> tuple[str, str, str]:
+        safe_name = Path(filename).name.strip()
+        if not safe_name:
+            raise ValueError("filename is required")
+        if len(safe_name) > 255:
+            raise ValueError("filename is too long")
+        if _INVALID_FILENAME_CHARS.search(safe_name):
+            raise ValueError("filename contains invalid characters")
+
+        ext = Path(safe_name).suffix.lower()
+        if not ext or ext not in _MIME_BY_EXTENSION:
+            raise ValueError("Unsupported file type")
+
+        normalized_mime = (mime_type or "").strip().lower()
+        if normalized_mime in {"", "application/octet-stream"}:
+            normalized_mime = _MIME_BY_EXTENSION[ext]
+        elif normalized_mime not in _SUPPORTED_UPLOAD_TYPES:
+            raise ValueError("Unsupported mime type")
+        elif ext not in _SUPPORTED_UPLOAD_TYPES[normalized_mime]:
+            raise ValueError("Filename extension does not match mime type")
+
+        return safe_name, normalized_mime, ext
 
     async def create_upload(
         self,
@@ -40,15 +85,15 @@ class DocumentUploadService:
         """
         from db.cerberus_models import CerberusDocumentFile
 
+        safe_name, normalized_mime, ext = self._normalize_upload_metadata(filename, mime_type)
         doc_id = str(uuid.uuid4())
-        ext = Path(filename).suffix
         storage_key = f"documents/{user_id}/{doc_id}{ext}"
 
         doc = CerberusDocumentFile(
             id=doc_id,
             user_id=user_id,
-            original_filename=filename,
-            mime_type=mime_type,
+            original_filename=safe_name,
+            mime_type=normalized_mime,
             storage_key=storage_key,
             status="pending",
         )
@@ -66,13 +111,15 @@ class DocumentUploadService:
             "upload_created",
             document_id=doc_id,
             user_id=user_id,
-            filename=filename,
+            filename=safe_name,
         )
 
         return {
             "document_id": doc_id,
             "upload_url": upload_url,
             "storage_key": storage_key,
+            "filename": safe_name,
+            "mimeType": normalized_mime,
             "documentId": doc_id,
             "uploadUrl": upload_url,
         }
@@ -155,6 +202,11 @@ class DocumentUploadService:
         """Persist a direct-uploaded file to local storage when S3 is unavailable."""
         from db.cerberus_models import CerberusDocumentFile
 
+        if not content:
+            raise ValueError("Upload body is empty")
+        if len(content) > MAX_DIRECT_UPLOAD_BYTES:
+            raise ValueError(f"Upload exceeds {MAX_DIRECT_UPLOAD_BYTES // (1024 * 1024)} MB limit")
+
         async with get_session() as session:
             result = await session.execute(
                 select(CerberusDocumentFile).where(
@@ -164,7 +216,7 @@ class DocumentUploadService:
             )
             doc = result.scalar_one_or_none()
             if not doc:
-                raise ValueError(f"Document {document_id} not found")
+                raise LookupError(f"Document {document_id} not found")
 
         local_path = _LOCAL_UPLOAD_DIR / doc.storage_key
         local_path.parent.mkdir(parents=True, exist_ok=True)

@@ -89,24 +89,27 @@ export default function RiskPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (error && !risk) {
+      return (
+        <EmptyState
+          icon={<Unplug className="h-5 w-5 text-muted-foreground" />}
+          title="No risk data available"
+          description="Connect a broker and start the backend to view drawdown controls, event logs, and trading halts."
+        />
+      );
+    }
+    return null;
+  };
 
-  if (error && !risk) {
-    return (
-      <EmptyState
-        icon={<Unplug className="h-5 w-5 text-muted-foreground" />}
-        title="No risk data available"
-        description="Connect a broker and start the backend to view drawdown controls, event logs, and trading halts."
-      />
-    );
-  }
-
+  const earlyContent = renderContent();
   const riskLevel = risk ? getRiskLevel(risk) : null;
   const gauges: RiskGaugeConfig[] = risk
     ? [
@@ -139,6 +142,8 @@ export default function RiskPage() {
         { href: "/risk", label: "Risk" },
       ]} />
 
+      {earlyContent ? earlyContent : (
+      <>
       <PageHeader
         eyebrow="Protection"
         title="Risk Monitoring"
@@ -227,6 +232,8 @@ export default function RiskPage() {
       )}
 
       <RiskEventLog events={events} />
+      </>
+      )}
     </div>
   );
 }

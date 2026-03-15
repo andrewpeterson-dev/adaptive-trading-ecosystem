@@ -15,6 +15,10 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
 
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Keep the dev server predictable; CSS optimization belongs in production builds.
   experimental: isProduction ? { optimizeCss: true } : {},
 

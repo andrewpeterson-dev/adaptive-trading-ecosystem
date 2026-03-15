@@ -1,26 +1,23 @@
 """Document upload and search endpoints."""
 from __future__ import annotations
 
-from typing import Optional
-
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import delete
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
 class UploadRequest(BaseModel):
-    filename: str
-    mimeType: str
+    filename: str = Field(..., min_length=1, max_length=255)
+    mimeType: str = Field(..., min_length=1, max_length=128)
 
 
 class SearchRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=2, max_length=2000)
     documentIds: list[str] = Field(default_factory=list)
-    topK: int = 8
+    topK: int = Field(default=8, ge=1, le=25)
 
 
 @router.post("/upload")
@@ -34,8 +31,11 @@ async def upload_document(request: Request, body: UploadRequest):
         raise HTTPException(status_code=400, detail="filename is required")
 
     service = DocumentUploadService()
-    result = await service.create_upload(user_id, filename, body.mimeType)
-    logger.info("document_upload_requested", user_id=user_id, filename=filename)
+    try:
+        result = await service.create_upload(user_id, filename, body.mimeType)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    logger.info("document_upload_requested", user_id=user_id, filename=result["filename"])
     return result
 
 
@@ -54,12 +54,19 @@ async def upload_document_content(
 
     try:
         user_id = service.verify_local_upload_token(document_id=document_id, token=token)
-        if not content:
-            raise HTTPException(status_code=400, detail="Upload body is empty")
-        await service.store_local_upload(document_id=document_id, user_id=user_id, content=content)
-        return {"documentId": document_id, "stored": True}
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    if not content:
+        raise HTTPException(status_code=400, detail="Upload body is empty")
+
+    try:
+        await service.store_local_upload(document_id=document_id, user_id=user_id, content=content)
+        return {"documentId": document_id, "stored": True}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 async def _run_document_ingestion(document_id: str, user_id: int) -> None:

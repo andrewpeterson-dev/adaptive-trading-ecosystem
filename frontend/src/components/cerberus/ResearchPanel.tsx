@@ -100,13 +100,23 @@ export function ResearchPanel() {
 
       try {
         const { documentId, uploadUrl } = await uploadDocument(file.name, file.type || 'application/octet-stream');
-        await fetch(uploadUrl, {
+        const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
           headers: {
             'Content-Type': file.type || 'application/octet-stream',
           },
           body: file,
         });
+        if (!uploadResponse.ok) {
+          let detail = uploadResponse.statusText || 'Upload failed';
+          try {
+            const body = await uploadResponse.json();
+            detail = body.detail || body.message || detail;
+          } catch {
+            // Ignore JSON parse failures and fall back to the status text.
+          }
+          throw new Error(detail);
+        }
         await finalizeDocument(documentId);
         const status = await getDocumentStatus(documentId);
 
@@ -182,7 +192,7 @@ export function ResearchPanel() {
             <div className="flex-1">
               <p className="text-sm font-medium text-foreground">Drag and drop research files</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                PDFs, DOCX, TXT, MD, CSV, and XLSX are supported. Uploaded documents stay attached to this research thread.
+                PDFs, DOCX, TXT, MD, CSV, XLS, XLSX, and JSON are supported. Uploaded documents stay attached to this research thread.
               </p>
             </div>
             <input
@@ -190,7 +200,7 @@ export function ResearchPanel() {
               ref={fileInputRef}
               onChange={handleFileUpload}
               className="hidden"
-              accept=".pdf,.docx,.txt,.md,.csv,.xlsx"
+              accept=".pdf,.docx,.txt,.md,.markdown,.csv,.xls,.xlsx,.json"
               multiple
             />
             <button

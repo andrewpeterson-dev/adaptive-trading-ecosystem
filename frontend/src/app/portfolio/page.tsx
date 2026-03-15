@@ -91,26 +91,29 @@ export default function PortfolioPage() {
     fetchAll();
   }, [fetchAll]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-32">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (error && !models.length && !equityCurve.length) {
+      return (
+        <div className="app-panel">
+          <EmptyState
+            icon={<Unplug className="h-5 w-5 text-muted-foreground/70" />}
+            title="Portfolio analytics are unavailable"
+            description="Train models and connect a broker to view portfolio analytics, equity curves, and allocation breakdowns."
+          />
+        </div>
+      );
+    }
+    return null;
+  };
 
-  if (error && !models.length && !equityCurve.length) {
-    return (
-      <div className="app-panel">
-        <EmptyState
-          icon={<Unplug className="h-5 w-5 text-muted-foreground/70" />}
-          title="Portfolio analytics are unavailable"
-          description="Train models and connect a broker to view portfolio analytics, equity curves, and allocation breakdowns."
-        />
-      </div>
-    );
-  }
-
+  const earlyContent = renderContent();
   const regimeLabel = regime?.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "Unknown";
 
   return (
@@ -121,6 +124,8 @@ export default function PortfolioPage() {
         { href: "/risk", label: "Risk" },
       ]} />
 
+      {earlyContent ? earlyContent : (
+      <>
       <PageHeader
         eyebrow="Capital"
         title="Portfolio"
@@ -221,6 +226,8 @@ export default function PortfolioPage() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
