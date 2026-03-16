@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 from datetime import datetime
 
@@ -22,6 +23,9 @@ from services.reasoning_engine.prompts import TRADE_DECISION_SYSTEM, build_trade
 
 logger = structlog.get_logger(__name__)
 _ALLOWED_DECISIONS = {"EXECUTE", "REDUCE_SIZE", "DELAY_TRADE", "PAUSE_BOT", "EXIT_POSITION"}
+
+_sector_cache: dict[str, tuple[float, str]] = {}
+_SECTOR_CACHE_TTL = 3600  # 1 hour - sectors don't change
 
 
 class ReasoningEngine:
@@ -170,9 +174,15 @@ class ReasoningEngine:
             try:
                 import yfinance as yf
                 for sym in unique_symbols:
+                    cached = _sector_cache.get(sym)
+                    if cached and (time.time() - cached[0]) < _SECTOR_CACHE_TTL:
+                        symbol_sector[sym] = cached[1]
+                        continue
                     try:
                         info = yf.Ticker(sym).info or {}
-                        symbol_sector[sym] = info.get("sector", "")
+                        sector = info.get("sector", "")
+                        symbol_sector[sym] = sector
+                        _sector_cache[sym] = (time.time(), sector)
                     except Exception:
                         symbol_sector[sym] = ""
             except Exception:

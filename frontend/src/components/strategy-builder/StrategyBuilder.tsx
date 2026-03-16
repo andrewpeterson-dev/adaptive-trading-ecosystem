@@ -933,7 +933,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             ? `Refine strategy #${initialStrategy?.id}, inspect its AI metadata, and keep the underlying builder in control of execution.`
             : "Use Cerberus to interview the strategy idea, translate it into executable logic, and hand you a builder-ready draft before anything is saved or deployed."
         }
-        meta={
+        badge={
           <>
             {allValidConditions.length > 0 && (
               <span className="app-pill font-mono tracking-normal">

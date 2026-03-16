@@ -48,10 +48,11 @@ export function Sidebar() {
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebar_collapsed");
-    if (saved === "true") {
-      setCollapsed(true);
+    if (saved !== null) {
+      // Respect user's saved preference
+      setCollapsed(saved === "true");
     } else if (typeof window !== "undefined" && window.innerWidth < 1280) {
-      // Auto-collapse on smaller desktop screens (1024-1280px)
+      // First visit on small desktop — auto-collapse
       setCollapsed(true);
       localStorage.setItem("sidebar_collapsed", "true");
     }
@@ -157,7 +158,7 @@ export function Sidebar() {
             {!collapsed && (
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  {mode === "live" ? "Live Trading" : "Paper Mode"}
+                  {mode === "live" ? "Live" : "Paper"}
                 </p>
               </div>
             )}
@@ -177,7 +178,7 @@ export function Sidebar() {
                   <p className="truncate text-xs font-medium text-foreground">
                     {user?.email?.split("@")[0] || "User"}
                   </p>
-                  <p className="truncate text-[10px] text-muted-foreground">
+                  <p className="truncate text-[11px] text-muted-foreground">
                     {user?.email || ""}
                   </p>
                 </div>

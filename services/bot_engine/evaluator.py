@@ -9,6 +9,16 @@ from __future__ import annotations
 
 import math
 
+_INDICATOR_ALIASES = {
+    "BOLLINGER_BANDS": "BBANDS",
+    "BOLLINGER": "BBANDS",
+    "BB": "BBANDS",
+    "STOCH": "STOCHASTIC",
+    "STOCH_RSI": "STOCHASTIC",
+    "MOVING_AVERAGE": "SMA",
+    "EXPONENTIAL_MOVING_AVERAGE": "EMA",
+}
+
 
 def _resolve_indicator_value(
     condition: dict, indicator_values: dict
@@ -19,6 +29,7 @@ def _resolve_indicator_value(
     Returns (current, previous, key_used).
     """
     name = condition["indicator"].upper()
+    name = _INDICATOR_ALIASES.get(name, name)
     params = condition.get("params") or {}
 
     # Build the lookup key the same way compute_indicators does

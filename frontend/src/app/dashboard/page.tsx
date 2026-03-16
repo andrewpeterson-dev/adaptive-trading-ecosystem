@@ -58,7 +58,7 @@ function GaugeBar({ value, max, label }: { value: number; max: number; label: st
           <span className="text-muted-foreground font-normal"> / {(max * 100).toFixed(0)}%</span>
         </span>
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
+      <div className="h-2 rounded-full bg-border/40 overflow-hidden">
         <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -303,12 +303,20 @@ export default function DashboardPage() {
                 max={risk.max_exposure_limit_pct}
                 label="Exposure"
               />
-              <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
-                <span className="text-muted-foreground">Trades this hour</span>
-                <span className="font-mono font-semibold tabular-nums">
-                  {risk.trades_this_hour}
-                  <span className="text-muted-foreground font-normal"> / {risk.max_trades_per_hour}</span>
-                </span>
+              <div className="space-y-1.5 pt-1 border-t border-border/40">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Trades this hour</span>
+                  <span className="font-mono font-semibold tabular-nums">
+                    {risk.trades_this_hour}
+                    <span className="text-muted-foreground font-normal"> / {risk.max_trades_per_hour}</span>
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-border/40 overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all duration-500",
+                    (risk.trades_this_hour / risk.max_trades_per_hour) > 0.85 ? "bg-red-500" :
+                    (risk.trades_this_hour / risk.max_trades_per_hour) > 0.6 ? "bg-amber-500" : "bg-emerald-500"
+                  )} style={{ width: `${Math.min((risk.trades_this_hour / risk.max_trades_per_hour) * 100, 100)}%` }} />
+                </div>
               </div>
             </div>
           </div>

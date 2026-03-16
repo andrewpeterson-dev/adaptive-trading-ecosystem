@@ -6,6 +6,7 @@ against market data and executes trades when conditions are met.
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from datetime import datetime, time as dtime
 from types import SimpleNamespace
@@ -30,6 +31,9 @@ from services.strategy_learning_engine import normalize_bot_config
 
 logger = structlog.get_logger(__name__)
 _MARKET_TIMEZONE = ZoneInfo("America/New_York")
+
+_bar_cache: dict[str, tuple[float, list[dict]]] = {}
+_BAR_CACHE_TTL = 60  # seconds
 
 
 class BotRunner:
@@ -530,6 +534,7 @@ class BotRunner:
                 db_trade.return_pct = return_pct
                 db_trade.notes = explanation or db_trade.notes
                 db_trade.payload_json = payload
+                await session.flush()
 
             closed_count += 1
 
@@ -581,7 +586,13 @@ class BotRunner:
         return await loop.run_in_executor(None, self._fetch_bars_sync, symbol, timeframe)
 
     def _fetch_bars_sync(self, symbol: str, timeframe: str) -> list[dict]:
-        """Synchronous yfinance fetch."""
+        """Synchronous yfinance fetch with TTL cache."""
+        cache_key = f"{symbol}:{timeframe}"
+        now = time.time()
+        cached = _bar_cache.get(cache_key)
+        if cached and (now - cached[0]) < _BAR_CACHE_TTL:
+            return cached[1]
+
         import yfinance as yf
 
         # Map timeframe to yfinance parameters
@@ -613,6 +624,7 @@ class BotRunner:
                         "volume": int(row["Volume"]),
                     }
                 )
+            _bar_cache[cache_key] = (now, bars)
             return bars
         except Exception as e:
             logger.error("bar_fetch_error", symbol=symbol, error=str(e))

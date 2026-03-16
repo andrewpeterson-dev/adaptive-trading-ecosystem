@@ -133,4 +133,5 @@ class ContextMonitor:
             for evt in expired:
                 await session.delete(evt)
             if expired:
+                await session.flush()
                 logger.info("context_monitor_expired_events", count=len(expired))

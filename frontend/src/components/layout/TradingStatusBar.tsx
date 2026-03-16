@@ -88,7 +88,7 @@ export function TradingStatusBar() {
               "rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider transition-all",
               mode === "live"
                 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                : "text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                : "border border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
             )}
           >
             {mode === "live" ? "Live On" : "Enable Live"}

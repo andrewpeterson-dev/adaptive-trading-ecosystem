@@ -10,6 +10,16 @@ from typing import Any
 
 import numpy as np
 
+_INDICATOR_ALIASES = {
+    "BOLLINGER_BANDS": "BBANDS",
+    "BOLLINGER": "BBANDS",
+    "BB": "BBANDS",
+    "STOCH": "STOCHASTIC",
+    "STOCH_RSI": "STOCHASTIC",
+    "MOVING_AVERAGE": "SMA",
+    "EXPONENTIAL_MOVING_AVERAGE": "EMA",
+}
+
 
 def _closes(bars: list[dict]) -> np.ndarray:
     return np.array([b["close"] for b in bars], dtype=np.float64)
@@ -50,7 +60,7 @@ def _rsi(closes: np.ndarray, period: int = 14) -> tuple[float, float]:
     # We need the previous value too — recompute stopping one bar earlier
     avg_gain_prev = np.mean(gains[:period])
     avg_loss_prev = np.mean(losses[:period])
-    for i in range(period, len(gains) - 1):
+    for i in range(period, len(gains) - 2):
         avg_gain_prev = (avg_gain_prev * (period - 1) + gains[i]) / period
         avg_loss_prev = (avg_loss_prev * (period - 1) + losses[i]) / period
 
@@ -308,6 +318,7 @@ def compute_indicators(
 
     for spec in indicators_needed:
         name = spec["indicator"].upper()
+        name = _INDICATOR_ALIASES.get(name, name)
         params = spec.get("params") or {}
 
         if name == "RSI":

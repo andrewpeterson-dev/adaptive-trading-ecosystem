@@ -76,27 +76,29 @@ function ProfileSection() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
-        <label className="app-label">Email</label>
-        <Input
-          type="email"
-          value={email}
-          disabled
-          className="app-input cursor-not-allowed font-mono opacity-60"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          To update your email, <a href="mailto:support@adaptivetrading.com" className="text-primary hover:underline">contact support →</a>
-        </p>
-      </div>
+      <div className="app-panel p-5 space-y-5">
+        <div className="space-y-2">
+          <label className="app-label">Email</label>
+          <Input
+            type="email"
+            value={email}
+            disabled
+            className="app-input cursor-not-allowed font-mono opacity-60"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            To update your email, <a href="mailto:support@adaptivetrading.com" className="text-primary hover:underline">contact support →</a>
+          </p>
+        </div>
 
-      <div className="space-y-2">
-        <label className="app-label">Display Name</label>
-        <Input
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="Your name..."
-        />
+        <div className="space-y-2">
+          <label className="app-label">Display Name</label>
+          <Input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Your name..."
+          />
+        </div>
       </div>
 
       <div className="app-panel overflow-hidden mt-4">
@@ -207,7 +209,7 @@ export default function SettingsPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="app-panel p-3">
+        <div className="app-panel p-3 lg:min-h-[280px]">
           <div className="flex gap-2 overflow-x-auto lg:flex-col">
             {TABS.map((tab) => {
               const Icon = tab.icon;
