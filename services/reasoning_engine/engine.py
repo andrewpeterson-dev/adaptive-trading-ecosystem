@@ -108,7 +108,7 @@ class ReasoningEngine:
         ]
 
         # Hard blockers
-        hard = check_hard_blockers(
+        hard = await check_hard_blockers(
             vix=vix, events=events_dicts, symbol=symbol,
             portfolio_exposure=portfolio_exposure, daily_pnl_pct=daily_pnl_pct,
         )
@@ -133,7 +133,7 @@ class ReasoningEngine:
         open_positions = await self._get_open_positions_with_sector(bot.user_id)
 
         # Soft guardrails
-        soft = check_soft_guardrails(
+        soft = await check_soft_guardrails(
             vix=vix, events=events_dicts, symbol=symbol,
             ai_confidence=llm_result.get("confidence", 0.7),
             override_level=override_level,
@@ -172,14 +172,18 @@ class ReasoningEngine:
             unique_symbols = {row[1] for row in rows}
             symbol_sector: dict[str, str] = {}
             try:
+                import asyncio
                 import yfinance as yf
+                loop = asyncio.get_event_loop()
                 for sym in unique_symbols:
                     cached = _sector_cache.get(sym)
                     if cached and (time.time() - cached[0]) < _SECTOR_CACHE_TTL:
                         symbol_sector[sym] = cached[1]
                         continue
                     try:
-                        info = yf.Ticker(sym).info or {}
+                        info = await loop.run_in_executor(
+                            None, lambda s=sym: yf.Ticker(s).info or {}
+                        )
                         sector = info.get("sector", "")
                         symbol_sector[sym] = sector
                         _sector_cache[sym] = (time.time(), sector)

@@ -103,6 +103,16 @@ class Settings(BaseSettings):
     stop_loss_pct: float = 0.03
     max_trades_per_hour: int = 20
 
+    # --- Position Monitoring ---
+    position_monitor_interval_seconds: float = 10.0  # How often to check stops/targets
+    default_stop_loss_pct: float = 3.0               # Default stop loss if not set in strategy
+    default_take_profit_pct: float = 10.0             # Default take profit
+    emergency_loss_pct: float = 10.0                  # Emergency exit threshold
+    max_hold_hours: float = 168.0                     # 1 week default max hold
+
+    # --- Broker ---
+    default_broker: str = "alpaca"                    # "alpaca" or "webull"
+
     # --- Model Retraining ---
     retrain_interval_hours: int = 24
     walk_forward_window_days: int = 252

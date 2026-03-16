@@ -1,6 +1,7 @@
 """Trade journal — records enriched trade data with AI context."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime
 
@@ -53,7 +54,11 @@ async def record_trade(
     sector_momentum = None
     try:
         import yfinance as yf
-        ticker_info = yf.Ticker(symbol).info or {}
+        loop = asyncio.get_event_loop()
+
+        ticker_info = await loop.run_in_executor(
+            None, lambda s=symbol: yf.Ticker(s).info or {}
+        )
         sector = ticker_info.get("sector", "")
         if sector:
             sector_etfs = {
@@ -64,7 +69,9 @@ async def record_trade(
             }
             etf = sector_etfs.get(sector)
             if etf:
-                etf_hist = yf.Ticker(etf).history(period="5d")
+                etf_hist = await loop.run_in_executor(
+                    None, lambda e=etf: yf.Ticker(e).history(period="5d")
+                )
                 if len(etf_hist) >= 2:
                     sector_momentum = float(
                         (etf_hist["Close"].iloc[-1] / etf_hist["Close"].iloc[0] - 1) * 100

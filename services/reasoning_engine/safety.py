@@ -1,5 +1,6 @@
 """Hard blockers and soft guardrails for trade safety."""
 from __future__ import annotations
+import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -24,7 +25,7 @@ class SafetyResult:
     reasons: list[str] = field(default_factory=list)
     model_used: str = "safety_rules"
 
-def check_hard_blockers(
+async def check_hard_blockers(
     vix: float | None,
     events: list[dict],
     symbol: str,
@@ -74,11 +75,17 @@ def check_hard_blockers(
         result.blocked = True
         result.reasons.append(f"Daily loss {daily_pnl_pct:.1f}% exceeds -5% limit — bot paused")
 
+    loop = asyncio.get_event_loop()
+
     # Circuit breaker: market-wide crash protection
     try:
         import yfinance as yf
-        spy = yf.Ticker("SPY")
-        hist = spy.history(period="1d", interval="1m")
+
+        def _fetch_spy_intraday():
+            spy = yf.Ticker("SPY")
+            return spy.history(period="1d", interval="1m")
+
+        hist = await loop.run_in_executor(None, _fetch_spy_intraday)
         if len(hist) >= 2:
             open_price = hist["Open"].iloc[0]
             current_price = hist["Close"].iloc[-1]
@@ -94,8 +101,14 @@ def check_hard_blockers(
     # Liquidity check
     try:
         import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        info = ticker.fast_info
+
+        def _fetch_liquidity(sym=symbol):
+            ticker = yf.Ticker(sym)
+            fast = ticker.fast_info
+            full = ticker.info or {}
+            return fast, full
+
+        info, full_info = await loop.run_in_executor(None, _fetch_liquidity)
         volume = getattr(info, "last_volume", None)
         if volume is not None and volume < 10_000:
             result.blocked = True
@@ -103,8 +116,8 @@ def check_hard_blockers(
                 f"Liquidity block: {symbol} volume {volume:,} is below 10,000 minimum."
             )
         # Check bid-ask spread if available
-        bid = getattr(info, "bid", None) or (ticker.info or {}).get("bid")
-        ask = getattr(info, "ask", None) or (ticker.info or {}).get("ask")
+        bid = getattr(info, "bid", None) or full_info.get("bid")
+        ask = getattr(info, "ask", None) or full_info.get("ask")
         if bid and ask and bid > 0:
             spread_pct = ((ask - bid) / bid) * 100
             if spread_pct > 2.0:
@@ -118,8 +131,11 @@ def check_hard_blockers(
     # API failure gate: don't trade blind
     try:
         import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="1d")
+
+        def _fetch_daily(sym=symbol):
+            return yf.Ticker(sym).history(period="1d")
+
+        hist = await loop.run_in_executor(None, _fetch_daily)
         if hist.empty:
             result.blocked = True
             result.reasons.append(
@@ -133,7 +149,7 @@ def check_hard_blockers(
 
     return result
 
-def check_soft_guardrails(
+async def check_soft_guardrails(
     vix: float | None,
     events: list[dict],
     symbol: str,
@@ -179,7 +195,13 @@ def check_soft_guardrails(
     if open_positions:
         try:
             import yfinance as yf
-            ticker_info = yf.Ticker(symbol).info or {}
+
+            def _fetch_sector(sym=symbol):
+                return yf.Ticker(sym).info or {}
+
+            ticker_info = await asyncio.get_event_loop().run_in_executor(
+                None, _fetch_sector
+            )
             sector = ticker_info.get("sector", "")
             if sector:
                 # Count distinct bots with open positions in the same sector

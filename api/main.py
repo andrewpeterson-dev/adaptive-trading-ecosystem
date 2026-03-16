@@ -135,6 +135,7 @@ async def _start_runtime_services_after_db_ready(
     learning_engine,
     context_monitor,
     universe_scanner,
+    orchestrator,
 ) -> None:
     while not _db_init_state["ready"] and not _db_init_state["failed"]:
         await asyncio.sleep(1)
@@ -142,6 +143,9 @@ async def _start_runtime_services_after_db_ready(
     if _db_init_state["failed"]:
         logger.error("runtime_services_not_started", reason="db_init_failed")
         return
+
+    # Start the trading orchestrator first (risk engine, position manager, signal bus)
+    await orchestrator.start()
 
     await bot_runner.start()
     _spawn_background_task(background_tasks, coro=learning_engine.start(), name="strategy_learning_engine")
@@ -172,6 +176,7 @@ async def lifespan(app: FastAPI):
     from services.strategy_learning_engine import StrategyLearningEngine
     from services.context_monitor import ContextMonitor
     from services.universe_scanner import UniverseScanner
+    from services.trading_orchestrator import orchestrator
 
     learning_engine = StrategyLearningEngine()
     context_monitor = ContextMonitor()
@@ -184,13 +189,15 @@ async def lifespan(app: FastAPI):
             learning_engine=learning_engine,
             context_monitor=context_monitor,
             universe_scanner=universe_scanner,
+            orchestrator=orchestrator,
         ),
         name="runtime_service_startup",
     )
 
     yield
 
-    # Shutdown
+    # Shutdown — orchestrator first (stops position monitoring + signal bus)
+    await orchestrator.stop()
     await bot_runner.stop()
     await learning_engine.stop()
     await context_monitor.stop()

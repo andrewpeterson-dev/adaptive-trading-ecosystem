@@ -1,82 +1,103 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   RefreshCw,
   Loader2,
   Unplug,
   Settings,
-  TrendingUp,
-  Receipt,
   LayoutGrid,
   PieChart,
   ShieldCheck,
+  Lock,
+  Unlock,
+  Brain,
+  BarChart3,
+  Activity,
+  Crosshair,
+  TrendingUp,
+  Receipt,
+  Zap,
+  Target,
 } from "lucide-react";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
+
+// RGL v2 runtime types — @types/react-grid-layout v1 is outdated
+interface LayoutItem { i: string; x: number; y: number; w: number; h: number; minW?: number; minH?: number; static?: boolean }
+type Layouts = Record<string, LayoutItem[]>;
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useTradingMode } from "@/hooks/useTradingMode";
-import { SentimentPanel } from "@/components/analytics/SentimentPanel";
-import { PortfolioRiskPanel } from "@/components/analytics/PortfolioRiskPanel";
-import { CombinedLedgerCard } from "@/components/ledger/CombinedLedgerCard";
+import { useDashboardStore } from "@/stores/dashboard-store";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SubNav } from "@/components/layout/SubNav";
+import {
+  DashboardPanel,
+  MetricsRow,
+  MarketIntelligenceBar,
+  AIReasoningPanel,
+  AIScannerPanel,
+  OpenPositionsPanel,
+  TradeLogPanel,
+  RiskMetricsPanel,
+  StrategyPanel,
+  EquityCurvePanel,
+  PortfolioRiskDashPanel,
+} from "@/components/dashboard";
+import { ExecutionChart } from "@/components/dashboard/ExecutionChart";
+import { SentimentPanel } from "@/components/analytics/SentimentPanel";
 
-function formatCurrency(val: number): string {
-  return val.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-}
+// ---------------------------------------------------------------------------
+// Dynamic import for react-grid-layout (SSR-incompatible)
+// ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    filled: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
-    pending: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-    cancelled: "text-muted-foreground bg-muted border-border/50",
-    rejected: "text-red-400 bg-red-400/10 border-red-400/20",
-    new: "text-blue-400 bg-blue-400/10 border-blue-400/20",
-    partially_filled: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-  };
-  const c = colors[status.toLowerCase()] || "text-muted-foreground bg-muted border-border/50";
-  return (
-    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wider ${c}`}>
-      {status.replace("_", " ")}
-    </span>
-  );
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ResponsiveGridLayout = dynamic<any>(
+  () => import("react-grid-layout").then((mod) => mod.Responsive),
+  { ssr: false },
+);
 
-function GaugeBar({ value, max, label }: { value: number; max: number; label: string }) {
-  const pct = Math.min((value / max) * 100, 100);
-  const color = pct > 85 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500";
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-mono font-semibold tabular-nums">
-          <span className={pct > 85 ? "text-red-400" : pct > 60 ? "text-amber-400" : "text-emerald-400"}>
-            {typeof value === "number" ? (value * 100).toFixed(1) : value}%
-          </span>
-          <span className="text-muted-foreground font-normal"> / {(max * 100).toFixed(0)}%</span>
-        </span>
-      </div>
-      <div className="h-2 rounded-full bg-border/40 overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// Default grid layout
+// ---------------------------------------------------------------------------
 
-function SectionHeader({ children, count }: { children: React.ReactNode; count?: number }) {
-  return (
-    <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{children}</h3>
-      {count !== undefined && (
-        <span className="text-xs font-mono text-muted-foreground">{count}</span>
-      )}
-    </div>
-  );
-}
+const DEFAULT_LAYOUTS: Layouts = {
+  lg: [
+    { i: "strategy",        x: 0, y: 0,  w: 3, h: 8,  minW: 2, minH: 4 },
+    { i: "ai-reasoning",    x: 0, y: 8,  w: 3, h: 7,  minW: 2, minH: 4 },
+    { i: "ai-scanner",      x: 0, y: 15, w: 3, h: 6,  minW: 2, minH: 3 },
+    { i: "execution-chart", x: 3, y: 0,  w: 6, h: 10, minW: 4, minH: 6 },
+    { i: "risk-metrics",    x: 9, y: 0,  w: 3, h: 5,  minW: 2, minH: 3 },
+    { i: "sentiment",       x: 9, y: 5,  w: 3, h: 5,  minW: 2, minH: 3 },
+    { i: "equity-curve",    x: 0, y: 21, w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "open-positions",  x: 6, y: 21, w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "portfolio-risk",  x: 0, y: 27, w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "trade-log",       x: 6, y: 27, w: 6, h: 6,  minW: 3, minH: 4 },
+  ],
+  md: [
+    { i: "strategy",        x: 0, y: 0,  w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "ai-reasoning",    x: 6, y: 0,  w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "ai-scanner",      x: 0, y: 6,  w: 6, h: 5,  minW: 3, minH: 3 },
+    { i: "execution-chart", x: 0, y: 11, w: 12, h: 10, minW: 6, minH: 6 },
+    { i: "risk-metrics",    x: 6, y: 6,  w: 6, h: 5,  minW: 3, minH: 3 },
+    { i: "sentiment",       x: 0, y: 21, w: 6, h: 5,  minW: 3, minH: 3 },
+    { i: "equity-curve",    x: 0, y: 26, w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "open-positions",  x: 6, y: 21, w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "portfolio-risk",  x: 0, y: 32, w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "trade-log",       x: 6, y: 27, w: 6, h: 6,  minW: 3, minH: 4 },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
+  // -- Data state --
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -86,6 +107,29 @@ export default function DashboardPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const { mode } = useTradingMode();
 
+  // -- Layout state --
+  const { isLayoutLocked, toggleLayoutLock, layouts, updateLayouts } =
+    useDashboardStore();
+
+  // -- Grid container width (RGL v2 requires explicit width) --
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [gridWidth, setGridWidth] = useState(1200);
+  useEffect(() => {
+    const el = gridContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setGridWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Use stored layouts if they have the right keys, otherwise use defaults
+  const activeLayouts = useMemo(() => {
+    const stored = layouts?.lg;
+    if (stored && stored.length >= 10) return layouts;
+    return DEFAULT_LAYOUTS;
+  }, [layouts]);
+
+  // -- Data fetching --
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -105,13 +149,11 @@ export default function DashboardPage() {
       }
 
       if (posRes.status === "fulfilled") {
-        const data = posRes.value;
-        setPositions(data.positions || []);
+        setPositions(posRes.value.positions || []);
       }
 
       if (ordRes.status === "fulfilled") {
-        const data = ordRes.value;
-        const list = data.orders || [];
+        const list = ordRes.value.orders || [];
         setOrders(list.slice(0, 20));
       }
 
@@ -133,25 +175,70 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  const renderContent = () => {
-    if (loading) {
-      return (
+  // -- Layout change handler --
+  const handleLayoutChange = useCallback(
+    (_layout: LayoutItem[], allLayouts: Layouts) => {
+      if (!isLayoutLocked) {
+        updateLayouts(allLayouts as never);
+      }
+    },
+    [isLayoutLocked, updateLayouts]
+  );
+
+  // -- Derived metrics --
+  const totalPnl = useMemo(() => {
+    return positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
+  }, [positions]);
+
+  const unrealizedPnl = totalPnl;
+  const realizedPnl = 0; // From trades, would need historical data
+
+  const winRate = useMemo(() => {
+    const filledOrders = orders.filter((o) => o.status === "filled");
+    if (filledOrders.length === 0) return 0;
+    // Simplified — would need trade P&L data for real win rate
+    return 0;
+  }, [orders]);
+
+  // -- Early return states --
+  if (loading) {
+    return (
+      <div className="app-page">
+        <SubNav
+          items={[
+            { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+            { href: "/portfolio", label: "Portfolio", icon: PieChart },
+            { href: "/risk", label: "Risk", icon: ShieldCheck },
+          ]}
+        />
         <div className="flex items-center justify-center py-32">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    if (account?.not_configured) {
-      return (
+  if (account?.not_configured) {
+    return (
+      <div className="app-page">
+        <SubNav
+          items={[
+            { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+            { href: "/portfolio", label: "Portfolio", icon: PieChart },
+            { href: "/risk", label: "Risk", icon: ShieldCheck },
+          ]}
+        />
         <div className="text-center py-32 space-y-4">
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto">
             <Unplug className="h-6 w-6 text-amber-400" />
           </div>
           <div>
-            <h2 className="text-base font-semibold">No live trading configured</h2>
+            <h2 className="text-base font-semibold">
+              No live trading configured
+            </h2>
             <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-              {account.message || "Connect a live API key in Settings to trade with real money."}
+              {account.message ||
+                "Connect a live API key in Settings to trade with real money."}
             </p>
           </div>
           <Link
@@ -162,11 +249,20 @@ export default function DashboardPage() {
             Go to Settings
           </Link>
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    if (error && !account) {
-      return (
+  if (error && !account) {
+    return (
+      <div className="app-page">
+        <SubNav
+          items={[
+            { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+            { href: "/portfolio", label: "Portfolio", icon: PieChart },
+            { href: "/risk", label: "Risk", icon: ShieldCheck },
+          ]}
+        />
         <div className="text-center py-32 space-y-4">
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/50 border border-border/50 mx-auto">
             <Unplug className="h-6 w-6 text-muted-foreground/60" />
@@ -174,7 +270,8 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-base font-semibold">Broker not responding</h2>
             <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-              Could not load account data. Your API key may need to be re-entered.
+              Could not load account data. Your API key may need to be
+              re-entered.
             </p>
           </div>
           <div className="flex items-center justify-center gap-3">
@@ -194,40 +291,45 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
-      );
-    }
-
-    return null;
-  };
-
-  const earlyContent = renderContent();
+      </div>
+    );
+  }
 
   return (
-    <div className="app-page">
-      <SubNav items={[
-        { href: "/dashboard", label: "Overview", icon: LayoutGrid },
-        { href: "/portfolio", label: "Portfolio", icon: PieChart },
-        { href: "/risk", label: "Risk", icon: ShieldCheck },
-      ]} />
+    <div
+      className={cn("app-page", isLayoutLocked ? "layout-locked" : "layout-unlocked")}
+    >
+      {/* SubNav */}
+      <SubNav
+        items={[
+          { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+          { href: "/portfolio", label: "Portfolio", icon: PieChart },
+          { href: "/risk", label: "Risk", icon: ShieldCheck },
+        ]}
+      />
 
-      {earlyContent ? earlyContent : (
-      <>
-
+      {/* Page Header */}
       <PageHeader
         eyebrow="Overview"
         title="Trading Dashboard"
-        description="Track account posture, risk, orders, and ledger activity from a single operational overview."
+        description="Real-time portfolio analytics, AI signals, and execution monitoring."
         badge={
-          <span className={cn(
-            "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em]",
-            mode === "live"
-              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
-              : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25"
-          )}>
-            <span className={cn(
-              "h-2 w-2 rounded-full",
-              mode === "live" ? "bg-emerald-400 animate-pulse-dot" : "bg-amber-500"
-            )} />
+          <span
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em]",
+              mode === "live"
+                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
+                : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+            )}
+          >
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                mode === "live"
+                  ? "bg-emerald-400 animate-pulse-dot"
+                  : "bg-amber-500"
+              )}
+            />
             {mode === "live" ? "LIVE MODE" : "PAPER MODE"}
           </span>
         }
@@ -239,303 +341,156 @@ export default function DashboardPage() {
           ) : undefined
         }
         actions={
-          <button onClick={fetchAll} className="app-button-secondary">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleLayoutLock}
+              className={cn(
+                "app-button-secondary !px-3 !py-2",
+                !isLayoutLocked && "!border-primary/40 !bg-primary/5"
+              )}
+              title={isLayoutLocked ? "Unlock layout" : "Lock layout"}
+            >
+              {isLayoutLocked ? (
+                <Lock className="h-4 w-4" />
+              ) : (
+                <Unlock className="h-4 w-4 text-primary" />
+              )}
+              <span className="text-xs">
+                {isLayoutLocked ? "Locked" : "Editing"}
+              </span>
+            </button>
+            <button onClick={fetchAll} className="app-button-secondary">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </button>
+          </div>
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        {account && (
-          <div className="app-panel p-4 space-y-3">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-              Account Summary
-            </div>
-            {account.equity === 0 && account.cash === 0 && account.portfolio_value === 0 ? (
-              <div className="space-y-3">
-                <div className="border border-dashed border-border/60 rounded-xl p-4 text-center space-y-2">
-                  <div className="text-3xl font-mono font-bold tabular-nums tracking-tight text-muted-foreground/30">
-                    $0
-                  </div>
-                  <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
-                    Your portfolio metrics will appear here once your first bot executes a trade. Deploy a strategy to get started.
-                  </p>
-                  <Link
-                    href="/"
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors"
-                  >
-                    Build a strategy &rarr;
-                  </Link>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="app-inset p-3 border border-dashed border-border/40">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Cash</div>
-                    <div className="break-words text-sm font-mono font-semibold tabular-nums text-muted-foreground/30">$0</div>
-                  </div>
-                  <div className="app-inset p-3 border border-dashed border-border/40">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Buying Power</div>
-                    <div className="break-words text-sm font-mono font-semibold tabular-nums text-muted-foreground/30">$0</div>
-                  </div>
-                  <div className="app-inset p-3 border border-dashed border-border/40">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Portfolio</div>
-                    <div className="break-words text-sm font-mono font-semibold tabular-nums text-muted-foreground/30">$0</div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="border-b border-border/40 pb-4">
-                  <div className="text-xs text-muted-foreground mb-1">Total Equity</div>
-                  <div className="text-3xl font-mono font-bold tabular-nums tracking-tight">
-                    {formatCurrency(account.equity)}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    <span className="font-mono">+$0 (0.0%)</span> today
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="app-inset p-3">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Cash</div>
-                    <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.cash)}</div>
-                  </div>
-                  <div className="app-inset p-3">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Buying Power</div>
-                    <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.buying_power)}</div>
-                  </div>
-                  <div className="app-inset p-3">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Portfolio</div>
-                    <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.portfolio_value)}</div>
-                  </div>
-                </div>
-              </>
-            )}
+      {/* Row 1: Metrics (outside grid — always full width, never draggable) */}
+      <MetricsRow
+        totalPnl={totalPnl}
+        unrealizedPnl={unrealizedPnl}
+        realizedPnl={realizedPnl}
+        expectancy={0}
+        winRate={winRate}
+        maxDrawdown={risk?.current_drawdown_pct ?? 0}
+        exposure={risk?.current_exposure_pct ?? 0}
+        tradesToday={risk?.trades_this_hour ?? 0}
+        tradeHistory={[]}
+      />
+
+      {/* Market Intelligence Bar (outside grid — static, never draggable) */}
+      <MarketIntelligenceBar
+        trend={{ direction: "bullish", label: "Bullish" }}
+        volatility={{ vix: 16.4, level: "low" }}
+        sentiment="risk-on"
+        bestSector="Technology"
+        strategyStatus={{ active: positions.length > 0, name: "AI Momentum" }}
+      />
+
+      {/* Grid Layout */}
+      <div ref={gridContainerRef}>
+      {typeof window !== "undefined" && (
+        <ResponsiveGridLayout
+          className="layout"
+          width={gridWidth}
+          layouts={activeLayouts}
+          breakpoints={{ lg: 1200, md: 768 }}
+          cols={{ lg: 12, md: 12 }}
+          rowHeight={40}
+          margin={[16, 16]}
+          containerPadding={[0, 0]}
+          isDraggable={!isLayoutLocked}
+          isResizable={!isLayoutLocked}
+          draggableHandle=".dashboard-panel-header"
+          onLayoutChange={handleLayoutChange}
+          useCSSTransforms={false}
+          compactType="vertical"
+        >
+          {/* Left Column */}
+          <div key="strategy">
+            <DashboardPanel title="Strategies" icon={Zap}>
+              <StrategyPanel strategies={[]} />
+            </DashboardPanel>
           </div>
-        )}
 
-        <CombinedLedgerCard />
+          <div key="ai-reasoning">
+            <DashboardPanel title="AI Reasoning" icon={Brain}>
+              <AIReasoningPanel decision={null} />
+            </DashboardPanel>
+          </div>
 
-        {risk ? (
-          <div className="app-panel p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                Risk Status
-              </div>
-              {risk.is_halted && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest bg-red-500/10 text-red-400 border border-red-500/20">
-                  Halted
-                </span>
-              )}
-            </div>
-            <div className="space-y-4">
-              <GaugeBar
-                value={risk.current_drawdown_pct}
-                max={risk.max_drawdown_limit_pct}
-                label="Drawdown"
+          <div key="ai-scanner">
+            <DashboardPanel title="AI Scanner" icon={Crosshair}>
+              <AIScannerPanel totalWatching={0} signals={[]} />
+            </DashboardPanel>
+          </div>
+
+          {/* Center Column */}
+          <div key="execution-chart">
+            <DashboardPanel title="Execution Chart" icon={BarChart3} noPadding>
+              <ExecutionChart symbol="SPY" height={340} />
+            </DashboardPanel>
+          </div>
+
+          {/* Right Column */}
+          <div key="risk-metrics">
+            <DashboardPanel title="Risk Metrics" icon={ShieldCheck}>
+              <RiskMetricsPanel
+                winRate={winRate}
+                maxDrawdown={risk?.current_drawdown_pct ?? 0}
+                totalTrades={orders.filter((o) => o.status === "filled").length}
               />
-              <GaugeBar
-                value={risk.current_exposure_pct}
-                max={risk.max_exposure_limit_pct}
-                label="Exposure"
+            </DashboardPanel>
+          </div>
+
+          <div key="sentiment">
+            <DashboardPanel title="Market Sentiment" icon={Activity} noPadding>
+              <SentimentPanel />
+            </DashboardPanel>
+          </div>
+
+          {/* Row 3 */}
+          <div key="equity-curve">
+            <DashboardPanel title="Equity Curve" icon={TrendingUp}>
+              <EquityCurvePanel data={[]} />
+            </DashboardPanel>
+          </div>
+
+          <div key="open-positions">
+            <DashboardPanel
+              title="Open Positions"
+              icon={Target}
+              noPadding
+              onRefresh={fetchAll}
+            >
+              <OpenPositionsPanel positions={positions} />
+            </DashboardPanel>
+          </div>
+
+          {/* Row 4 */}
+          <div key="portfolio-risk">
+            <DashboardPanel title="Portfolio Risk" icon={ShieldCheck}>
+              <PortfolioRiskDashPanel
+                totalExposure={risk?.current_exposure_pct ?? 0}
               />
-              <div className="space-y-1.5 pt-1 border-t border-border/40">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Trades this hour</span>
-                  <span className="font-mono font-semibold tabular-nums">
-                    {risk.trades_this_hour}
-                    <span className="text-muted-foreground font-normal"> / {risk.max_trades_per_hour}</span>
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-border/40 overflow-hidden">
-                  <div className={cn("h-full rounded-full transition-all duration-500",
-                    (risk.trades_this_hour / risk.max_trades_per_hour) > 0.85 ? "bg-red-500" :
-                    (risk.trades_this_hour / risk.max_trades_per_hour) > 0.6 ? "bg-amber-500" : "bg-emerald-500"
-                  )} style={{ width: `${Math.min((risk.trades_this_hour / risk.max_trades_per_hour) * 100, 100)}%` }} />
-                </div>
-              </div>
-            </div>
+            </DashboardPanel>
           </div>
-        ) : (
-          <div className="app-panel p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                Risk Status
-              </div>
-              <span className="text-[9px] font-semibold px-2 py-0.5 rounded uppercase tracking-widest bg-muted/30 text-slate-500 border border-dashed border-border/50">
-                Example
-              </span>
-            </div>
-            <div className="space-y-4 opacity-40 pointer-events-none">
-              <GaugeBar value={0.032} max={0.15} label="Drawdown" />
-              <GaugeBar value={0.45} max={1.0} label="Exposure" />
-              <div className="space-y-1.5 pt-1 border-t border-border/40">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Trades this hour</span>
-                  <span className="font-mono font-semibold tabular-nums">
-                    3
-                    <span className="text-muted-foreground font-normal"> / 30</span>
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-border/40 overflow-hidden">
-                  <div className="h-full rounded-full bg-emerald-500" style={{ width: "10%" }} />
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 text-center pt-1">
-              Live risk gauges activate once your bots begin trading.
-            </p>
-          </div>
-        )}
-      </div>
 
-      {/* Sentiment + Portfolio Risk */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <SentimentPanel />
-        <PortfolioRiskPanel />
-      </div>
-
-      {/* Positions Table */}
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
-        <SectionHeader count={positions.length}>Open Positions</SectionHeader>
-        {positions.length === 0 ? (
-          <div className="py-10 flex flex-col items-center gap-3 text-center">
-            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/30 border border-dashed border-border/50">
-              <TrendingUp className="h-5 w-5 text-muted-foreground/40" />
-            </div>
-            <div>
-              <div className="text-sm font-medium text-muted-foreground">No open positions</div>
-              <div className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
-                Your holdings will appear here with real-time P&L once you execute a trade or deploy a bot.
-              </div>
-            </div>
-            <div className="w-full max-w-md opacity-20 pointer-events-none mt-2">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground uppercase tracking-widest">
-                    <th className="py-2 px-3 font-semibold">Symbol</th>
-                    <th className="py-2 px-3 font-semibold">Qty</th>
-                    <th className="py-2 px-3 font-semibold">Entry</th>
-                    <th className="py-2 px-3 font-semibold">P&L</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-border/40">
-                    <td className="py-2 px-3 font-mono text-sm">AAPL</td>
-                    <td className="py-2 px-3 font-mono text-sm">25</td>
-                    <td className="py-2 px-3 font-mono text-sm">$187.50</td>
-                    <td className="py-2 px-3 font-mono text-sm text-emerald-400">+$42.50</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <Link href="/trade" className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors">
-              Go to Trade &rarr;
-            </Link>
+          <div key="trade-log">
+            <DashboardPanel
+              title="Trade Log"
+              icon={Receipt}
+              noPadding
+              onRefresh={fetchAll}
+            >
+              <TradeLogPanel orders={orders} />
+            </DashboardPanel>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground uppercase tracking-widest">
-                  <th className="py-2.5 px-4 font-semibold">Symbol</th>
-                  <th className="py-2.5 px-4 font-semibold">Qty</th>
-                  <th className="py-2.5 px-4 font-semibold">Avg Entry</th>
-                  <th className="py-2.5 px-4 font-semibold">Current</th>
-                  <th className="py-2.5 px-4 font-semibold">Unrealized P&L</th>
-                  <th className="py-2.5 px-4 font-semibold">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {positions.map((p, i) => {
-                  const isUp = (p.unrealized_pnl ?? 0) >= 0;
-                  return (
-                    <tr
-                      key={p.symbol}
-                      className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${
-                        i % 2 === 1 ? "bg-muted/5" : ""
-                      }`}
-                    >
-                      <td className="py-2.5 px-4 font-mono font-semibold text-sm tracking-wide">{p.symbol}</td>
-                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums">{p.quantity}</td>
-                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums">${p.avg_entry_price?.toFixed(2)}</td>
-                      <td className="py-2.5 px-4 font-mono text-sm tabular-nums">${p.current_price?.toFixed(2)}</td>
-                      <td className={`py-2.5 px-4 font-mono text-sm font-semibold tabular-nums ${isUp ? "text-emerald-400" : "text-red-400"}`}>
-                        {isUp ? "+" : ""}${(p.unrealized_pnl ?? 0).toFixed(2)}
-                      </td>
-                      <td className={`py-2.5 px-4 font-mono text-xs tabular-nums ${isUp ? "text-emerald-400" : "text-red-400"}`}>
-                        {isUp ? "+" : ""}{((p.unrealized_pnl_pct ?? 0) * 100).toFixed(2)}%
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Recent Orders Table */}
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
-        <SectionHeader count={orders.length}>Recent Orders</SectionHeader>
-        {orders.length === 0 ? (
-          <div className="py-10 flex flex-col items-center gap-3 text-center">
-            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/30 border border-dashed border-border/50">
-              <Receipt className="h-5 w-5 text-muted-foreground/40" />
-            </div>
-            <div>
-              <div className="text-sm font-medium text-muted-foreground">No recent orders</div>
-              <div className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
-                Your order history with fills, statuses, and timestamps will appear here once you place a trade manually or through a bot.
-              </div>
-            </div>
-            <Link href="/trade" className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors">
-              Place your first order &rarr;
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground uppercase tracking-widest">
-                  <th className="py-2.5 px-4 font-semibold">Symbol</th>
-                  <th className="py-2.5 px-4 font-semibold">Side</th>
-                  <th className="py-2.5 px-4 font-semibold">Qty</th>
-                  <th className="py-2.5 px-4 font-semibold">Type</th>
-                  <th className="py-2.5 px-4 font-semibold">Status</th>
-                  <th className="py-2.5 px-4 font-semibold">Filled</th>
-                  <th className="py-2.5 px-4 font-semibold">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o, i) => (
-                  <tr
-                    key={o.id}
-                    className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${
-                      i % 2 === 1 ? "bg-muted/5" : ""
-                    }`}
-                  >
-                    <td className="py-2.5 px-4 font-mono font-semibold text-sm tracking-wide">{o.symbol}</td>
-                    <td className="py-2.5 px-4">
-                      <span className={`text-xs font-bold uppercase tracking-wider ${o.direction === "long" ? "text-emerald-400" : "text-red-400"}`}>
-                        {o.direction}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-4 font-mono text-sm tabular-nums">{o.quantity}</td>
-                    <td className="py-2.5 px-4 text-xs text-muted-foreground uppercase tracking-wide">{o.order_type}</td>
-                    <td className="py-2.5 px-4"><StatusBadge status={o.status} /></td>
-                    <td className="py-2.5 px-4 font-mono text-sm tabular-nums">
-                      {o.filled_price ? `$${o.filled_price.toFixed(2)}` : <span className="text-muted-foreground/50">—</span>}
-                    </td>
-                    <td className="py-2.5 px-4 font-mono text-xs text-muted-foreground tabular-nums">{o.submitted_at?.slice(0, 16)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      </>
+        </ResponsiveGridLayout>
       )}
+      </div>
     </div>
   );
 }
