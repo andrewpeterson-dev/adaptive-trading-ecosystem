@@ -729,6 +729,8 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
   const applyGeneratedStrategy = useCallback((result: GeneratedStrategyResponse) => {
     const draft = result.builder_draft;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const draftExt = draft as any;
     const builderPreferences = draft.aiContext?.builder_preferences;
     const groups = (draft.conditionGroups as unknown as ConditionGroup[] | undefined)
       ?? [{
@@ -746,13 +748,20 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setTimeframe(draft.timeframe);
     setConditionGroups(groups);
     setSymbols(draft.symbols?.length ? draft.symbols : ["SPY"]);
-    setOrderType((builderPreferences?.order_type as OrderType | undefined) ?? "market");
+    setOrderType(draftExt.orderType ?? (builderPreferences?.order_type as OrderType | undefined) ?? "market");
     setBacktestPeriod(
-      (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y"
+      draftExt.backtestPeriod ?? (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y"
     );
     setExitLogic(
-      (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "stop_target"
+      draftExt.exitLogic ?? (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "hybrid"
     );
+    // Apply AI-inferred execution config
+    if (draftExt.trailingStop) { setTrailingStopEnabled(true); setTrailingStop(draftExt.trailingStop); }
+    if (draftExt.exitAfterBars) { setExitAfterBarsEnabled(true); setExitAfterBars(draftExt.exitAfterBars); }
+    if (draftExt.cooldownBars) setCooldownBars(draftExt.cooldownBars);
+    if (draftExt.maxTradesPerDay) setMaxTradesPerDay(draftExt.maxTradesPerDay);
+    if (draftExt.maxExposure != null) setMaxExposurePct(draftExt.maxExposure);
+    if (draftExt.maxLoss != null) setMaxLossPct(draftExt.maxLoss);
     setStrategyType(draft.strategyType ?? "ai_generated");
     setSourcePrompt(draft.sourcePrompt ?? result.prompt);
     setAiContext(draft.aiContext ?? {});

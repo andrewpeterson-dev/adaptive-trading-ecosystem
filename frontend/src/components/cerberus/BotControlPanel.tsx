@@ -368,17 +368,28 @@ export function BotControlPanel() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 rounded-[20px] border border-border/70 bg-muted/30 p-4 md:grid-cols-3">
+                <div className="grid gap-3 rounded-[20px] border border-border/70 bg-muted/30 p-4 md:grid-cols-4">
                   <div>
-                    <p className="app-label">Win Rate</p>
-                    <p className="mt-2 font-mono text-lg text-foreground">
-                      {(bot.performance.win_rate * 100).toFixed(0)}%
+                    <p className="app-label">P&L</p>
+                    <p className={`mt-2 font-mono text-lg ${(bot.performance.total_net_pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      ${(bot.performance.total_net_pnl ?? 0).toFixed(2)}
                     </p>
                   </div>
                   <div>
-                    <p className="app-label">Sharpe</p>
+                    <p className="app-label">Trades</p>
                     <p className="mt-2 font-mono text-lg text-foreground">
-                      {bot.performance.sharpe_ratio.toFixed(2)}
+                      {bot.performance.trade_count ?? 0}
+                      {bot.performance.open_count
+                        ? ` (${bot.performance.open_count} open)`
+                        : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="app-label">Win Rate</p>
+                    <p className="mt-2 font-mono text-lg text-foreground">
+                      {bot.performance.closed_count
+                        ? `${(bot.performance.win_rate * 100).toFixed(0)}%`
+                        : "N/A"}
                     </p>
                   </div>
                   <div>

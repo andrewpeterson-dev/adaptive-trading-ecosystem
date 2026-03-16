@@ -79,7 +79,15 @@ export default function BotDetailPage() {
 
   useEffect(() => {
     if (!detail) return;
-    const fallback = detail.primarySymbol || trackedSymbols[0] || "SPY";
+    // Default to symbol with most trades, not just the first in the list
+    const tradedSymbol = detail.trades.length > 0
+      ? detail.trades.reduce((best, t) => {
+          const counts: Record<string, number> = {};
+          detail.trades.forEach(tr => { counts[tr.symbol] = (counts[tr.symbol] || 0) + 1; });
+          return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || best;
+        }, detail.primarySymbol)
+      : null;
+    const fallback = tradedSymbol || detail.primarySymbol || trackedSymbols[0] || "SPY";
     setActiveSymbol((current) => (current && trackedSymbols.includes(current) ? current : fallback));
   }, [detail, trackedSymbols]);
 

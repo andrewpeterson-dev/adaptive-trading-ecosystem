@@ -61,6 +61,20 @@ class AIThinking(BaseModel):
     adaptiveBehavior: str = "Tighten stops in high volatility, pause new entries before major events, scale out early if momentum deteriorates."
 
 
+class ExecutionConfig(BaseModel):
+    """AI-inferred execution parameters based on strategy description."""
+    orderType: Literal["market", "limit", "stop"] = "market"
+    exitLogic: Literal["stop_target", "indicator_reversal", "time_stop", "hybrid"] = "hybrid"
+    trailingStopPct: float | None = None
+    exitAfterBars: int | None = None
+    cooldownBars: int = 0
+    maxTradesPerDay: int = 0
+    maxExposurePct: float = 100.0
+    maxLossPct: float = 5.0
+    backtestPeriod: Literal["3M", "6M", "1Y", "2Y"] = "1Y"
+    twoSided: bool = False  # True = bot can go long AND short
+
+
 class GeneratedStrategySpec(BaseModel):
     name: str
     description: str = ""
@@ -79,6 +93,7 @@ class GeneratedStrategySpec(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     learningPlan: LearningPlan = Field(default_factory=LearningPlan)
     aiThinking: AIThinking = Field(default_factory=AIThinking)
+    executionConfig: ExecutionConfig = Field(default_factory=ExecutionConfig)
 
 
 def extract_json(text: str) -> str | None:
@@ -215,12 +230,16 @@ def compile_strategy_payload(spec: GeneratedStrategySpec) -> dict[str, Any]:
         "symbols": spec.symbols or ["SPY"],
         "commission_pct": 0.001,
         "slippage_pct": 0.0005,
-        "trailing_stop_pct": None,
-        "exit_after_bars": None,
-        "cooldown_bars": 0,
-        "max_trades_per_day": 0,
-        "max_exposure_pct": 1.0,
-        "max_loss_pct": 0.0,
+        "trailing_stop_pct": round(spec.executionConfig.trailingStopPct / 100, 4) if spec.executionConfig.trailingStopPct else None,
+        "exit_after_bars": spec.executionConfig.exitAfterBars,
+        "cooldown_bars": spec.executionConfig.cooldownBars,
+        "max_trades_per_day": spec.executionConfig.maxTradesPerDay,
+        "max_exposure_pct": round(spec.executionConfig.maxExposurePct / 100, 4),
+        "max_loss_pct": round(spec.executionConfig.maxLossPct / 100, 4),
+        "order_type": spec.executionConfig.orderType,
+        "exit_logic": spec.executionConfig.exitLogic,
+        "two_sided": spec.executionConfig.twoSided,
+        "backtest_period": spec.executionConfig.backtestPeriod,
         "strategy_type": spec.strategyType,
         "source_prompt": spec.sourcePrompt,
         "ai_context": ai_context,
@@ -248,6 +267,16 @@ def compile_builder_draft(spec: GeneratedStrategySpec) -> dict[str, Any]:
         "strategyType": payload["strategy_type"],
         "sourcePrompt": payload["source_prompt"],
         "aiContext": deepcopy(payload["ai_context"]),
+        "orderType": payload.get("order_type", "market"),
+        "exitLogic": payload.get("exit_logic", "hybrid"),
+        "trailingStop": spec.executionConfig.trailingStopPct,
+        "exitAfterBars": spec.executionConfig.exitAfterBars,
+        "cooldownBars": spec.executionConfig.cooldownBars,
+        "maxTradesPerDay": spec.executionConfig.maxTradesPerDay,
+        "maxExposure": spec.executionConfig.maxExposurePct,
+        "maxLoss": spec.executionConfig.maxLossPct,
+        "backtestPeriod": spec.executionConfig.backtestPeriod,
+        "twoSided": spec.executionConfig.twoSided,
     }
 
 
@@ -432,7 +461,18 @@ class AIStrategyService:
             "CRITICAL: Every strategy MUST include:\n"
             "1) 2-4 entryConditions that confirm the trade thesis\n"
             "2) 2-3 exitConditions that detect when the thesis breaks (RSI reversal, MACD crossover against position, trend break, etc.) — NEVER leave exitConditions empty\n"
-            "3) An aiThinking block with marketRegimeCheck (what regime to watch), disruptionTriggers (events that could invalidate the strategy), and adaptiveBehavior (how the bot should adapt)\n"
+            "3) An aiThinking block with marketRegimeCheck, disruptionTriggers, adaptiveBehavior\n"
+            "4) An executionConfig block — infer ALL of these from the user's description:\n"
+            "   - orderType: 'market' (default), 'limit' (for mean reversion/value), or 'stop' (for breakouts)\n"
+            "   - exitLogic: 'stop_target' (simple), 'indicator_reversal' (smart exits), 'time_stop' (time-limited), or 'hybrid' (combines all)\n"
+            "   - trailingStopPct: null or number (e.g. 2.0 for 2% trailing stop) — use for trend following\n"
+            "   - exitAfterBars: null or number — use for short-term/swing strategies\n"
+            "   - cooldownBars: integer (how many bars to wait between trades, 0=none)\n"
+            "   - maxTradesPerDay: integer (0=unlimited)\n"
+            "   - maxExposurePct: 0-100 (max portfolio % exposed at once)\n"
+            "   - maxLossPct: 0-100 (max daily loss before pausing)\n"
+            "   - backtestPeriod: '3M', '6M', '1Y', or '2Y' — choose based on timeframe\n"
+            "   - twoSided: true if strategy should go both long AND short, false for one-directional\n\n"
             "stopLossPct and takeProfitPct are hard safety limits. exitConditions are the intelligent exits that fire BEFORE the hard stops."
         )
         user_prompt = (

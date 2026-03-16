@@ -7,13 +7,25 @@ import type { StrategyAiContext, StrategyType } from '@/types/strategy';
 
 export interface BotPerformanceSummary {
   trade_count: number;
+  open_count?: number;
+  closed_count?: number;
   avg_return_pct: number;
   total_net_pnl: number;
+  realized_pnl?: number;
+  unrealized_pnl?: number;
   total_gross_pnl: number;
   total_volume: number;
   win_rate: number;
   sharpe_ratio: number;
   max_drawdown: number;
+  open_positions?: Array<{
+    symbol: string;
+    side: string;
+    quantity: number;
+    entryPrice: number;
+    currentPrice: number;
+    unrealizedPnl: number;
+  }>;
   feature_signals: string[];
 }
 

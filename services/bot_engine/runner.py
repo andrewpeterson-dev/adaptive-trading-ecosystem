@@ -170,13 +170,15 @@ class BotRunner:
 
         risk_context = await self._build_risk_context(bot)
 
-        # Use AI evaluation when an LLM API key is available; fall back to
-        # rigid conditions only when no key is configured.
-        settings = get_settings()
-        use_ai_eval = bool(settings.openai_api_key or settings.anthropic_api_key)
-        if use_ai_eval:
-            await self._ai_evaluate_bot(bot, config, symbols, action, position_size_pct, risk_context)
-        else:
+        # Manual strategies use rigid condition evaluation (the conditions
+        # the user configured).  AI evaluation is only for ai_generated or
+        # custom strategy types that are designed to let the LLM decide.
+        if strategy_type in ("ai_generated", "custom"):
+            settings = get_settings()
+            if settings.openai_api_key or settings.anthropic_api_key:
+                await self._ai_evaluate_bot(bot, config, symbols, action, position_size_pct, risk_context)
+                return
+        if True:  # rigid condition path for manual strategies
             for symbol in symbols:
                 try:
                     await self._evaluate_symbol(
