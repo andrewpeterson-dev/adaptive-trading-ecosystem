@@ -8,7 +8,7 @@ All endpoints require JWT authentication via request.state.user_id.
 """
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 import httpx
@@ -435,7 +435,7 @@ async def delete_connection(connection_id: int, request: Request):
         )
         provider = provider_result.scalar_one_or_none()
         conn.status = "disconnected"
-        conn.updated_at = datetime.now(timezone.utc)
+        conn.updated_at = datetime.utcnow()
 
         # Clear any active settings pointing to this connection
         settings_result = await db.execute(
@@ -510,7 +510,7 @@ async def test_connection(connection_id: int, request: Request):
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = _sanitize_connection_error_message(test_result.get("error"))
         conn.last_tested_at = datetime.utcnow()
-        conn.updated_at = datetime.now(timezone.utc)
+        conn.updated_at = datetime.utcnow()
         await db.commit()
 
     _test_cooldowns[connection_id] = time.time()
