@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, Rocket, Globe, Cpu, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -122,9 +123,16 @@ export function DeployConfigModal({
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="app-panel mx-4 w-full max-w-lg p-5 sm:p-6">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={(e) => { e.stopPropagation(); onClose(); }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div
+        className="app-panel mx-4 w-full max-w-lg p-5 sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="mb-5 flex items-start justify-between">
           <div>
@@ -325,6 +333,7 @@ export function DeployConfigModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

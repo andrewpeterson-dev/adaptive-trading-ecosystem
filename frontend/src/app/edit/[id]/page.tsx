@@ -14,7 +14,13 @@ export default function EditStrategyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isNew = id === "new";
+
   useEffect(() => {
+    if (isNew) {
+      setLoading(false);
+      return;
+    }
     async function load() {
       if (!id) {
         setError("Missing strategy ID");
@@ -31,7 +37,7 @@ export default function EditStrategyPage() {
       }
     }
     load();
-  }, [id]);
+  }, [id, isNew]);
 
   if (loading) {
     return (
@@ -39,6 +45,10 @@ export default function EditStrategyPage() {
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
+  }
+
+  if (isNew) {
+    return <StrategyBuilder mode="create" />;
   }
 
   if (error || !strategy) {
