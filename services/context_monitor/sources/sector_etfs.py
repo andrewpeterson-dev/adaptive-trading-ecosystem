@@ -49,10 +49,10 @@ async def fetch_sector_events() -> list[dict]:
 
     events = []
     for s in sectors:
-        if abs(s["change_pct"]) < 2.0:
+        if abs(s["change_pct"]) < 0.5:
             continue
 
-        impact = "HIGH" if abs(s["change_pct"]) > 3.0 else "MEDIUM"
+        impact = "HIGH" if abs(s["change_pct"]) > 3.0 else "MEDIUM" if abs(s["change_pct"]) > 1.5 else "LOW"
         direction = "up" if s["change_pct"] > 0 else "down"
         headline = f"{s['name']} ({s['symbol']}) {direction} {abs(s['change_pct']):.1f}% today"
 

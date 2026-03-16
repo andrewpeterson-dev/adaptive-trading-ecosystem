@@ -65,11 +65,13 @@ class ContextMonitor:
         from services.context_monitor.sources.finnhub_calendar import fetch_earnings_events, fetch_economic_events
         from services.context_monitor.sources.stocktwits import fetch_stocktwits_events
         from services.context_monitor.sources.sector_etfs import fetch_sector_events
+        from services.context_monitor.sources.yfinance_news import fetch_yfinance_news_events
 
         fetchers = [
             fetch_vix_events,
             fetch_fear_greed_events,
             fetch_finnhub_news_events,
+            fetch_yfinance_news_events,
             fetch_earnings_events,
             fetch_economic_events,
             fetch_stocktwits_events,
