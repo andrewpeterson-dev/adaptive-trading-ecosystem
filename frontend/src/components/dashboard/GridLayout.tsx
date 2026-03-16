@@ -40,13 +40,13 @@ export function DashboardGrid({
 }: DashboardGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1200);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   const [GridComponent, setGridComponent] = useState<React.ComponentType<any> | null>(null);
 
   // Dynamically import react-grid-layout on client
   useEffect(() => {
     import("react-grid-layout").then((mod) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line
       const RGL = (mod as any).default ?? mod;
       setGridComponent(() => RGL.Responsive ?? RGL);
     });

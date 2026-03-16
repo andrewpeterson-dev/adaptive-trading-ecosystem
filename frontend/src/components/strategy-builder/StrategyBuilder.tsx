@@ -729,8 +729,8 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
   const applyGeneratedStrategy = useCallback((result: GeneratedStrategyResponse) => {
     const draft = result.builder_draft;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const draftExt = draft as any;
+    // Extended draft fields from AI execution config
+    const dx = draft as typeof draft & { orderType?: string; backtestPeriod?: string; exitLogic?: string; trailingStop?: number; exitAfterBars?: number; cooldownBars?: number; maxTradesPerDay?: number; maxExposure?: number; maxLoss?: number };
     const builderPreferences = draft.aiContext?.builder_preferences;
     const groups = (draft.conditionGroups as unknown as ConditionGroup[] | undefined)
       ?? [{
@@ -748,20 +748,16 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     setTimeframe(draft.timeframe);
     setConditionGroups(groups);
     setSymbols(draft.symbols?.length ? draft.symbols : ["SPY"]);
-    setOrderType(draftExt.orderType ?? (builderPreferences?.order_type as OrderType | undefined) ?? "market");
-    setBacktestPeriod(
-      draftExt.backtestPeriod ?? (builderPreferences?.backtest_period as BacktestPeriod | undefined) ?? "1Y"
-    );
-    setExitLogic(
-      draftExt.exitLogic ?? (builderPreferences?.exit_logic as ExitLogic | undefined) ?? "hybrid"
-    );
+    setOrderType((dx.orderType ?? builderPreferences?.order_type ?? "market") as OrderType);
+    setBacktestPeriod((dx.backtestPeriod ?? builderPreferences?.backtest_period ?? "1Y") as BacktestPeriod);
+    setExitLogic((dx.exitLogic ?? builderPreferences?.exit_logic ?? "hybrid") as ExitLogic);
     // Apply AI-inferred execution config
-    if (draftExt.trailingStop) { setTrailingStopEnabled(true); setTrailingStop(draftExt.trailingStop); }
-    if (draftExt.exitAfterBars) { setExitAfterBarsEnabled(true); setExitAfterBars(draftExt.exitAfterBars); }
-    if (draftExt.cooldownBars) setCooldownBars(draftExt.cooldownBars);
-    if (draftExt.maxTradesPerDay) setMaxTradesPerDay(draftExt.maxTradesPerDay);
-    if (draftExt.maxExposure != null) setMaxExposurePct(draftExt.maxExposure);
-    if (draftExt.maxLoss != null) setMaxLossPct(draftExt.maxLoss);
+    if (dx.trailingStop) { setTrailingStopEnabled(true); setTrailingStop(dx.trailingStop); }
+    if (dx.exitAfterBars) { setExitAfterBarsEnabled(true); setExitAfterBars(dx.exitAfterBars); }
+    if (dx.cooldownBars) setCooldownBars(dx.cooldownBars);
+    if (dx.maxTradesPerDay) setMaxTradesPerDay(dx.maxTradesPerDay);
+    if (dx.maxExposure != null) setMaxExposurePct(dx.maxExposure);
+    if (dx.maxLoss != null) setMaxLossPct(dx.maxLoss);
     setStrategyType(draft.strategyType ?? "ai_generated");
     setSourcePrompt(draft.sourcePrompt ?? result.prompt);
     setAiContext(draft.aiContext ?? {});
@@ -1083,7 +1079,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the strategy, setup quality, and why the edge should persist."
                   rows={4}
-                  className="app-input mt-2 min-h-[112px] resize-y py-3"
+                  className="app-textarea mt-2 min-h-[112px] resize-y py-3"
                 />
               </div>
             </div>
@@ -1254,7 +1250,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
 
             <div className={cn(
-              "mt-5 rounded-[24px] border px-4 py-3 text-sm",
+              "app-card mt-5 min-h-[48px] px-4 py-3 text-sm",
               validationIssues.length > 0
                 ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-300"
                 : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-400"
