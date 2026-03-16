@@ -158,7 +158,7 @@ def evaluate_conditions(
     for cond in conditions:
         cond.get("indicator", "UNKNOWN")
         operator = cond.get("operator", ">")
-        compare_to = cond.get("compare_to", "").upper()
+        compare_to = (cond.get("compare_to") or "").upper()
 
         current, previous, key = _resolve_indicator_value(cond, indicator_values)
 

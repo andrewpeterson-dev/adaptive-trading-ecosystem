@@ -274,6 +274,11 @@ def strategy_record_to_bot_config(strategy_record: dict[str, Any]) -> dict[str, 
         "symbols": deepcopy(strategy_record.get("symbols") or ["SPY"]),
         "conditions": deepcopy(strategy_record.get("conditions") or []),
         "condition_groups": deepcopy(strategy_record.get("condition_groups") or []),
+        "exit_conditions": deepcopy(
+            strategy_record.get("exit_conditions")
+            or ai_context.get("exit_conditions")
+            or []
+        ),
         "feature_signals": feature_signals,
         "ai_context": ai_context,
         "learning": learning,
