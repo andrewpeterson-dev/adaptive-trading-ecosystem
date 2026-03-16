@@ -10,7 +10,6 @@ import { ConditionGroup as ConditionGroupComponent } from "./ConditionGroup";
 import { AccordionSection } from "./AccordionSection";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { ExplainerPanel } from "./ExplainerPanel";
-import { AIStrategyGeneratorDialog } from "./AIStrategyGeneratorDialog";
 import { IndicatorChart } from "@/components/charts/IndicatorChart";
 import { PageHeader } from "@/components/layout/PageHeader";
 import type {
@@ -933,11 +932,6 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
   return (
     <div className="app-page">
-      <AIStrategyGeneratorDialog
-        open={isAIGeneratorOpen}
-        onOpenChange={setIsAIGeneratorOpen}
-        onApplyDraft={applyGeneratedStrategy}
-      />
       <PageHeader
         eyebrow="Builder"
         title={mode === "edit" ? "Edit Strategy" : "Strategy Builder"}
