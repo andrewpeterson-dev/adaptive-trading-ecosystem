@@ -100,7 +100,8 @@ async def test_update_profile_changes_password_with_current_password():
     user.password_hash = _hash_password("CurPass123!x")
 
     db = _mock_session(user)
-    with patch("api.routes.auth.get_session", return_value=db):
+    with patch("api.routes.auth.get_session", return_value=db), \
+         patch("api.routes.auth.encode_jwt", return_value="mock-jwt-token"):
         response = await update_profile(
             ProfileUpdateRequest(
                 current_password="CurPass123!x",

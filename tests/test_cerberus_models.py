@@ -91,7 +91,7 @@ class TestEnums:
         assert AccountMode.LIVE.value == "live"
 
     def test_bot_status_values(self):
-        expected = {"draft", "running", "paused", "stopped", "error"}
+        expected = {"draft", "running", "paused", "stopped", "error", "deleted"}
         assert {s.value for s in BotStatus} == expected
 
     def test_conversation_mode_values(self):
