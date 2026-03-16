@@ -504,12 +504,15 @@ class BotRunner:
         closed_count = 0
         for open_trade in open_trades:
             exit_side = "BUY" if str(open_trade.side or "").lower().startswith("sell") else "SELL"
-            trade_result = await self._submit_paper_trade(
-                user_id=bot.user_id,
-                symbol=symbol,
-                side=exit_side,
-                quantity=float(open_trade.quantity or 0.0),
-            )
+            try:
+                trade_result = await self._submit_alpaca_order(
+                    symbol=symbol,
+                    side=exit_side,
+                    quantity=int(open_trade.quantity or 0),
+                )
+            except Exception as e:
+                logger.error("bot_exit_order_failed", bot_id=bot.id, symbol=symbol, error=str(e))
+                continue
             if not trade_result:
                 continue
 
@@ -639,23 +642,12 @@ class BotRunner:
         current_price: float,
         reasons: list[str] | None = None,
     ) -> CerberusTrade | None:
-        """Execute a trade for a bot via paper trading."""
-        from db.models import PaperPortfolio
-
+        """Execute a trade via Alpaca paper trading API."""
         user_id = bot.user_id
 
-        # Calculate quantity from position_size_pct
-        async with get_session() as session:
-            result = await session.execute(
-                select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
-            )
-            portfolio = result.scalar_one_or_none()
-
-        if not portfolio or current_price <= 0:
-            logger.warning(
-                "bot_no_portfolio_or_price", bot_id=bot.id, user_id=user_id
-            )
-            return
+        if current_price <= 0:
+            logger.warning("bot_no_price", bot_id=bot.id, symbol=symbol)
+            return None
 
         position_fraction = self._normalize_position_size(position_size_pct)
         if position_fraction <= 0:
@@ -665,42 +657,47 @@ class BotRunner:
                 symbol=symbol,
                 position_size_pct=position_size_pct,
             )
-            return
-
-        position_value = portfolio.cash * position_fraction
-        quantity = int(position_value / current_price)
-        if quantity < 1:
-            logger.warning(
-                "bot_insufficient_funds",
-                bot_id=bot.id,
-                symbol=symbol,
-                cash=portfolio.cash,
-            )
-            return
+            return None
 
         # Map action to side
         side = "BUY" if action.upper() in ("BUY", "LONG") else "SELL"
 
-        # Execute via paper trading (bots always use paper mode for safety)
         try:
-            trade_result = await self._submit_paper_trade(
-                user_id=user_id,
-                symbol=symbol,
-                side=side,
-                quantity=quantity,
+            # Get buying power from Alpaca to size the order
+            alpaca_client = self._get_alpaca_client()
+            account = alpaca_client.get_account()
+            equity = float(account.equity)
+
+            position_value = equity * position_fraction
+            quantity = int(position_value / current_price)
+            if quantity < 1:
+                logger.warning(
+                    "bot_insufficient_funds",
+                    bot_id=bot.id,
+                    symbol=symbol,
+                    equity=equity,
+                )
+                return None
+
+            # Submit order to Alpaca paper
+            order = await self._submit_alpaca_order(
+                symbol=symbol, side=side, quantity=quantity,
             )
 
+            alpaca_order_id = order.get("id") or order.get("order_id")
+            fill_price = float(order.get("filled_avg_price") or current_price)
+
             logger.info(
-                "bot_trade_executed",
+                "bot_trade_executed_alpaca",
                 bot_id=bot.id,
                 symbol=symbol,
                 side=side,
                 quantity=quantity,
-                price=current_price,
-                result=trade_result,
+                price=fill_price,
+                alpaca_order_id=alpaca_order_id,
             )
 
-            # Record in CerberusTrade with bot_id for audit trail
+            # Record in CerberusTrade for audit trail
             async with get_session() as session:
                 explanation = "; ".join(reason.strip() for reason in (reasons or []) if reason.strip()) or None
                 trade = CerberusTrade(
@@ -711,10 +708,15 @@ class BotRunner:
                     side=side.lower(),
                     quantity=quantity,
                     entry_ts=datetime.utcnow(),
-                    entry_price=current_price,
+                    entry_price=fill_price,
                     strategy_tag=bot.name,
                     notes=explanation,
-                    payload_json={"reasons": reasons or [], "bot_explanation": explanation},
+                    payload_json={
+                        "reasons": reasons or [],
+                        "bot_explanation": explanation,
+                        "alpaca_order_id": alpaca_order_id,
+                        "broker": "alpaca_paper",
+                    },
                     created_at=datetime.utcnow(),
                 )
                 session.add(trade)
@@ -728,26 +730,50 @@ class BotRunner:
             )
         return None
 
-    async def _submit_paper_trade(
-        self,
-        *,
-        user_id: int,
-        symbol: str,
-        side: str,
-        quantity: float,
-    ) -> dict | None:
-        from api.routes.paper_trading import PaperTradeRequest, execute_paper_trade
+    def _get_alpaca_client(self):
+        """Get Alpaca paper trading client."""
+        if not hasattr(self, "_alpaca_client") or self._alpaca_client is None:
+            from config.settings import get_settings
+            from alpaca.trading.client import TradingClient
+            settings = get_settings()
+            self._alpaca_client = TradingClient(
+                settings.alpaca_api_key,
+                settings.alpaca_secret_key,
+                paper=True,
+            )
+        return self._alpaca_client
 
-        mock_request = SimpleNamespace(
-            state=SimpleNamespace(user_id=user_id, trading_mode=None)
+    async def _submit_alpaca_order(
+        self, *, symbol: str, side: str, quantity: int,
+    ) -> dict:
+        """Submit a market order to Alpaca paper trading."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None, self._submit_alpaca_order_sync, symbol, side, quantity,
         )
-        paper_req = PaperTradeRequest(
+
+    def _submit_alpaca_order_sync(
+        self, symbol: str, side: str, quantity: int,
+    ) -> dict:
+        from alpaca.trading.requests import MarketOrderRequest
+        from alpaca.trading.enums import OrderSide, TimeInForce
+
+        client = self._get_alpaca_client()
+        order_data = MarketOrderRequest(
             symbol=symbol.upper(),
-            side=side,
-            quantity=quantity,
-            user_confirmed=True,
+            qty=quantity,
+            side=OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL,
+            time_in_force=TimeInForce.DAY,
         )
-        return await execute_paper_trade(mock_request, paper_req)
+        order = client.submit_order(order_data)
+        return {
+            "id": str(order.id),
+            "status": str(order.status),
+            "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
+            "filled_qty": float(order.filled_qty) if order.filled_qty else None,
+            "symbol": order.symbol,
+            "side": str(order.side),
+        }
 
     def _is_market_open(self) -> bool:
         """Check if US stock market is currently open (rough check)."""
