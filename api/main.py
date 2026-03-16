@@ -112,6 +112,8 @@ async def _init_db_with_retry() -> None:
             _db_init_state["ready"] = True
             _db_init_state["failed"] = False
             logger.info("db_initialized", attempt=attempt + 1)
+            from scripts.seed_templates import seed_templates
+            await seed_templates()
             return
         except Exception as exc:
             _db_init_state["ready"] = False

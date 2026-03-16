@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     JSON,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -521,6 +522,7 @@ class StrategyTemplate(Base):
     strategy_type = Column(String(32), default="manual")
     source_prompt = Column(Text, nullable=True)
     ai_context = Column(JSON, nullable=True)
+    is_system = Column(Boolean, default=False, server_default=text("false"))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

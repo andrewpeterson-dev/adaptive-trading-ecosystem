@@ -6,7 +6,7 @@ All strategy queries are scoped to the user's active trading mode.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from typing import Any, Optional, Union
 import structlog
@@ -419,6 +419,39 @@ async def list_strategies(request: Request):
         strategies = [_instance_to_dict(inst) for inst in instances]
 
     return {"strategies": strategies, "mode": mode.value}
+
+
+@router.get("/templates")
+async def list_templates(
+    type: str = Query(None, description="Filter by strategy_type"),
+    timeframe: str = Query(None, description="Filter by timeframe"),
+):
+    """List built-in system strategy templates. Public — no auth required."""
+    async with get_session() as session:
+        stmt = select(StrategyTemplate).where(
+            StrategyTemplate.is_system == True  # noqa: E712
+        )
+        if type:
+            stmt = stmt.where(StrategyTemplate.strategy_type == type)
+        if timeframe:
+            stmt = stmt.where(StrategyTemplate.timeframe == timeframe)
+        stmt = stmt.order_by(StrategyTemplate.name)
+        result = await session.execute(stmt)
+        templates = result.scalars().all()
+
+    return {
+        "templates": [
+            {
+                "id": t.id,
+                "name": t.name,
+                "description": t.description or "",
+                "strategy_type": t.strategy_type or "manual",
+                "config_json": t.ai_context or {},
+                "is_system": t.is_system,
+            }
+            for t in templates
+        ]
+    }
 
 
 @router.get("/{instance_id}")
