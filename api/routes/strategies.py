@@ -962,6 +962,11 @@ async def run_backtest(req: BacktestRequest, request: Request):
         for i in range(min(len(dates), len(benchmark_equity)))
     ]
 
+    # Compute signal stats for diagnostics
+    total_signals = int(np.sum(signals))
+    bars_evaluated = n_bars
+    conditions_count = sum(len(g.get("conditions", [])) for g in groups)
+
     return {
         "symbol": req.symbol.upper(),
         "timeframe": strategy_timeframe,
@@ -976,6 +981,12 @@ async def run_backtest(req: BacktestRequest, request: Request):
             "num_trades": len(trades),
             "avg_trade_pnl": round(float(avg_pnl), 2),
             "profit_factor": round(float(min(profit_factor, 999)), 3),
+        },
+        "diagnostics": {
+            "bars_evaluated": bars_evaluated,
+            "total_signals": total_signals,
+            "conditions_count": conditions_count,
+            "groups_count": len(groups),
         },
         "equity_curve": equity_curve,
         "benchmark_equity_curve": benchmark_curve,

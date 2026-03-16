@@ -181,6 +181,7 @@ export default function BacktestPage() {
     try {
       const data = await apiFetch<BacktestResult>("/api/strategies/backtest", {
         method: "POST",
+        timeoutMs: 120_000, // backtests can take a while (yfinance + indicators)
         body: JSON.stringify({
           strategy_id: parseInt(id, 10),
           symbol,
