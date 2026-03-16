@@ -116,13 +116,42 @@ def normalize_bot_config(config: dict[str, Any] | None) -> dict[str, Any]:
 
 def calculate_trade_metrics(trades: list[CerberusTrade], config: dict[str, Any] | None = None) -> dict[str, Any]:
     config = normalize_bot_config(config)
-    returns = [float(t.return_pct) for t in trades if t.return_pct is not None]
-    pnl_series = [float(t.net_pnl or 0) for t in trades]
+
+    closed_trades = [t for t in trades if t.exit_ts is not None]
+    open_trades = [t for t in trades if t.exit_ts is None]
+
+    returns = [float(t.return_pct) for t in closed_trades if t.return_pct is not None]
+    pnl_series = [float(t.net_pnl or 0) for t in closed_trades]
     trade_count = len(trades)
-    wins = sum(1 for t in trades if (t.net_pnl or 0) > 0)
+    wins = sum(1 for t in closed_trades if (t.net_pnl or 0) > 0)
     total_net_pnl = sum(pnl_series)
-    total_gross_pnl = sum(float(t.gross_pnl or 0) for t in trades)
+    total_gross_pnl = sum(float(t.gross_pnl or 0) for t in closed_trades)
     total_volume = sum(float((t.entry_price or 0) * t.quantity) for t in trades)
+
+    # Estimate unrealized P&L for open trades
+    unrealized_pnl = 0.0
+    open_positions: list[dict[str, Any]] = []
+    if open_trades:
+        try:
+            import yfinance as yf
+            for sym in {t.symbol for t in open_trades}:
+                try:
+                    price = float(yf.Ticker(sym).history(period="1d")["Close"].iloc[-1])
+                    for t in open_trades:
+                        if t.symbol == sym:
+                            entry = float(t.entry_price or 0)
+                            qty = float(t.quantity or 0)
+                            pnl = round((price - entry) * qty, 2)
+                            unrealized_pnl += pnl
+                            open_positions.append({
+                                "symbol": sym, "side": t.side, "quantity": qty,
+                                "entryPrice": entry, "currentPrice": round(price, 2),
+                                "unrealizedPnl": pnl,
+                            })
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     sharpe = 0.0
     if len(returns) >= 2:
@@ -139,24 +168,21 @@ def calculate_trade_metrics(trades: list[CerberusTrade], config: dict[str, Any] 
             peak = max(peak, equity)
             if peak > 0:
                 max_drawdown = max(max_drawdown, (peak - equity) / peak)
-    else:
-        equity = 0.0
-        peak = 0.0
-        for pnl in pnl_series:
-            equity += pnl
-            peak = max(peak, equity)
-            if peak > 0:
-                max_drawdown = max(max_drawdown, (peak - equity) / peak)
 
     return {
         "trade_count": trade_count,
-        "win_rate": round(wins / trade_count, 4) if trade_count else 0.0,
+        "open_count": len(open_trades),
+        "closed_count": len(closed_trades),
+        "win_rate": round(wins / len(closed_trades), 4) if closed_trades else 0.0,
         "avg_return_pct": round(mean(returns), 4) if returns else 0.0,
-        "total_net_pnl": round(total_net_pnl, 2),
+        "total_net_pnl": round(total_net_pnl + unrealized_pnl, 2),
+        "realized_pnl": round(total_net_pnl, 2),
+        "unrealized_pnl": round(unrealized_pnl, 2),
         "total_gross_pnl": round(total_gross_pnl, 2),
         "total_volume": round(total_volume, 2),
         "sharpe_ratio": round(sharpe, 4),
         "max_drawdown": round(max_drawdown, 4),
+        "open_positions": open_positions,
         "feature_signals": config.get("feature_signals") or derive_feature_signals(config.get("conditions") or []),
     }
 
@@ -260,6 +286,7 @@ class StrategyLearningEngine:
             adjustments, method, summary = self._propose_adjustments(config, metrics)
             updated_config = deepcopy(config)
             new_version_id: str | None = None
+            require_backtest = get_settings().live_trading_enabled
 
             if adjustments:
                 updated_config = self._apply_adjustments(updated_config, adjustments)
@@ -283,6 +310,8 @@ class StrategyLearningEngine:
                     )
                 )
                 new_version_id = str(uuid4())
+                # In paper mode, auto-promote optimized versions (no backtest gate).
+                # In live mode, require backtest validation before deployment.
                 session.add(
                     CerberusBotVersion(
                         id=new_version_id,
@@ -291,13 +320,20 @@ class StrategyLearningEngine:
                         config_json=updated_config,
                         diff_summary=summary,
                         created_by="learning_engine",
-                        backtest_required=True,
+                        backtest_required=require_backtest,
                     )
                 )
+                # Auto-promote to current version in paper mode so the runner
+                # picks up the optimized config on the next cycle.
+                if not require_backtest:
+                    bot.current_version_id = new_version_id
 
             bot.last_optimization_at = datetime.utcnow()
+            promotion_status = "awaiting_backtest" if (adjustments and require_backtest) else (
+                "promoted" if adjustments else "monitoring"
+            )
             bot.learning_status_json = {
-                "status": "awaiting_backtest" if adjustments else "monitoring",
+                "status": promotion_status,
                 "lastOptimizationAt": bot.last_optimization_at.isoformat(),
                 "nextOptimizationAt": (bot.last_optimization_at + timedelta(minutes=cadence_minutes)).isoformat(),
                 "method": method,
@@ -316,7 +352,7 @@ class StrategyLearningEngine:
                     source_version_id=version.id,
                     result_version_id=new_version_id,
                     method=method,
-                    status="awaiting_backtest" if adjustments else "monitoring",
+                    status=promotion_status,
                     metrics_json=metrics,
                     adjustments_json={"parameter_adjustments": adjustments},
                     summary=summary,

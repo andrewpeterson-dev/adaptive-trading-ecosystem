@@ -290,10 +290,19 @@ class TestDeployAndLearningSafety:
             versions = list(version_result.scalars().all())
 
         assert len(versions) == 2
-        assert refreshed_bot.current_version_id == current_version.id
-        assert refreshed_bot.learning_status_json["status"] == "awaiting_backtest"
+        # In paper mode (live_trading_enabled=False), optimized versions are
+        # auto-promoted and backtest_required is False.
+        # In live mode, they would be staged with backtest_required=True.
+        from config.settings import get_settings
+        if get_settings().live_trading_enabled:
+            assert refreshed_bot.current_version_id == current_version.id
+            assert refreshed_bot.learning_status_json["status"] == "awaiting_backtest"
+            assert versions[-1].backtest_required is True
+        else:
+            assert refreshed_bot.current_version_id == versions[-1].id
+            assert refreshed_bot.learning_status_json["status"] == "promoted"
+            assert versions[-1].backtest_required is False
         assert refreshed_bot.learning_status_json["stagedVersionId"] == versions[-1].id
-        assert versions[-1].backtest_required is True
 
 
 class TestReasoningFailClosed:

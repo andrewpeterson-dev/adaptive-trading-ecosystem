@@ -104,7 +104,7 @@ async def _create_bot(
     strategy_name: str = None,
     config: dict = None,
 ) -> dict:
-    """Create a new bot in draft status."""
+    """Create a new bot and immediately activate it for trading."""
     from db.database import get_session
     from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
 
@@ -126,12 +126,12 @@ async def _create_bot(
             id=bot_id,
             user_id=user_id,
             name=bot_name,
-            status=BotStatus.DRAFT,
+            status=BotStatus.RUNNING,
             current_version_id=version_id,
             learning_enabled=bool(learning.get("enabled", True)),
             learning_status_json={
                 "status": "monitoring" if learning.get("enabled", True) else "disabled",
-                "summary": learning.get("last_summary", "Bot created and waiting for deployment."),
+                "summary": learning.get("last_summary", "Bot created and actively trading."),
                 "metrics": {},
                 "featureSignals": normalized_config.get("feature_signals", []),
                 "parameterAdjustments": [],
@@ -149,12 +149,14 @@ async def _create_bot(
         session.add(bot)
         session.add(version)
 
+    logger.info("bot_created_and_activated", bot_id=bot_id, name=bot_name, user_id=user_id)
     return {
         "bot_id": bot_id,
         "version_id": version_id,
         "name": bot_name,
-        "status": "draft",
+        "status": "running",
         "version_number": 1,
+        "message": f"Bot '{bot_name}' is now live and will begin trading on the next evaluation cycle (≤60s).",
     }
 
 
@@ -388,11 +390,19 @@ def register():
 
     registry.register(ToolDefinition(
         name="createBot",
-        version="1.0",
-        description="Create a new trading bot in draft status",
+        version="1.1",
+        description=(
+            "Create and immediately activate a trading bot. The bot starts in RUNNING status "
+            "and will begin evaluating signals on the next 60-second cycle. No separate "
+            "activation step is needed. Config must include: symbols (list of tickers), "
+            "action ('BUY' or 'SELL'), timeframe ('1m','5m','15m','1h','1D'), and at least "
+            "one condition with indicator, operator, and value. Include stop_loss_pct and "
+            "take_profit_pct as decimals (e.g. 0.03 for 3%). position_size_pct controls "
+            "capital allocation per trade (e.g. 5.0 for 5% of equity)."
+        ),
         category=ToolCategory.TRADING,
         side_effect=ToolSideEffect.WRITE,
-        timeout_ms=3000,
+        timeout_ms=10000,
         input_schema={
             "type": "object",
             "properties": {
