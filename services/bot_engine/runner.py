@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 import structlog
 from sqlalchemy import select
 
+from config.settings import get_settings
 from db.database import get_session
 from db.cerberus_models import (
     CerberusBot,
@@ -26,6 +27,7 @@ from db.models import UserApiSettings, UserApiConnection, ApiProvider
 from services.activity_bus import BotActivityEvent, activity_bus
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
+from services.bot_engine.ai_evaluator import ai_evaluate_entries, AIEntrySignal
 from services.reasoning_engine import ReasoningEngine
 from services.strategy_learning_engine import normalize_bot_config
 
@@ -131,6 +133,7 @@ class BotRunner:
         action = config.get("action", "BUY")
         timeframe = config.get("timeframe", "1D")
         position_size_pct = config.get("position_size_pct", 5.0)
+        strategy_type = config.get("strategy_type", "manual")
 
         # Dynamic universe: pull candidates from UniverseScanner if not "fixed" mode
         universe_config = version.universe_config or {}
@@ -146,7 +149,12 @@ class BotRunner:
             if dynamic_symbols:
                 symbols = dynamic_symbols
 
-        if not symbols or not conditions:
+        if not symbols:
+            logger.warning("bot_skipped_no_symbols", bot_id=bot.id)
+            return
+
+        # For rigid-condition bots, still require conditions
+        if strategy_type not in ("ai_generated", "custom") and not conditions:
             logger.warning("bot_skipped_no_config", bot_id=bot.id)
             return
 
@@ -161,26 +169,249 @@ class BotRunner:
             return
 
         risk_context = await self._build_risk_context(bot)
-        for symbol in symbols:
-            try:
-                await self._evaluate_symbol(
-                    bot,
-                    config,
-                    symbol,
-                    conditions,
-                    action,
-                    position_size_pct,
-                    risk_context,
-                )
-            except Exception as e:
-                logger.error(
-                    "bot_symbol_eval_error",
-                    bot_id=bot.id,
-                    symbol=symbol,
-                    error=str(e),
-                )
+
+        # Use AI evaluation when an LLM API key is available; fall back to
+        # rigid conditions only when no key is configured.
+        settings = get_settings()
+        use_ai_eval = bool(settings.openai_api_key or settings.anthropic_api_key)
+        if use_ai_eval:
+            await self._ai_evaluate_bot(bot, config, symbols, action, position_size_pct, risk_context)
+        else:
+            for symbol in symbols:
+                try:
+                    await self._evaluate_symbol(
+                        bot, config, symbol, conditions, action,
+                        position_size_pct, risk_context,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "bot_symbol_eval_error",
+                        bot_id=bot.id, symbol=symbol, error=str(e),
+                    )
 
         self._last_eval[bot.id] = datetime.utcnow()
+
+    async def _ai_evaluate_bot(
+        self,
+        bot: CerberusBot,
+        config: dict,
+        symbols: list[str],
+        action: str,
+        position_size_pct: float,
+        risk_context: dict,
+    ) -> None:
+        """Use AI evaluation to decide entries for all symbols at once."""
+        conditions = config.get("conditions", [])
+        exit_conditions = config.get("exit_conditions") or []
+
+        # Step 1: Fetch bars and compute indicators for all symbols
+        symbol_data: list[dict] = []
+        symbol_bars: dict[str, list[dict]] = {}
+        symbol_indicators: dict[str, dict] = {}
+        open_position_symbols: list[str] = []
+
+        for symbol in symbols:
+            bars = await self._fetch_bars(symbol, config.get("timeframe", "1D"))
+            if not bars or len(bars) < 50:
+                continue
+
+            # Compute indicators using the same logic as rigid evaluation
+            indicators_needed = [
+                {"indicator": c["indicator"], "params": c.get("params", {})}
+                for c in [*conditions, *exit_conditions]
+                if isinstance(c, dict) and c.get("indicator")
+            ]
+            # Always compute common indicators for AI context
+            for ind_spec in [
+                {"indicator": "rsi", "params": {"period": 14}},
+                {"indicator": "sma", "params": {"period": 50}},
+                {"indicator": "ema", "params": {"period": 200}},
+                {"indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}},
+                {"indicator": "atr", "params": {"period": 14}},
+                {"indicator": "volume", "params": {}},
+            ]:
+                if not any(
+                    i["indicator"].lower() == ind_spec["indicator"]
+                    and i.get("params", {}).get("period") == ind_spec["params"].get("period")
+                    for i in indicators_needed
+                ):
+                    indicators_needed.append(ind_spec)
+
+            indicator_values = compute_indicators(bars, indicators_needed)
+            current_price = float(bars[-1].get("close", 0) or 0)
+            indicator_values["CLOSE"] = current_price
+
+            # Check for existing open positions
+            open_trades = await self._get_open_trades(bot.id, symbol)
+            if open_trades:
+                open_position_symbols.append(symbol)
+                # Still check exit conditions for open positions
+                should_exit, exit_reasons = self._should_exit_position(
+                    open_trades=open_trades,
+                    config=config,
+                    indicator_values=indicator_values,
+                    current_price=current_price,
+                )
+                if should_exit:
+                    await self._close_open_trades(
+                        bot=bot, symbol=symbol, open_trades=open_trades,
+                        current_price=current_price, reasons=exit_reasons,
+                    )
+                continue
+
+            symbol_data.append({
+                "symbol": symbol,
+                "price": current_price,
+                "indicators": indicator_values,
+            })
+            symbol_bars[symbol] = bars
+            symbol_indicators[symbol] = indicator_values
+
+        if not symbol_data:
+            return
+
+        # Step 2: Call AI evaluator with all symbol data
+        description = config.get("description") or config.get("overview") or config.get("name", "")
+        ai_context = config.get("ai_context") or {}
+        overview = ai_context.get("overview") or description
+
+        # Synthesize description from conditions when none exists
+        if not overview or len(overview) < 10:
+            condition_parts = []
+            for c in conditions:
+                ind = c.get("indicator", "").upper()
+                op = c.get("operator", ">")
+                val = c.get("value", 0)
+                params = c.get("params") or {}
+                period = params.get("period", "")
+                condition_parts.append(f"{ind}({period}) {op} {val}")
+            exit_parts = []
+            for c in exit_conditions:
+                ind = c.get("indicator", "").upper()
+                op = c.get("operator", ">")
+                val = c.get("value", 0)
+                exit_parts.append(f"{ind} {op} {val}")
+            overview = (
+                f"{action} strategy on {config.get('timeframe', '1D')} timeframe. "
+                f"Entry signals: {', '.join(condition_parts) if condition_parts else 'AI discretion'}. "
+                f"Exit signals: {', '.join(exit_parts) if exit_parts else 'stop loss/take profit'}."
+            )
+
+        ai_thinking = ai_context.get("ai_thinking") or {}
+        if ai_thinking:
+            full_description = f"{overview}\n\nAI Guidance: {ai_thinking.get('adaptiveBehavior', '')}"
+        else:
+            full_description = overview
+
+        signals = await ai_evaluate_entries(
+            strategy_name=config.get("name", bot.name),
+            strategy_description=full_description,
+            action=action,
+            stop_loss_pct=float(config.get("stop_loss_pct", 0.02)),
+            take_profit_pct=float(config.get("take_profit_pct", 0.05)),
+            position_size_pct=float(config.get("position_size_pct", 0.10)),
+            timeframe=config.get("timeframe", "1D"),
+            symbol_data=symbol_data,
+            open_positions=open_position_symbols,
+        )
+
+        # Step 3: Process AI signals — execute entries with high confidence
+        for signal in signals:
+            if signal.action != "enter" or signal.confidence < 60:
+                logger.debug(
+                    "ai_eval_hold",
+                    bot_id=bot.id, symbol=signal.symbol,
+                    confidence=signal.confidence, reasoning=signal.reasoning,
+                )
+                continue
+
+            symbol = signal.symbol
+            indicator_values = symbol_indicators.get(symbol)
+            if not indicator_values:
+                continue
+            current_price = indicator_values.get("CLOSE", 0)
+
+            logger.info(
+                "ai_signal_triggered",
+                bot_id=bot.id, symbol=symbol, action=action,
+                confidence=signal.confidence, reasoning=signal.reasoning,
+            )
+
+            # Gate through Reasoning Engine for safety checks
+            decision = None
+            try:
+                decision = await self._reasoning_engine.evaluate(
+                    bot=bot, symbol=symbol, signal=action,
+                    strategy_config=config,
+                    vix=risk_context.get("vix"),
+                    portfolio_exposure=self._calculate_symbol_exposure(
+                        risk_context, symbol, current_price,
+                    ),
+                    daily_pnl_pct=float(risk_context.get("daily_pnl_pct") or 0.0),
+                )
+
+                if decision.decision == "PAUSE_BOT":
+                    await self._pause_bot(bot.id, decision.reasoning)
+                    logger.info("bot_paused_by_reasoning", bot_id=bot.id, symbol=symbol, reasoning=decision.reasoning)
+                    self._publish_activity(
+                        "bot_paused", bot, symbol,
+                        f"{bot.name} paused — {decision.reasoning}",
+                        {"decision": decision.decision, "reasoning": decision.reasoning},
+                    )
+                    return
+
+                if decision.decision in ("EXIT_POSITION", "DELAY_TRADE"):
+                    logger.info(
+                        "ai_trade_blocked_by_reasoning",
+                        bot_id=bot.id, symbol=symbol,
+                        decision=decision.decision, reasoning=decision.reasoning,
+                    )
+                    continue
+
+                if decision.delay_seconds > 0:
+                    logger.info(
+                        "ai_trade_delayed_by_reasoning",
+                        bot_id=bot.id, symbol=symbol,
+                        delay=decision.delay_seconds, reasoning=decision.reasoning,
+                    )
+                    continue
+
+                # Apply size adjustments from both AI confidence and reasoning engine
+                adjusted_size = position_size_pct * decision.size_adjustment
+                # Scale by AI evaluator confidence (60-100 → 0.6-1.0 multiplier)
+                confidence_scale = signal.confidence / 100.0
+                adjusted_size = adjusted_size * confidence_scale
+
+            except Exception as e:
+                logger.warning("reasoning_engine_error", bot_id=bot.id, error=str(e))
+                # In paper mode, still execute at reduced size
+                adjusted_size = position_size_pct * 0.5
+
+            executed_trade = await self._execute_trade(
+                bot, symbol, action, adjusted_size, current_price,
+                reasons=[f"AI: {signal.reasoning} (confidence: {signal.confidence}%)"],
+            )
+            if not executed_trade:
+                continue
+
+            self._publish_activity(
+                "trade_executed", bot, symbol,
+                f"{bot.name} AI {action} {symbol} @ ${current_price:.2f} (conf: {signal.confidence}%)",
+                {"action": action, "price": current_price, "size_pct": adjusted_size,
+                 "ai_confidence": signal.confidence, "ai_reasoning": signal.reasoning},
+            )
+
+            # Record in trade journal
+            try:
+                from services.bot_memory.journal import record_trade
+                await record_trade(
+                    bot_id=bot.id, trade_id=executed_trade.id,
+                    symbol=symbol, side=action, entry_price=current_price,
+                    vix=risk_context.get("vix"), entry_at=executed_trade.entry_ts,
+                    trade_decision=decision,
+                )
+            except Exception as e:
+                logger.warning("journal_record_error", bot_id=bot.id, error=str(e))
 
     async def _evaluate_symbol(
         self,
