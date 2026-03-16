@@ -34,6 +34,9 @@ import { CapitalPanel } from "@/components/terminal/CapitalPanel";
 import { TradeLogPanel } from "@/components/terminal/TradeLogPanel";
 import { AIReasoningPanel } from "@/components/terminal/AIReasoningPanel";
 import { ChartPanel } from "@/components/terminal/ChartPanel";
+import { MarketContextPanel } from "@/components/terminal/MarketContextPanel";
+import { MarketScannerPanel } from "@/components/terminal/MarketScannerPanel";
+import { TradeInspectorModal } from "@/components/terminal/TradeInspectorModal";
 
 // ---------------------------------------------------------------------------
 // Page
@@ -49,6 +52,7 @@ export default function BotDetailPage() {
   const [activeSymbol, setActiveSymbol] = useState<string>("");
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [hoveredTradeId, setHoveredTradeId] = useState<string | null>(null);
+  const [inspectedTrade, setInspectedTrade] = useState<BotTrade | null>(null);
   const [activeTab, setActiveTab] = useState<"terminal" | "reasoning" | "learning" | "universe">("terminal");
 
   useEffect(() => {
@@ -102,6 +106,7 @@ export default function BotDetailPage() {
   const handleSelectTrade = (trade: BotTrade) => {
     setActiveSymbol(trade.symbol.toUpperCase());
     setSelectedTradeId(trade.id);
+    setInspectedTrade(trade);
   };
 
   // Loading state
@@ -266,10 +271,27 @@ export default function BotDetailPage() {
               ai_decision: (
                 <AIReasoningPanel detail={detail} trade={selectedTrade} />
               ),
+              market: (
+                <MarketContextPanel detail={detail} />
+              ),
+              scanner: (
+                <MarketScannerPanel
+                  symbols={trackedSymbols}
+                  trades={detail.trades}
+                  conditions={(Array.isArray(config.conditions) ? config.conditions : []) as Array<Record<string, unknown>>}
+                />
+              ),
             }}
           </DashboardLayout>
         </div>
       )}
+
+      {/* Trade Inspector Modal */}
+      <TradeInspectorModal
+        trade={inspectedTrade}
+        config={config}
+        onClose={() => setInspectedTrade(null)}
+      />
     </div>
   );
 }
