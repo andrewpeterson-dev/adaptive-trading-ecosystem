@@ -21,8 +21,8 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <section className={cn("app-hero", className)}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-1.5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-1.5">
           {eyebrow && <p className="app-kicker">{eyebrow}</p>}
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -33,7 +33,7 @@ export function PageHeader({
           </div>
 
           {description && (
-            <p className="max-w-[44rem] text-[13px] leading-5 text-muted-foreground">
+            <p className="max-w-full text-[13px] leading-5 text-muted-foreground sm:max-w-[44rem]">
               {description}
             </p>
           )}

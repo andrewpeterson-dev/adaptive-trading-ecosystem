@@ -45,6 +45,8 @@ class NewsIngestion:
         articles = await self._fetch_alphavantage_async(valid_symbols, limit)
         if not articles:
             articles = await self._fetch_finnhub_async(valid_symbols, limit)
+        if not articles:
+            articles = await self._fetch_yfinance_async(valid_symbols, limit)
 
         self._cache[cache_key] = (articles, time.time())
         return articles[:limit]
@@ -74,6 +76,10 @@ class NewsIngestion:
         # Fallback to Finnhub
         if not articles:
             articles = self._fetch_finnhub(valid_symbols, limit)
+
+        # Final fallback: yfinance (free, no API key needed)
+        if not articles:
+            articles = self._fetch_yfinance(valid_symbols, limit)
 
         self._cache[cache_key] = (articles, time.time())
         return articles[:limit]
@@ -324,3 +330,47 @@ class NewsIngestion:
 
         logger.info("finnhub_async_fetched", count=len(articles), symbols=symbols)
         return articles
+
+    # ── yfinance fallback (free, no API key) ──────────────────────────────────
+
+    def _fetch_yfinance(self, symbols: list[str], limit: int) -> list[dict]:
+        """Fallback: fetch news from yfinance (no API key required)."""
+        try:
+            import yfinance as yf
+        except ImportError:
+            logger.debug("yfinance_not_installed")
+            return []
+
+        articles = []
+        for symbol in symbols[:5]:
+            try:
+                ticker = yf.Ticker(symbol)
+                news = ticker.news or []
+                for item in news[:limit]:
+                    content = item.get("content", item)
+                    title = content.get("title", "") or item.get("title", "")
+                    if not title:
+                        continue
+                    pub = content.get("pubDate", "") or item.get("providerPublishTime", "")
+                    if isinstance(pub, (int, float)):
+                        pub = datetime.fromtimestamp(pub, tz=timezone.utc).isoformat()
+                    provider = content.get("provider", {})
+                    articles.append({
+                        "title": title,
+                        "url": content.get("canonicalUrl", {}).get("url", "") or item.get("link", ""),
+                        "source": provider.get("displayName", "") if isinstance(provider, dict) else str(provider),
+                        "published_at": str(pub),
+                        "summary": content.get("summary", "") or item.get("summary", ""),
+                        "symbols": [symbol],
+                    })
+            except Exception as e:
+                logger.warning("yfinance_news_failed", symbol=symbol, error=str(e))
+                continue
+
+        logger.info("yfinance_news_fetched", count=len(articles), symbols=symbols)
+        return articles
+
+    async def _fetch_yfinance_async(self, symbols: list[str], limit: int) -> list[dict]:
+        """Async wrapper for yfinance news (runs sync fetch in thread)."""
+        import asyncio
+        return await asyncio.to_thread(self._fetch_yfinance, symbols, limit)

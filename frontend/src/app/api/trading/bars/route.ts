@@ -31,9 +31,11 @@ export async function GET(request: NextRequest) {
       status: res.status,
       headers: {
         "content-type": res.headers.get("content-type") ?? "application/json",
+        "cache-control": "public, s-maxage=60, stale-while-revalidate=300",
       },
     });
-  } catch {
+  } catch (err) {
+    console.error("[bars proxy] backend unreachable:", err instanceof Error ? err.message : err);
     return NextResponse.json(
       { detail: "Chart data backend unavailable" },
       { status: 502 }

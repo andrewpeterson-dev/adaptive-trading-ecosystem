@@ -5,6 +5,7 @@ from collections.abc import Sequence
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 import structlog
 
 from db.cerberus_models import CerberusPortfolioSnapshot
@@ -77,13 +78,16 @@ async def get_combined_ledger(request: Request):
     if settings.active_equity_broker_id:
         async with get_session() as db:
             r = await db.execute(
-                select(UserApiConnection).join(ApiProvider).where(
+                select(UserApiConnection)
+                .options(selectinload(UserApiConnection.provider))
+                .join(ApiProvider)
+                .where(
                     UserApiConnection.id == settings.active_equity_broker_id,
                     UserApiConnection.user_id == user_id,
                 )
             )
             conn = r.scalar_one_or_none()
-            if conn:
+            if conn and conn.provider:
                 broker_label = f"{conn.provider.name} ({'Paper' if conn.is_paper else 'Live'})"
     elif equity_series:
         broker_label = "Stored Portfolio Snapshot"
@@ -92,13 +96,16 @@ async def get_combined_ledger(request: Request):
     if getattr(settings, "options_fallback_enabled", False) and getattr(settings, "options_provider_connection_id", None):
         async with get_session() as db:
             r = await db.execute(
-                select(UserApiConnection).join(ApiProvider).where(
+                select(UserApiConnection)
+                .options(selectinload(UserApiConnection.provider))
+                .join(ApiProvider)
+                .where(
                     UserApiConnection.id == settings.options_provider_connection_id,
                     UserApiConnection.user_id == user_id,
                 )
             )
             conn = r.scalar_one_or_none()
-            if conn:
+            if conn and conn.provider:
                 options_label = f"{conn.provider.name} (Options Sim)"
 
     return await ledger_aggregator.build_combined(
