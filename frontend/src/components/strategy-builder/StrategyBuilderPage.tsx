@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import AIChat from "./AIChat";
 import StrategyPreview from "./StrategyPreview";
 import { useBuilderStore } from "@/stores/builder-store";
 import { useStrategyBuilderStore } from "@/stores/strategy-builder-store";
@@ -70,11 +71,7 @@ export default function StrategyBuilderPage({ mode, initialStrategy }: StrategyB
       <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] h-[calc(100vh-120px)]">
         {/* Left panel */}
         <div className="overflow-y-auto border-r border-border">
-          {activeMode === "ai" && (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              AI Chat — coming soon
-            </div>
-          )}
+          {activeMode === "ai" && <AIChat />}
           {activeMode === "manual" && (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Manual Builder — coming soon
