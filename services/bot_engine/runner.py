@@ -245,6 +245,14 @@ class BotRunner:
         # Evaluate conditions
         all_passed, reasons = evaluate_conditions(conditions, indicator_values)
 
+        if not all_passed:
+            logger.debug(
+                "bot_conditions_not_met",
+                bot_id=bot.id,
+                symbol=symbol,
+                reasons=reasons,
+            )
+
         if all_passed:
             logger.info(
                 "bot_signal_triggered",
@@ -786,16 +794,21 @@ class BotRunner:
         return market_open <= now.time() <= market_close
 
     def _timeframe_to_seconds(self, tf: str) -> int:
-        """Convert timeframe string to minimum seconds between evaluations."""
+        """Convert timeframe string to minimum seconds between evaluations.
+
+        For daily (1D) strategies, evaluate every 5 minutes rather than once
+        per day — conditions can change intraday and we want to catch the
+        moment they trigger during market hours.
+        """
         mapping = {
             "1m": 60,
             "5m": 300,
             "15m": 900,
             "1H": 3600,
             "4H": 14400,
-            "1D": 86400,
+            "1D": 300,
         }
-        return mapping.get(tf, 86400)
+        return mapping.get(tf, 300)
 
     def _normalize_position_size(self, position_size_pct: float) -> float:
         """Accept both fractional sizing (0.1 = 10%) and percent sizing (10 = 10%)."""
