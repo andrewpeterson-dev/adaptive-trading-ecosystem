@@ -22,6 +22,7 @@ from db.cerberus_models import (
     UniverseCandidate,
     BotStatus,
 )
+from db.models import UserApiSettings, UserApiConnection, ApiProvider
 from services.activity_bus import BotActivityEvent, activity_bus
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
@@ -531,15 +532,33 @@ class BotRunner:
         current_price: float,
         reasons: list[str],
     ) -> None:
+        # Resolve broker once for all exit orders in this batch
+        broker = await self._resolve_broker(bot.user_id)
+
         closed_count = 0
         for open_trade in open_trades:
             exit_side = "BUY" if str(open_trade.side or "").lower().startswith("sell") else "SELL"
+            trade_result = None
             try:
-                trade_result = await self._submit_alpaca_order(
-                    symbol=symbol,
-                    side=exit_side,
-                    quantity=int(open_trade.quantity or 0),
-                )
+                if broker == "webull":
+                    try:
+                        trade_result = await self._submit_webull_order(
+                            user_id=bot.user_id,
+                            symbol=symbol,
+                            side=exit_side,
+                            quantity=int(open_trade.quantity or 0),
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "webull_exit_failed_falling_back",
+                            bot_id=bot.id, symbol=symbol, error=str(e),
+                        )
+                if trade_result is None:
+                    trade_result = await self._submit_alpaca_order(
+                        symbol=symbol,
+                        side=exit_side,
+                        quantity=int(open_trade.quantity or 0),
+                    )
             except Exception as e:
                 logger.error("bot_exit_order_failed", bot_id=bot.id, symbol=symbol, error=str(e))
                 continue
@@ -672,7 +691,7 @@ class BotRunner:
         current_price: float,
         reasons: list[str] | None = None,
     ) -> CerberusTrade | None:
-        """Execute a trade via Alpaca paper trading API."""
+        """Execute a trade via the user's active broker (Webull or Alpaca)."""
         user_id = bot.user_id
 
         if current_price <= 0:
@@ -691,6 +710,9 @@ class BotRunner:
 
         # Map action to side
         side = "BUY" if action.upper() in ("BUY", "LONG") else "SELL"
+
+        # Resolve which broker to use for this user
+        broker = await self._resolve_broker(user_id)
 
         try:
             # Use bot's allocated capital if set, otherwise fall back to Alpaca equity
@@ -713,22 +735,44 @@ class BotRunner:
                 )
                 return None
 
-            # Submit order to Alpaca paper
-            order = await self._submit_alpaca_order(
-                symbol=symbol, side=side, quantity=quantity,
-            )
+            # Submit order to the resolved broker
+            order: dict | None = None
+            used_broker = broker
 
-            alpaca_order_id = order.get("id") or order.get("order_id")
+            if broker == "webull":
+                try:
+                    order = await self._submit_webull_order(
+                        user_id=user_id, symbol=symbol, side=side, quantity=quantity,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "webull_order_failed_falling_back",
+                        bot_id=bot.id,
+                        symbol=symbol,
+                        error=str(e),
+                    )
+                    # Fall back to Alpaca paper
+                    used_broker = "alpaca"
+
+            if order is None:
+                order = await self._submit_alpaca_order(
+                    symbol=symbol, side=side, quantity=quantity,
+                )
+                used_broker = "alpaca"
+
+            order_id = order.get("id") or order.get("order_id") or order.get("client_order_id")
             fill_price = float(order.get("filled_avg_price") or current_price)
+            broker_tag = f"webull_{order.get('mode', 'paper')}" if used_broker == "webull" else "alpaca_paper"
 
             logger.info(
-                "bot_trade_executed_alpaca",
+                "bot_trade_executed",
                 bot_id=bot.id,
                 symbol=symbol,
                 side=side,
                 quantity=quantity,
                 price=fill_price,
-                alpaca_order_id=alpaca_order_id,
+                broker=broker_tag,
+                order_id=order_id,
             )
 
             # Record in CerberusTrade for audit trail
@@ -748,8 +792,8 @@ class BotRunner:
                     payload_json={
                         "reasons": reasons or [],
                         "bot_explanation": explanation,
-                        "alpaca_order_id": alpaca_order_id,
-                        "broker": "alpaca_paper",
+                        "order_id": order_id,
+                        "broker": broker_tag,
                     },
                     created_at=datetime.utcnow(),
                 )
@@ -807,6 +851,145 @@ class BotRunner:
             "filled_qty": float(order.filled_qty) if order.filled_qty else None,
             "symbol": order.symbol,
             "side": str(order.side),
+        }
+
+    # ── Broker resolution ─────────────────────────────────────────────────
+
+    async def _resolve_broker(self, user_id: int) -> str:
+        """Determine which broker to use for a user.
+
+        Checks UserApiSettings.active_equity_broker_id → UserApiConnection →
+        ApiProvider to see if the active broker is Webull. Returns "webull" or
+        "alpaca" (the default fallback).
+        """
+        try:
+            async with get_session() as session:
+                settings_result = await session.execute(
+                    select(UserApiSettings).where(UserApiSettings.user_id == user_id)
+                )
+                settings = settings_result.scalar_one_or_none()
+                if not settings or not settings.active_equity_broker_id:
+                    return "alpaca"
+
+                conn_result = await session.execute(
+                    select(UserApiConnection)
+                    .join(ApiProvider)
+                    .where(
+                        UserApiConnection.id == settings.active_equity_broker_id,
+                        UserApiConnection.status == "connected",
+                    )
+                )
+                conn = conn_result.scalar_one_or_none()
+                if not conn:
+                    return "alpaca"
+
+                provider_result = await session.execute(
+                    select(ApiProvider).where(ApiProvider.id == conn.provider_id)
+                )
+                provider = provider_result.scalar_one_or_none()
+                if provider and provider.slug == "webull":
+                    return "webull"
+        except Exception as e:
+            logger.warning("broker_resolve_error", user_id=user_id, error=str(e))
+
+        return "alpaca"
+
+    # ── Webull order submission ───────────────────────────────────────────
+
+    async def _get_webull_clients(self, user_id: int, mode: str = "paper"):
+        """Load Webull clients for a user, mirroring api/routes/webull._get_user_clients."""
+        import json
+        from db.encryption import decrypt_value
+        from db.models import BrokerCredential, BrokerType
+        from data.webull import create_webull_clients
+
+        app_key = None
+        app_secret = None
+
+        # 1. Prefer UserApiConnection system
+        async with get_session() as db:
+            result = await db.execute(
+                select(UserApiConnection)
+                .join(ApiProvider)
+                .where(
+                    UserApiConnection.user_id == user_id,
+                    UserApiConnection.status == "connected",
+                    ApiProvider.slug == "webull",
+                )
+            )
+            conn = result.scalar_one_or_none()
+
+        if conn:
+            try:
+                creds = json.loads(decrypt_value(conn.encrypted_credentials))
+                app_key = creds.get("app_key", "")
+                app_secret = creds.get("app_secret", "")
+            except Exception as exc:
+                logger.error("webull_cred_decrypt_failed", user_id=user_id, error=str(exc))
+                return None
+        else:
+            # 2. Fall back to legacy BrokerCredential
+            async with get_session() as db:
+                result = await db.execute(
+                    select(BrokerCredential).where(
+                        BrokerCredential.user_id == user_id,
+                        BrokerCredential.broker_type == BrokerType.WEBULL,
+                    )
+                )
+                cred = result.scalar_one_or_none()
+
+            if not cred:
+                return None
+
+            app_key = decrypt_value(cred.encrypted_api_key)
+            app_secret = decrypt_value(cred.encrypted_api_secret)
+
+        if not app_key or not app_secret:
+            return None
+
+        try:
+            return create_webull_clients(mode, app_key=app_key, app_secret=app_secret)
+        except Exception as exc:
+            logger.error("webull_client_create_error", user_id=user_id, error=str(exc))
+            return None
+
+    async def _submit_webull_order(
+        self, *, user_id: int, symbol: str, side: str, quantity: int,
+    ) -> dict:
+        """Submit a market order via Webull. Returns a dict matching the Alpaca
+        order result shape for consistency, or raises on failure."""
+        from data.webull.trading import OrderRequest as WBOrderRequest
+
+        clients = await self._get_webull_clients(user_id, mode="paper")
+        if not clients:
+            raise RuntimeError("No Webull credentials found for user")
+
+        wb_req = WBOrderRequest(
+            symbol=symbol.upper(),
+            side=side.upper(),
+            qty=quantity,
+            order_type="MKT",
+            tif="DAY",
+        )
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: clients.trading.place_order(wb_req, user_confirmed=True),
+        )
+
+        if not result.success:
+            raise RuntimeError(f"Webull order failed: {result.error}")
+
+        return {
+            "id": result.order_id,
+            "client_order_id": result.client_order_id,
+            "status": "submitted",
+            "filled_avg_price": None,
+            "filled_qty": None,
+            "symbol": symbol.upper(),
+            "side": side.upper(),
+            "mode": result.mode,
         }
 
     def _is_market_open(self) -> bool:

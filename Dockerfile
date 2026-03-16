@@ -2,14 +2,14 @@ FROM python:3.11-slim AS api
 
 WORKDIR /app
 
-# System dependencies
+# System dependencies (includes grpcio build deps for Webull SDK)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl \
+    build-essential curl python3-dev cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies
 COPY requirements-docker.txt .
-RUN pip install --no-cache-dir -r requirements-docker.txt
+RUN pip install --no-cache-dir --prefer-binary -r requirements-docker.txt
 
 # Application code
 COPY . .

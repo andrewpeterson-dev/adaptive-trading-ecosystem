@@ -30,9 +30,15 @@ scipy==1.12.0
 alpaca-py==0.21.1
 websocket-client==1.7.0
 
-# NOTE: Webull SDK excluded from Docker build — requires grpcio source
-# compile on ARM (~10min). Install separately if needed:
-#   pip install webull-python-sdk-core webull-python-sdk-trade webull>=0.6.1
+# Webull Official OpenAPI SDK
+webull-python-sdk-core>=0.1.18
+webull-python-sdk-trade>=0.1.18
+webull-python-sdk-quotes-core>=0.1.18
+webull-python-sdk-mdata>=0.1.18
+webull-python-sdk-trade-events-core>=0.1.18
+
+# Webull unofficial (quote fallback)
+webull>=0.6.1
 
 # Visualization
 plotly==5.18.0
