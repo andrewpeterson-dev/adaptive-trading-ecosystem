@@ -307,7 +307,7 @@ class ReasoningEngine:
             return {
                 "decision": "EXECUTE",
                 "confidence": 0.5,
-                "reasoning": f"LLM unavailable — executing with safety-reduced size (paper mode)",
+                "reasoning": "LLM unavailable — executing with safety-reduced size (paper mode)",
                 "size_adjustment": 0.5,
                 "delay_seconds": 0,
                 "model_used": "safety_rules_fallback",

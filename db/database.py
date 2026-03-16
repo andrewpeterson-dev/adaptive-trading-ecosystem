@@ -26,7 +26,6 @@ _async_session_factory = None
 def _get_engine():
     global _engine
     if _engine is None:
-        import os
         from sqlalchemy.ext.asyncio import create_async_engine
 
         from sqlalchemy.pool import StaticPool
@@ -86,7 +85,6 @@ async def get_db():
 
 
 async def init_db():
-    import os
     settings = get_settings()
     is_sqlite = "sqlite" in settings.database_url
     async with _get_engine().begin() as conn:

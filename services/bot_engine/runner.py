@@ -27,7 +27,7 @@ from db.models import UserApiSettings, UserApiConnection, ApiProvider
 from services.activity_bus import BotActivityEvent, activity_bus
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
-from services.bot_engine.ai_evaluator import ai_evaluate_entries, AIEntrySignal
+from services.bot_engine.ai_evaluator import ai_evaluate_entries
 from services.reasoning_engine import ReasoningEngine
 from services.strategy_learning_engine import normalize_bot_config
 
