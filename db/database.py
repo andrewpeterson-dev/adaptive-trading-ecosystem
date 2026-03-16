@@ -92,6 +92,21 @@ async def init_db():
             await conn.execute(text("PRAGMA journal_mode=WAL"))
             await conn.execute(text("PRAGMA synchronous=NORMAL"))
         await conn.run_sync(Base.metadata.create_all)
+    # Ensure PostgreSQL enums have all values (must run outside transaction)
+    if not settings.use_sqlite:
+        try:
+            raw_engine = _get_engine()
+            async with raw_engine.connect() as raw_conn:
+                await raw_conn.execution_options(isolation_level="AUTOCOMMIT")
+                for val in ("paused", "deleted"):
+                    try:
+                        await raw_conn.execute(
+                            text(f"ALTER TYPE botstatus ADD VALUE IF NOT EXISTS '{val}'")
+                        )
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     # Compatibility shim for local/dev startups that call create_all directly
     # instead of running Alembic migrations against an existing database.
     await _ensure_auth_schema()

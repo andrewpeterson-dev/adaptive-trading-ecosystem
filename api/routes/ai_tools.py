@@ -66,7 +66,13 @@ async def _check_bot_limit(user_id: int) -> None:
         bot_result = await session.execute(
             select(func.count(CerberusBot.id)).where(
                 CerberusBot.user_id == user_id,
-                CerberusBot.status != BotStatus.DELETED,
+                CerberusBot.status.in_([
+                    BotStatus.DRAFT,
+                    BotStatus.RUNNING,
+                    BotStatus.PAUSED,
+                    BotStatus.STOPPED,
+                    BotStatus.ERROR,
+                ]),
             )
         )
         count = bot_result.scalar() or 0
