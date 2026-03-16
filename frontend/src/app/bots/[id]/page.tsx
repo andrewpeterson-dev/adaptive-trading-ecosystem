@@ -18,12 +18,9 @@ import {
   getTrackedSymbols,
   getTradeById,
   summarizeRisk,
-  type TimelineGranularity,
 } from "@/lib/bot-visualization";
 
 // Terminal panels
-import { DashboardLayout } from "@/components/terminal/DashboardLayout";
-import { TerminalPanel } from "@/components/terminal/TerminalPanel";
 import { PerformanceMetricsPanel } from "@/components/terminal/PerformanceMetricsPanel";
 import { OpenPositionsPanel } from "@/components/terminal/OpenPositionsPanel";
 import { RiskMetricsPanel } from "@/components/terminal/RiskMetricsPanel";
@@ -37,10 +34,6 @@ import { ChartPanel } from "@/components/terminal/ChartPanel";
 import { MarketContextPanel } from "@/components/terminal/MarketContextPanel";
 import { MarketScannerPanel } from "@/components/terminal/MarketScannerPanel";
 import { TradeInspectorModal } from "@/components/terminal/TradeInspectorModal";
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 
 export default function BotDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
@@ -70,19 +63,16 @@ export default function BotDetailPage() {
     if (botId) void load();
   }, [botId]);
 
-  const trackedSymbols = useMemo(
-    () => (detail ? getTrackedSymbols(detail) : []),
-    [detail],
-  );
+  const trackedSymbols = useMemo(() => (detail ? getTrackedSymbols(detail) : []), [detail]);
 
   useEffect(() => {
     if (!detail) return;
     const tradedSymbol = detail.trades.length > 0
-      ? detail.trades.reduce((best, t) => {
+      ? (() => {
           const counts: Record<string, number> = {};
           detail.trades.forEach(tr => { counts[tr.symbol] = (counts[tr.symbol] || 0) + 1; });
-          return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || best;
-        }, detail.primarySymbol)
+          return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+        })()
       : null;
     const fallback = tradedSymbol || detail.primarySymbol || trackedSymbols[0] || "SPY";
     setActiveSymbol((current) => (current && trackedSymbols.includes(current) ? current : fallback));
@@ -109,7 +99,6 @@ export default function BotDetailPage() {
     setInspectedTrade(trade);
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="app-page">
@@ -140,10 +129,10 @@ export default function BotDetailPage() {
   return (
     <div className="app-page">
       {/* ── Sticky Header ─────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-3 bg-background/80 backdrop-blur-xl border-b border-border/30">
+      <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-3 bg-background/90 backdrop-blur-xl border-b border-border/30">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/bots" className="rounded-lg border border-border/50 p-1.5 text-muted-foreground hover:text-foreground hover:border-border transition-colors">
+            <Link href="/bots" className="rounded-lg border border-border/50 p-1.5 text-muted-foreground hover:text-foreground hover:border-border transition-colors shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Link>
             <div className="min-w-0">
@@ -160,13 +149,11 @@ export default function BotDetailPage() {
                 <span className="app-pill font-mono text-[10px]">{formatTimeframe(config.timeframe)}</span>
                 <span className="app-pill font-mono text-[10px]">{riskSummary}</span>
               </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-xl">
                 {detail.overview || "No strategy description"}
-              </div>
+              </p>
             </div>
           </div>
-
-          {/* P&L hero metric */}
           <div className="text-right shrink-0">
             <div className={`text-2xl font-bold font-mono ${totalPnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
               {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(2)}
@@ -177,7 +164,7 @@ export default function BotDetailPage() {
           </div>
         </div>
 
-        {/* Tab navigation */}
+        {/* Tabs */}
         <div className="flex items-center gap-1 mt-3">
           {([
             { key: "terminal" as const, label: "Terminal", icon: LineChart },
@@ -208,81 +195,70 @@ export default function BotDetailPage() {
       {activeTab === "universe" && <UniverseTab botId={botId} />}
 
       {activeTab === "terminal" && (
-        <div className="mt-3">
-          <DashboardLayout>
-            {{
-              performance: (
-                <PerformanceMetricsPanel detail={detail} />
-              ),
-              capital: (
-                <CapitalPanel
-                  detail={detail}
-                  onDetailUpdate={(updates) => setDetail(prev => prev ? { ...prev, ...updates } : prev)}
-                />
-              ),
-              settings: (
-                <StrategySettingsPanel config={config} strategyType={detail.strategyType} />
-              ),
-              chart: (
-                <ChartPanel
-                  symbol={activeSymbol}
-                  trades={symbolTrades}
-                  selectedTrade={selectedTrade}
-                  hoveredTrade={hoveredTrade}
-                  selectedTradeId={selectedTradeId}
-                  onHoverTrade={setHoveredTradeId}
-                  onSelectTrade={setSelectedTradeId}
-                  equityCurve={detail.equityCurve}
-                  initialCapital={detail.allocatedCapital ?? 100000}
-                />
-              ),
-              positions: (
-                <OpenPositionsPanel
-                  performance={detail.performance}
-                  onSelectSymbol={(sym) => { setActiveSymbol(sym); setSelectedTradeId(null); }}
-                />
-              ),
-              risk: (
-                <RiskMetricsPanel config={config} />
-              ),
-              logic: (
-                <EntryLogicPanel
-                  conditions={(Array.isArray(config.conditions) ? config.conditions : []) as Array<Record<string, unknown>>}
-                  exitConditions={(Array.isArray(config.exit_conditions) ? config.exit_conditions : Array.isArray((config.ai_context as Record<string, unknown>)?.exit_conditions) ? (config.ai_context as Record<string, unknown>).exit_conditions : []) as Array<Record<string, unknown>>}
-                  stopLossPct={config.stop_loss_pct as number | undefined}
-                  takeProfitPct={config.take_profit_pct as number | undefined}
-                />
-              ),
-              universe: (
-                <UniversePanel
-                  symbols={trackedSymbols}
-                  activeSymbol={activeSymbol}
-                  onSymbolSelect={(sym) => { setActiveSymbol(sym); setSelectedTradeId(null); setHoveredTradeId(null); }}
-                  openPositionSymbols={openPositionSymbols}
-                />
-              ),
-              tradelog: (
-                <TradeLogPanel
-                  trades={detail.trades}
-                  selectedTradeId={selectedTradeId}
-                  onSelectTrade={handleSelectTrade}
-                />
-              ),
-              ai_decision: (
-                <AIReasoningPanel detail={detail} trade={selectedTrade} />
-              ),
-              market: (
-                <MarketContextPanel detail={detail} />
-              ),
-              scanner: (
-                <MarketScannerPanel
-                  symbols={trackedSymbols}
-                  trades={detail.trades}
-                  conditions={(Array.isArray(config.conditions) ? config.conditions : []) as Array<Record<string, unknown>>}
-                />
-              ),
-            }}
-          </DashboardLayout>
+        <div className="mt-4 space-y-4">
+          {/* Row 1: Performance + Capital + Settings */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_200px_200px]">
+            <PerformanceMetricsPanel detail={detail} />
+            <CapitalPanel
+              detail={detail}
+              onDetailUpdate={(updates) => setDetail(prev => prev ? { ...prev, ...updates } : prev)}
+            />
+            <StrategySettingsPanel config={config} strategyType={detail.strategyType} />
+          </div>
+
+          {/* Row 2: Chart + Sidebar (Positions, Risk, Logic) */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
+            <ChartPanel
+              symbol={activeSymbol}
+              trades={symbolTrades}
+              selectedTrade={selectedTrade}
+              hoveredTrade={hoveredTrade}
+              selectedTradeId={selectedTradeId}
+              onHoverTrade={setHoveredTradeId}
+              onSelectTrade={setSelectedTradeId}
+              equityCurve={detail.equityCurve}
+              initialCapital={detail.allocatedCapital ?? 100000}
+            />
+            <div className="space-y-4">
+              <OpenPositionsPanel
+                performance={detail.performance}
+                onSelectSymbol={(sym) => { setActiveSymbol(sym); setSelectedTradeId(null); }}
+              />
+              <RiskMetricsPanel config={config} />
+              <EntryLogicPanel
+                conditions={(Array.isArray(config.conditions) ? config.conditions : []) as Array<Record<string, unknown>>}
+                exitConditions={(Array.isArray(config.exit_conditions) ? config.exit_conditions : Array.isArray((config.ai_context as Record<string, unknown>)?.exit_conditions) ? (config.ai_context as Record<string, unknown>).exit_conditions : []) as Array<Record<string, unknown>>}
+                stopLossPct={config.stop_loss_pct as number | undefined}
+                takeProfitPct={config.take_profit_pct as number | undefined}
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Universe + Market Context + Scanner */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <UniversePanel
+              symbols={trackedSymbols}
+              activeSymbol={activeSymbol}
+              onSymbolSelect={(sym) => { setActiveSymbol(sym); setSelectedTradeId(null); setHoveredTradeId(null); }}
+              openPositionSymbols={openPositionSymbols}
+            />
+            <MarketContextPanel detail={detail} />
+            <MarketScannerPanel
+              symbols={trackedSymbols}
+              trades={detail.trades}
+              conditions={(Array.isArray(config.conditions) ? config.conditions : []) as Array<Record<string, unknown>>}
+            />
+          </div>
+
+          {/* Row 4: Trade Log + AI Decision */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <TradeLogPanel
+              trades={detail.trades}
+              selectedTradeId={selectedTradeId}
+              onSelectTrade={handleSelectTrade}
+            />
+            <AIReasoningPanel detail={detail} trade={selectedTrade} />
+          </div>
         </div>
       )}
 
