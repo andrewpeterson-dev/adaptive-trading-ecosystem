@@ -9,7 +9,6 @@ import asyncio
 import time
 import uuid
 from datetime import datetime, time as dtime
-from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import structlog
