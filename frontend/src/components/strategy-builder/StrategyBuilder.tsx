@@ -123,10 +123,10 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   const [description, setDescription] = useState("");
   const [action, setAction] = useState<Action>("BUY");
   const [timeframe, setTimeframe] = useState("1D");
-  const [strategyType, setStrategyType] = useState<StrategyType>("manual");
+  const [strategyType, setStrategyType] = useState<StrategyType>("ai_generated");
   const [sourcePrompt, setSourcePrompt] = useState("");
   const [aiContext, setAiContext] = useState<StrategyAiContext>({});
-  const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
+  const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(true);
 
   // Condition groups (primary state — replaces flat conditions[])
   const [conditionGroups, setConditionGroups] = useState<ConditionGroup[]>([emptyGroup(0)]);
@@ -1050,8 +1050,8 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
-        <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[3fr_minmax(340px,2fr)]">
+        <div className="min-w-0 space-y-4">
           <div className="app-panel p-5 sm:p-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
@@ -1507,7 +1507,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           </AccordionSection>
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-[calc(var(--status-bar-height)+1.75rem)] lg:self-start lg:max-h-[calc(100vh-var(--status-bar-height)-3rem)] lg:overflow-y-auto">
+        <div className="space-y-4 xl:sticky xl:top-[calc(var(--status-bar-height)+1.75rem)] xl:self-start xl:max-h-[calc(100vh-var(--status-bar-height)-3rem)] xl:overflow-y-auto">
           {/* Logic Preview — always visible in the right panel */}
           <div className="app-panel space-y-3 p-4 sm:p-5">
             <div className="flex items-center justify-between">

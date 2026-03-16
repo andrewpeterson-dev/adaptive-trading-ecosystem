@@ -104,11 +104,41 @@ export function PortfolioRiskPanel() {
       {loading && <SkeletonBlock />}
 
       {!loading && error && (
-        <EmptyState title="Unable to load portfolio analytics" className="py-6" />
+        <EmptyState title="Unable to load portfolio analytics" description="Check your broker connection and try refreshing." className="py-6" />
       )}
 
       {!loading && !error && !data && (
-        <EmptyState title="No analytics data available" className="py-6" />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Badge className={RATING_COLORS.moderate}>
+              <span className="opacity-50">Moderate Risk</span>
+            </Badge>
+            <span className="text-[9px] font-semibold px-2 py-0.5 rounded uppercase tracking-widest bg-muted/30 text-slate-500 border border-dashed border-border/50">
+              Example
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 rounded-[20px] border border-dashed border-border/50 bg-muted/10 p-4 opacity-40">
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">VaR 95%</span>
+              <div className="text-base font-mono tabular-nums font-semibold">2.14%</div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Beta</span>
+              <div className="text-base font-mono tabular-nums font-semibold">1.05</div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">CVaR</span>
+              <div className="text-base font-mono tabular-nums font-semibold">3.42%</div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Max DD</span>
+              <div className="text-base font-mono tabular-nums font-semibold">8.70%</div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 text-center leading-relaxed">
+            Risk metrics populate once you have open positions. Deploy a strategy to see VaR, Beta, CVaR, and drawdown analytics.
+          </p>
+        </div>
       )}
 
       {!loading && !error && data && (

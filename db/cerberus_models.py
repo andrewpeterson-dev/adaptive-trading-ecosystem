@@ -257,6 +257,7 @@ class CerberusBot(Base):
     learning_enabled = Column(Boolean, default=True)
     learning_status_json = Column(JSON, default=dict)
     last_optimization_at = Column(DateTime, nullable=True)
+    allocated_capital = Column(Float, nullable=True, default=None)
     reasoning_model_config = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

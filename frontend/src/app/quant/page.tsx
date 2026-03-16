@@ -306,10 +306,23 @@ export default function QuantPage() {
         <div className="app-panel">
           <EmptyState
             icon={<BarChart3 className="h-5 w-5 text-muted-foreground/70" />}
-            title="No performance data available"
-            description="Run your strategies in paper or live mode to generate performance data for comparison."
-            className="py-12"
+            title="No performance data yet"
+            description="Strategy performance comparisons will appear here once your bots have completed trades. Deploy and run a strategy to see analytics."
+            className="py-8"
           />
+          <div className="px-5 pb-5 space-y-3 opacity-25 pointer-events-none">
+            <div className="rounded-xl border border-dashed border-border/50 bg-muted/10 p-4 h-36 flex items-center justify-center text-xs text-muted-foreground">
+              Equity curve comparison preview
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-dashed border-border/50 bg-muted/10 p-4 h-28 flex items-center justify-center text-xs text-muted-foreground">
+                Radar chart
+              </div>
+              <div className="rounded-xl border border-dashed border-border/50 bg-muted/10 p-4 h-28 flex items-center justify-center text-xs text-muted-foreground">
+                Key metrics
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -434,8 +447,8 @@ export default function QuantPage() {
               ) : (
                 <EmptyState
                   icon={<Brain className="h-5 w-5 text-muted-foreground/70" />}
-                  title="No comparable radar metrics"
-                  description="The radar chart only renders metrics that are available for every selected strategy."
+                  title="Insufficient radar metrics"
+                  description="The radar chart requires complete metrics (Sharpe, win rate, return, etc.) across all selected strategies. Run more trades to generate full analytics."
                   className="py-12"
                 />
               )}
@@ -611,7 +624,7 @@ export default function QuantPage() {
           <EmptyState
             icon={<Brain className="h-5 w-5 text-muted-foreground/70" />}
             title="No strategies to compare yet"
-            description="Build and save a strategy first, then return here to compare risk, return, and AI confidence."
+            description="Strategy performance comparisons will appear here once your bots have completed trades. Deploy and run a strategy to see analytics like Sharpe ratios, equity curves, and radar plots."
             action={
               <Button asChild variant="primary" size="sm">
                 <Link href="/">

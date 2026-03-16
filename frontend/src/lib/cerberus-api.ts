@@ -52,6 +52,7 @@ export interface BotSummary {
   learningStatus: BotLearningStatus;
   currentVersion: BotVersionSummary | null;
   latestDecision: BotLatestDecision | null;
+  allocatedCapital: number | null;
 }
 
 export interface BotVersionSummary {
@@ -107,6 +108,7 @@ export interface BotDetail extends BotSummary {
     resultVersionId?: string | null;
     createdAt: string | null;
   }>;
+  aiCapitalManagement?: boolean;
 }
 
 export interface GeneratedStrategyResponse {
@@ -201,13 +203,35 @@ export async function deployBot(
   botId: string,
   universeConfig?: Record<string, unknown>,
   overrideLevel?: string,
+  allocatedCapital?: number | null,
 ): Promise<{ bot_id: string; status: string }> {
   return apiFetch(`/api/ai/tools/bots/${botId}/deploy`, {
     method: 'POST',
     body: JSON.stringify({
       ...(universeConfig ? { universe_config: universeConfig } : {}),
       ...(overrideLevel ? { override_level: overrideLevel } : {}),
+      ...(allocatedCapital != null ? { allocated_capital: allocatedCapital } : {}),
     }),
+  });
+}
+
+export async function updateBotCapital(
+  botId: string,
+  allocatedCapital: number | null,
+): Promise<{ bot_id: string; allocated_capital: number | null }> {
+  return apiFetch(`/api/ai/tools/bots/${botId}/capital`, {
+    method: 'PATCH',
+    body: JSON.stringify({ allocated_capital: allocatedCapital }),
+  });
+}
+
+export async function updateAiCapitalManagement(
+  botId: string,
+  enabled: boolean,
+): Promise<{ bot_id: string; ai_capital_management: boolean }> {
+  return apiFetch(`/api/ai/tools/bots/${botId}/ai-capital`, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
   });
 }
 

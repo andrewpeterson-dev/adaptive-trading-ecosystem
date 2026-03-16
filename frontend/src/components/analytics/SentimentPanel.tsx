@@ -86,8 +86,13 @@ export function SentimentPanel() {
       )}
 
       {!loading && !error && (!report || !report.market_mood) && (
-        <div className="py-6 text-center text-muted-foreground text-sm">
-          No sentiment data available
+        <div className="py-6 space-y-3 text-center">
+          <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-muted/30 border border-dashed border-border/50 mx-auto">
+            <Newspaper className="h-4 w-4 text-muted-foreground/40" />
+          </div>
+          <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            Market sentiment data updates every 60 seconds during market hours. Check back when markets are open.
+          </p>
         </div>
       )}
 

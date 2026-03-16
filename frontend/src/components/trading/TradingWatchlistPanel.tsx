@@ -14,7 +14,7 @@ import type { Quote } from "@/types/trading";
 async function fetchWatchlistQuotes(symbols: string[]): Promise<Quote[]> {
   if (symbols.length === 0) return [];
   const response = await apiFetch<{ quotes: Quote[] }>(
-    `/api/trading/quotes?symbols=${encodeURIComponent(symbols.join(","))}`,
+    `/api/trading/quotes?symbols=${symbols.map((s) => encodeURIComponent(s)).join(",")}`,
   );
   return response.quotes || [];
 }

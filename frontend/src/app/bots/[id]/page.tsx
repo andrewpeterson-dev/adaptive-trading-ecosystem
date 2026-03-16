@@ -232,6 +232,7 @@ export default function BotDetailPage() {
             setHoveredTradeId(null);
           }}
           selectedTrade={selectedTrade}
+          onDetailUpdate={(updates) => setDetail((prev) => prev ? { ...prev, ...updates } : prev)}
         />
 
         <div className="space-y-6">

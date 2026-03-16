@@ -34,8 +34,28 @@ export function EarningsCalendar() {
             Earnings calendar unavailable. {error}
           </div>
         ) : events.length === 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            No upcoming earnings events
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
+              <Calendar className="h-4 w-4 text-amber-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Earnings calendar data requires a Finnhub API key. Add one in Settings &rarr; API Connections to see upcoming earnings for your watchlist symbols.
+            </p>
+            <div className="space-y-2 opacity-30 pointer-events-none pt-1">
+              {[
+                { symbol: "AAPL", headline: "Apple Inc. Q2 Earnings", date: "Apr 24", impact: "HIGH" },
+                { symbol: "MSFT", headline: "Microsoft Q3 Earnings", date: "Apr 29", impact: "HIGH" },
+              ].map((ex) => (
+                <div key={ex.symbol} className="flex items-center gap-3 rounded-xl border border-border/40 bg-muted/5 px-3.5 py-2.5">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${IMPACT_DOT[ex.impact as keyof typeof IMPACT_DOT] ?? IMPACT_DOT.LOW}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{ex.headline}</p>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground">{ex.date}</div>
+                    <span className="font-mono text-[10px] text-muted-foreground">{ex.symbol}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           events.map((evt) => (

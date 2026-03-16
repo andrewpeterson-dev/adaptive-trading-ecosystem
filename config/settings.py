@@ -23,6 +23,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # --- Database ---
@@ -34,15 +35,15 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Async database URL. Checks DATABASE_URL env var first (Railway/Heroku)."""
+        """Async database URL. Prioritizes use_sqlite for local dev."""
+        if self.use_sqlite:
+            return "sqlite+aiosqlite:///trading_ecosystem.db"
         raw = os.environ.get("DATABASE_URL", "")
         if raw:
             # Railway gives postgresql:// — asyncpg needs postgresql+asyncpg://
             if raw.startswith("postgresql://"):
                 return raw.replace("postgresql://", "postgresql+asyncpg://", 1)
             return raw
-        if self.use_sqlite:
-            return "sqlite+aiosqlite:///trading_ecosystem.db"
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -50,17 +51,16 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
-        """Sync database URL for Alembic. Checks DATABASE_URL env var first."""
+        """Sync database URL for Alembic. Prioritizes use_sqlite for local dev."""
+        if self.use_sqlite:
+            return "sqlite:///trading_ecosystem.db"
         raw = os.environ.get("DATABASE_URL", "")
         if raw:
             if raw.startswith("postgresql://"):
                 return raw.replace("postgresql://", "postgresql+psycopg2://", 1)
-            # If already has +asyncpg, swap to psycopg2
             if "+asyncpg" in raw:
                 return raw.replace("+asyncpg", "+psycopg2")
             return raw
-        if self.use_sqlite:
-            return "sqlite:///trading_ecosystem.db"
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

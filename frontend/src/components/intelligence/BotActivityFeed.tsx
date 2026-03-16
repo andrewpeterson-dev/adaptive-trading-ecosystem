@@ -101,9 +101,16 @@ export function BotActivityFeed() {
 
       <div className="mt-4 max-h-[340px] space-y-2.5 overflow-y-auto scrollbar-thin">
         {events.length === 0 && (
-          <p className="py-8 text-center text-xs text-muted-foreground/60">
-            {connected ? "Waiting for bot activity..." : "Connecting..."}
-          </p>
+          <div className="py-6 text-center space-y-2">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-muted/20 border border-dashed border-border/50 mx-auto">
+              <Activity className="h-4 w-4 text-muted-foreground/40" />
+            </div>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+              {connected
+                ? "Listening for bot activity. Trade executions, safety blocks, and candidate signals will appear here in real time."
+                : "Connecting to the live activity stream..."}
+            </p>
+          </div>
         )}
         {events.map((evt, i) => {
           const Icon = EVENT_ICONS[evt.event_type] ?? Activity;

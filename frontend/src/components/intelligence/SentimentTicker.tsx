@@ -61,8 +61,29 @@ export function SentimentTicker() {
             Sentiment feed unavailable. {error}
           </div>
         ) : sentiments.length === 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            No sentiment signals detected
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-cyan-400/5 border border-dashed border-cyan-400/20 mx-auto">
+              <MessageCircle className="h-4 w-4 text-cyan-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Market sentiment data updates every 2 minutes during market hours. Check back when markets are open.
+            </p>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3 opacity-30 pointer-events-none pt-1">
+              {[
+                { symbol: "AAPL", sentiment: "bullish" as const, score: 72 },
+                { symbol: "TSLA", sentiment: "bearish" as const, score: 61 },
+                { symbol: "NVDA", sentiment: "bullish" as const, score: 84 },
+              ].map((s) => {
+                const colors = SENTIMENT_COLORS[s.sentiment];
+                return (
+                  <div key={s.symbol} className={`rounded-xl border ${colors.border} ${colors.bg} p-3 text-center`}>
+                    <div className="font-mono text-sm font-semibold text-foreground">{s.symbol}</div>
+                    <div className={`mt-1 text-xs font-semibold uppercase tracking-wider ${colors.text}`}>{s.sentiment}</div>
+                    <div className="mt-1 text-[10px] font-mono text-muted-foreground">{s.score}% {s.sentiment === "bullish" ? "bull" : "bear"}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3">

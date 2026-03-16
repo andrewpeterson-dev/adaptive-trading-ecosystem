@@ -39,8 +39,13 @@ export function NewsFeed() {
             News feed unavailable. {error}
           </div>
         ) : news.length === 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            No news events detected yet
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-2">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-blue-400/5 border border-dashed border-blue-400/20 mx-auto">
+              <Newspaper className="h-4 w-4 text-blue-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Financial news headlines will stream here during market hours. The feed aggregates from multiple sources and highlights tickers relevant to your watchlist.
+            </p>
           </div>
         ) : (
           news.map((item) => (

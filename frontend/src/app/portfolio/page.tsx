@@ -105,7 +105,7 @@ export default function PortfolioPage() {
           <EmptyState
             icon={<Unplug className="h-5 w-5 text-muted-foreground/70" />}
             title="Portfolio analytics are unavailable"
-            description="Train models and connect a broker to view portfolio analytics, equity curves, and allocation breakdowns."
+            description="Your equity curve, capital allocation chart, and model performance table will populate here once you connect a broker and deploy strategies. Start by building a strategy and running it in paper mode."
           />
         </div>
       );
@@ -184,7 +184,7 @@ export default function PortfolioPage() {
             <EmptyState
               icon={<Layers className="h-5 w-5 text-muted-foreground/70" />}
               title="No models trained yet"
-              description="Train a model to unlock live allocation, equity, and regime analytics."
+              description="Once you train a model, this table will show Sharpe ratios, win rates, max drawdowns, and total returns for each active model in your portfolio."
               className="py-12"
             />
           ) : (

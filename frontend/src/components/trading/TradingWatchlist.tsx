@@ -28,7 +28,7 @@ export function TradingWatchlist() {
 
       try {
         const data = await apiFetch<{ quotes: Quote[] }>(
-          `/api/trading/quotes?symbols=${watchlist.join(",")}`,
+          `/api/trading/quotes?symbols=${watchlist.map((s) => encodeURIComponent(s)).join(",")}`,
         );
         if (cancelled) return;
         setQuotes(

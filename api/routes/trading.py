@@ -965,51 +965,105 @@ async def get_quotes(
     symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     user_id = getattr(request.state, "user_id", None)
 
+    quotes: list[dict] = []
+    resolved_symbols: set[str] = set()
+
+    # 1. Try Webull SDK (per-user, authenticated) for all symbols
     if user_id:
         mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
         wb = await _get_user_webull_client(user_id, _wb_mode(mode))
         if wb:
-            raw = await asyncio.to_thread(wb.market_data.get_quotes, symbol_list)
-            quotes = []
-            for sym in symbol_list:
-                q = raw.get(sym, {})
-                if q:
+            try:
+                raw = await asyncio.to_thread(wb.market_data.get_quotes, symbol_list)
+                for sym in symbol_list:
+                    q = raw.get(sym, {})
+                    if q:
+                        quotes.append({
+                            "symbol": sym,
+                            "price": q.get("price", q.get("close", 0)),
+                            "change": q.get("change", 0),
+                            "change_pct": q.get("change_pct", 0),
+                            "volume": q.get("volume", 0),
+                            "high": q.get("high", 0),
+                            "low": q.get("low", 0),
+                            "open": q.get("open", 0),
+                            "prev_close": q.get("prev_close", 0),
+                        })
+                        resolved_symbols.add(sym)
+            except Exception as e:
+                logger.warning("webull_quotes_failed", error=str(e))
+
+    # 2. Fall back for any symbols not resolved by Webull
+    missing = [s for s in symbol_list if s not in resolved_symbols]
+    if missing:
+        try:
+            import yfinance as yf
+            for sym in missing:
+                try:
+                    ticker = yf.Ticker(sym)
+                    fast_info = getattr(ticker, "fast_info", None)
+                    info = getattr(ticker, "info", None) or {}
+                    fi = dict(fast_info) if fast_info else {}
+                    price = (
+                        fi.get("lastPrice", fi.get("last_price"))
+                        or info.get("currentPrice")
+                        or info.get("regularMarketPrice")
+                        or 0
+                    )
+                    prev_close = (
+                        fi.get("previousClose", fi.get("previous_close"))
+                        or info.get("regularMarketPreviousClose")
+                        or price
+                    )
+                    change = float(price or 0) - float(prev_close or 0)
+                    change_pct = (change / float(prev_close)) * 100 if prev_close else 0.0
+                    volume = int(float(
+                        fi.get("lastVolume", fi.get("last_volume"))
+                        or info.get("regularMarketVolume")
+                        or info.get("volume")
+                        or 0
+                    ))
                     quotes.append({
                         "symbol": sym,
-                        "price": q.get("price", q.get("close", 0)),
-                        "change": q.get("change", 0),
-                        "change_pct": q.get("change_pct", 0),
-                        "volume": q.get("volume", 0),
-                        "high": q.get("high", 0),
-                        "low": q.get("low", 0),
-                        "open": q.get("open", 0),
-                        "prev_close": q.get("prev_close", 0),
+                        "price": round(float(price or 0), 4),
+                        "change": round(float(change), 4),
+                        "change_pct": round(float(change_pct), 4),
+                        "volume": volume,
+                        "high": float(fi.get("dayHigh", fi.get("day_high")) or info.get("dayHigh") or 0),
+                        "low": float(fi.get("dayLow", fi.get("day_low")) or info.get("dayLow") or 0),
+                        "open": float(info.get("open") or 0),
+                        "prev_close": round(float(prev_close or 0), 4),
                     })
-            return {"quotes": quotes}
+                    resolved_symbols.add(sym)
+                except Exception as e:
+                    logger.warning("yfinance_quote_failed", symbol=sym, error=str(e))
+        except ImportError:
+            logger.warning("yfinance_not_available")
 
-    # Fallback: unofficial webull SDK (no auth needed)
-    try:
-        from webull import webull
-        wb = webull()
-        quotes = []
-        for sym in symbol_list:
-            raw = wb.get_quote(sym)
-            if raw:
-                quotes.append({
-                    "symbol": sym,
-                    "price": float(raw.get("close", 0)),
-                    "change": float(raw.get("change", 0)),
-                    "change_pct": float(raw.get("changeRatio", 0)) * 100,
-                    "volume": int(float(raw.get("volume", 0))),
-                    "high": float(raw.get("high", 0)),
-                    "low": float(raw.get("low", 0)),
-                    "open": float(raw.get("open", 0)),
-                    "prev_close": float(raw.get("preClose", 0)),
-                })
-        return {"quotes": quotes}
-    except Exception as e:
-        logger.warning("quote_fallback_failed", error=str(e))
-        return {"quotes": []}
+    # 3. Last resort: unofficial webull SDK for still-missing symbols
+    still_missing = [s for s in symbol_list if s not in resolved_symbols]
+    if still_missing:
+        try:
+            from webull import webull as WebullUnofficial
+            uwb = WebullUnofficial()
+            for sym in still_missing:
+                raw = uwb.get_quote(sym)
+                if raw:
+                    quotes.append({
+                        "symbol": sym,
+                        "price": float(raw.get("close", 0)),
+                        "change": float(raw.get("change", 0)),
+                        "change_pct": float(raw.get("changeRatio", 0)) * 100,
+                        "volume": int(float(raw.get("volume", 0))),
+                        "high": float(raw.get("high", 0)),
+                        "low": float(raw.get("low", 0)),
+                        "open": float(raw.get("open", 0)),
+                        "prev_close": float(raw.get("preClose", 0)),
+                    })
+        except Exception as e:
+            logger.warning("quote_fallback_failed", error=str(e))
+
+    return {"quotes": quotes}
 
 
 @router.get("/quote")
@@ -1118,6 +1172,21 @@ async def get_trading_status(request: Request, symbol: str = Query("SPY")):
         "market_data": market_status,
         "order_routing": order_status,
     }
+
+
+@router.get("/execute")
+async def execute_signal_get():
+    """Return a helpful 405 when someone hits /execute with GET."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=405,
+        content={
+            "error": "Use POST to submit trade orders",
+            "method": "POST",
+            "required_fields": ["symbol", "side", "quantity"],
+        },
+    )
 
 
 @router.post("/execute")

@@ -107,6 +107,7 @@ class ExecuteTradeRequest(BaseModel):
 class DeployBotRequest(BaseModel):
     universe_config: Optional[dict[str, Any]] = Field(default=None)
     override_level: Optional[str] = Field(default=None, pattern=r"^(advisory|soft|full)$")
+    allocated_capital: Optional[float] = Field(default=None, ge=0, description="Capital allocated to this bot in dollars")
 
 
 class DeployFromStrategyRequest(BaseModel):
@@ -588,6 +589,7 @@ async def list_bots(request: Request):
                     "learningStatus": _learning_status(bot, config or {}, metrics),
                     "currentVersion": _version_to_dict(version) if version else None,
                     "latestDecision": latest_decision_dict,
+                    "allocatedCapital": bot.allocated_capital,
                 }
             )
 
@@ -727,6 +729,8 @@ async def get_bot_detail(bot_id: str, request: Request):
         "trades": [_serialize_trade(trade, config) for trade in trades[:50]],
         "versionHistory": [_version_to_dict(version) for version in versions],
         "optimizationHistory": [_optimization_run_to_dict(run) for run in optimization_runs],
+        "allocatedCapital": bot.allocated_capital,
+        "aiCapitalManagement": bool(bot.reasoning_model_config and bot.reasoning_model_config.get("ai_capital_management")),
     }
 
 
@@ -785,10 +789,12 @@ async def deploy_bot(bot_id: str, request: Request, body: Optional[DeployBotRequ
             version.universe_config = body.universe_config
         if body.override_level is not None:
             version.override_level = body.override_level
+        if body.allocated_capital is not None:
+            bot.allocated_capital = body.allocated_capital
         bot.learning_enabled = bool((config.get("learning") or {}).get("enabled", False))
         bot.status = BotStatus.RUNNING
 
-    logger.info("bot_deployed", bot_id=bot_id, user_id=user_id)
+    logger.info("bot_deployed", bot_id=bot_id, user_id=user_id, allocated_capital=body.allocated_capital)
     return {"bot_id": bot_id, "status": "running"}
 
 
@@ -809,6 +815,50 @@ async def stop_bot(bot_id: str, request: Request):
 
     logger.info("bot_stopped", bot_id=bot_id, user_id=user_id)
     return {"bot_id": bot_id, "status": "stopped"}
+
+
+@router.patch("/bots/{bot_id}/capital")
+async def update_bot_capital(bot_id: str, request: Request):
+    """Update allocated capital for a bot."""
+    user_id = request.state.user_id
+    body = await request.json()
+    allocated_capital = body.get("allocated_capital")
+    if allocated_capital is not None and (not isinstance(allocated_capital, (int, float)) or allocated_capital < 0):
+        raise HTTPException(status_code=400, detail="allocated_capital must be a non-negative number")
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        bot.allocated_capital = float(allocated_capital) if allocated_capital is not None else None
+
+    logger.info("bot_capital_updated", bot_id=bot_id, user_id=user_id, allocated_capital=allocated_capital)
+    return {"bot_id": bot_id, "allocated_capital": allocated_capital}
+
+
+@router.patch("/bots/{bot_id}/ai-capital")
+async def update_ai_capital_management(bot_id: str, request: Request):
+    """Toggle AI-managed capital allocation for a bot."""
+    user_id = request.state.user_id
+    body = await request.json()
+    enabled = bool(body.get("enabled", False))
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        config = bot.reasoning_model_config if isinstance(bot.reasoning_model_config, dict) else {}
+        config["ai_capital_management"] = enabled
+        bot.reasoning_model_config = config
+
+    logger.info("bot_ai_capital_toggled", bot_id=bot_id, user_id=user_id, enabled=enabled)
+    return {"bot_id": bot_id, "ai_capital_management": enabled}
 
 
 @router.post("/confirm-trade")

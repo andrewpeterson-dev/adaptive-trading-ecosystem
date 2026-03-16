@@ -48,8 +48,32 @@ export function SectorMomentum() {
             Sector momentum unavailable. {error}
           </div>
         ) : sectors.length === 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            No significant sector moves
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-violet-400/5 border border-dashed border-violet-400/20 mx-auto">
+              <BarChart3 className="h-4 w-4 text-violet-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Sector momentum tracking activates during market hours with real-time ETF data.
+            </p>
+            <div className="space-y-2 opacity-30 pointer-events-none pt-1">
+              {[
+                { symbol: "XLK", move: 1.24 },
+                { symbol: "XLF", move: -0.87 },
+                { symbol: "XLE", move: 0.53 },
+              ].map((s) => (
+                <div key={s.symbol} className="flex items-center gap-3">
+                  <span className="w-12 shrink-0 text-right font-mono text-xs font-medium text-muted-foreground">{s.symbol}</span>
+                  <div className="flex-1">
+                    <div className="h-5 w-full overflow-hidden rounded-md bg-muted/20">
+                      <div className={`h-full rounded-md ${s.move >= 0 ? "bg-emerald-400/60" : "bg-rose-400/60"}`} style={{ width: `${(Math.abs(s.move) / 1.5) * 100}%` }} />
+                    </div>
+                  </div>
+                  <span className={`w-16 shrink-0 text-right font-mono text-xs font-semibold ${s.move >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {s.move >= 0 ? "+" : ""}{s.move.toFixed(2)}%
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           sectors.map((s) => {

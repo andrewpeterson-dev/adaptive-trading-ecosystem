@@ -103,6 +103,7 @@ export function BotControlPanel() {
         bot.id,
         config.universeConfig as unknown as Record<string, unknown>,
         config.overrideLevel,
+        config.allocatedCapital,
       );
       setBots((prev) =>
         prev.map((item) =>
@@ -289,6 +290,9 @@ export function BotControlPanel() {
                           Array.isArray(bot.config.symbols) &&
                           (bot.config.symbols as string[]).length > 0
                             ? (bot.config.symbols as string[]).slice(0, 3).join(", ")
+                            : "",
+                          bot.allocatedCapital
+                            ? `$${bot.allocatedCapital.toLocaleString()}`
                             : "",
                         ]
                           .filter(Boolean)

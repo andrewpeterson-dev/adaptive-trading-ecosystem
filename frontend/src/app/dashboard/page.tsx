@@ -252,35 +252,70 @@ export default function DashboardPage() {
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
               Account Summary
             </div>
-            <div className="border-b border-border/40 pb-4">
-              <div className="text-xs text-muted-foreground mb-1">Total Equity</div>
-              <div className="text-3xl font-mono font-bold tabular-nums tracking-tight">
-                {formatCurrency(account.equity)}
+            {account.equity === 0 && account.cash === 0 && account.portfolio_value === 0 ? (
+              <div className="space-y-3">
+                <div className="border border-dashed border-border/60 rounded-xl p-4 text-center space-y-2">
+                  <div className="text-3xl font-mono font-bold tabular-nums tracking-tight text-muted-foreground/30">
+                    $0
+                  </div>
+                  <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+                    Your portfolio metrics will appear here once your first bot executes a trade. Deploy a strategy to get started.
+                  </p>
+                  <Link
+                    href="/"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors"
+                  >
+                    Build a strategy &rarr;
+                  </Link>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="app-inset p-3 border border-dashed border-border/40">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Cash</div>
+                    <div className="break-words text-sm font-mono font-semibold tabular-nums text-muted-foreground/30">$0</div>
+                  </div>
+                  <div className="app-inset p-3 border border-dashed border-border/40">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Buying Power</div>
+                    <div className="break-words text-sm font-mono font-semibold tabular-nums text-muted-foreground/30">$0</div>
+                  </div>
+                  <div className="app-inset p-3 border border-dashed border-border/40">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Portfolio</div>
+                    <div className="break-words text-sm font-mono font-semibold tabular-nums text-muted-foreground/30">$0</div>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                <span className="font-mono">+$0 (0.0%)</span> today
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="app-inset p-3">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Cash</div>
-                <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.cash)}</div>
-              </div>
-              <div className="app-inset p-3">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Buying Power</div>
-                <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.buying_power)}</div>
-              </div>
-              <div className="app-inset p-3">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Portfolio</div>
-                <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.portfolio_value)}</div>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="border-b border-border/40 pb-4">
+                  <div className="text-xs text-muted-foreground mb-1">Total Equity</div>
+                  <div className="text-3xl font-mono font-bold tabular-nums tracking-tight">
+                    {formatCurrency(account.equity)}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    <span className="font-mono">+$0 (0.0%)</span> today
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="app-inset p-3">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Cash</div>
+                    <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.cash)}</div>
+                  </div>
+                  <div className="app-inset p-3">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Buying Power</div>
+                    <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.buying_power)}</div>
+                  </div>
+                  <div className="app-inset p-3">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Portfolio</div>
+                    <div className="break-words text-sm font-mono font-semibold tabular-nums">{formatCurrency(account.portfolio_value)}</div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
         <CombinedLedgerCard />
 
-        {risk && (
+        {risk ? (
           <div className="app-panel p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
@@ -320,6 +355,36 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        ) : (
+          <div className="app-panel p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                Risk Status
+              </div>
+              <span className="text-[9px] font-semibold px-2 py-0.5 rounded uppercase tracking-widest bg-muted/30 text-slate-500 border border-dashed border-border/50">
+                Example
+              </span>
+            </div>
+            <div className="space-y-4 opacity-40 pointer-events-none">
+              <GaugeBar value={0.032} max={0.15} label="Drawdown" />
+              <GaugeBar value={0.45} max={1.0} label="Exposure" />
+              <div className="space-y-1.5 pt-1 border-t border-border/40">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Trades this hour</span>
+                  <span className="font-mono font-semibold tabular-nums">
+                    3
+                    <span className="text-muted-foreground font-normal"> / 30</span>
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-border/40 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-500" style={{ width: "10%" }} />
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 text-center pt-1">
+              Live risk gauges activate once your bots begin trading.
+            </p>
+          </div>
         )}
       </div>
 
@@ -333,15 +398,37 @@ export default function DashboardPage() {
       <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
         <SectionHeader count={positions.length}>Open Positions</SectionHeader>
         {positions.length === 0 ? (
-          <div className="py-16 flex flex-col items-center gap-3 text-center">
-            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/50 border border-border/50">
-              <TrendingUp className="h-5 w-5 text-muted-foreground/50" />
+          <div className="py-10 flex flex-col items-center gap-3 text-center">
+            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/30 border border-dashed border-border/50">
+              <TrendingUp className="h-5 w-5 text-muted-foreground/40" />
             </div>
             <div>
               <div className="text-sm font-medium text-muted-foreground">No open positions</div>
-              <div className="text-xs text-muted-foreground/60 mt-0.5">Execute a trade to open a position</div>
+              <div className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                Your holdings will appear here with real-time P&L once you execute a trade or deploy a bot.
+              </div>
             </div>
-            <Link href="/trade" className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors">
+            <div className="w-full max-w-md opacity-20 pointer-events-none mt-2">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground uppercase tracking-widest">
+                    <th className="py-2 px-3 font-semibold">Symbol</th>
+                    <th className="py-2 px-3 font-semibold">Qty</th>
+                    <th className="py-2 px-3 font-semibold">Entry</th>
+                    <th className="py-2 px-3 font-semibold">P&L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-border/40">
+                    <td className="py-2 px-3 font-mono text-sm">AAPL</td>
+                    <td className="py-2 px-3 font-mono text-sm">25</td>
+                    <td className="py-2 px-3 font-mono text-sm">$187.50</td>
+                    <td className="py-2 px-3 font-mono text-sm text-emerald-400">+$42.50</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <Link href="/trade" className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors">
               Go to Trade &rarr;
             </Link>
           </div>
@@ -391,13 +478,15 @@ export default function DashboardPage() {
       <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
         <SectionHeader count={orders.length}>Recent Orders</SectionHeader>
         {orders.length === 0 ? (
-          <div className="py-16 flex flex-col items-center gap-3 text-center">
-            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/50 border border-border/50">
-              <Receipt className="h-5 w-5 text-muted-foreground/50" />
+          <div className="py-10 flex flex-col items-center gap-3 text-center">
+            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/30 border border-dashed border-border/50">
+              <Receipt className="h-5 w-5 text-muted-foreground/40" />
             </div>
             <div>
               <div className="text-sm font-medium text-muted-foreground">No recent orders</div>
-              <div className="text-xs text-muted-foreground/60 mt-0.5">Place your first order to see activity here</div>
+              <div className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                Your order history with fills, statuses, and timestamps will appear here once you place a trade manually or through a bot.
+              </div>
             </div>
             <Link href="/trade" className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors">
               Place your first order &rarr;

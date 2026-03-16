@@ -68,8 +68,13 @@ export function ActiveEvents() {
             Market events unavailable. {error}
           </div>
         ) : events.length === 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
-            No active market events
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-2">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
+              <Zap className="h-4 w-4 text-amber-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Market events (FOMC announcements, earnings surprises, sector moves) will appear here as they are detected during trading hours.
+            </p>
           </div>
         ) : (
           events.map((evt) => (

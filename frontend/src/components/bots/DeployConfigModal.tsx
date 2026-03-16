@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, Rocket, Globe, Cpu, ShieldCheck } from "lucide-react";
+import { X, Rocket, Globe, Cpu, ShieldCheck, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ export type OverrideLevel = "advisory" | "soft" | "full";
 export interface DeployConfig {
   universeConfig: UniverseConfig;
   overrideLevel: OverrideLevel;
+  allocatedCapital: number | null;
 }
 
 interface DeployConfigModalProps {
@@ -82,6 +83,7 @@ export function DeployConfigModal({
   const [selectedIndex, setSelectedIndex] = useState<string>(INDEX_OPTIONS[0]);
   const [blacklistText, setBlacklistText] = useState("");
   const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>("soft");
+  const [capitalInput, setCapitalInput] = useState("");
 
   const toggleSector = useCallback((sector: string) => {
     setSelectedSectors((prev) => {
@@ -118,7 +120,9 @@ export function DeployConfigModal({
       universeConfig.blacklist = blacklist;
     }
 
-    onDeploy({ universeConfig, overrideLevel });
+    const parsedCapital = capitalInput.trim() ? parseFloat(capitalInput.replace(/[,$]/g, "")) : null;
+    const allocatedCapital = parsedCapital && !isNaN(parsedCapital) && parsedCapital > 0 ? parsedCapital : null;
+    onDeploy({ universeConfig, overrideLevel, allocatedCapital });
   };
 
   if (!open) return null;
@@ -260,6 +264,30 @@ export function DeployConfigModal({
               />
               <p className="mt-1.5 text-[11px] text-muted-foreground">
                 Symbols excluded from trading regardless of universe mode
+              </p>
+            </div>
+          </section>
+
+          {/* ── Capital Allocation ────────────────────────────────────── */}
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-emerald-400" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Capital Allocation
+              </p>
+            </div>
+            <div>
+              <label className="app-label mb-1.5 block">Allocated Capital ($)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={capitalInput}
+                onChange={(e) => setCapitalInput(e.target.value)}
+                placeholder="e.g. 10000"
+                className="app-input"
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Maximum capital this bot can trade with. Leave empty to use full account equity.
               </p>
             </div>
           </section>

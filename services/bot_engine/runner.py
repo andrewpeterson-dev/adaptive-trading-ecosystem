@@ -322,6 +322,25 @@ class BotRunner:
 
                 # Apply size adjustment from reasoning
                 adjusted_size = position_size_pct * decision.size_adjustment
+
+                # AI capital management: scale position based on confidence
+                ai_capital_enabled = bool(
+                    bot.reasoning_model_config
+                    and isinstance(bot.reasoning_model_config, dict)
+                    and bot.reasoning_model_config.get("ai_capital_management")
+                )
+                if ai_capital_enabled and decision.ai_confidence > 0:
+                    # Scale position: high confidence → up to 1.5x, low → down to 0.5x
+                    confidence_multiplier = 0.5 + decision.ai_confidence
+                    adjusted_size = adjusted_size * confidence_multiplier
+                    logger.info(
+                        "ai_capital_adjustment",
+                        bot_id=bot.id,
+                        symbol=symbol,
+                        confidence=decision.ai_confidence,
+                        multiplier=confidence_multiplier,
+                        adjusted_size=adjusted_size,
+                    )
             except Exception as e:
                 logger.warning("reasoning_engine_error", bot_id=bot.id, error=str(e))
                 return
@@ -336,6 +355,10 @@ class BotRunner:
             )
             if not executed_trade:
                 return
+
+            # AI capital management: adjust allocated_capital after trade based on performance
+            if ai_capital_enabled and bot.allocated_capital:
+                await self._ai_adjust_capital(bot)
 
             self._publish_activity(
                 "trade_executed", bot, symbol,
@@ -670,10 +693,13 @@ class BotRunner:
         side = "BUY" if action.upper() in ("BUY", "LONG") else "SELL"
 
         try:
-            # Get buying power from Alpaca to size the order
-            alpaca_client = self._get_alpaca_client()
-            account = alpaca_client.get_account()
-            equity = float(account.equity)
+            # Use bot's allocated capital if set, otherwise fall back to Alpaca equity
+            if bot.allocated_capital and bot.allocated_capital > 0:
+                equity = bot.allocated_capital
+            else:
+                alpaca_client = self._get_alpaca_client()
+                account = alpaca_client.get_account()
+                equity = float(account.equity)
 
             position_value = equity * position_fraction
             quantity = int(position_value / current_price)
@@ -683,6 +709,7 @@ class BotRunner:
                     bot_id=bot.id,
                     symbol=symbol,
                     equity=equity,
+                    allocated_capital=bot.allocated_capital,
                 )
                 return None
 
@@ -809,6 +836,74 @@ class BotRunner:
             "1D": 300,
         }
         return mapping.get(tf, 300)
+
+    async def _ai_adjust_capital(self, bot: CerberusBot) -> None:
+        """Adjust allocated capital based on recent trade performance.
+
+        Winning bots get more capital (up to 2x initial), losing bots get
+        scaled back (down to 0.25x).  Adjustments are capped at ±10% per
+        evaluation to avoid whipsawing.
+        """
+        try:
+            async with get_session() as session:
+                result = await session.execute(
+                    select(CerberusTrade)
+                    .where(
+                        CerberusTrade.bot_id == bot.id,
+                        CerberusTrade.exit_ts.is_not(None),
+                    )
+                    .order_by(CerberusTrade.exit_ts.desc())
+                    .limit(10)
+                )
+                recent_trades = list(result.scalars().all())
+
+            if len(recent_trades) < 3:
+                return  # Not enough history
+
+            wins = sum(1 for t in recent_trades if (t.gross_pnl or 0) > 0)
+            win_rate = wins / len(recent_trades)
+
+            current = bot.allocated_capital or 0
+            if current <= 0:
+                return
+
+            # Scale: 70%+ win rate → grow, <40% → shrink
+            if win_rate >= 0.7:
+                new_capital = min(current * 1.10, current * 2.0)  # +10%, max 2x
+            elif win_rate < 0.4:
+                new_capital = max(current * 0.90, current * 0.25)  # -10%, min 0.25x
+            else:
+                return  # Neutral — no adjustment
+
+            new_capital = round(new_capital, 2)
+            if abs(new_capital - current) < 1:
+                return
+
+            async with get_session() as session:
+                result = await session.execute(
+                    select(CerberusBot).where(CerberusBot.id == bot.id)
+                )
+                db_bot = result.scalar_one_or_none()
+                if db_bot:
+                    db_bot.allocated_capital = new_capital
+
+            logger.info(
+                "ai_capital_adjusted",
+                bot_id=bot.id,
+                old_capital=current,
+                new_capital=new_capital,
+                win_rate=win_rate,
+                recent_trades=len(recent_trades),
+            )
+
+            self._publish_activity(
+                "capital_adjusted", bot, None,
+                f"{bot.name} capital {'increased' if new_capital > current else 'decreased'}: "
+                f"${current:,.0f} → ${new_capital:,.0f} (win rate {win_rate:.0%})",
+                {"old_capital": current, "new_capital": new_capital, "win_rate": win_rate},
+            )
+        except Exception as e:
+            logger.warning("ai_capital_adjust_error", bot_id=bot.id, error=str(e))
 
     def _normalize_position_size(self, position_size_pct: float) -> float:
         """Accept both fractional sizing (0.1 = 10%) and percent sizing (10 = 10%)."""

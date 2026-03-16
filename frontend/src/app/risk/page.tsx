@@ -102,7 +102,7 @@ export default function RiskPage() {
         <EmptyState
           icon={<Unplug className="h-5 w-5 text-muted-foreground" />}
           title="No risk data available"
-          description="Connect a broker and start the backend to view drawdown controls, event logs, and trading halts."
+          description="Drawdown gauges, exposure limits, and risk event logs will appear here once the backend is running and a broker is connected. This console monitors trading halts, position limits, and rate controls in real time."
         />
       );
     }

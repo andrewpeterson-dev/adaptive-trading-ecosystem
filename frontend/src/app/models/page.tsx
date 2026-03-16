@@ -118,7 +118,7 @@ export default function ModelsPage() {
         <EmptyState
           icon={<Unplug className="h-5 w-5 text-muted-foreground" />}
           title="No model data available"
-          description="Train models and bring the backend online to view performance, regime detection, and allocation analytics."
+          description="Regime detection and allocation recommendations will populate after the AI models have sufficient market data to analyze. Ensure the backend is running and models are trained."
         />
       );
     }
@@ -175,13 +175,27 @@ export default function ModelsPage() {
         {regime ? (
           <RegimeIndicator data={regime} />
         ) : (
-          <div className="app-panel p-5">
-            <EmptyState
-              icon={<Activity className="h-5 w-5 text-muted-foreground" />}
-              title="No regime data"
-              description="Market regime appears here after the backend records real regime detections."
-              className="py-10"
-            />
+          <div className="app-panel p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="app-section-title flex items-center gap-2 mb-0">
+                <Activity className="h-4 w-4" />
+                Regime Detection
+              </div>
+              <span className="text-[9px] font-semibold px-2 py-0.5 rounded uppercase tracking-widest bg-muted/30 text-slate-500 border border-dashed border-border/50">
+                Preview
+              </span>
+            </div>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Regime detection and allocation recommendations will populate after the AI models have sufficient market data to analyze.
+            </p>
+            <div className="grid grid-cols-3 gap-2 opacity-30 pointer-events-none">
+              {["Bull Trend", "Mean Reversion", "High Volatility"].map((label) => (
+                <div key={label} className="rounded-xl border border-dashed border-border/50 bg-muted/10 p-3 text-center">
+                  <div className="text-xs font-medium text-foreground">{label}</div>
+                  <div className="mt-1 text-[10px] font-mono text-muted-foreground">--</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -210,12 +224,30 @@ export default function ModelsPage() {
               ))}
             </div>
           ) : (
-            <EmptyState
-              icon={<Activity className="h-5 w-5 text-muted-foreground" />}
-              title="No allocation data"
-              description="The ensemble panel only shows persisted allocation weights. No real allocation snapshot is available yet."
-              className="py-10"
-            />
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-slate-400 leading-relaxed">
+                Ensemble allocation weights appear here once models are trained and contributing predictions.
+              </p>
+              <div className="space-y-3 opacity-30 pointer-events-none">
+                {[
+                  { name: "Momentum Model", weight: 0.40 },
+                  { name: "Mean Reversion", weight: 0.35 },
+                  { name: "Volatility Adj.", weight: 0.25 },
+                ].map((m) => (
+                  <div key={m.name} className="app-inset p-3 border border-dashed border-border/40">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-foreground">{m.name}</span>
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        {(m.weight * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="app-progress-track mt-3">
+                      <div className="app-progress-bar bg-primary" style={{ width: `${m.weight * 100}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -237,10 +269,20 @@ export default function ModelsPage() {
         {allocation.length > 0 ? (
           <AllocationChart data={allocation} />
         ) : (
-          <EmptyState
-            title="No allocation data"
-            description="Capital allocation appears here after portfolio weights are calculated."
-          />
+          <div className="app-panel p-5 space-y-3">
+            <div className="app-section-title flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              Capital Allocation
+            </div>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Capital allocation appears here after portfolio weights are calculated from model outputs and risk constraints.
+            </p>
+            <div className="rounded-xl border border-dashed border-border/50 bg-muted/10 p-4 opacity-30 pointer-events-none">
+              <div className="flex items-center justify-center h-24 text-sm text-muted-foreground">
+                Allocation chart preview
+              </div>
+            </div>
+          </div>
         )}
 
         <div className="app-table-shell overflow-x-auto">
@@ -255,7 +297,7 @@ export default function ModelsPage() {
           {models.length === 0 ? (
             <EmptyState
               title="No models registered"
-              description="Once model metadata is available, comparative metrics will populate this table."
+              description="Train your first model to see Sharpe ratios, win rates, drawdowns, and return metrics compared side by side."
               className="py-12"
             />
           ) : (
