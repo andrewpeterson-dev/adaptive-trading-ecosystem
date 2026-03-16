@@ -10,7 +10,6 @@ so stops fire in near-real-time.
 from __future__ import annotations
 
 import asyncio
-import uuid
 from datetime import datetime
 from typing import Any
 
@@ -23,7 +22,6 @@ from db.cerberus_models import (
     CerberusBot,
     CerberusBotVersion,
     CerberusTrade,
-    BotStatus,
 )
 from data.market_data import MarketDataService
 from services.activity_bus import BotActivityEvent, activity_bus

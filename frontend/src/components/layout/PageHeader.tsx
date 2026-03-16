@@ -1,3 +1,4 @@
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
@@ -7,6 +8,8 @@ interface PageHeaderProps {
   badge?: React.ReactNode;
   actions?: React.ReactNode;
   meta?: React.ReactNode;
+  updatedAt?: Date | null;
+  onRefresh?: () => void;
   className?: string;
 }
 
@@ -17,8 +20,23 @@ export function PageHeader({
   badge,
   actions,
   meta,
+  updatedAt,
+  onRefresh,
   className,
 }: PageHeaderProps) {
+  const renderedMeta = meta ?? (updatedAt ? (
+    <span className="app-pill font-mono tracking-normal">
+      Updated {updatedAt.toLocaleTimeString()}
+    </span>
+  ) : null);
+
+  const renderedActions = actions ?? (onRefresh ? (
+    <button onClick={onRefresh} className="app-button-secondary">
+      <RefreshCw className="h-4 w-4" />
+      Refresh
+    </button>
+  ) : null);
+
   return (
     <section className={cn("app-hero", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -38,16 +56,16 @@ export function PageHeader({
             </p>
           )}
 
-          {meta && (
+          {renderedMeta && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {meta}
+              {renderedMeta}
             </div>
           )}
         </div>
 
-        {actions && (
+        {renderedActions && (
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            {actions}
+            {renderedActions}
           </div>
         )}
       </div>

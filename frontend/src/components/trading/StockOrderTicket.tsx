@@ -222,14 +222,12 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
           }
         }}
       >
-        <div className="grid grid-cols-2 gap-2">
+        <div className="app-segmented">
           <button
             type="button"
             onClick={() => setDirection("buy")}
-            className={`rounded-2xl border px-4 py-2.5 text-sm font-bold transition-colors ${
-              direction === "buy"
-                ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
-                : "border-border/60 bg-muted/20 text-muted-foreground opacity-30"
+            className={`app-segment ${
+              direction === "buy" ? "app-toggle-active !bg-emerald-600 !text-white !border-emerald-600" : ""
             }`}
           >
             Buy
@@ -237,10 +235,8 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
           <button
             type="button"
             onClick={() => setDirection("sell")}
-            className={`rounded-2xl border px-4 py-2.5 text-sm font-bold transition-colors ${
-              direction === "sell"
-                ? "bg-red-600 text-white border-red-600 hover:bg-red-700"
-                : "border-border/60 bg-muted/20 text-muted-foreground opacity-30"
+            className={`app-segment ${
+              direction === "sell" ? "app-toggle-active !bg-red-600 !text-white !border-red-600" : ""
             }`}
           >
             Sell
@@ -255,7 +251,7 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
             <select
               value={orderType}
               onChange={(event) => setOrderType(event.target.value as OrderType)}
-              className="app-input"
+              className="app-select"
             >
               {ORDER_TYPES.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -269,17 +265,13 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Input Mode
             </span>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="app-segmented">
               {(["shares", "dollars"] as InputMode[]).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setInputMode(mode)}
-                  className={`rounded-2xl border px-3 py-2.5 text-sm font-medium transition-colors ${
-                    inputMode === mode
-                      ? "border-primary/35 bg-primary/12 text-primary"
-                      : "border-border/60 bg-muted/20 text-muted-foreground"
-                  }`}
+                  className={`app-segment ${inputMode === mode ? "app-toggle-active" : ""}`}
                 >
                   {mode === "shares" ? "Shares" : "Dollars"}
                 </button>

@@ -3,6 +3,7 @@
 import { MessageCircle } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
 import { usePolling } from "@/hooks/usePolling";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface TickerSentiment {
   symbol: string;
@@ -53,8 +54,14 @@ export function SentimentTicker() {
 
       <div className="mt-4">
         {loading ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            Loading sentiment signals…
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-border/40 p-3 space-y-2 text-center">
+                <Skeleton className="h-4 w-12 mx-auto" />
+                <Skeleton className="h-3 w-14 mx-auto" />
+                <Skeleton className="h-2.5 w-16 mx-auto" />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">

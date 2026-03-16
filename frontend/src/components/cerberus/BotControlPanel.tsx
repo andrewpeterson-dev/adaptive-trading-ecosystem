@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusChip } from "@/components/ui/status-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { useTradingMode } from "@/hooks/useTradingMode";
@@ -40,6 +41,14 @@ const STATUS_COLOR: Record<
   stopped: "neutral",
   paused: "info",
   error: "negative",
+};
+
+const STATUS_CHIP_VARIANT: Record<string, "positive" | "warning" | "neutral" | "info" | "danger"> = {
+  running: "positive",
+  draft: "warning",
+  stopped: "neutral",
+  paused: "info",
+  error: "danger",
 };
 
 export function BotControlPanel() {
@@ -249,12 +258,11 @@ export function BotControlPanel() {
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="text-base font-semibold text-foreground">{bot.name}</h4>
-                      <Badge variant={STATUS_COLOR[bot.status] || "neutral"}>
-                        {bot.status === "running" && (
-                          <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-400 animate-pulse-dot inline-block" />
-                        )}
-                        {bot.status}
-                      </Badge>
+                      <StatusChip
+                        variant={STATUS_CHIP_VARIANT[bot.status] || "neutral"}
+                        label={bot.status}
+                        pulse={bot.status === "running"}
+                      />
                       {bot.latestDecision && (
                         <>
                           <Badge

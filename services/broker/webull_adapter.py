@@ -173,19 +173,23 @@ class WebullAdapter(BrokerAdapter):
         wb_type = _ORDER_TYPE_TO_WEBULL.get(order.order_type, "MKT")
         wb_tif = _TIF_TO_WEBULL.get(order.time_in_force, "DAY")
 
+        # Build order kwargs — include outside_rth for extended hours
+        order_kwargs = dict(
+            symbol=order.symbol,
+            side=wb_side,
+            qty=int(order.qty),
+            order_type=wb_type,
+            limit_price=order.limit_price,
+            stop_price=order.stop_price,
+            tif=wb_tif,
+            user_confirmed=True,
+        )
+        if order.extended_hours:
+            order_kwargs["outside_rth"] = True
+
         try:
             result = await self._run(
-                partial(
-                    self._client.place_order,
-                    symbol=order.symbol,
-                    side=wb_side,
-                    qty=int(order.qty),
-                    order_type=wb_type,
-                    limit_price=order.limit_price,
-                    stop_price=order.stop_price,
-                    tif=wb_tif,
-                    user_confirmed=True,
-                ),
+                partial(self._client.place_order, **order_kwargs),
             )
 
             if result.get("success"):

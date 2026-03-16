@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Loader2, Unplug, RefreshCw, Brain, Activity } from "lucide-react";
+import { Unplug, RefreshCw, Brain, Activity } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { ModelCard } from "@/components/analytics/ModelCard";
 import { RegimeIndicator } from "@/components/analytics/RegimeIndicator";
@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton, CardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { useTradingMode } from "@/hooks/useTradingMode";
@@ -108,8 +109,32 @@ export default function ModelsPage() {
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="space-y-4">
+          <div className="app-panel p-5 space-y-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3 w-72" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+          <div className="app-panel p-5 space-y-3">
+            <Skeleton className="h-4 w-32" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 py-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
         </div>
       );
     }

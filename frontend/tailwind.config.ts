@@ -75,10 +75,15 @@ const config: Config = {
           foreground: "hsl(var(--info-foreground))",
         },
       },
+      spacing: {
+        gutter: "var(--layout-gutter)",
+        panel: "var(--panel-padding)",
+      },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        DEFAULT: "var(--radius)",
+        lg: "var(--radius-lg)",
+        md: "var(--radius)",
+        sm: "var(--radius-sm)",
       },
     },
   },

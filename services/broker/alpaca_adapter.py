@@ -147,12 +147,17 @@ class AlpacaAdapter(BrokerAdapter):
         side = AlpSide(_SIDE_MAP[order.side])
         tif = AlpTIF(_TIF_MAP[order.time_in_force])
 
+        # Extended hours requires DAY time-in-force on Alpaca
+        if order.extended_hours and tif != AlpTIF("day"):
+            tif = AlpTIF("day")
+
         if order.order_type == OrderType.MARKET:
             req = MarketOrderRequest(
                 symbol=order.symbol,
                 qty=order.qty,
                 side=side,
                 time_in_force=tif,
+                extended_hours=order.extended_hours,
             )
         elif order.order_type == OrderType.LIMIT:
             req = LimitOrderRequest(
@@ -161,6 +166,7 @@ class AlpacaAdapter(BrokerAdapter):
                 side=side,
                 time_in_force=tif,
                 limit_price=order.limit_price,
+                extended_hours=order.extended_hours,
             )
         elif order.order_type == OrderType.STOP:
             req = StopOrderRequest(

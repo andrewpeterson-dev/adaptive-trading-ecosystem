@@ -3,6 +3,7 @@
 import { Newspaper } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
 import { usePolling } from "@/hooks/usePolling";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "";
@@ -29,10 +30,21 @@ export function NewsFeed() {
         Live News Feed
       </div>
 
-      <div className="mt-4 max-h-[400px] space-y-2.5 overflow-y-auto">
+      <div className="mt-4 max-h-[400px] overflow-y-auto">
         {loading ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            Loading news events…
+          <div className="space-y-0 divide-y divide-border/40">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="py-3 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-12 shrink-0" />
+                </div>
+                <div className="flex gap-1">
+                  <Skeleton className="h-5 w-12 rounded-md" />
+                  <Skeleton className="h-5 w-10 rounded-md" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
@@ -48,10 +60,10 @@ export function NewsFeed() {
             </p>
           </div>
         ) : (
-          news.map((item) => (
+          news.map((item, idx) => (
             <div
               key={item.id}
-              className="rounded-xl border border-border/40 bg-muted/5 px-3.5 py-2.5 transition-colors hover:bg-muted/10"
+              className={`py-3 transition-colors hover:bg-muted/10 ${idx < news.length - 1 ? "border-b border-border/40" : ""}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-medium leading-snug text-foreground">

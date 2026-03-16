@@ -23,7 +23,6 @@ from config.settings import get_settings
 from services.activity_bus import BotActivityEvent
 from services.signal_bus.events import (
     CHANNEL_BOT_ACTIVITY,
-    SignalEvent,
 )
 
 try:

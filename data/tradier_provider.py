@@ -6,7 +6,6 @@ environments based on ``settings.tradier_sandbox``.
 
 from __future__ import annotations
 
-from typing import Optional
 
 import structlog
 

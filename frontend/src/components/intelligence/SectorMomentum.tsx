@@ -3,6 +3,7 @@
 import { BarChart3 } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
 import { usePolling } from "@/hooks/usePolling";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SectorData {
   symbol: string;
@@ -40,8 +41,14 @@ export function SectorMomentum() {
 
       <div className="mt-4 space-y-2">
         {loading ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            Loading sector momentum…
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-4 w-12 shrink-0" />
+                <Skeleton className="h-5 flex-1 rounded-md" />
+                <Skeleton className="h-4 w-16 shrink-0" />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">

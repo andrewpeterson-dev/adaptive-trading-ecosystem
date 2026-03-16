@@ -19,7 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, Brain, ChevronRight, Loader2, Plus, X } from "lucide-react";
+import { BarChart3, Brain, ChevronRight, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { StrategyRecord } from "@/types/strategy";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -292,13 +292,39 @@ export default function QuantPage() {
       )}
 
       {compareLoading && (
-        <div className="app-panel">
-          <EmptyState
-            icon={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
-            title="Analysing strategies"
-            description="Building the comparison set, normalising metrics, and preparing the visualization stack."
-            className="py-12"
-          />
+        <div className="space-y-4">
+          <div className="app-panel p-4 md:p-5 space-y-3">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-[240px] w-full rounded-xl" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="app-panel p-4 md:p-5 space-y-3">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-[280px] w-full rounded-xl" />
+            </div>
+            <div className="app-panel p-4 md:p-5 space-y-4">
+              <Skeleton className="h-3 w-24" />
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-2.5 w-20" />
+                  <Skeleton className="h-4 w-full rounded-full" />
+                  <Skeleton className="h-4 w-full rounded-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="app-panel p-4 md:p-5 space-y-3">
+            <Skeleton className="h-3 w-36" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 py-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 w-14" />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

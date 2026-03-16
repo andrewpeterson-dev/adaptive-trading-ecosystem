@@ -97,8 +97,8 @@ def _validate_bars(bars: list[dict]) -> list[dict]:
     """Clean bars: remove zero/negative price bars, warn on insufficient data."""
     cleaned = []
     for bar in bars:
-        o, h, l, c = bar.get("o", 0), bar.get("h", 0), bar.get("l", 0), bar.get("c", 0)
-        if o <= 0 or h <= 0 or l <= 0 or c <= 0:
+        o, h, lo, c = bar.get("o", 0), bar.get("h", 0), bar.get("l", 0), bar.get("c", 0)
+        if o <= 0 or h <= 0 or lo <= 0 or c <= 0:
             continue
         cleaned.append(bar)
 

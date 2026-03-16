@@ -75,6 +75,7 @@ class BrokerOrder:
     limit_price: Optional[float] = None
     stop_price: Optional[float] = None
     time_in_force: TimeInForce = TimeInForce.DAY
+    extended_hours: bool = False
 
 
 @dataclass(frozen=True)

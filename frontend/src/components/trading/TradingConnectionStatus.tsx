@@ -1,11 +1,11 @@
 "use client";
 
 import { Activity, PlugZap, Router } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { StatusChip } from "@/components/ui/status-chip";
 import { useTradeStore } from "@/stores/trade-store";
 
-function variantForStatus(status?: string) {
-  if (status === "connected") return "success" as const;
+function chipVariantForStatus(status?: string) {
+  if (status === "connected") return "positive" as const;
   if (status === "warning") return "warning" as const;
   return "danger" as const;
 }
@@ -34,10 +34,12 @@ export function TradingConnectionStatus() {
             </p>
           </div>
         </div>
-        <Badge variant={variantForStatus(status?.market_data.status)}>
-          <PlugZap className="h-3.5 w-3.5" />
-          {status?.market_data.status || "disconnected"}
-        </Badge>
+        <StatusChip
+          variant={chipVariantForStatus(status?.market_data.status)}
+          label={status?.market_data.status || "disconnected"}
+          icon={<PlugZap className="h-3.5 w-3.5" />}
+          pulse={status?.market_data.status === "connected"}
+        />
       </div>
 
       <div className="app-panel flex items-start justify-between gap-3 p-4">
@@ -57,10 +59,12 @@ export function TradingConnectionStatus() {
             </p>
           </div>
         </div>
-        <Badge variant={variantForStatus(status?.order_routing.status)}>
-          <PlugZap className="h-3.5 w-3.5" />
-          {status?.order_routing.status || "disconnected"}
-        </Badge>
+        <StatusChip
+          variant={chipVariantForStatus(status?.order_routing.status)}
+          label={status?.order_routing.status || "disconnected"}
+          icon={<PlugZap className="h-3.5 w-3.5" />}
+          pulse={status?.order_routing.status === "connected"}
+        />
       </div>
     </div>
   );

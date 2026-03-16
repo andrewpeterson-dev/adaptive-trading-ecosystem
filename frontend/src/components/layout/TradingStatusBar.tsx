@@ -80,6 +80,7 @@ export function TradingStatusBar() {
           >
             Paper
           </button>
+          <span className="h-4 w-px bg-border/50" />
           <button
             type="button"
             onClick={() => void handleModeRequest("live")}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Zap } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
 import { usePolling } from "@/hooks/usePolling";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const IMPACT_STYLES: Record<string, string> = {
   HIGH: "border-rose-400/25 bg-rose-400/10 text-rose-400",
@@ -60,8 +61,20 @@ export function ActiveEvents() {
 
       <div className="mt-4 max-h-[480px] space-y-2 overflow-y-auto">
         {loading ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
-            Loading market events…
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-border/40 px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-14 rounded-full" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <Skeleton className="h-4 w-3/4" />
+                <div className="flex gap-1">
+                  <Skeleton className="h-5 w-10 rounded-md" />
+                  <Skeleton className="h-5 w-12 rounded-md" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-6 text-center text-sm text-rose-300">

@@ -134,6 +134,7 @@ class BotRunner:
         timeframe = config.get("timeframe", "1D")
         position_size_pct = config.get("position_size_pct", 5.0)
         strategy_type = config.get("strategy_type", "manual")
+        extended_hours = bool(config.get("extended_hours", False))
 
         # Dynamic universe: pull candidates from UniverseScanner if not "fixed" mode
         universe_config = version.universe_config or {}
@@ -158,8 +159,8 @@ class BotRunner:
             logger.warning("bot_skipped_no_config", bot_id=bot.id)
             return
 
-        # Check if market is open (skip weekends, outside 9:30-16:00 ET)
-        if not self._is_market_open():
+        # Check if market is open (extended_hours bots get 4AM-8PM ET window)
+        if not self._is_market_open(extended_hours=extended_hours):
             return
 
         # Rate limit: don't evaluate same bot more than once per timeframe interval
@@ -258,6 +259,7 @@ class BotRunner:
                     await self._close_open_trades(
                         bot=bot, symbol=symbol, open_trades=open_trades,
                         current_price=current_price, reasons=exit_reasons,
+                        extended_hours=bool(config.get("extended_hours", False)),
                     )
                 continue
 
@@ -304,6 +306,15 @@ class BotRunner:
             full_description = f"{overview}\n\nAI Guidance: {ai_thinking.get('adaptiveBehavior', '')}"
         else:
             full_description = overview
+
+        # Alert AI evaluator about extended hours session characteristics
+        if config.get("extended_hours") and self._is_extended_session():
+            full_description += (
+                "\n\nIMPORTANT: This is an EXTENDED HOURS session (pre-market or after-hours). "
+                "Liquidity is significantly lower, spreads are wider, and price moves can be "
+                "exaggerated. Be more selective — only enter with high conviction. "
+                "Volume-based indicators (VWAP, volume) are unreliable during this session."
+            )
 
         signals = await ai_evaluate_entries(
             strategy_name=config.get("name", bot.name),
@@ -392,6 +403,7 @@ class BotRunner:
             executed_trade = await self._execute_trade(
                 bot, symbol, action, adjusted_size, current_price,
                 reasons=[f"AI: {signal.reasoning} (confidence: {signal.confidence}%)"],
+                extended_hours=bool(config.get("extended_hours", False)),
             )
             if not executed_trade:
                 continue
@@ -466,6 +478,7 @@ class BotRunner:
                     open_trades=open_trades,
                     current_price=current_price,
                     reasons=exit_reasons,
+                    extended_hours=bool(config.get("extended_hours", False)),
                 )
             else:
                 logger.debug(
@@ -586,6 +599,7 @@ class BotRunner:
                 adjusted_size,
                 current_price,
                 reasons=reasons,
+                extended_hours=bool(config.get("extended_hours", False)),
             )
             if not executed_trade:
                 return
@@ -764,6 +778,7 @@ class BotRunner:
         open_trades: list[CerberusTrade],
         current_price: float,
         reasons: list[str],
+        extended_hours: bool = False,
     ) -> None:
         # Resolve broker once for all exit orders in this batch
         broker = await self._resolve_broker(bot.user_id)
@@ -780,6 +795,7 @@ class BotRunner:
                             symbol=symbol,
                             side=exit_side,
                             quantity=int(open_trade.quantity or 0),
+                            extended_hours=extended_hours,
                         )
                     except Exception as e:
                         logger.warning(
@@ -791,6 +807,7 @@ class BotRunner:
                         symbol=symbol,
                         side=exit_side,
                         quantity=int(open_trade.quantity or 0),
+                        extended_hours=extended_hours,
                     )
             except Exception as e:
                 logger.error("bot_exit_order_failed", bot_id=bot.id, symbol=symbol, error=str(e))
@@ -923,6 +940,7 @@ class BotRunner:
         position_size_pct: float,
         current_price: float,
         reasons: list[str] | None = None,
+        extended_hours: bool = False,
     ) -> CerberusTrade | None:
         """Execute a trade via the user's active broker (Webull or Alpaca)."""
         user_id = bot.user_id
@@ -930,6 +948,13 @@ class BotRunner:
         if current_price <= 0:
             logger.warning("bot_no_price", bot_id=bot.id, symbol=symbol)
             return None
+
+        # Auto-reduce position size during extended hours (lower liquidity)
+        if extended_hours and self._is_extended_session():
+            position_size_pct = position_size_pct * 0.5
+            if reasons is None:
+                reasons = []
+            reasons.append("Extended hours: position size halved for lower liquidity")
 
         position_fraction = self._normalize_position_size(position_size_pct)
         if position_fraction <= 0:
@@ -976,6 +1001,7 @@ class BotRunner:
                 try:
                     order = await self._submit_webull_order(
                         user_id=user_id, symbol=symbol, side=side, quantity=quantity,
+                        extended_hours=extended_hours,
                     )
                 except Exception as e:
                     logger.warning(
@@ -990,6 +1016,7 @@ class BotRunner:
             if order is None:
                 order = await self._submit_alpaca_order(
                     symbol=symbol, side=side, quantity=quantity,
+                    extended_hours=extended_hours,
                 )
                 used_broker = "alpaca"
 
@@ -1027,6 +1054,7 @@ class BotRunner:
                         "bot_explanation": explanation,
                         "order_id": order_id,
                         "broker": broker_tag,
+                        "extended_hours": extended_hours,
                     },
                     created_at=datetime.utcnow(),
                 )
@@ -1056,15 +1084,18 @@ class BotRunner:
 
     async def _submit_alpaca_order(
         self, *, symbol: str, side: str, quantity: int,
+        extended_hours: bool = False,
     ) -> dict:
         """Submit a market order to Alpaca paper trading."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, self._submit_alpaca_order_sync, symbol, side, quantity,
+            extended_hours,
         )
 
     def _submit_alpaca_order_sync(
         self, symbol: str, side: str, quantity: int,
+        extended_hours: bool = False,
     ) -> dict:
         from alpaca.trading.requests import MarketOrderRequest
         from alpaca.trading.enums import OrderSide, TimeInForce
@@ -1075,6 +1106,7 @@ class BotRunner:
             qty=quantity,
             side=OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL,
             time_in_force=TimeInForce.DAY,
+            extended_hours=extended_hours,
         )
         order = client.submit_order(order_data)
         return {
@@ -1188,6 +1220,7 @@ class BotRunner:
 
     async def _submit_webull_order(
         self, *, user_id: int, symbol: str, side: str, quantity: int,
+        extended_hours: bool = False,
     ) -> dict:
         """Submit a market order via Webull. Returns a dict matching the Alpaca
         order result shape for consistency, or raises on failure."""
@@ -1203,6 +1236,7 @@ class BotRunner:
             qty=quantity,
             order_type="MKT",
             tif="DAY",
+            **({"outside_rth": True} if extended_hours else {}),
         )
 
         loop = asyncio.get_running_loop()
@@ -1225,16 +1259,27 @@ class BotRunner:
             "mode": result.mode,
         }
 
-    def _is_market_open(self) -> bool:
-        """Check if US stock market is currently open (rough check)."""
+    def _is_extended_session(self) -> bool:
+        """Return True if we're currently in extended hours (pre/post-market)."""
         now = datetime.now(_MARKET_TIMEZONE)
-        # Weekends
         if now.weekday() >= 5:
             return False
-        # Market hours: 9:30 AM - 4:00 PM ET
-        market_open = dtime(9, 30)
-        market_close = dtime(16, 0)
-        return market_open <= now.time() <= market_close
+        t = now.time()
+        return (dtime(4, 0) <= t < dtime(9, 30)) or (dtime(16, 0) < t <= dtime(20, 0))
+
+    def _is_market_open(self, extended_hours: bool = False) -> bool:
+        """Check if US stock market is currently open (rough check).
+
+        When *extended_hours* is True the window widens to include pre-market
+        (4:00 AM ET) and after-hours (8:00 PM ET).
+        """
+        now = datetime.now(_MARKET_TIMEZONE)
+        # Weekends — no extended hours sessions either
+        if now.weekday() >= 5:
+            return False
+        if extended_hours:
+            return dtime(4, 0) <= now.time() <= dtime(20, 0)
+        return dtime(9, 30) <= now.time() <= dtime(16, 0)
 
     def _timeframe_to_seconds(self, tf: str) -> int:
         """Convert timeframe string to minimum seconds between evaluations.

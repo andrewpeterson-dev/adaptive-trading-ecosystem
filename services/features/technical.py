@@ -63,7 +63,6 @@ class TechnicalFeatures:
             return {}
 
         opens, highs, lows, closes, volumes = _extract_arrays(bars)
-        n = len(closes)
         result: dict = {}
 
         # --- RSI (14-period) ---
@@ -289,7 +288,6 @@ class TechnicalFeatures:
 
     @staticmethod
     def _volatility(closes: np.ndarray) -> dict:
-        n = len(closes)
         result: dict = {}
 
         log_returns = np.diff(np.log(closes[closes > 0]))
@@ -387,7 +385,7 @@ class TechnicalFeatures:
             }
 
         h = highs[-window:]
-        l = lows[-window:]
+        lo = lows[-window:]
 
         # Swing highs: bars where high > both neighbors
         swing_highs: list[float] = []
@@ -396,8 +394,8 @@ class TechnicalFeatures:
         for i in range(1, len(h) - 1):
             if h[i] > h[i - 1] and h[i] > h[i + 1]:
                 swing_highs.append(float(h[i]))
-            if l[i] < l[i - 1] and l[i] < l[i + 1]:
-                swing_lows.append(float(l[i]))
+            if lo[i] < lo[i - 1] and lo[i] < lo[i + 1]:
+                swing_lows.append(float(lo[i]))
 
         # Sort and pick nearest levels above/below current price
         current_price = float(closes[-1])

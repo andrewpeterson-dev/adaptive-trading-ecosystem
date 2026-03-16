@@ -3,6 +3,7 @@
 import { Calendar } from "lucide-react";
 import { getMarketEvents, type MarketEvent } from "@/lib/reasoning-api";
 import { usePolling } from "@/hooks/usePolling";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const IMPACT_DOT = {
   HIGH: "bg-rose-400",
@@ -26,8 +27,17 @@ export function EarningsCalendar() {
 
       <div className="mt-4 max-h-[320px] space-y-2 overflow-y-auto">
         {loading ? (
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            Loading earnings calendar…
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-border/40 px-3.5 py-2.5">
+                <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-2.5 w-16" />
+                </div>
+                <Skeleton className="h-3 w-12 shrink-0" />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">

@@ -3,6 +3,7 @@
 import { ShieldAlert } from "lucide-react";
 import { getRiskScore, type RiskScore } from "@/lib/reasoning-api";
 import { usePolling } from "@/hooks/usePolling";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function RiskGauge() {
   const { data, loading, error } = usePolling<RiskScore>({
@@ -34,8 +35,18 @@ export function RiskGauge() {
 
       <div className="mt-4 flex items-end gap-4">
         {loading ? (
-          <div className="w-full rounded-2xl border border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-            Loading risk score…
+          <div className="w-full flex items-end gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-20 rounded-2xl" />
+              <Skeleton className="h-3 w-14" />
+            </div>
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3 w-full rounded-full" />
+              <div className="flex justify-between">
+                <Skeleton className="h-2.5 w-12" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            </div>
           </div>
         ) : error ? (
           <div className="w-full rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">

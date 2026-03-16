@@ -15,6 +15,7 @@ import {
   Layers,
   MoreHorizontal,
 } from "lucide-react";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api/client";
 import { deployBotFromStrategy } from "@/lib/cerberus-api";
 import {
@@ -263,8 +264,10 @@ export default function StrategiesPage() {
         />
 
         {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="space-y-3">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
           </div>
         ) : strategies.length === 0 ? (
           <EmptyState

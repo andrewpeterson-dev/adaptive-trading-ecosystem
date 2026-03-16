@@ -4,7 +4,6 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   RefreshCw,
-  Loader2,
   Unplug,
   Settings,
   LayoutGrid,
@@ -47,6 +46,9 @@ import { ExecutionChart } from "@/components/dashboard/ExecutionChart";
 import { DashboardGrid } from "@/components/dashboard/GridLayout";
 import type { Layouts, LayoutItem } from "@/components/dashboard/GridLayout";
 import { SentimentPanel } from "@/components/analytics/SentimentPanel";
+import { DashboardSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusChip } from "@/components/ui/status-chip";
 
 // ---------------------------------------------------------------------------
 // Default grid layout
@@ -187,9 +189,7 @@ export default function DashboardPage() {
             { href: "/risk", label: "Risk", icon: ShieldCheck },
           ]}
         />
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <DashboardSkeleton />
       </div>
     );
   }
@@ -204,27 +204,23 @@ export default function DashboardPage() {
             { href: "/risk", label: "Risk", icon: ShieldCheck },
           ]}
         />
-        <div className="text-center py-32 space-y-4">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto">
-            <Unplug className="h-6 w-6 text-amber-400" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold">
-              No live trading configured
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-              {account.message ||
-                "Connect a live API key in Settings to trade with real money."}
-            </p>
-          </div>
-          <Link
-            href="/settings"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            <Settings className="h-4 w-4" />
-            Go to Settings
-          </Link>
-        </div>
+        <EmptyState
+          icon={<Unplug className="h-6 w-6 text-amber-400" />}
+          title="No live trading configured"
+          description={
+            account.message ||
+            "Connect a live API key in Settings to trade with real money."
+          }
+          action={
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+              Go to Settings
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -239,34 +235,29 @@ export default function DashboardPage() {
             { href: "/risk", label: "Risk", icon: ShieldCheck },
           ]}
         />
-        <div className="text-center py-32 space-y-4">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/50 border border-border/50 mx-auto">
-            <Unplug className="h-6 w-6 text-muted-foreground/60" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold">Broker not responding</h2>
-            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-              Could not load account data. Your API key may need to be
-              re-entered.
-            </p>
-          </div>
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={fetchAll}
-              className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Retry
-            </button>
-            <Link
-              href="/settings"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              <Settings className="h-4 w-4" />
-              Go to Settings
-            </Link>
-          </div>
-        </div>
+        <EmptyState
+          icon={<Unplug className="h-6 w-6 text-muted-foreground/60" />}
+          title="Broker not responding"
+          description="Could not load account data. Your API key may need to be re-entered."
+          action={
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={fetchAll}
+                className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Retry
+              </button>
+              <Link
+                href="/settings"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                Go to Settings
+              </Link>
+            </div>
+          }
+        />
       </div>
     );
   }
@@ -290,24 +281,11 @@ export default function DashboardPage() {
         title="Trading Dashboard"
         description="Real-time portfolio analytics, AI signals, and execution monitoring."
         badge={
-          <span
-            className={cn(
-              "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em]",
-              mode === "live"
-                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
-                : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25"
-            )}
-          >
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                mode === "live"
-                  ? "bg-emerald-400 animate-pulse-dot"
-                  : "bg-amber-500"
-              )}
-            />
-            {mode === "live" ? "LIVE MODE" : "PAPER MODE"}
-          </span>
+          <StatusChip
+            variant={mode === "live" ? "live" : "paper"}
+            label={mode === "live" ? "LIVE MODE" : "PAPER MODE"}
+            pulse
+          />
         }
         meta={
           lastRefresh ? (
@@ -332,7 +310,7 @@ export default function DashboardPage() {
                 <Unlock className="h-4 w-4 text-primary" />
               )}
               <span className="text-xs">
-                {isLayoutLocked ? "Locked" : "Editing"}
+                {isLayoutLocked ? "Layout Locked" : "Editing Layout"}
               </span>
             </button>
             <button onClick={fetchAll} className="app-button-secondary">

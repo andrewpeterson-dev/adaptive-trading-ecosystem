@@ -1213,15 +1213,13 @@ export function TradingChart({
             </span>
           </label>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="app-segmented">
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
-                className={`rounded-full px-3 py-1.5 text-xs font-mono transition-colors ${
-                  timeframe === tf
-                    ? "bg-foreground text-background"
-                    : "bg-black/[0.03] text-muted-foreground hover:text-foreground dark:bg-white/[0.03]"
+                className={`app-segment font-mono ${
+                  timeframe === tf ? "app-toggle-active" : ""
                 }`}
               >
                 {tf}
@@ -1238,11 +1236,7 @@ export function TradingChart({
             <button
               key={ind}
               onClick={() => toggleIndicator(ind)}
-              className={`rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors ${
-                indicators[ind]
-                  ? "bg-foreground text-background"
-                  : "bg-black/[0.03] text-muted-foreground/70 hover:text-muted-foreground dark:bg-white/[0.03]"
-              }`}
+              className={`app-toggle ${indicators[ind] ? "app-toggle-active" : ""}`}
             >
               <span className="flex items-center gap-1.5">
                 <span
