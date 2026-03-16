@@ -6,7 +6,6 @@ Implements performance-weighted allocation with floor/ceiling constraints.
 
 from datetime import datetime
 
-import numpy as np
 import structlog
 
 from config.settings import get_settings
@@ -85,7 +84,7 @@ class CapitalAllocator:
     def _apply_constraints(self, raw_weights: dict[str, float]) -> dict[str, float]:
         """Enforce min/max weight constraints with redistribution."""
         weights = dict(raw_weights)
-        n = len(weights)
+        len(weights)
 
         # Iteratively clamp and redistribute
         for _ in range(10):

@@ -1,6 +1,6 @@
 """Tests for system event logger."""
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from db.models import SystemEventType, TradingModeEnum
 
 

@@ -158,7 +158,6 @@ class AnthropicProvider(BaseProvider):
         logger.info("anthropic_stream", model=model)
         settings = get_settings()
         max_retries = settings.llm_max_retries
-        last_exc: Exception | None = None
         for attempt in range(max_retries + 1):
             try:
                 async with client.messages.stream(**params) as stream:
@@ -187,7 +186,6 @@ class AnthropicProvider(BaseProvider):
                             )
                 return  # Success — exit retry loop
             except Exception as e:
-                last_exc = e
                 err_type = getattr(e, "type", "") or ""
                 if err_type not in _RETRYABLE_ERRORS and "overloaded" not in str(e).lower():
                     raise

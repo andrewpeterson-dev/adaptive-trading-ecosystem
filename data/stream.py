@@ -3,7 +3,6 @@ Real-time market data stream listener using Alpaca WebSocket.
 Pushes bar/quote updates to Redis for consumption by models and execution engine.
 """
 
-import asyncio
 import json
 from datetime import datetime
 

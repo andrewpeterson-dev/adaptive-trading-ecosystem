@@ -5,7 +5,6 @@ Checks API, database, Redis, broker, disk, and memory status.
 
 import shutil
 import time
-from typing import Optional
 
 import httpx
 import psutil
@@ -40,7 +39,7 @@ class HealthChecker:
         # Critical services: database + Redis — app cannot function without these
         # Optional services: broker — degraded but operational without credentials
         critical = {k: checks[k] for k in ("database", "redis")}
-        optional = {k: checks[k] for k in ("broker",)}
+        {k: checks[k] for k in ("broker",)}
 
         critical_statuses = [c["status"] for c in critical.values()]
         all_statuses = [c["status"] for c in checks.values()]

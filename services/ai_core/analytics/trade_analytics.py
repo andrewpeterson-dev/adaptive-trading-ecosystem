@@ -5,7 +5,7 @@ from datetime import datetime, date
 from typing import Optional
 
 import structlog
-from sqlalchemy import select, func, desc, asc, case, extract
+from sqlalchemy import select, func, desc, asc, case
 
 from db.database import get_session
 

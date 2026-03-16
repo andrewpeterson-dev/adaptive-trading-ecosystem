@@ -1,11 +1,5 @@
 """Tests for the autonomous improvement loop and task queue."""
 
-import json
-import os
-import tempfile
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

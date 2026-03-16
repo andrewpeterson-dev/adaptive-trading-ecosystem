@@ -5,12 +5,10 @@ All secrets and tunables come from environment variables or .env file.
 
 from enum import Enum
 from functools import lru_cache
-from pathlib import Path
 from typing import Optional
 
 import os
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

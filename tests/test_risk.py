@@ -3,7 +3,6 @@ Tests for the risk management layer.
 """
 
 import os
-import pytest
 
 # Override settings before import
 os.environ.setdefault("ALPACA_API_KEY", "test")

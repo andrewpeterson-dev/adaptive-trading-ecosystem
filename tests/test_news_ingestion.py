@@ -8,7 +8,6 @@ os.environ.setdefault("ALPACA_SECRET_KEY", "test")
 
 from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
 
 from news.ingestion import NewsIngestion

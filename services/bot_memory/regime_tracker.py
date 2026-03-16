@@ -17,7 +17,6 @@ def _fetch_spy_data_sync() -> dict | None:
     """Fetch SPY data for regime classification."""
     try:
         import yfinance as yf
-        import numpy as np
         spy = yf.Ticker("SPY")
         hist = spy.history(period="30d", interval="1d")
         if len(hist) < 20:

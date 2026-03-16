@@ -7,7 +7,6 @@ defaults insert the row and re-read it from the session.
 """
 
 import pytest
-from datetime import datetime
 
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session

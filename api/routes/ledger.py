@@ -9,7 +9,7 @@ import structlog
 
 from db.cerberus_models import CerberusPortfolioSnapshot
 from db.database import get_session
-from db.models import UserApiSettings, UserApiConnection, ApiProvider, PortfolioSnapshot
+from db.models import UserApiConnection, ApiProvider, PortfolioSnapshot
 from services.ledger_aggregator import ledger_aggregator
 from services.api_connection_manager import api_connection_manager
 

@@ -5,8 +5,7 @@ No SDK calls are made — all external dependencies are mocked.
 Run with: pytest tests/test_webull_guardrails.py -v
 """
 
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

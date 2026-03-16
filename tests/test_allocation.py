@@ -3,7 +3,6 @@ Tests for the capital allocation engine.
 """
 
 import os
-import pytest
 
 os.environ.setdefault("ALPACA_API_KEY", "test")
 os.environ.setdefault("ALPACA_SECRET_KEY", "test")

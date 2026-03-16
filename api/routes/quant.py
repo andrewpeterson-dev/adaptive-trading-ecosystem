@@ -15,7 +15,7 @@ import math
 import random
 import statistics
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -28,7 +28,6 @@ from db.models import (
     Strategy,
     StrategyInstance,
     StrategySnapshot,
-    StrategyTemplate,
     TradeEvent,
 )
 

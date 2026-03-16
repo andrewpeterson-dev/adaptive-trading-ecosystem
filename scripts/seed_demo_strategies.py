@@ -5,7 +5,6 @@ Safe to call multiple times — skips if strategies already exist.
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import get_session
 from db.models import Strategy

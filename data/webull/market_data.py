@@ -151,12 +151,18 @@ class MarketDataClient:
             rename: dict[str, str] = {}
             for col in df.columns:
                 lc = col.lower()
-                if   "open"  in lc:             rename[col] = "open"
-                elif "high"  in lc:             rename[col] = "high"
-                elif "low"   in lc:             rename[col] = "low"
-                elif "close" in lc:             rename[col] = "close"
-                elif "vol"   in lc:             rename[col] = "volume"
-                elif "time"  in lc or "date" in lc: rename[col] = "timestamp"
+                if "open" in lc:
+                    rename[col] = "open"
+                elif "high" in lc:
+                    rename[col] = "high"
+                elif "low" in lc:
+                    rename[col] = "low"
+                elif "close" in lc:
+                    rename[col] = "close"
+                elif "vol" in lc:
+                    rename[col] = "volume"
+                elif "time" in lc or "date" in lc:
+                    rename[col] = "timestamp"
 
             df = df.rename(columns=rename)
             df["symbol"] = symbol

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from sqlalchemy import select
 
 from db.database import get_session
-from db.models import PortfolioSnapshot, TradingModeEnum
+from db.models import PortfolioSnapshot
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()

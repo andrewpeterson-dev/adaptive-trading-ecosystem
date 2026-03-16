@@ -27,7 +27,7 @@ def upgrade() -> None:
         name="proposalstatus",
     )
     document_status = sa.Enum("pending", "processing", "indexed", "failed", name="documentstatus")
-    tool_side_effect = sa.Enum("none", "read", "write", "trade", "notify", name="toolsideeffect")
+    sa.Enum("none", "read", "write", "trade", "notify", name="toolsideeffect")
 
     # ── 1. cerberus_brokerage_accounts ─────────────────────────────────────
     op.create_table(

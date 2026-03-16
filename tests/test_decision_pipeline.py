@@ -9,9 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from intelligence.confidence_model import ConfidenceModel
 from intelligence.decision_pipeline import DecisionPipeline
-from intelligence.ensemble_engine import EnsembleEngine
 from models.base import Signal
 from risk.manager import RiskManager
 

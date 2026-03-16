@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
-from db.database import get_session, init_db
+from db.database import get_session
 from db.models import ApiProvider, ApiProviderType
 
 

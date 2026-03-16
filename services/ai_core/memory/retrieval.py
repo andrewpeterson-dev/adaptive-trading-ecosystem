@@ -101,8 +101,7 @@ class MemoryRetrieval:
 
         Falls back to text-based search if pgvector is not available.
         """
-        from db.cerberus_models import CerberusMemoryItem
-        from sqlalchemy import select, text
+        from sqlalchemy import text
 
         async with get_session() as session:
             # Try pgvector cosine similarity if embedding column exists

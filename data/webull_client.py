@@ -17,7 +17,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 import structlog
 
@@ -346,12 +345,18 @@ class _WebullBase:
             rename_map = {}
             for col in df.columns:
                 lower = col.lower()
-                if "open" in lower: rename_map[col] = "open"
-                elif "high" in lower: rename_map[col] = "high"
-                elif "low" in lower: rename_map[col] = "low"
-                elif "close" in lower: rename_map[col] = "close"
-                elif "vol" in lower: rename_map[col] = "volume"
-                elif "time" in lower or "date" in lower: rename_map[col] = "timestamp"
+                if "open" in lower:
+                    rename_map[col] = "open"
+                elif "high" in lower:
+                    rename_map[col] = "high"
+                elif "low" in lower:
+                    rename_map[col] = "low"
+                elif "close" in lower:
+                    rename_map[col] = "close"
+                elif "vol" in lower:
+                    rename_map[col] = "volume"
+                elif "time" in lower or "date" in lower:
+                    rename_map[col] = "timestamp"
             df = df.rename(columns=rename_map)
             df["symbol"] = symbol
             for col in ["open", "high", "low", "close", "volume"]:

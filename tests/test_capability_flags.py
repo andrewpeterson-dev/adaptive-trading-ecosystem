@@ -1,4 +1,5 @@
-import asyncio, pytest, sys
+import pytest
+import sys
 sys.path.insert(0, '.')
 
 pytestmark = pytest.mark.asyncio

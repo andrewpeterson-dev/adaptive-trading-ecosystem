@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from db.models import TradingModeEnum, UserTradingSession
+from db.models import TradingModeEnum
 
 
 def _make_request(user_id: int = 1):

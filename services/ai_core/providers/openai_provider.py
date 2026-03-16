@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncIterator
+from typing import TYPE_CHECKING, AsyncIterator
 
-import httpx
 import structlog
 
 from config.settings import get_settings
+
+if TYPE_CHECKING:
+    import openai
 from .base import (
     BaseProvider, ProviderMessage, ProviderToolDef,
     ProviderResponse, StreamChunk,

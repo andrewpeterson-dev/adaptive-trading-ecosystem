@@ -1,7 +1,6 @@
 """Document upload service — creates records and storage paths for uploaded files."""
 from __future__ import annotations
 
-import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone

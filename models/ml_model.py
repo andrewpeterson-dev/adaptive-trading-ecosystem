@@ -3,7 +3,6 @@ Machine learning model using XGBoost and RandomForest.
 Learns non-linear patterns from engineered features to predict next-period returns.
 """
 
-import numpy as np
 import pandas as pd
 import structlog
 

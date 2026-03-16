@@ -4,7 +4,6 @@ Enforces position limits, exposure caps, stop losses, drawdown shutdowns,
 and trade frequency limits before any order reaches the execution engine.
 """
 
-from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
 

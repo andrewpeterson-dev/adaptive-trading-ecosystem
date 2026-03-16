@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from db.database import Base
 from db.models import User  # noqa: F401
-from db.cerberus_models import CerberusTrade, CerberusBrokerageAccount, AccountMode
+from db.cerberus_models import CerberusTrade
 
 from services.ai_core.analytics.trade_analytics import TradeAnalyticsService
 
@@ -49,7 +49,6 @@ async def session(session_factory):
 
 
 async def _seed_user(session: AsyncSession) -> int:
-    from db.models import User
     user = User(email="test@example.com", password_hash="hash", display_name="Test")
     session.add(user)
     await session.flush()
@@ -120,7 +119,7 @@ class TestTradeAnalytics:
     @pytest.mark.asyncio
     async def test_get_best_trade(self, session, session_factory):
         uid = await _seed_user(session)
-        trades = await _seed_trades(session, uid)
+        await _seed_trades(session, uid)
         await session.commit()
 
         svc = TradeAnalyticsService()
@@ -242,7 +241,7 @@ class TestTradeAnalytics:
 
     @pytest.mark.asyncio
     async def test_get_bot_performance_no_trades(self, session, session_factory):
-        uid = await _seed_user(session)
+        await _seed_user(session)
         await session.commit()
 
         svc = TradeAnalyticsService()

@@ -4,11 +4,11 @@ AI Reasoning Layer endpoints — market events, risk score, bot reasoning/learni
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import select, func, and_, desc
 
 from db.database import get_session

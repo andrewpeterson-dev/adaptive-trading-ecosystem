@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -62,7 +61,6 @@ def _clear_rate_limiter():
 
 
 async def _seed_user(session: AsyncSession) -> int:
-    from db.models import User
     user = User(email="chat@example.com", password_hash="hash", display_name="ChatUser")
     session.add(user)
     await session.flush()
@@ -176,7 +174,7 @@ class TestChatEndpoint:
 
     @pytest.mark.asyncio
     async def test_chat_calls_controller_handle_turn(self, session, session_factory):
-        uid = await _seed_user(session)
+        await _seed_user(session)
         await session.commit()
 
         mock_result = MagicMock()
@@ -246,7 +244,7 @@ class TestChatEndpoint:
 
     @pytest.mark.asyncio
     async def test_chat_rate_limits_turn_creation(self, session, session_factory):
-        uid = await _seed_user(session)
+        await _seed_user(session)
         await session.commit()
 
         mock_result = MagicMock()

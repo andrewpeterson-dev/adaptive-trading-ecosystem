@@ -106,7 +106,7 @@ class MomentumModel(ModelBase):
         spread = d["ma_spread"].iloc[i]
         rsi = d["rsi"].iloc[i]
         macd_h = d["macd_hist"].iloc[i]
-        roc = d["roc_10"].iloc[i]
+        d["roc_10"].iloc[i]
         above_trend = d["close"].iloc[i] > d["trend_ma"].iloc[i]
 
         signals = []
@@ -158,7 +158,7 @@ class MomentumModel(ModelBase):
         macd_hist = macd - macd_sig
 
         # Rate of change for trend confirmation
-        roc = df["close"].pct_change(fast)
+        df["close"].pct_change(fast)
 
         position = pd.Series(0.0, index=df.index)
         in_position = 0.0

@@ -11,8 +11,7 @@ from typing import Any
 
 import structlog
 
-from config.settings import get_settings
-from .base import ToolDefinition, ToolSideEffect
+from .base import ToolSideEffect
 from .registry import get_registry
 
 logger = structlog.get_logger(__name__)

@@ -1,7 +1,7 @@
 """Hard blockers and soft guardrails for trade safety."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 VIX_THRESHOLDS = {
     "normal": (0, 18),

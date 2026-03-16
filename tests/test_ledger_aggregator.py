@@ -1,5 +1,4 @@
 """Unit tests for ledger aggregation. All mocked."""
-import pytest
 
 def test_total_equals_broker_plus_options_pnl():
     from services.ledger_aggregator import LedgerAggregator

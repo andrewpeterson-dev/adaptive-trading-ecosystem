@@ -265,7 +265,6 @@ class BacktestEngine:
         """
         returns = result.returns.dropna()
         equity = result.equity_curve
-        trades = result.trades
 
         if len(returns) < 2:
             return self._empty_metrics(result.model_name)

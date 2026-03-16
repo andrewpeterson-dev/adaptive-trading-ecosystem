@@ -5,7 +5,6 @@ import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -71,7 +70,6 @@ async def session(engine):
 
 async def _seed_user(session: AsyncSession) -> int:
     """Insert a minimal user row and return its id."""
-    from db.models import User
 
     user = User(
         email="test@example.com",

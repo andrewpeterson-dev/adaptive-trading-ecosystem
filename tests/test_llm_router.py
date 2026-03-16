@@ -5,7 +5,7 @@ import os
 os.environ.setdefault("ALPACA_API_KEY", "test")
 os.environ.setdefault("ALPACA_SECRET_KEY", "test")
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

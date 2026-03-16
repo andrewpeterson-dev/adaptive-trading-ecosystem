@@ -5,7 +5,6 @@ import hashlib
 import secrets
 import uuid
 from datetime import datetime
-from typing import Optional
 
 import structlog
 from sqlalchemy import select
@@ -172,7 +171,7 @@ class ConfirmationService:
         # Execute via broker adapter
         try:
             execution_result = await self._execute_order(user_id, proposal.proposal_json)
-        except Exception as exc:
+        except Exception:
             # Mark as failed
             async with get_session() as session:
                 stmt = select(CerberusTradeProposal).where(
@@ -297,7 +296,6 @@ class ConfirmationService:
         self, user_id: int, symbol: str, side: str, quantity: float
     ) -> dict:
         """Execute via paper trading system."""
-        from api.routes.paper_trading import PaperTradeRequest
         from db.models import (
             PaperPortfolio, PaperPosition, PaperTrade,
             PaperTradeStatus, TradeDirection,

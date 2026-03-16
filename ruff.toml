@@ -1,0 +1,10 @@
+target-version = "py311"
+
+[lint]
+ignore = [
+    "E712",   # SQLAlchemy column comparisons require `== True` / `== False`
+    "E402",   # Late imports are intentional (deferred loading, circular import avoidance)
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["F841"]  # Unused variables in tests are often intentional fixtures

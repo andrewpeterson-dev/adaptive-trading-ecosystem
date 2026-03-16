@@ -1,7 +1,5 @@
 """Tests for portfolio risk analytics (pure math, no external calls)."""
 
-import json
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np

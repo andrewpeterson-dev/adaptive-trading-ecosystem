@@ -152,13 +152,13 @@ def seed():
 
         session.commit()
         print("Seeded example data successfully:")
-        print(f"  - 3 trading models")
-        print(f"  - 3 trades")
-        print(f"  - 3 performance records")
-        print(f"  - 3 capital allocations")
-        print(f"  - 1 portfolio snapshot")
-        print(f"  - 1 market regime record")
-        print(f"  - 1 risk event")
+        print("  - 3 trading models")
+        print("  - 3 trades")
+        print("  - 3 performance records")
+        print("  - 3 capital allocations")
+        print("  - 1 portfolio snapshot")
+        print("  - 1 market regime record")
+        print("  - 1 risk event")
 
 
 if __name__ == "__main__":

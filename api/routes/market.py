@@ -6,7 +6,6 @@ GET /api/market/bars/{symbol}           — OHLCV bars  (Redis-cached, 60s TTL)
 POST /api/market/batch-quotes           — multiple quotes in one call
 """
 
-from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 

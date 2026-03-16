@@ -1,7 +1,6 @@
 """Thread summarizer — condenses long conversation threads into memory items."""
 from __future__ import annotations
 
-from typing import Optional
 
 import structlog
 from sqlalchemy import select

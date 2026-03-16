@@ -11,21 +11,21 @@ from typing import AsyncIterator, Optional
 import structlog
 from sqlalchemy import select
 
-from config.settings import get_settings
 from db.database import get_session
 from db.cerberus_models import (
     CerberusConversationThread,
     CerberusConversationMessage,
     CerberusAIToolCall,
     CerberusUIContextEvent,
+    ConversationMode,
 )
 from services.ai_core.context_assembler import ContextAssembler
 from services.ai_core.model_router import ModelRouter
 from services.ai_core.prompt_builder import PromptBuilder
-from services.ai_core.safety_guard import SafetyGuard, SafetyViolation
+from services.ai_core.safety_guard import SafetyGuard
 from services.ai_core.tools.executor import ToolExecutor
 from services.ai_core.tools.registry import get_registry
-from services.ai_core.providers.base import ProviderMessage, ProviderToolDef, StreamChunk
+from services.ai_core.providers.base import ProviderMessage, ProviderToolDef
 from services.ai_core.citation_assembler import CitationAssembler
 from services.ai_core.ui_command_formatter import format_ui_commands
 

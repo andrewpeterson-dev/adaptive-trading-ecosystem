@@ -419,6 +419,7 @@ class TestBotRunnerSafety:
                 delay_seconds=0,
                 size_adjustment=1.0,
                 reasoning="Proceed.",
+                ai_confidence=0.85,
             )
         )
 

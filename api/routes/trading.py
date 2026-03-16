@@ -9,7 +9,7 @@ otherwise fall back to the Alpaca-based ExecutionEngine.
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 import structlog

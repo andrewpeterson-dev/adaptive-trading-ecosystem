@@ -1,7 +1,6 @@
 """Tests for UI command formatter (services/ai_core/ui_command_formatter.py)."""
 from __future__ import annotations
 
-import pytest
 
 from services.ai_core.ui_command_formatter import (
     format_ui_commands,

@@ -6,7 +6,6 @@ Pure Python/numpy implementations — no ta-lib or pandas_ta dependency.
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 import numpy as np

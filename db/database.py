@@ -28,7 +28,7 @@ def _get_engine():
     if _engine is None:
         from sqlalchemy.ext.asyncio import create_async_engine
 
-        from sqlalchemy.pool import NullPool, QueuePool, StaticPool
+        from sqlalchemy.pool import StaticPool
 
         settings = get_settings()
         kwargs = dict(echo=False)

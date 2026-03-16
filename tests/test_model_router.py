@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from unittest.mock import patch, MagicMock
 
-import pytest
 
-from services.ai_core.model_router import ModelRouter, RoutingIntent, RoutingDecision
+from services.ai_core.model_router import ModelRouter, RoutingIntent
 
 
 # ---------------------------------------------------------------------------

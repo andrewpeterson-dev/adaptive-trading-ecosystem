@@ -65,7 +65,7 @@ def refresh_analytics():
     """Refresh materialized views for trade analytics."""
     logger.info("task_refresh_analytics")
     try:
-        from services.ai_core.analytics.trade_analytics import TradeAnalyticsService, MATERIALIZED_VIEW_SQL
+        from services.ai_core.analytics.trade_analytics import MATERIALIZED_VIEW_SQL
         # In production, execute the materialized view SQL against PostgreSQL
         logger.info("task_analytics_refreshed", views=list(MATERIALIZED_VIEW_SQL.keys()))
     except Exception as exc:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import defaultdict, deque
 import re
 import time
-from typing import Optional
 
 import structlog
 

@@ -224,16 +224,15 @@ class TradingOrchestrator:
                             break
 
                     # Apply sentiment bias to signal strength (subtle adjustment)
-                    adjusted_strength = signal.strength
                     if sentiment_bias != 0.0:
                         if signal.direction == "long" and sentiment_bias > 0:
-                            adjusted_strength = min(1.0, signal.strength + sentiment_bias * 0.1)
+                            min(1.0, signal.strength + sentiment_bias * 0.1)
                         elif signal.direction == "short" and sentiment_bias < 0:
-                            adjusted_strength = min(1.0, signal.strength + abs(sentiment_bias) * 0.1)
+                            min(1.0, signal.strength + abs(sentiment_bias) * 0.1)
                         elif signal.direction == "long" and sentiment_bias < 0:
-                            adjusted_strength = max(0.0, signal.strength - abs(sentiment_bias) * 0.05)
+                            max(0.0, signal.strength - abs(sentiment_bias) * 0.05)
                         elif signal.direction == "short" and sentiment_bias > 0:
-                            adjusted_strength = max(0.0, signal.strength - sentiment_bias * 0.05)
+                            max(0.0, signal.strength - sentiment_bias * 0.05)
 
                     # Run through decision pipeline
                     try:

@@ -54,7 +54,7 @@ def _score_candidates_sync(symbols: list[str], strategy_type: str) -> list[dict]
                         # ATR for volatility
                         highs = hist["High"].values
                         lows = hist["Low"].values
-                        tr = [max(h - l, abs(h - closes[i-1]), abs(l - closes[i-1])) for i, (h, l) in enumerate(zip(highs[1:], lows[1:]), 1)]
+                        tr = [max(hi - lo, abs(hi - closes[i-1]), abs(lo - closes[i-1])) for i, (hi, lo) in enumerate(zip(highs[1:], lows[1:]), 1)]
                         atr = sum(tr[-14:]) / min(14, len(tr)) if tr else 0
                         atr_pct = atr / closes[-1] if closes[-1] > 0 else 0
 

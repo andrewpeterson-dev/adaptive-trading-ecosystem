@@ -140,7 +140,7 @@ class EarningsMomentumModel(ModelBase):
 
         phase = d["event_phase"].iloc[i]
         gap = d["event_gap"].iloc[i]
-        rsi = d["rsi"].iloc[i]
+        d["rsi"].iloc[i]
         roc = d["roc_5"].iloc[i]
 
         signals = []

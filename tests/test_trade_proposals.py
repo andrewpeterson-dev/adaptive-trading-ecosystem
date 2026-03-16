@@ -5,11 +5,9 @@ import hashlib
 import secrets
 import uuid
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -19,7 +17,6 @@ from db.cerberus_models import (
     CerberusTradeProposal,
     CerberusTradeConfirmation,
     CerberusPortfolioSnapshot,
-    CerberusPosition,
     CerberusAuditLog,
     ProposalStatus,
 )
@@ -55,7 +52,6 @@ async def session(engine):
 
 
 async def _seed_user(session: AsyncSession) -> int:
-    from db.models import User
     user = User(email="test@example.com", password_hash="fakehash", display_name="Test")
     session.add(user)
     await session.flush()

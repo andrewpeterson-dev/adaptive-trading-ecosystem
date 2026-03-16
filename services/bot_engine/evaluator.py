@@ -8,7 +8,6 @@ and returns whether all conditions passed, plus human-readable reasons.
 from __future__ import annotations
 
 import math
-from typing import Any
 
 
 def _resolve_indicator_value(
@@ -146,7 +145,7 @@ def evaluate_conditions(
     all_passed = True
 
     for cond in conditions:
-        indicator_name = cond.get("indicator", "UNKNOWN")
+        cond.get("indicator", "UNKNOWN")
         operator = cond.get("operator", ">")
         compare_to = cond.get("compare_to", "").upper()
 

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 
 import structlog
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, and_
 
 from db.database import get_session
 from db.cerberus_models import (
@@ -16,7 +16,7 @@ from db.cerberus_models import (
 from db.models import User
 from services.ai_core.providers.base import ProviderMessage
 from services.reasoning_engine.safety import (
-    check_hard_blockers, check_soft_guardrails, classify_vix, SafetyResult,
+    check_hard_blockers, check_soft_guardrails,
 )
 from services.reasoning_engine.prompts import TRADE_DECISION_SYSTEM, build_trade_decision_prompt
 
