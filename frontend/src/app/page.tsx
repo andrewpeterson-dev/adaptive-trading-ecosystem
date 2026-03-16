@@ -1,5 +1,5 @@
-import { StrategyBuilder } from "@/components/strategy-builder/StrategyBuilder";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <StrategyBuilder />;
+  redirect("/dashboard");
 }
