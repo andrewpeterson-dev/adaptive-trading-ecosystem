@@ -214,12 +214,23 @@ async def ai_evaluate_entries(
     )
 
     router = _get_router()
-    routing = router.route(mode="strategy", message="evaluate entries", has_tools=False)
-    # Use low-latency model for speed and cost efficiency
-    model = settings.openai_low_latency_model or routing.model
+
+    # Pick the right provider and model based on available API keys
+    if settings.openai_api_key:
+        routing = router.route(mode="strategy", message="evaluate entries", has_tools=False)
+        model = settings.openai_low_latency_model or routing.model
+        provider = routing.provider
+    else:
+        # Fall back to Anthropic when OpenAI isn't configured
+        routing = router.route(
+            mode="strategy", message="evaluate entries",
+            has_tools=False, openai_failed=True,
+        )
+        model = settings.anthropic_fallback_model or "claude-sonnet-4-6-20250514"
+        provider = routing.provider
 
     try:
-        response = await routing.provider.complete(
+        response = await provider.complete(
             messages=[
                 ProviderMessage(role="system", content=SYSTEM_PROMPT),
                 ProviderMessage(role="user", content=prompt),
