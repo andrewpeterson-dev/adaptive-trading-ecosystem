@@ -308,6 +308,7 @@ def strategy_record_to_bot_config(strategy_record: dict[str, Any]) -> dict[str, 
             or ai_context.get("exit_conditions")
             or []
         ),
+        "extended_hours": bool(strategy_record.get("extended_hours", False)),
         "feature_signals": feature_signals,
         "ai_context": ai_context,
         "learning": learning,

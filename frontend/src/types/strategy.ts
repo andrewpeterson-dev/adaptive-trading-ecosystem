@@ -76,6 +76,7 @@ export interface Strategy {
   // Execution
   commission_pct: number;
   slippage_pct: number;
+  extended_hours?: boolean;
   // Exit
   trailing_stop_pct: number | null;
   exit_after_bars: number | null;
@@ -154,6 +155,7 @@ export interface StrategyRecord {
   symbols: string[];
   commission_pct: number;
   slippage_pct: number;
+  extended_hours?: boolean;
   trailing_stop_pct: number | null;
   exit_after_bars: number | null;
   cooldown_bars: number;

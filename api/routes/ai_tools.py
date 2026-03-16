@@ -108,6 +108,7 @@ class DeployBotRequest(BaseModel):
     universe_config: Optional[dict[str, Any]] = Field(default=None)
     override_level: Optional[str] = Field(default=None, pattern=r"^(advisory|soft|full)$")
     allocated_capital: Optional[float] = Field(default=None, ge=0, description="Capital allocated to this bot in dollars")
+    extended_hours: Optional[bool] = Field(default=None, description="Enable pre-market and after-hours trading")
 
 
 class DeployFromStrategyRequest(BaseModel):
@@ -784,6 +785,8 @@ async def deploy_bot(bot_id: str, request: Request, body: Optional[DeployBotRequ
             logger.warning("bot_deploy_rejected", bot_id=bot_id, user_id=user_id, detail=exc.detail)
             raise
 
+        if body.extended_hours is not None:
+            config["extended_hours"] = body.extended_hours
         version.config_json = config
         if body.universe_config is not None:
             version.universe_config = body.universe_config

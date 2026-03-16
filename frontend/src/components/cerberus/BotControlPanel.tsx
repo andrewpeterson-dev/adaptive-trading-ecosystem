@@ -113,6 +113,7 @@ export function BotControlPanel() {
         config.universeConfig as unknown as Record<string, unknown>,
         config.overrideLevel,
         config.allocatedCapital,
+        config.extendedHours,
       );
       setBots((prev) =>
         prev.map((item) =>

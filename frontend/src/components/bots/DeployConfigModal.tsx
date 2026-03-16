@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, Rocket, Globe, Cpu, ShieldCheck, DollarSign } from "lucide-react";
+import { X, Rocket, Globe, Cpu, ShieldCheck, DollarSign, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -23,6 +23,7 @@ export interface DeployConfig {
   universeConfig: UniverseConfig;
   overrideLevel: OverrideLevel;
   allocatedCapital: number | null;
+  extendedHours: boolean;
 }
 
 interface DeployConfigModalProps {
@@ -84,6 +85,7 @@ export function DeployConfigModal({
   const [blacklistText, setBlacklistText] = useState("");
   const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>("soft");
   const [capitalInput, setCapitalInput] = useState("");
+  const [extendedHours, setExtendedHours] = useState(false);
 
   const toggleSector = useCallback((sector: string) => {
     setSelectedSectors((prev) => {
@@ -122,7 +124,7 @@ export function DeployConfigModal({
 
     const parsedCapital = capitalInput.trim() ? parseFloat(capitalInput.replace(/[,$]/g, "")) : null;
     const allocatedCapital = parsedCapital && !isNaN(parsedCapital) && parsedCapital > 0 ? parsedCapital : null;
-    onDeploy({ universeConfig, overrideLevel, allocatedCapital });
+    onDeploy({ universeConfig, overrideLevel, allocatedCapital, extendedHours });
   };
 
   if (!open) return null;
@@ -337,6 +339,34 @@ export function DeployConfigModal({
                 </button>
               ))}
             </div>
+          </section>
+
+          {/* ── Extended Hours ────────────────────────────────────────── */}
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-sky-400" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Extended Hours
+              </p>
+            </div>
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={extendedHours}
+                  onChange={(e) => setExtendedHours(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="h-5 w-9 rounded-full border border-border/60 bg-muted/30 transition-colors peer-checked:border-sky-400/40 peer-checked:bg-sky-400/20" />
+                <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-muted-foreground/60 transition-all peer-checked:translate-x-4 peer-checked:bg-sky-400" />
+              </div>
+              <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                Enable pre-market &amp; after-hours trading
+              </span>
+            </label>
+            <p className="mt-2 pl-12 text-[11px] text-muted-foreground">
+              Trades 4 AM &ndash; 8 PM ET instead of 9:30 AM &ndash; 4 PM. Position sizes auto-reduce 50% outside regular hours due to lower liquidity.
+            </p>
           </section>
 
           {/* ── Actions ───────────────────────────────────────────────── */}

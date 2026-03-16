@@ -216,6 +216,7 @@ export async function deployBot(
   universeConfig?: Record<string, unknown>,
   overrideLevel?: string,
   allocatedCapital?: number | null,
+  extendedHours?: boolean,
 ): Promise<{ bot_id: string; status: string }> {
   return apiFetch(`/api/ai/tools/bots/${botId}/deploy`, {
     method: 'POST',
@@ -223,6 +224,7 @@ export async function deployBot(
       ...(universeConfig ? { universe_config: universeConfig } : {}),
       ...(overrideLevel ? { override_level: overrideLevel } : {}),
       ...(allocatedCapital != null ? { allocated_capital: allocatedCapital } : {}),
+      ...(extendedHours != null ? { extended_hours: extendedHours } : {}),
     }),
   });
 }

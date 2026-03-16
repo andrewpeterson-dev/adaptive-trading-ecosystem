@@ -60,6 +60,7 @@ class StrategySchema(BaseModel):
     symbols: list[str] = Field(default_factory=lambda: ["SPY"])
     commission_pct: float = 0.001
     slippage_pct: float = 0.0005
+    extended_hours: bool = False
     trailing_stop_pct: Optional[float] = None
     exit_after_bars: Optional[int] = None
     cooldown_bars: int = 0
@@ -85,6 +86,7 @@ class StrategyUpdateSchema(BaseModel):
     symbols: Optional[list[str]] = None
     commission_pct: Optional[float] = None
     slippage_pct: Optional[float] = None
+    extended_hours: Optional[bool] = None
     trailing_stop_pct: Optional[float] = None
     exit_after_bars: Optional[int] = None
     cooldown_bars: Optional[int] = None
@@ -161,6 +163,7 @@ def _instance_to_dict(inst: StrategyInstance) -> dict:
         "symbols": t.symbols or ["SPY"],
         "commission_pct": t.commission_pct or 0.001,
         "slippage_pct": t.slippage_pct or 0.0005,
+        "extended_hours": bool(t.extended_hours) if hasattr(t, "extended_hours") else False,
         "trailing_stop_pct": t.trailing_stop_pct,
         "exit_after_bars": t.exit_after_bars,
         "cooldown_bars": t.cooldown_bars or 0,
@@ -192,6 +195,7 @@ def _strategy_to_dict(s) -> dict:
         "symbols": s.symbols or ["SPY"],
         "commission_pct": s.commission_pct or 0.001,
         "slippage_pct": s.slippage_pct or 0.0005,
+        "extended_hours": bool(getattr(s, "extended_hours", False)),
         "trailing_stop_pct": s.trailing_stop_pct,
         "exit_after_bars": s.exit_after_bars,
         "cooldown_bars": s.cooldown_bars or 0,
@@ -352,6 +356,7 @@ async def create_strategy(strategy: StrategySchema, request: Request):
             symbols=strategy.symbols,
             commission_pct=strategy.commission_pct,
             slippage_pct=strategy.slippage_pct,
+            extended_hours=strategy.extended_hours,
             trailing_stop_pct=strategy.trailing_stop_pct,
             exit_after_bars=strategy.exit_after_bars,
             cooldown_bars=strategy.cooldown_bars,
@@ -464,7 +469,7 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
         template_fields = {
             "name", "description", "conditions", "condition_groups", "action",
             "stop_loss_pct", "take_profit_pct", "timeframe",
-            "symbols", "commission_pct", "slippage_pct",
+            "symbols", "commission_pct", "slippage_pct", "extended_hours",
             "trailing_stop_pct", "exit_after_bars",
             "cooldown_bars", "max_trades_per_day", "max_exposure_pct", "max_loss_pct",
             "strategy_type", "source_prompt", "ai_context",

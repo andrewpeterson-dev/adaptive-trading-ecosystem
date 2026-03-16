@@ -183,10 +183,12 @@ async def _ensure_ai_strategy_schema() -> None:
             add_column_if_missing("strategies", "strategy_type", "VARCHAR(32) DEFAULT 'manual'")
             add_column_if_missing("strategies", "source_prompt", "TEXT")
             add_column_if_missing("strategies", "ai_context", "JSON")
+            add_column_if_missing("strategies", "extended_hours", "BOOLEAN DEFAULT FALSE")
 
             add_column_if_missing("strategy_templates", "strategy_type", "VARCHAR(32) DEFAULT 'manual'")
             add_column_if_missing("strategy_templates", "source_prompt", "TEXT")
             add_column_if_missing("strategy_templates", "ai_context", "JSON")
+            add_column_if_missing("strategy_templates", "extended_hours", "BOOLEAN DEFAULT FALSE")
 
             add_column_if_missing("cerberus_bots", "learning_enabled", "BOOLEAN DEFAULT TRUE")
             add_column_if_missing("cerberus_bots", "learning_status_json", "JSON")
