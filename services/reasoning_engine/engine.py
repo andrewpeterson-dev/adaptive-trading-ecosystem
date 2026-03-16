@@ -386,9 +386,16 @@ class ReasoningEngine:
         delay = llm_result.get("delay_seconds", 0)
         reasons = [llm_result.get("reasoning", "")]
 
+        # Always apply size reductions from guardrails
         if soft.reduce_size < size_adj:
             size_adj = soft.reduce_size
-        if soft.delay_seconds > delay:
+        # Only apply guardrail delays if the LLM didn't explicitly say EXECUTE
+        # with reasonable confidence — the LLM already evaluated the events.
+        if decision == "EXECUTE" and confidence >= 0.5:
+            # LLM considered events and chose to proceed — respect that decision.
+            # Still apply size reductions above but don't block the trade.
+            pass
+        elif soft.delay_seconds > delay:
             delay = soft.delay_seconds
         if soft.reasons:
             reasons.extend(soft.reasons)
