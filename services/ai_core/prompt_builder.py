@@ -90,7 +90,9 @@ CRITICAL RULES:
 
 Use lowercase indicator names (rsi, sma, ema, macd, bollinger_bands, atr, vwap, obv, stochastic).
 Valid timeframes: 1m, 5m, 15m, 1H, 4H, 1D, 1W.
-Always include operator and value fields in conditions so the JSON is machine-parseable."""
+Always include operator and value fields in conditions so the JSON is machine-parseable.
+
+ABSOLUTE REQUIREMENT — Your response MUST contain a valid JSON object inside a ```json fenced code block. The frontend parser will extract this JSON to create the bot. If you do not include the JSON block, the strategy CANNOT be created. Never return only text — always include the JSON."""
 
 RESEARCH_MODE_ADDENDUM = """
 You are in Research Mode.

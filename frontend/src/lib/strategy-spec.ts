@@ -63,21 +63,47 @@ function stringList(value: unknown): string[] | undefined {
 
 /**
  * Extract a JSON object from a text response.
- * Handles both fenced code blocks and raw JSON.
+ * Handles fenced code blocks, raw JSON, and edge cases like
+ * strings containing braces inside JSON values.
  */
 export function extractJson(text: string): string | null {
-  // Try fenced code block first
+  // Try fenced code block first (```json ... ``` or ``` ... ```)
   const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
+  if (fenced) {
+    const candidate = fenced[1].trim();
+    // Validate it's actually parseable JSON
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // Fenced block wasn't valid JSON, fall through to raw extraction
+    }
+  }
 
-  // Try raw JSON object (first { to last matching })
+  // Try raw JSON object — find the largest valid JSON object in the text
   const start = text.indexOf("{");
   if (start === -1) return null;
 
   let depth = 0;
+  let inString = false;
+  let escaped = false;
   for (let i = start; i < text.length; i++) {
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}") depth--;
+    const ch = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") depth--;
     if (depth === 0) return text.slice(start, i + 1);
   }
   return null;
