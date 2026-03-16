@@ -374,7 +374,7 @@ async def create_connection(req: CreateConnectionRequest, request: Request):
         test_result = await _test_connection_internal(conn, credentials)
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = _sanitize_connection_error_message(test_result.get("error"))
-        conn.last_tested_at = datetime.now(timezone.utc)
+        conn.last_tested_at = datetime.utcnow()
         # Auto-detect paper vs live for Alpaca
         if "is_paper" in test_result and provider.slug == "alpaca":
             conn.is_paper = test_result["is_paper"]
@@ -509,7 +509,7 @@ async def test_connection(connection_id: int, request: Request):
         # Update status
         conn.status = "connected" if test_result["connected"] else "error"
         conn.error_message = _sanitize_connection_error_message(test_result.get("error"))
-        conn.last_tested_at = datetime.now(timezone.utc)
+        conn.last_tested_at = datetime.utcnow()
         conn.updated_at = datetime.now(timezone.utc)
         await db.commit()
 
