@@ -155,9 +155,16 @@ def check_soft_guardrails(
     for evt in events:
         if evt.get("impact") == "HIGH":
             evt_symbols = evt.get("symbols", [])
-            if symbol.upper() in [s.upper() for s in evt_symbols] or not evt_symbols:
+            # Only delay if the event specifically targets this symbol.
+            # Generic untargeted events (empty symbols list) are noted but
+            # don't block — the LLM reasoning already factors them in.
+            if symbol.upper() in [s.upper() for s in evt_symbols]:
                 result.delay_seconds = max(result.delay_seconds, 900)
                 result.reasons.append(f"HIGH impact event pending: {evt.get('headline', 'unknown')}")
+            elif not evt_symbols:
+                # Untargeted HIGH event: reduce size slightly but don't delay
+                result.reduce_size = min(result.reduce_size, 0.75)
+                result.reasons.append(f"HIGH impact event (untargeted): {evt.get('headline', 'unknown')}")
 
     if ai_confidence < 0.3:
         result.reduce_size = min(result.reduce_size, 0.5)
