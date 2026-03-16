@@ -899,7 +899,8 @@ async def get_positions(request: Request):
                 raw = await asyncio.to_thread(wb.account.get_positions)
                 return {"positions": _normalize_webull_positions_payload(raw), "mode": mode.value}
 
-        return {"positions": [], "mode": mode.value}
+        reason = broker_context.get("reason") or "No live broker configured"
+        return {"positions": [], "mode": mode.value, "not_configured": True, "message": reason}
 
     if user_id:
         from api.routes.paper_trading import get_paper_positions
@@ -942,7 +943,8 @@ async def get_orders(request: Request, status: str = "open"):
                 raw = await asyncio.to_thread(wb.account.get_open_orders)
                 return {"orders": _normalize_webull_orders_payload(raw), "mode": mode.value}
 
-        return {"orders": [], "mode": mode.value}
+        reason = broker_context.get("reason") or "No live broker configured"
+        return {"orders": [], "mode": mode.value, "not_configured": True, "message": reason}
 
     if user_id and mode in (TradingModeEnum.PAPER, TradingModeEnum.BACKTEST):
         return {"orders": [], "mode": "paper"}
