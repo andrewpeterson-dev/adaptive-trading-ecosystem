@@ -53,10 +53,14 @@ class DiagnosticReport:
         }
 
 
-# Correlation groups — indicators that measure similar things
+# Correlation groups — indicators that measure similar things.
+# MACD is separated from raw trend indicators because MACD + SMA/EMA trend
+# filter is a standard, valid combination (oscillator + moving average).
 CORRELATION_GROUPS = {
     "momentum_oscillators": {"rsi", "stochastic", "cci", "williams_r"},
-    "trend_following": {"sma", "ema", "macd", "adx", "aroon"},
+    "trend_averages": {"sma", "ema"},
+    "macd_family": {"macd"},
+    "trend_direction": {"adx", "aroon"},
     "volatility": {"bollinger_bands", "atr", "keltner", "donchian"},
     "volume": {"obv", "vwap", "mfi", "ad_line", "cmf"},
 }
@@ -72,15 +76,27 @@ PARAMETER_BOUNDS = {
     "stochastic": {"k_period": (5, 30), "d_period": (2, 10)},
 }
 
+# Operators that indicate crossover signals rather than directional bias
+CROSSOVER_OPERATORS = {"crosses_above", "crosses_below", "cross_above", "cross_below"}
+
 
 class StrategyDiagnostics:
     """Run diagnostic checks on strategy definitions."""
 
     @classmethod
-    def run_all(cls, conditions: list[dict], parameters: dict[str, dict]) -> DiagnosticReport:
+    def run_all(
+        cls,
+        conditions: list[dict],
+        parameters: dict[str, dict],
+        *,
+        has_stop_loss: bool = False,
+        has_take_profit: bool = False,
+    ) -> DiagnosticReport:
         """
         conditions: list of {"indicator": str, "operator": str, "value": Any, "params": dict}
         parameters: dict of indicator_name -> {param_name: value}
+        has_stop_loss: whether the strategy has a stop-loss configured
+        has_take_profit: whether the strategy has a take-profit configured
         """
         report = DiagnosticReport()
 
@@ -90,7 +106,7 @@ class StrategyDiagnostics:
         cls._check_condition_count(conditions, report)
         cls._check_lookahead_bias(conditions, report)
         cls._check_redundant_conditions(conditions, report)
-        cls._check_missing_exit(conditions, report)
+        cls._check_missing_exit(conditions, report, has_stop_loss=has_stop_loss, has_take_profit=has_take_profit)
 
         # Compute score
         deductions = sum(
@@ -125,6 +141,16 @@ class StrategyDiagnostics:
             op = c.get("operator", "")
             val = c.get("value", 0)
 
+            # Skip crossover operators — they are directional signals, not
+            # simple above/below comparisons, and are inherently consistent
+            # with the strategy direction.
+            if op in CROSSOVER_OPERATORS:
+                continue
+
+            # Skip conditions that compare to another indicator (e.g., EMA > SMA)
+            if c.get("compare_to"):
+                continue
+
             if ind == "rsi":
                 if op == "<" and isinstance(val, (int, float)) and val < 40:
                     bullish.append("RSI oversold (buy signal)")
@@ -136,10 +162,15 @@ class StrategyDiagnostics:
                 elif op == "<":
                     bearish.append("MACD bearish")
             elif ind in ("sma", "ema"):
-                if op == ">":
-                    bullish.append(f"Price above {ind.upper()} (bullish)")
-                elif op == "<":
-                    bearish.append(f"Price below {ind.upper()} (bearish)")
+                # Only flag as directional when comparing price to the MA
+                # with a meaningful threshold. EMA < 0 is ambiguous and
+                # often means "EMA slope is negative" which is actually a
+                # valid filter, not a conflicting signal.
+                if isinstance(val, (int, float)) and val > 0:
+                    if op == ">":
+                        bullish.append(f"Price above {ind.upper()} (bullish)")
+                    elif op == "<":
+                        bearish.append(f"Price below {ind.upper()} (bearish)")
 
         if bullish and bearish:
             report.diagnostics.append(Diagnostic(
@@ -214,13 +245,36 @@ class StrategyDiagnostics:
             seen[key] = True
 
     @classmethod
-    def _check_missing_exit(cls, conditions: list[dict], report: DiagnosticReport):
-        has_exit = any(c.get("action", "").upper() in ("SELL", "EXIT", "CLOSE") for c in conditions)
-        if not has_exit:
+    def _check_missing_exit(
+        cls,
+        conditions: list[dict],
+        report: DiagnosticReport,
+        *,
+        has_stop_loss: bool = False,
+        has_take_profit: bool = False,
+    ):
+        has_exit_condition = any(c.get("action", "").upper() in ("SELL", "EXIT", "CLOSE") for c in conditions)
+
+        # If the strategy has stop-loss and take-profit configured, that counts
+        # as valid exit logic — don't flag EXIT_001.
+        if has_exit_condition or (has_stop_loss and has_take_profit):
+            return
+
+        # Only flag if there's truly no exit mechanism at all
+        if has_stop_loss or has_take_profit:
+            # Has partial exit config — downgrade to info
+            report.diagnostics.append(Diagnostic(
+                code="EXIT_002",
+                severity=Severity.INFO,
+                title="Partial Exit Logic",
+                message="Strategy has stop-loss or take-profit but not both. Consider adding the missing component for balanced risk management.",
+                suggestion="Add both a stop-loss (to limit downside) and a take-profit (to lock in gains).",
+            ))
+        else:
             report.diagnostics.append(Diagnostic(
                 code="EXIT_001",
                 severity=Severity.WARNING,
                 title="No Exit Conditions",
                 message="Strategy defines entry conditions but no explicit exit logic. Without exit rules, the strategy relies solely on stop-loss or time-based exits.",
-                suggestion="Define exit conditions (e.g., RSI > 70 for a mean-reversion buy strategy) or ensure stop-loss and take-profit are configured.",
+                suggestion="Define exit conditions (e.g., RSI > 70 for a mean-reversion buy strategy) or configure stop-loss and take-profit.",
             ))

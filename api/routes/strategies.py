@@ -329,7 +329,12 @@ async def create_strategy(strategy: StrategySchema, request: Request):
         p = c.get("params", {}) if isinstance(c, dict) else c.params
         params[ind] = p
 
-    report = StrategyDiagnostics.run_all(conditions_dicts, params)
+    report = StrategyDiagnostics.run_all(
+        conditions_dicts,
+        params,
+        has_stop_loss=bool(strategy.stop_loss_pct and strategy.stop_loss_pct > 0),
+        has_take_profit=bool(strategy.take_profit_pct and strategy.take_profit_pct > 0),
+    )
 
     async with get_session() as session:
         # Create the template (logic)
@@ -487,7 +492,12 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
             params = {}
             for c in conditions_dicts:
                 params[c["indicator"]] = c.get("params", {})
-            report = StrategyDiagnostics.run_all(conditions_dicts, params)
+            report = StrategyDiagnostics.run_all(
+                conditions_dicts,
+                params,
+                has_stop_loss=bool(inst.stop_loss_pct and inst.stop_loss_pct > 0),
+                has_take_profit=bool(inst.take_profit_pct and inst.take_profit_pct > 0),
+            )
             template.diagnostics = report.to_dict()
 
         await session.flush()
