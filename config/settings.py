@@ -35,15 +35,15 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Async database URL. Prioritizes use_sqlite for local dev."""
-        if self.use_sqlite:
-            return "sqlite+aiosqlite:///trading_ecosystem.db"
+        """Async database URL. DATABASE_URL env var always wins if set."""
         raw = os.environ.get("DATABASE_URL", "")
         if raw:
             # Railway gives postgresql:// — asyncpg needs postgresql+asyncpg://
             if raw.startswith("postgresql://"):
                 return raw.replace("postgresql://", "postgresql+asyncpg://", 1)
             return raw
+        if self.use_sqlite:
+            return "sqlite+aiosqlite:///trading_ecosystem.db"
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -51,9 +51,7 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
-        """Sync database URL for Alembic. Prioritizes use_sqlite for local dev."""
-        if self.use_sqlite:
-            return "sqlite:///trading_ecosystem.db"
+        """Sync database URL for Alembic. DATABASE_URL env var always wins if set."""
         raw = os.environ.get("DATABASE_URL", "")
         if raw:
             if raw.startswith("postgresql://"):
@@ -61,6 +59,8 @@ class Settings(BaseSettings):
             if "+asyncpg" in raw:
                 return raw.replace("+asyncpg", "+psycopg2")
             return raw
+        if self.use_sqlite:
+            return "sqlite:///trading_ecosystem.db"
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -217,8 +217,7 @@ class Settings(BaseSettings):
     @property
     def auth_database_url(self) -> str:
         """Database URL for the auth/dashboard sync engine."""
-        if self.use_sqlite:
-            return "sqlite:///trading_ecosystem.db"
+        # Delegate to database_url_sync which already checks DATABASE_URL first
         return self.database_url_sync
 
 

@@ -26,23 +26,25 @@ _async_session_factory = None
 def _get_engine():
     global _engine
     if _engine is None:
+        import os
         from sqlalchemy.ext.asyncio import create_async_engine
 
         from sqlalchemy.pool import StaticPool
 
         settings = get_settings()
+        db_url = settings.database_url
+        # Determine if we're actually using SQLite based on the resolved URL,
+        # not the use_sqlite flag (which may be stale if DATABASE_URL overrides it).
+        is_sqlite = "sqlite" in db_url
         kwargs = dict(echo=False)
-        if settings.use_sqlite:
-            # StaticPool: reuse a single connection across requests. Combined with
-            # WAL journal mode (set in init_db), this avoids the overhead of opening
-            # a new connection per request (NullPool) while preventing stale reads.
+        if is_sqlite:
             kwargs["connect_args"] = {"check_same_thread": False}
             kwargs["poolclass"] = StaticPool
         else:
             kwargs["pool_size"] = 20
             kwargs["max_overflow"] = 10
             kwargs["pool_pre_ping"] = True
-        _engine = create_async_engine(settings.database_url, **kwargs)
+        _engine = create_async_engine(db_url, **kwargs)
     return _engine
 
 
@@ -84,16 +86,18 @@ async def get_db():
 
 
 async def init_db():
+    import os
     settings = get_settings()
+    is_sqlite = "sqlite" in settings.database_url
     async with _get_engine().begin() as conn:
         # Enable WAL journal mode for SQLite — allows concurrent reads while writing
         # and prevents stale reads with StaticPool.
-        if settings.use_sqlite:
+        if is_sqlite:
             await conn.execute(text("PRAGMA journal_mode=WAL"))
             await conn.execute(text("PRAGMA synchronous=NORMAL"))
         await conn.run_sync(Base.metadata.create_all)
     # Ensure PostgreSQL enums have all values (must run outside transaction)
-    if not settings.use_sqlite:
+    if not is_sqlite:
         try:
             raw_engine = _get_engine()
             async with raw_engine.connect() as raw_conn:
