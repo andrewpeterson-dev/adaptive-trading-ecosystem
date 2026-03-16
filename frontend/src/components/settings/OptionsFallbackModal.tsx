@@ -52,7 +52,7 @@ export function OptionsFallbackModal({ payload, connections, providers, onEnable
         <div>
           <h2 className="text-base font-semibold">Options Not Supported</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{payload.active_broker}</span> doesn't
+            <span className="font-medium text-foreground">{payload.active_broker}</span> doesn&apos;t
             support options trading via API. You can simulate options using a separate provider.
           </p>
         </div>
