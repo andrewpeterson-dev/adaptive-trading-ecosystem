@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { ArrowLeft, BrainCircuit, Plus, Play, Save, RotateCcw, Zap } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Plus, Play, Save, RotateCcw, Zap, LogIn, Settings2, ShieldAlert, Crosshair } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -1282,16 +1282,13 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             )}
           </div>
 
-          <div className="app-panel p-5 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="app-label">
-                Entry Conditions
-              </h3>
-              <span className="app-pill font-mono tracking-normal">
-                {allValidConditions.length} active
-              </span>
-            </div>
-
+          <AccordionSection
+            title="Entry Conditions"
+            defaultOpen
+            badge={`${allValidConditions.length} active`}
+            borderColor="border-l-blue-500"
+            icon={<Crosshair className="h-3.5 w-3.5" />}
+          >
             <div className="rounded-[22px] border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
               Define the entry tree one branch at a time: each branch can mix AND/OR rules internally, then you can join branches with their own AND/OR operator.
             </div>
@@ -1331,78 +1328,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               <Plus className="h-3.5 w-3.5" />
               Add Group
             </button>
-          </div>
-
-          <div className="app-panel space-y-4 p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="app-label">Logic Preview</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Review the readable DSL and the branch tree before you save.
-                </p>
-              </div>
-              <span className="app-pill font-mono tracking-normal">DSL</span>
-            </div>
-
-            <div className="dsl-code-block relative">
-              <button
-                onClick={() => { navigator.clipboard.writeText(logicString); }}
-                className="absolute right-3 top-3 rounded-lg bg-slate-700/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300 hover:bg-slate-600/80 transition-colors"
-              >
-                Copy DSL
-              </button>
-              <code className="break-all">
-                {logicString
-                  ? logicString.split(/\b/).map((token, i) => {
-                      if (/^(IF|THEN|AND|OR)$/.test(token)) return <span key={i} className="token-keyword">{token}</span>;
-                      if (/^(BUY|SELL)$/.test(token)) return <span key={i} className="token-keyword">{token}</span>;
-                      if (/^[A-Z_]{2,}/.test(token)) return <span key={i} className="token-indicator">{token}</span>;
-                      if (/^[<>=!]+$/.test(token)) return <span key={i} className="token-operator">{token}</span>;
-                      if (/^\d/.test(token)) return <span key={i} className="token-value">{token}</span>;
-                      return <span key={i}>{token}</span>;
-                    })
-                  : <span className="text-slate-500">IF [build at least one entry rule] THEN BUY</span>}
-              </code>
-            </div>
-
-            {allConditionGroupsWithRules.length > 0 && (
-              <div className="space-y-3">
-                {allConditionGroupsWithRules.map((group, groupIndex) => (
-                  <React.Fragment key={group.id}>
-                    {groupIndex > 0 && (
-                      <div className="flex items-center justify-center">
-                        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-400">
-                          {group.joiner ?? "OR"}
-                        </span>
-                      </div>
-                    )}
-                    <div className="rounded-[22px] border border-border/60 bg-muted/20 p-4">
-                      <p className="app-label">
-                        {group.label ?? `Group ${String.fromCharCode(65 + groupIndex)}`}
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        {group.conditions
-                          .filter((condition) => condition.indicator)
-                          .map((condition, conditionIndex) => (
-                            <div
-                              key={condition.id}
-                              className="rounded-2xl border border-border/60 bg-background/60 px-3 py-2 text-sm text-foreground"
-                            >
-                              {conditionIndex > 0 && (
-                                <span className="mr-2 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-                                  {condition.joiner ?? "AND"}
-                                </span>
-                              )}
-                              {describeCondition(condition)}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </div>
+          </AccordionSection>
 
           {allValidConditions.length > 0 && Object.keys(indicatorPreviews).length > 0 && (
             <div className="app-panel space-y-3 p-5 sm:p-6">
@@ -1431,7 +1357,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           )}
 
-          <AccordionSection title="Exit Conditions" defaultOpen badge={exitLogicLabel} borderColor="border-l-red-500">
+          <AccordionSection title="Exit Conditions" defaultOpen badge={exitLogicLabel} borderColor="border-l-red-500" icon={<LogIn className="h-3.5 w-3.5" />}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1486,7 +1412,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           </AccordionSection>
 
-          <AccordionSection title="Execution Settings" badge={orderTypeLabel} borderColor="border-l-slate-400">
+          <AccordionSection title="Execution Settings" badge={orderTypeLabel} borderColor="border-l-slate-400" icon={<Settings2 className="h-3.5 w-3.5" />}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1525,7 +1451,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           </AccordionSection>
 
-          <AccordionSection title="Risk Controls" borderColor="border-l-amber-500">
+          <AccordionSection title="Risk Controls" borderColor="border-l-amber-500" icon={<ShieldAlert className="h-3.5 w-3.5" />}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1570,19 +1496,86 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           </AccordionSection>
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-[calc(var(--status-bar-height)+1.75rem)] lg:self-start">
+        <div className="space-y-4 lg:sticky lg:top-[calc(var(--status-bar-height)+1.75rem)] lg:self-start lg:max-h-[calc(100vh-var(--status-bar-height)-3rem)] lg:overflow-y-auto">
+          {/* Logic Preview — always visible in the right panel */}
+          <div className="app-panel space-y-3 p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <p className="app-label">Logic Preview</p>
+              <span className="app-pill font-mono tracking-normal text-[10px]">DSL</span>
+            </div>
+
+            <div className="dsl-code-block relative text-xs">
+              {logicString && (
+                <button
+                  onClick={() => { navigator.clipboard.writeText(logicString); }}
+                  className="absolute right-2 top-2 rounded-md bg-slate-700/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-300 hover:bg-slate-600/80 transition-colors"
+                >
+                  Copy
+                </button>
+              )}
+              <code className="break-all text-[12px] leading-relaxed">
+                {logicString
+                  ? logicString.split(/\b/).map((token, i) => {
+                      if (/^(IF|THEN|AND|OR)$/.test(token)) return <span key={i} className="token-keyword">{token}</span>;
+                      if (/^(BUY|SELL)$/.test(token)) return <span key={i} className="token-keyword">{token}</span>;
+                      if (/^[A-Z_]{2,}/.test(token)) return <span key={i} className="token-indicator">{token}</span>;
+                      if (/^[<>=!]+$/.test(token)) return <span key={i} className="token-operator">{token}</span>;
+                      if (/^\d/.test(token)) return <span key={i} className="token-value">{token}</span>;
+                      return <span key={i}>{token}</span>;
+                    })
+                  : <span className="text-slate-500 italic">Add entry conditions to see the logic tree</span>}
+              </code>
+            </div>
+
+            {allConditionGroupsWithRules.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {allConditionGroupsWithRules.map((group, groupIndex) => (
+                  <React.Fragment key={group.id}>
+                    {groupIndex > 0 && (
+                      <div className="flex items-center justify-center">
+                        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-400">
+                          {group.joiner ?? "OR"}
+                        </span>
+                      </div>
+                    )}
+                    <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {group.label ?? `Group ${String.fromCharCode(65 + groupIndex)}`}
+                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        {group.conditions
+                          .filter((condition) => condition.indicator)
+                          .map((condition, conditionIndex) => (
+                            <div
+                              key={condition.id}
+                              className="rounded-lg border border-border/50 bg-background/60 px-2.5 py-1.5 text-xs text-foreground"
+                            >
+                              {conditionIndex > 0 && (
+                                <span className="mr-1.5 rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                                  {condition.joiner ?? "AND"}
+                                </span>
+                              )}
+                              {describeCondition(condition)}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Diagnostics + Explainer */}
           {allValidConditions.length === 0 && !diagnostics && !explanation ? (
             <div className="app-panel p-5">
-              <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-muted/40">
-                  <Zap className="h-5 w-5 text-muted-foreground" />
+              <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-muted/40">
+                  <Zap className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Add your first entry condition</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Diagnostics will appear here as you build</p>
-                </div>
-                <div className="text-muted-foreground/40">
-                  <ArrowLeft className="h-5 w-5" />
+                  <p className="text-sm font-semibold text-foreground">No diagnostics yet</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Add entry conditions to run analysis</p>
                 </div>
               </div>
             </div>
@@ -1592,6 +1585,36 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               <ExplainerPanel explanation={explanation} loading={explainLoading} />
             </>
           )}
+
+          {/* Sticky action buttons at bottom of right panel */}
+          <div className="sticky bottom-0 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 p-3 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={runExplainer}
+              disabled={allValidConditions.length === 0 || explainLoading}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Zap className="h-4 w-4" />
+              {explainLoading ? "Analyzing..." : "Analyze"}
+            </button>
+            <button
+              type="button"
+              onClick={saveStrategy}
+              disabled={!canSave}
+              className="flex-1 app-button-primary py-2.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Save className="h-4 w-4" />
+              {saveStatus === "saving"
+                ? "Saving..."
+                : saveStatus === "saved"
+                  ? "Saved ✓"
+                  : saveStatus === "error"
+                    ? "Retry"
+                    : mode === "edit"
+                      ? "Update"
+                      : "Save Strategy"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

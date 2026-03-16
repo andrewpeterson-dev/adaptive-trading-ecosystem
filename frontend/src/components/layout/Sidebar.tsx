@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   CandlestickChart,
   Brain,
-  Lock,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -37,7 +36,7 @@ const NAV_ITEMS = [
   { href: "/bots", label: "Bots", icon: Bot, activeFor: ["/bots"] },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, activeFor: ["/dashboard", "/portfolio", "/risk"] },
   { href: "/trade", label: "Trade", icon: CandlestickChart, activeFor: ["/trade", "/watchlist"] },
-  { href: "/ai-intelligence", label: "Intelligence", icon: Brain, activeFor: ["/ai-intelligence", "/models", "/quant"], comingSoon: true },
+  { href: "/ai-intelligence", label: "Intelligence", icon: Brain, activeFor: ["/ai-intelligence", "/models", "/quant"] },
 ];
 
 export function Sidebar() {
@@ -49,7 +48,13 @@ export function Sidebar() {
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebar_collapsed");
-    if (saved === "true") setCollapsed(true);
+    if (saved === "true") {
+      setCollapsed(true);
+    } else if (typeof window !== "undefined" && window.innerWidth < 1280) {
+      // Auto-collapse on smaller desktop screens (1024-1280px)
+      setCollapsed(true);
+      localStorage.setItem("sidebar_collapsed", "true");
+    }
   }, []);
 
   const toggle = () => {
@@ -103,32 +108,18 @@ export function Sidebar() {
             const link = (
               <Link
                 key={item.href}
-                href={item.comingSoon ? "#" : item.href}
-                onClick={item.comingSoon ? (e) => e.preventDefault() : undefined}
+                href={item.href}
                 className={cn(
                   "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all",
                   collapsed && "justify-center px-2",
                   active
                     ? "bg-primary/12 text-primary"
-                    : item.comingSoon
-                      ? "cursor-not-allowed text-muted-foreground/50"
-                      : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                 )}
               >
                 <Icon className={cn("h-[18px] w-[18px] shrink-0", active && "text-primary")} />
                 {!collapsed && (
-                  <>
-                    <span className="truncate">{item.label}</span>
-                    {item.comingSoon && (
-                      <span className="ml-auto flex items-center gap-1 rounded-md bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        <Lock className="h-2.5 w-2.5" />
-                        Soon
-                      </span>
-                    )}
-                  </>
-                )}
-                {collapsed && item.comingSoon && (
-                  <Lock className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 text-muted-foreground/50" />
+                  <span className="truncate">{item.label}</span>
                 )}
               </Link>
             );
@@ -139,7 +130,6 @@ export function Sidebar() {
                   <TooltipTrigger asChild>{link}</TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8}>
                     {item.label}
-                    {item.comingSoon && " (Coming Soon)"}
                   </TooltipContent>
                 </Tooltip>
               );
@@ -268,7 +258,7 @@ export function Sidebar() {
 
       {/* Mobile bottom tab bar */}
       <nav className="mobile-bottom-tabs lg:hidden">
-        {NAV_ITEMS.filter((item) => !item.comingSoon).map((item) => {
+        {NAV_ITEMS.slice(0, 5).map((item) => {
           const active = isActive(item);
           const Icon = item.icon;
           return (
