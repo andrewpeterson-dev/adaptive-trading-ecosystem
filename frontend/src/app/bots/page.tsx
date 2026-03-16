@@ -5,9 +5,9 @@ export default function BotsPage() {
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Autonomous"
+        eyebrow="Trading Terminal"
         title="Bot Fleet"
-        description="Monitor AI-generated and hybrid bots, inspect how each strategy is evolving, and jump into the learning detail view for parameter changes over time."
+        description="Monitor autonomous trading bots, track live P&L, and inspect AI decision-making in real time."
       />
       <div className="app-panel">
         <BotControlPanel />

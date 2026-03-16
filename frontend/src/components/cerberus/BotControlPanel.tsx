@@ -285,11 +285,11 @@ export function BotControlPanel() {
                     {bot.config && (
                       <p className="font-mono text-xs text-muted-foreground">
                         {[
-                          (bot.config.action as string) || "",
+                          (bot.config.action as string) === "SELL" ? "Short" : "Long",
                           (bot.config.timeframe as string) || "",
                           Array.isArray(bot.config.symbols) &&
                           (bot.config.symbols as string[]).length > 0
-                            ? (bot.config.symbols as string[]).slice(0, 3).join(", ")
+                            ? `${(bot.config.symbols as string[]).length} symbols`
                             : "",
                           bot.allocatedCapital
                             ? `$${bot.allocatedCapital.toLocaleString()}`
