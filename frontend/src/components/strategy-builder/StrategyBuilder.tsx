@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { ArrowLeft, BrainCircuit, Plus, Play, Save, RotateCcw, Zap, LogIn, Settings2, ShieldAlert, Crosshair } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Plus, Play, Save, RotateCcw, Zap, LogIn, Settings2, ShieldAlert, Crosshair, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -150,6 +150,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
   const [backtestPeriod, setBacktestPeriod] = useState<BacktestPeriod>("1Y");
   const [commissionPct, setCommissionPct] = useState(0.1);  // display as %
   const [slippagePct, setSlippagePct] = useState(0.05);
+  const [extendedHours, setExtendedHours] = useState(false);
 
   // Risk
   const [cooldownBars, setCooldownBars] = useState(0);
@@ -193,6 +194,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     maxTradesPerDay: number;
     maxExposurePct: number;
     maxLossPct: number;
+    extendedHours: boolean;
   }) => JSON.stringify(
     draft ?? {
       name,
@@ -217,6 +219,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       maxTradesPerDay,
       maxExposurePct,
       maxLossPct,
+      extendedHours,
     }
   ), [
     action,
@@ -372,6 +375,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       maxTradesPerDay,
       maxExposurePct,
       maxLossPct,
+      extendedHours,
     });
     localStorage.removeItem(DRAFT_KEY);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -402,6 +406,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     );
     setCommissionPct((initialStrategy.commission_pct ?? 0.001) * 100);
     setSlippagePct((initialStrategy.slippage_pct ?? 0.0005) * 100);
+    setExtendedHours(initialStrategy.extended_hours ?? false);
     if (initialStrategy.trailing_stop_pct != null) {
       setTrailingStopEnabled(true);
       setTrailingStop(initialStrategy.trailing_stop_pct * 100);
@@ -512,6 +517,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         maxTradesPerDay: initialStrategy.max_trades_per_day ?? 0,
         maxExposurePct: (initialStrategy.max_exposure_pct ?? 1.0) * 100,
         maxLossPct: (initialStrategy.max_loss_pct ?? 0) * 100,
+        extendedHours: false,
       });
     } else {
       aiBaselineRef.current = null;
@@ -789,6 +795,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       maxTradesPerDay,
       maxExposurePct,
       maxLossPct,
+      extendedHours,
     });
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
   }, [
@@ -835,6 +842,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
       symbols,
       commission_pct: commissionPct / 100,
       slippage_pct: slippagePct / 100,
+      extended_hours: extendedHours,
       trailing_stop_pct: trailingStopEnabled ? trailingStop / 100 : null,
       exit_after_bars: exitAfterBarsEnabled ? exitAfterBars : null,
       cooldown_bars: cooldownBars,
@@ -1463,6 +1471,27 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 <div className="mt-2 rounded-2xl border border-border/60 bg-background/60 px-3 py-3 text-sm text-foreground">
                   {backtestPeriod}
                 </div>
+              </div>
+              <div className="col-span-full">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={extendedHours}
+                      onChange={(e) => setExtendedHours(e.target.checked)}
+                      className="peer sr-only"
+                    />
+                    <div className="h-5 w-9 rounded-full border border-border/60 bg-muted/30 transition-colors peer-checked:border-sky-400/40 peer-checked:bg-sky-400/20" />
+                    <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-muted-foreground/60 transition-all peer-checked:translate-x-4 peer-checked:bg-sky-400" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">Extended Hours Trading</span>
+                  </div>
+                </label>
+                <p className="mt-1.5 pl-12 text-[10px] text-muted-foreground">
+                  Enables pre-market (4 AM) and after-hours (8 PM ET) trading. Position sizes auto-reduce 50% outside regular hours.
+                </p>
               </div>
             </div>
           </AccordionSection>
