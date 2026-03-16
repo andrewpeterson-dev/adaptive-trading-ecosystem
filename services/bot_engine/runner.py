@@ -612,7 +612,7 @@ class BotRunner:
             "15m": ("15m", "5d"),
             "1H": ("1h", "30d"),
             "4H": ("1h", "60d"),  # yf doesn't have 4h, use 1h
-            "1D": ("1d", "120d"),
+            "1D": ("1d", "1y"),
         }
         interval, period = tf_map.get(timeframe, ("1d", "120d"))
 
