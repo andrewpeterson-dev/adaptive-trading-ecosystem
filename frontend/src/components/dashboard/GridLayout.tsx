@@ -46,9 +46,15 @@ export function DashboardGrid({
   // Dynamically import react-grid-layout on client
   useEffect(() => {
     import("react-grid-layout").then((mod) => {
+      // Responsive is a named export, not a property on the default export
       // eslint-disable-next-line
-      const RGL = (mod as any).default ?? mod;
-      setGridComponent(() => RGL.Responsive ?? RGL);
+      const Responsive = (mod as any).Responsive;
+      if (Responsive) {
+        setGridComponent(() => Responsive);
+      } else {
+        // Fallback: base grid (won't support breakpoints)
+        setGridComponent(() => (mod as any).default ?? mod);
+      }
     });
   }, []);
 
@@ -72,7 +78,7 @@ export function DashboardGrid({
   }
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} className="dashboard-grid-root">
       <GridComponent
         className="layout"
         layouts={layouts}
