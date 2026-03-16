@@ -8,9 +8,14 @@ import {
   Unplug,
   Settings,
   TrendingUp,
+  Receipt,
+  LayoutGrid,
+  PieChart,
+  ShieldCheck,
 } from "lucide-react";
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { SentimentPanel } from "@/components/analytics/SentimentPanel";
 import { PortfolioRiskPanel } from "@/components/analytics/PortfolioRiskPanel";
@@ -39,11 +44,23 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function GaugeBar({ value, max, color }: { value: number; max: number; color: string }) {
+function GaugeBar({ value, max, label }: { value: number; max: number; label: string }) {
   const pct = Math.min((value / max) * 100, 100);
+  const color = pct > 85 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500";
   return (
-    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-      <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono font-semibold tabular-nums">
+          <span className={pct > 85 ? "text-red-400" : pct > 60 ? "text-amber-400" : "text-emerald-400"}>
+            {typeof value === "number" ? (value * 100).toFixed(1) : value}%
+          </span>
+          <span className="text-muted-foreground font-normal"> / {(max * 100).toFixed(0)}%</span>
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
@@ -115,9 +132,6 @@ export default function DashboardPage() {
     const interval = setInterval(fetchAll, 30000);
     return () => clearInterval(interval);
   }, [fetchAll]);
-
-  const drawdownRatio = risk ? risk.current_drawdown_pct / risk.max_drawdown_limit_pct : 0;
-  const exposureRatio = risk ? risk.current_exposure_pct / risk.max_exposure_limit_pct : 0;
 
   const renderContent = () => {
     if (loading) {
@@ -191,9 +205,9 @@ export default function DashboardPage() {
   return (
     <div className="app-page">
       <SubNav items={[
-        { href: "/dashboard", label: "Overview" },
-        { href: "/portfolio", label: "Portfolio" },
-        { href: "/risk", label: "Risk" },
+        { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+        { href: "/portfolio", label: "Portfolio", icon: PieChart },
+        { href: "/risk", label: "Risk", icon: ShieldCheck },
       ]} />
 
       {earlyContent ? earlyContent : (
@@ -204,13 +218,17 @@ export default function DashboardPage() {
         title="Trading Dashboard"
         description="Track account posture, risk, orders, and ledger activity from a single operational overview."
         badge={
-          <span className="app-pill">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                mode === "live" ? "bg-emerald-400" : "bg-primary"
-              }`}
-            />
-            {mode === "live" ? "Live" : "Paper"}
+          <span className={cn(
+            "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em]",
+            mode === "live"
+              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
+              : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+          )}>
+            <span className={cn(
+              "h-2 w-2 rounded-full",
+              mode === "live" ? "bg-emerald-400 animate-pulse-dot" : "bg-amber-500"
+            )} />
+            {mode === "live" ? "LIVE MODE" : "PAPER MODE"}
           </span>
         }
         meta={
@@ -230,7 +248,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         {account && (
-          <div className="app-panel p-5 space-y-4">
+          <div className="app-panel p-4 space-y-3">
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
               Account Summary
             </div>
@@ -239,6 +257,9 @@ export default function DashboardPage() {
               <div className="text-3xl font-mono font-bold tabular-nums tracking-tight">
                 {formatCurrency(account.equity)}
               </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                <span className="font-mono">+$0 (0.0%)</span> today
+              </p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="app-inset p-3">
@@ -260,7 +281,7 @@ export default function DashboardPage() {
         <CombinedLedgerCard />
 
         {risk && (
-          <div className="app-panel p-5 space-y-4">
+          <div className="app-panel p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 Risk Status
@@ -272,34 +293,16 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Drawdown</span>
-                  <span className={`font-mono font-semibold ${drawdownRatio > 0.7 ? "text-red-400" : drawdownRatio > 0.4 ? "text-amber-400" : "text-emerald-400"}`}>
-                    {(risk.current_drawdown_pct * 100).toFixed(1)}%
-                    <span className="text-muted-foreground font-normal"> / {(risk.max_drawdown_limit_pct * 100).toFixed(0)}%</span>
-                  </span>
-                </div>
-                <GaugeBar
-                  value={risk.current_drawdown_pct}
-                  max={risk.max_drawdown_limit_pct}
-                  color={drawdownRatio > 0.7 ? "bg-red-500" : drawdownRatio > 0.4 ? "bg-amber-500" : "bg-emerald-500"}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Exposure</span>
-                  <span className={`font-mono font-semibold ${exposureRatio > 0.7 ? "text-amber-400" : "text-blue-400"}`}>
-                    {(risk.current_exposure_pct * 100).toFixed(1)}%
-                    <span className="text-muted-foreground font-normal"> / {(risk.max_exposure_limit_pct * 100).toFixed(0)}%</span>
-                  </span>
-                </div>
-                <GaugeBar
-                  value={risk.current_exposure_pct}
-                  max={risk.max_exposure_limit_pct}
-                  color={exposureRatio > 0.7 ? "bg-amber-500" : "bg-blue-500"}
-                />
-              </div>
+              <GaugeBar
+                value={risk.current_drawdown_pct}
+                max={risk.max_drawdown_limit_pct}
+                label="Drawdown"
+              />
+              <GaugeBar
+                value={risk.current_exposure_pct}
+                max={risk.max_exposure_limit_pct}
+                label="Exposure"
+              />
               <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
                 <span className="text-muted-foreground">Trades this hour</span>
                 <span className="font-mono font-semibold tabular-nums">
@@ -313,7 +316,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Sentiment + Portfolio Risk */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <SentimentPanel />
         <PortfolioRiskPanel />
       </div>
@@ -330,6 +333,9 @@ export default function DashboardPage() {
               <div className="text-sm font-medium text-muted-foreground">No open positions</div>
               <div className="text-xs text-muted-foreground/60 mt-0.5">Execute a trade to open a position</div>
             </div>
+            <Link href="/trade" className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors">
+              Go to Trade &rarr;
+            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -377,8 +383,17 @@ export default function DashboardPage() {
       <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
         <SectionHeader count={orders.length}>Recent Orders</SectionHeader>
         {orders.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            No recent orders
+          <div className="py-16 flex flex-col items-center gap-3 text-center">
+            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/50 border border-border/50">
+              <Receipt className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">No recent orders</div>
+              <div className="text-xs text-muted-foreground/60 mt-0.5">Place your first order to see activity here</div>
+            </div>
+            <Link href="/trade" className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors">
+              Place your first order &rarr;
+            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">

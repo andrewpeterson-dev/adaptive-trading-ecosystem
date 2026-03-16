@@ -71,7 +71,7 @@ export function SentimentPanel() {
   }, [fetchReport]);
 
   return (
-    <div className="rounded-lg border border-border/50 bg-card p-4 space-y-4">
+    <div className="app-panel p-4 space-y-4">
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
         <Newspaper className="h-4 w-4" />
         Market Sentiment

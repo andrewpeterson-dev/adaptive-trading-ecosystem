@@ -22,6 +22,12 @@ import { useCerberusStore } from '@/stores/cerberus-store';
 import { useShallow } from 'zustand/react/shallow';
 import { useUIContextStore } from '@/stores/ui-context-store';
 import dynamic from 'next/dynamic';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const ChatPanel = dynamic(() => import('./ChatPanel').then((m) => m.ChatPanel), { ssr: false });
 const StrategyBuilder = dynamic(() => import('./StrategyBuilder').then((m) => m.StrategyBuilder), { ssr: false });
@@ -156,36 +162,43 @@ export function AIWidget() {
     <>
       <AnimatePresence mode="wait">
         {!isOpen && (
-          <motion.div
-            key="cerberus-bubble"
-            ref={bubbleRef}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            drag
-            dragMomentum={false}
-            onDragStart={() => setIsDragging(true)}
-            onDragEnd={(_, info) => {
-              setIsDragging(false);
-              setPosition((prev) =>
-                clampBubblePosition({
-                  x: prev.x + info.offset.x,
-                  y: prev.y + info.offset.y,
-                })
-              );
-            }}
-            onClick={() => {
-              if (!isDragging) openCerberus();
-            }}
-            className="fixed bottom-4 right-4 z-50 flex h-14 w-14 touch-none cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30 transition-transform hover:scale-110 active:scale-95 sm:bottom-6 sm:right-6"
-            style={{ x: position.x, y: position.y }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
-              <path d="M10 21h4" />
-            </svg>
-            <span className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full bg-emerald-400 ring-2 ring-background" />
-          </motion.div>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <motion.div
+                  key="cerberus-bubble"
+                  ref={bubbleRef}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  drag
+                  dragMomentum={false}
+                  onDragStart={() => setIsDragging(true)}
+                  onDragEnd={(_, info) => {
+                    setIsDragging(false);
+                    setPosition((prev) =>
+                      clampBubblePosition({
+                        x: prev.x + info.offset.x,
+                        y: prev.y + info.offset.y,
+                      })
+                    );
+                  }}
+                  onClick={() => {
+                    if (!isDragging) openCerberus();
+                  }}
+                  className="animate-scale-in fixed bottom-20 right-4 z-50 flex h-14 w-14 touch-none cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30 transition-transform hover:scale-110 active:scale-95 sm:bottom-6 sm:right-6 lg:bottom-6"
+                  style={{ x: position.x, y: position.y }}
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
+                    <path d="M10 21h4" />
+                  </svg>
+                  <span className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full bg-emerald-400 ring-2 ring-background" />
+                </motion.div>
+              </TooltipTrigger>
+              <TooltipContent side="left">Ask Cerberus</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </AnimatePresence>
 

@@ -35,19 +35,19 @@ export default function AIIntelligencePage() {
       />
 
       {/* Row 1: Risk Score + Sentiment */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <RiskGauge />
         <SentimentTicker />
       </div>
 
       {/* Row 2: News + Sector Momentum */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-[1.5fr_1fr]">
         <NewsFeed />
         <SectorMomentum />
       </div>
 
       {/* Row 3: Earnings + Active Events */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <EarningsCalendar />
         <ActiveEvents />
       </div>

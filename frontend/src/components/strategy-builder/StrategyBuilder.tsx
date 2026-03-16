@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { BrainCircuit, Plus, Play, Save, RotateCcw, Zap } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Plus, Play, Save, RotateCcw, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConditionGroup as ConditionGroupComponent } from "./ConditionGroup";
 import { AccordionSection } from "./AccordionSection";
 import { DiagnosticPanel } from "./DiagnosticPanel";
@@ -966,15 +968,26 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               <RotateCcw className="h-3.5 w-3.5" />
               Reset
             </button>
-            <button
-              type="button"
-              onClick={runExplainer}
-              disabled={allValidConditions.length === 0 || explainLoading}
-              className="app-button-ghost disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Zap className="h-3.5 w-3.5" />
-              {explainLoading ? "Analyzing…" : "Analyze"}
-            </button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={runExplainer}
+                      disabled={allValidConditions.length === 0 || explainLoading}
+                      className="app-button-ghost disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Zap className="h-3.5 w-3.5" />
+                      {explainLoading ? "Analyzing…" : "Analyze"}
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                {allValidConditions.length === 0 && (
+                  <TooltipContent>Add at least one entry condition to analyze</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
             {mode === "edit" && initialStrategy && (
               <button
                 onClick={() => router.push(`/backtest/${initialStrategy.id}`)}
@@ -984,29 +997,61 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                 Backtest
               </button>
             )}
-            <button
-              type="button"
-              onClick={saveStrategy}
-              disabled={!canSave}
-              className="app-button-secondary disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-40"
-            >
-              <Save className="h-3.5 w-3.5" />
-              {saveStatus === "saving"
-                ? "Saving..."
-                : saveStatus === "saved"
-                  ? "Saved ✓"
-                  : saveStatus === "error"
-                    ? "Failed — Retry"
-                    : mode === "edit"
-                      ? "Update Strategy"
-                      : "Save"}
-            </button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={saveStrategy}
+                      disabled={!canSave}
+                      className="app-button-secondary disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-40"
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      {saveStatus === "saving"
+                        ? "Saving..."
+                        : saveStatus === "saved"
+                          ? "Saved ✓"
+                          : saveStatus === "error"
+                            ? "Failed — Retry"
+                            : mode === "edit"
+                              ? "Update Strategy"
+                              : "Save"}
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                {!canSave && validationIssues.length > 0 && (
+                  <TooltipContent>{validationIssues[0]}</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
+      <div className="app-segmented">
+        <button
+          onClick={() => { setStrategyType("manual"); setSourcePrompt(""); setAiContext({}); aiBaselineRef.current = null; }}
+          className={cn("app-segment", strategyType === "manual" && "app-toggle-active")}
+        >
+          Manual
+        </button>
+        <button
+          onClick={() => setIsAIGeneratorOpen(true)}
+          className={cn("app-segment", strategyType === "ai_generated" && "app-toggle-active")}
+        >
+          AI-Assisted
+        </button>
+        <button
+          onClick={() => setStrategyType("custom")}
+          className={cn("app-segment", (strategyType === "custom") && "app-toggle-active")}
+        >
+          From Template
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
+        <div className="space-y-4">
           <div className="app-panel p-5 sm:p-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
@@ -1034,29 +1079,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-              <div>
-                <label className="app-label">
-                  Strategy Type
-                </label>
-                <select
-                  value={strategyType}
-                  onChange={(e) => {
-                    const next = e.target.value as StrategyType;
-                    setStrategyType(next);
-                    if (next === "manual") {
-                      setSourcePrompt("");
-                      setAiContext({});
-                      aiBaselineRef.current = null;
-                    }
-                  }}
-                  className="app-select mt-2 text-sm font-medium"
-                >
-                  <option value="ai_generated">AI Generated</option>
-                  <option value="manual">Manual</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               <div>
                 <label className="app-label">
                   Action
@@ -1321,9 +1344,24 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               <span className="app-pill font-mono tracking-normal">DSL</span>
             </div>
 
-            <div className="rounded-[22px] border border-border/60 bg-background/60 p-4">
-              <code className="break-all text-sm font-mono text-primary">
-                {logicString || "IF [build at least one entry rule] THEN BUY"}
+            <div className="dsl-code-block relative">
+              <button
+                onClick={() => { navigator.clipboard.writeText(logicString); }}
+                className="absolute right-3 top-3 rounded-lg bg-slate-700/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300 hover:bg-slate-600/80 transition-colors"
+              >
+                Copy DSL
+              </button>
+              <code className="break-all">
+                {logicString
+                  ? logicString.split(/\b/).map((token, i) => {
+                      if (/^(IF|THEN|AND|OR)$/.test(token)) return <span key={i} className="token-keyword">{token}</span>;
+                      if (/^(BUY|SELL)$/.test(token)) return <span key={i} className="token-keyword">{token}</span>;
+                      if (/^[A-Z_]{2,}/.test(token)) return <span key={i} className="token-indicator">{token}</span>;
+                      if (/^[<>=!]+$/.test(token)) return <span key={i} className="token-operator">{token}</span>;
+                      if (/^\d/.test(token)) return <span key={i} className="token-value">{token}</span>;
+                      return <span key={i}>{token}</span>;
+                    })
+                  : <span className="text-slate-500">IF [build at least one entry rule] THEN BUY</span>}
               </code>
             </div>
 
@@ -1393,7 +1431,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           )}
 
-          <AccordionSection title="Exit Conditions" defaultOpen badge={exitLogicLabel}>
+          <AccordionSection title="Exit Conditions" defaultOpen badge={exitLogicLabel} borderColor="border-l-red-500">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1448,7 +1486,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           </AccordionSection>
 
-          <AccordionSection title="Execution Settings" badge={orderTypeLabel}>
+          <AccordionSection title="Execution Settings" badge={orderTypeLabel} borderColor="border-l-slate-400">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1487,7 +1525,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           </AccordionSection>
 
-          <AccordionSection title="Risk Controls">
+          <AccordionSection title="Risk Controls" borderColor="border-l-amber-500">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1532,9 +1570,28 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           </AccordionSection>
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-28 lg:self-start">
-          <DiagnosticPanel report={diagnostics} loading={diagLoading} />
-          <ExplainerPanel explanation={explanation} loading={explainLoading} />
+        <div className="space-y-4 lg:sticky lg:top-[calc(var(--status-bar-height)+1.75rem)] lg:self-start">
+          {allValidConditions.length === 0 && !diagnostics && !explanation ? (
+            <div className="app-panel p-5">
+              <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-muted/40">
+                  <Zap className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Add your first entry condition</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Diagnostics will appear here as you build</p>
+                </div>
+                <div className="text-muted-foreground/40">
+                  <ArrowLeft className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <DiagnosticPanel report={diagnostics} loading={diagLoading} />
+              <ExplainerPanel explanation={explanation} loading={explainLoading} />
+            </>
+          )}
         </div>
       </div>
     </div>

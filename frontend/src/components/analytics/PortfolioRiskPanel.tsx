@@ -94,8 +94,8 @@ export function PortfolioRiskPanel() {
   }, [fetchData]);
 
   return (
-    <div className="app-panel p-5">
-      <div className="space-y-4">
+    <div className="app-panel p-4">
+      <div className="space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
         <ShieldCheck className="h-4 w-4" />
         Portfolio Risk

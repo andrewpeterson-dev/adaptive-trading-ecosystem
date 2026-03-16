@@ -1,11 +1,12 @@
 "use client";
 
-import { Eye, Plus, Star, X } from "lucide-react";
-import { useCallback } from "react";
+import { Clock3, Eye, Plus, Star, X } from "lucide-react";
+import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { usePolling } from "@/hooks/usePolling";
 import { apiFetch } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 import { formatCompactNumber, formatCurrency, formatPercent } from "@/lib/trading/format";
 import { useTradeStore } from "@/stores/trade-store";
 import type { Quote } from "@/types/trading";
@@ -34,12 +35,26 @@ export function TradingWatchlistPanel() {
 
   const quotesBySymbol = new Map((quotes || []).map((quote) => [quote.symbol.toUpperCase(), quote]));
 
+  // Detect if market appears closed: all watchlist quotes have null/zero price or no change data
+  const marketClosed = useMemo(() => {
+    if (watchlist.length === 0 || !quotes || quotes.length === 0) return false;
+    return quotes.every((q) => q.price == null || q.price === 0 || q.change_pct == null);
+  }, [watchlist, quotes]);
+
   return (
     <div className="app-panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="app-label">Watchlist</p>
-          <p className="mt-1 text-sm font-medium text-foreground">
+          <div className="flex items-center gap-2 mb-1">
+            <p className="app-label">Watchlist</p>
+            {marketClosed && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted/50 border border-border/50 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <Clock3 className="h-3 w-3" />
+                Market Closed
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-medium text-foreground">
             Keep a short list beside the chart.
           </p>
         </div>
@@ -67,11 +82,12 @@ export function TradingWatchlistPanel() {
             return (
               <div
                 key={item}
-                className={`flex items-center gap-3 rounded-[24px] border px-4 py-3 transition-colors ${
+                className={cn(
+                  "flex items-center gap-3 rounded-[24px] border px-4 py-3 transition-colors",
                   active
-                    ? "border-primary/35 bg-primary/10"
+                    ? "border-primary/35 bg-primary/10 border-l-2 border-l-primary"
                     : "border-border/60 bg-muted/14 hover:border-border hover:bg-muted/28"
-                }`}
+                )}
               >
                 <button
                   type="button"

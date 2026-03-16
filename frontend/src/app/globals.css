@@ -37,6 +37,25 @@
     --surface-overlay: 210 36% 99%;
     --shadow-color: 220 20% 70%;
     --radius: 1.125rem;
+
+    /* Design system semantic colors */
+    --color-primary: #2563eb;
+    --color-success: #16a34a;
+    --color-danger: #dc2626;
+    --color-warning: #d97706;
+    --color-surface-1: #ffffff;
+    --color-surface-2: #f8fafc;
+    --color-border: #e2e8f0;
+
+    /* Elevation shadows */
+    --shadow-1: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-2: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-3: 0 20px 40px rgba(0,0,0,0.15);
+
+    /* Sidebar dimensions */
+    --sidebar-width: 220px;
+    --sidebar-collapsed-width: 56px;
+    --status-bar-height: 36px;
   }
 
   .dark {
@@ -73,6 +92,18 @@
     --surface-overlay: 228 23% 10%;
     --shadow-color: 220 75% 2%;
     --radius: 1.125rem;
+
+    --color-primary: #3b82f6;
+    --color-success: #22c55e;
+    --color-danger: #ef4444;
+    --color-warning: #f59e0b;
+    --color-surface-1: #0f172a;
+    --color-surface-2: #1e293b;
+    --color-border: #334155;
+
+    --shadow-1: 0 1px 3px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
+    --shadow-2: 0 4px 12px rgba(0,0,0,0.3);
+    --shadow-3: 0 20px 40px rgba(0,0,0,0.5);
   }
 }
 
@@ -157,7 +188,7 @@
   }
 
   .app-hero {
-    @apply relative overflow-hidden rounded-[26px] border px-5 py-5 backdrop-blur-2xl sm:px-6 sm:py-5;
+    @apply relative overflow-hidden rounded-[26px] border px-5 py-4 backdrop-blur-2xl sm:px-6 sm:py-4;
     border-color: hsl(var(--border) / 0.75);
     background:
       linear-gradient(180deg, hsl(var(--surface-2) / 0.98), hsl(var(--surface-1) / 0.98)),
@@ -229,6 +260,10 @@
 
   .app-select {
     @apply app-input appearance-none pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
   }
 
   .app-textarea {
@@ -496,5 +531,151 @@
   }
   to {
     background-position: calc(240px + 100%) 0;
+  }
+}
+
+/* ── Pulse animation for live indicators ────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ── Sidebar transitions ────────────────────────────────────────────── */
+.sidebar-transition {
+  transition: width 200ms ease, padding 200ms ease;
+}
+
+.content-transition {
+  transition: margin-left 200ms ease, padding-left 200ms ease;
+}
+
+/* ── Status bar styles ──────────────────────────────────────────────── */
+.status-bar-paper {
+  background: linear-gradient(90deg, hsl(214 30% 94%), hsl(214 25% 92%));
+}
+
+.dark .status-bar-paper {
+  background: linear-gradient(90deg, hsl(215 25% 18%), hsl(215 22% 16%));
+}
+
+.status-bar-live {
+  background: linear-gradient(90deg, #fef3c7, #fde68a);
+}
+
+.dark .status-bar-live {
+  background: linear-gradient(90deg, #78350f, #92400e);
+}
+
+/* ── Typography design system tokens ────────────────────────────────── */
+.ds-h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.ds-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.ds-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ds-body {
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.ds-code {
+  font-family: "Berkeley Mono", "JetBrains Mono", "SF Mono", "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Elevation utility classes ──────────────────────────────────────── */
+.elevation-1 {
+  box-shadow: var(--shadow-1);
+}
+
+.elevation-2 {
+  box-shadow: var(--shadow-2);
+}
+
+.elevation-3 {
+  box-shadow: var(--shadow-3);
+}
+
+/* ── Card hover lift ────────────────────────────────────────────────── */
+.card-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+/* ── Score ring progress ────────────────────────────────────────────── */
+.score-ring {
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+/* ── Code block styling ─────────────────────────────────────────────── */
+.dsl-code-block {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  font-family: "Berkeley Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: #e2e8f0;
+  overflow-x: auto;
+}
+
+.dsl-code-block .token-indicator { color: #60a5fa; }
+.dsl-code-block .token-operator { color: #94a3b8; }
+.dsl-code-block .token-value { color: #34d399; }
+.dsl-code-block .token-keyword { color: #c084fc; }
+
+/* ── Cerberus AI button entry animation ─────────────────────────────── */
+@keyframes scale-in {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-scale-in {
+  animation: scale-in 300ms ease-out forwards;
+}
+
+/* ── Mobile bottom tab bar ──────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  .mobile-bottom-tabs {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    height: 64px;
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--card) / 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }

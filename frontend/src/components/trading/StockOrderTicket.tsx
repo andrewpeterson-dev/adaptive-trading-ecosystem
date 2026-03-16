@@ -226,10 +226,10 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
           <button
             type="button"
             onClick={() => setDirection("buy")}
-            className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
+            className={`rounded-2xl border px-4 py-2.5 text-sm font-bold transition-colors ${
               direction === "buy"
-                ? "border-emerald-500/35 bg-emerald-500/12 text-emerald-300"
-                : "border-border/60 bg-muted/20 text-muted-foreground"
+                ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                : "border-border/60 bg-muted/20 text-muted-foreground opacity-30"
             }`}
           >
             Buy
@@ -237,10 +237,10 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
           <button
             type="button"
             onClick={() => setDirection("sell")}
-            className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
+            className={`rounded-2xl border px-4 py-2.5 text-sm font-bold transition-colors ${
               direction === "sell"
-                ? "border-red-500/35 bg-red-500/12 text-red-200"
-                : "border-border/60 bg-muted/20 text-muted-foreground"
+                ? "bg-red-600 text-white border-red-600 hover:bg-red-700"
+                : "border-border/60 bg-muted/20 text-muted-foreground opacity-30"
             }`}
           >
             Sell
@@ -435,9 +435,11 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
           </div>
         )}
 
-        <Button type="submit" variant="primary" className="w-full" disabled={reviewDisabled}>
-          Review Order
-        </Button>
+        <div className="sticky bottom-0 bg-card/95 backdrop-blur-sm border-t border-border/50 pt-3 -mx-4 px-4 pb-1">
+          <Button type="submit" variant="primary" className="w-full" disabled={reviewDisabled}>
+            Review Order
+          </Button>
+        </div>
       </form>
     </div>
   );

@@ -122,11 +122,11 @@ export function TradingWorkspace({
 
   const gridTemplateColumns =
     leftDrawerOpen && rightDrawerOpen
-      ? "320px minmax(0,1fr) 420px"
+      ? "280px minmax(0,1fr) 380px"
       : leftDrawerOpen && !rightDrawerOpen
-        ? "320px minmax(0,1fr) 76px"
+        ? "280px minmax(0,1fr) 76px"
         : !leftDrawerOpen && rightDrawerOpen
-          ? "76px minmax(0,1fr) 420px"
+          ? "76px minmax(0,1fr) 380px"
           : "76px minmax(0,1fr) 76px";
 
   const layoutStyle: CSSProperties = {
@@ -201,12 +201,14 @@ export function TradingWorkspace({
         </DrawerShell>
 
         <div className="min-w-0 space-y-4">
-          <TradingChart
-            symbol={symbol}
-            trades={tradeMarkers}
-            highlightedTradeId={highlightedTradeId}
-            onTradeSelect={setHighlightedTradeId}
-          />
+          <div className="min-h-[400px]">
+            <TradingChart
+              symbol={symbol}
+              trades={tradeMarkers}
+              highlightedTradeId={highlightedTradeId}
+              onTradeSelect={setHighlightedTradeId}
+            />
+          </div>
           <TradingDataTabs onRefresh={onRefresh} />
         </div>
 

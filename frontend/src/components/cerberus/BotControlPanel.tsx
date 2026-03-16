@@ -52,6 +52,7 @@ export function BotControlPanel() {
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deployTarget, setDeployTarget] = useState<BotSummary | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   const fetchBots = useCallback(async () => {
     setIsLoading(true);
@@ -72,6 +73,22 @@ export function BotControlPanel() {
   useEffect(() => {
     fetchBots();
   }, [fetchBots]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchBots();
+      setLastUpdated(new Date());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBots]);
+
+  // Tick every 10s to keep the "updated X seconds ago" label fresh
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const ticker = setInterval(() => setTick((t) => t + 1), 10000);
+    return () => clearInterval(ticker);
+  }, []);
 
   const handleDeployClick = (bot: BotSummary) => {
     setDeployTarget(bot);
@@ -109,6 +126,7 @@ export function BotControlPanel() {
   };
 
   const handleStop = async (bot: BotSummary) => {
+    if (!confirm("Stop bot? This will cancel any pending orders and halt signal monitoring.")) return;
     setActioningId(bot.id);
     try {
       await stopBot(bot.id);
@@ -183,14 +201,19 @@ export function BotControlPanel() {
             </p>
           )}
         </div>
-        <Button variant="secondary" size="sm" onClick={fetchBots} disabled={isLoading}>
-          {isLoading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            Updated {Math.round((Date.now() - lastUpdated.getTime()) / 1000) < 5 ? "just now" : `${Math.round((Date.now() - lastUpdated.getTime()) / 1000)}s ago`}
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => { fetchBots(); setLastUpdated(new Date()); }} disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {loadError && (
@@ -226,6 +249,9 @@ export function BotControlPanel() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="text-base font-semibold text-foreground">{bot.name}</h4>
                       <Badge variant={STATUS_COLOR[bot.status] || "neutral"}>
+                        {bot.status === "running" && (
+                          <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-400 animate-pulse-dot inline-block" />
+                        )}
                         {bot.status}
                       </Badge>
                       {bot.latestDecision && (
@@ -294,9 +320,8 @@ export function BotControlPanel() {
                       </Button>
                     )}
                     {bot.status === "running" && (
-                      <Button
-                        variant="danger"
-                        size="sm"
+                      <button
+                        className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
                         onClick={(event) => {
                           event.stopPropagation();
                           void handleStop(bot);
@@ -309,7 +334,7 @@ export function BotControlPanel() {
                           <Square className="h-3.5 w-3.5" />
                         )}
                         Stop
-                      </Button>
+                      </button>
                     )}
                     {bot.status === "paused" && (
                       <Button

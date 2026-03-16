@@ -7,6 +7,8 @@ interface AccordionSectionProps {
   title: string;
   defaultOpen?: boolean;
   badge?: string;
+  borderColor?: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -14,18 +16,21 @@ export function AccordionSection({
   title,
   defaultOpen = false,
   badge,
+  borderColor,
+  icon,
   children,
 }: AccordionSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="app-panel overflow-hidden">
+    <div className={`app-panel overflow-hidden ${borderColor ? `border-l-4 ${borderColor}` : ""}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between bg-slate-950/[0.03] px-5 py-4 text-left transition-colors hover:bg-slate-950/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]"
       >
         <div className="flex items-center gap-2">
+          {icon && <span className="text-muted-foreground">{icon}</span>}
           <span className="app-label">
             {title}
           </span>
