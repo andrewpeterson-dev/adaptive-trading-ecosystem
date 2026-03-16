@@ -5,8 +5,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Brain, GraduationCap, Globe, LineChart } from "lucide-react";
 
-import { BotTradeChart } from "@/components/bots/BotTradeChart";
-import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AIReasoningTab } from "@/components/bots/reasoning/AIReasoningTab";
 import { LearningTab } from "@/components/bots/reasoning/LearningTab";
@@ -34,6 +32,8 @@ import { EntryLogicPanel } from "@/components/terminal/EntryLogicPanel";
 import { UniversePanel } from "@/components/terminal/UniversePanel";
 import { CapitalPanel } from "@/components/terminal/CapitalPanel";
 import { TradeLogPanel } from "@/components/terminal/TradeLogPanel";
+import { AIReasoningPanel } from "@/components/terminal/AIReasoningPanel";
+import { ChartPanel } from "@/components/terminal/ChartPanel";
 
 // ---------------------------------------------------------------------------
 // Page
@@ -219,17 +219,17 @@ export default function BotDetailPage() {
                 <StrategySettingsPanel config={config} strategyType={detail.strategyType} />
               ),
               chart: (
-                <TerminalPanel title={`${activeSymbol} Execution Map`} icon={<LineChart className="h-3.5 w-3.5" />} accent="text-sky-400">
-                  <BotTradeChart
-                    symbol={activeSymbol}
-                    trades={symbolTrades}
-                    selectedTrade={selectedTrade}
-                    hoveredTrade={hoveredTrade}
-                    highlightedTradeId={selectedTradeId}
-                    onHoverTrade={setHoveredTradeId}
-                    onSelectTrade={setSelectedTradeId}
-                  />
-                </TerminalPanel>
+                <ChartPanel
+                  symbol={activeSymbol}
+                  trades={symbolTrades}
+                  selectedTrade={selectedTrade}
+                  hoveredTrade={hoveredTrade}
+                  selectedTradeId={selectedTradeId}
+                  onHoverTrade={setHoveredTradeId}
+                  onSelectTrade={setSelectedTradeId}
+                  equityCurve={detail.equityCurve}
+                  initialCapital={detail.allocatedCapital ?? 100000}
+                />
               ),
               positions: (
                 <OpenPositionsPanel
@@ -263,10 +263,8 @@ export default function BotDetailPage() {
                   onSelectTrade={handleSelectTrade}
                 />
               ),
-              equity: (
-                <TerminalPanel title="Equity Curve" accent="text-fuchsia-400">
-                  <EquityCurveChart data={detail.equityCurve} initialCapital={detail.allocatedCapital ?? 100000} height={200} />
-                </TerminalPanel>
+              ai_decision: (
+                <AIReasoningPanel detail={detail} trade={selectedTrade} />
               ),
             }}
           </DashboardLayout>

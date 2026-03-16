@@ -28,8 +28,8 @@ const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: "risk", x: 8, y: 7, w: 2, h: 4, minW: 2, minH: 3 },
   { i: "logic", x: 10, y: 7, w: 2, h: 4, minW: 2, minH: 3 },
   { i: "universe", x: 0, y: 11, w: 4, h: 3, minW: 2, minH: 2 },
-  { i: "tradelog", x: 4, y: 11, w: 8, h: 5, minW: 4, minH: 3 },
-  { i: "equity", x: 0, y: 14, w: 4, h: 4, minW: 3, minH: 3 },
+  { i: "tradelog", x: 4, y: 11, w: 4, h: 5, minW: 3, minH: 3 },
+  { i: "ai_decision", x: 8, y: 11, w: 4, h: 5, minW: 3, minH: 3 },
 ];
 
 interface DashboardLayoutProps {
