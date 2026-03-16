@@ -2,19 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-
-// Inline layout types — @types/react-grid-layout v1 doesn't match RGL v2
-interface LayoutItem {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  minW?: number;
-  minH?: number;
-  static?: boolean;
-}
-type Layouts = Record<string, LayoutItem[]>;
+import type { LayoutItem, Layouts } from "@/components/dashboard/GridLayout";
 
 // ---------------------------------------------------------------------------
 // Default grid layout (12-column, rowHeight 40px)

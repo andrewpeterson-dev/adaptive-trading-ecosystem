@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
 
-interface LayoutItem {
+// ---------------------------------------------------------------------------
+// Types (inline — @types/react-grid-layout v1 doesn't match RGL v2 runtime)
+// ---------------------------------------------------------------------------
+
+export interface LayoutItem {
   i: string;
   x: number;
   y: number;
@@ -14,7 +17,7 @@ interface LayoutItem {
   static?: boolean;
 }
 
-type Layouts = Record<string, LayoutItem[]>;
+export type Layouts = Record<string, LayoutItem[]>;
 
 interface DashboardGridProps {
   children: React.ReactNode;
@@ -23,6 +26,10 @@ interface DashboardGridProps {
   isResizable: boolean;
   onLayoutChange: (layout: LayoutItem[], allLayouts: Layouts) => void;
 }
+
+// ---------------------------------------------------------------------------
+// Component — wraps react-grid-layout's Responsive with width measurement
+// ---------------------------------------------------------------------------
 
 export function DashboardGrid({
   children,
@@ -33,6 +40,17 @@ export function DashboardGrid({
 }: DashboardGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1200);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [GridComponent, setGridComponent] = useState<React.ComponentType<any> | null>(null);
+
+  // Dynamically import react-grid-layout on client
+  useEffect(() => {
+    import("react-grid-layout").then((mod) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const RGL = (mod as any).default ?? mod;
+      setGridComponent(() => RGL.Responsive ?? RGL);
+    });
+  }, []);
 
   const updateWidth = useCallback(() => {
     if (containerRef.current) {
@@ -49,26 +67,30 @@ export function DashboardGrid({
     return () => observer.disconnect();
   }, [updateWidth]);
 
+  if (!GridComponent) {
+    return <div ref={containerRef} style={{ minHeight: 400 }} />;
+  }
+
   return (
     <div ref={containerRef}>
-      <ResponsiveGridLayout
+      <GridComponent
         className="layout"
-        layouts={layouts as Record<string, ReactGridLayout.Layout[]>}
+        layouts={layouts}
         breakpoints={{ lg: 1200, md: 768 }}
         cols={{ lg: 12, md: 12 }}
         rowHeight={40}
-        margin={[16, 16] as [number, number]}
-        containerPadding={[0, 0] as [number, number]}
+        margin={[16, 16]}
+        containerPadding={[0, 0]}
         width={width}
         isDraggable={isDraggable}
         isResizable={isResizable}
         draggableHandle=".dashboard-panel-header"
-        onLayoutChange={onLayoutChange as never}
+        onLayoutChange={onLayoutChange}
         useCSSTransforms={false}
         compactType="vertical"
       >
         {children}
-      </ResponsiveGridLayout>
+      </GridComponent>
     </div>
   );
 }

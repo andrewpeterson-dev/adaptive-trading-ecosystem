@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* react-grid-layout overrides */
+.react-grid-item.react-grid-placeholder {
+  background: rgba(56, 189, 248, 0.12) !important;
+  border: 1px dashed rgba(56, 189, 248, 0.3) !important;
+  border-radius: 12px !important;
+}
+.react-grid-item > .react-resizable-handle::after {
+  border-color: rgba(100, 116, 139, 0.3) !important;
+}
+.react-grid-item {
+  transition: none !important;
+}
+.react-grid-item.cssTransforms {
+  transition: none !important;
+}
+.react-grid-layout {
+  position: relative;
+}
+.react-grid-item > .react-resizable-handle {
+  z-index: 10;
+}
+
+/* Dashboard panel header drag handle */
+.dashboard-panel-header {
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+.layout-locked .dashboard-panel-header {
+  cursor: default;
+}
+.layout-unlocked .dashboard-panel-header {
+  cursor: grab;
+}
+.layout-unlocked .dashboard-panel-header:active {
+  cursor: grabbing;
+}
+.layout-unlocked .react-grid-item {
+  outline: 1px dashed hsl(var(--border) / 0.4);
+  outline-offset: -1px;
+}
 
 @layer base {
   :root {
@@ -37,7 +76,25 @@
     --surface-3: 210 30% 96%;
     --surface-overlay: 210 36% 99%;
     --shadow-color: 220 20% 70%;
-    --radius: 1.125rem;
+    --radius: 0.75rem;
+    --radius-sm: 0.5rem;
+    --radius-lg: 1rem;
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --layout-gutter: 16px;
+    --panel-padding: 16px;
+
+    /* Status colors */
+    --status-positive: 166 72% 50%;
+    --status-caution: 38 92% 50%;
+    --status-danger: 349 91% 73%;
+    --status-muted: 220 9% 64%;
 
     /* Design system semantic colors */
     --color-primary: #2563eb;
@@ -92,7 +149,9 @@
     --surface-3: 224 20% 15%;
     --surface-overlay: 228 23% 10%;
     --shadow-color: 220 75% 2%;
-    --radius: 1.125rem;
+    --radius: 0.75rem;
+    --radius-sm: 0.5rem;
+    --radius-lg: 1rem;
 
     --color-primary: #3b82f6;
     --color-success: #22c55e;
@@ -189,7 +248,7 @@
   }
 
   .app-hero {
-    @apply relative overflow-hidden rounded-[26px] border px-5 py-4 backdrop-blur-2xl sm:px-6 sm:py-4;
+    @apply relative overflow-hidden rounded-xl border px-5 py-4 backdrop-blur-2xl sm:px-6 sm:py-4;
     border-color: hsl(var(--border) / 0.75);
     background:
       linear-gradient(180deg, hsl(var(--surface-2) / 0.98), hsl(var(--surface-1) / 0.98)),
@@ -200,7 +259,7 @@
   }
 
   .app-panel {
-    @apply rounded-[24px] border backdrop-blur-2xl;
+    @apply rounded-xl border backdrop-blur-2xl;
     border-color: hsl(var(--border) / 0.78);
     background:
       linear-gradient(180deg, hsl(var(--surface-2) / 0.96), hsl(var(--surface-1) / 0.96));
@@ -210,7 +269,7 @@
   }
 
   .app-card {
-    @apply rounded-[20px] border backdrop-blur-xl;
+    @apply rounded-xl border backdrop-blur-xl;
     border-color: hsl(var(--border) / 0.72);
     background:
       linear-gradient(180deg, hsl(var(--surface-2) / 0.92), hsl(var(--surface-3) / 0.92));
@@ -220,7 +279,7 @@
   }
 
   .app-inset {
-    @apply rounded-[18px] border;
+    @apply rounded-lg border;
     border-color: hsl(var(--border) / 0.66);
     background: linear-gradient(180deg, hsl(var(--surface-3) / 0.8), hsl(var(--surface-2) / 0.42));
   }
@@ -234,7 +293,7 @@
   }
 
   .app-input {
-    @apply h-11 w-full rounded-2xl border px-4 text-sm text-foreground outline-none placeholder:text-muted-foreground/65;
+    @apply h-11 w-full rounded-xl border px-4 text-sm text-foreground outline-none placeholder:text-muted-foreground/65;
     border-color: hsl(var(--border) / 0.74);
     background:
       linear-gradient(180deg, hsl(var(--surface-3) / 0.94), hsl(var(--surface-2) / 0.94));
@@ -268,7 +327,7 @@
   }
 
   .app-textarea {
-    @apply min-h-[120px] w-full rounded-[22px] border px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/65;
+    @apply min-h-[120px] w-full rounded-xl border px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/65;
     border-color: hsl(var(--border) / 0.74);
     background:
       linear-gradient(180deg, hsl(var(--surface-3) / 0.94), hsl(var(--surface-2) / 0.94));
@@ -397,7 +456,7 @@
   }
 
   .app-table-shell {
-    @apply overflow-hidden rounded-[24px] border;
+    @apply overflow-hidden rounded-xl border;
     border-color: hsl(var(--border) / 0.78);
     background:
       linear-gradient(180deg, hsl(var(--surface-2) / 0.96), hsl(var(--surface-1) / 0.96));
@@ -659,6 +718,22 @@
 
 .animate-scale-in {
   animation: scale-in 300ms ease-out forwards;
+}
+
+/* ── Responsive panel stacking below 900px ─────────────────────────── */
+@media (max-width: 900px) {
+  .react-grid-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+  }
+  .react-grid-item {
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 200px;
+    transform: none !important;
+  }
 }
 
 /* ── Mobile bottom tab bar ──────────────────────────────────────────── */

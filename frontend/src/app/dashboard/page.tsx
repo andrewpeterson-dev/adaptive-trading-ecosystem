@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import {
   RefreshCw,
   Loader2,
@@ -24,10 +23,6 @@ import {
 } from "lucide-react";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-
-// RGL v2 runtime types — @types/react-grid-layout v1 is outdated
-interface LayoutItem { i: string; x: number; y: number; w: number; h: number; minW?: number; minH?: number; static?: boolean }
-type Layouts = Record<string, LayoutItem[]>;
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -49,17 +44,9 @@ import {
   PortfolioRiskDashPanel,
 } from "@/components/dashboard";
 import { ExecutionChart } from "@/components/dashboard/ExecutionChart";
+import { DashboardGrid } from "@/components/dashboard/GridLayout";
+import type { Layouts, LayoutItem } from "@/components/dashboard/GridLayout";
 import { SentimentPanel } from "@/components/analytics/SentimentPanel";
-
-// ---------------------------------------------------------------------------
-// Dynamic import for react-grid-layout (SSR-incompatible)
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ResponsiveGridLayout = dynamic<any>(
-  () => import("react-grid-layout").then((mod) => mod.Responsive),
-  { ssr: false },
-);
 
 // ---------------------------------------------------------------------------
 // Default grid layout
@@ -110,17 +97,6 @@ export default function DashboardPage() {
   // -- Layout state --
   const { isLayoutLocked, toggleLayoutLock, layouts, updateLayouts } =
     useDashboardStore();
-
-  // -- Grid container width (RGL v2 requires explicit width) --
-  const gridContainerRef = useRef<HTMLDivElement>(null);
-  const [gridWidth, setGridWidth] = useState(1200);
-  useEffect(() => {
-    const el = gridContainerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setGridWidth(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // Use stored layouts if they have the right keys, otherwise use defaults
   const activeLayouts = useMemo(() => {
@@ -179,7 +155,7 @@ export default function DashboardPage() {
   const handleLayoutChange = useCallback(
     (_layout: LayoutItem[], allLayouts: Layouts) => {
       if (!isLayoutLocked) {
-        updateLayouts(allLayouts as never);
+        updateLayouts(allLayouts);
       }
     },
     [isLayoutLocked, updateLayouts]
@@ -390,24 +366,12 @@ export default function DashboardPage() {
       />
 
       {/* Grid Layout */}
-      <div ref={gridContainerRef}>
-      {typeof window !== "undefined" && (
-        <ResponsiveGridLayout
-          className="layout"
-          width={gridWidth}
-          layouts={activeLayouts}
-          breakpoints={{ lg: 1200, md: 768 }}
-          cols={{ lg: 12, md: 12 }}
-          rowHeight={40}
-          margin={[16, 16]}
-          containerPadding={[0, 0]}
-          isDraggable={!isLayoutLocked}
-          isResizable={!isLayoutLocked}
-          draggableHandle=".dashboard-panel-header"
-          onLayoutChange={handleLayoutChange}
-          useCSSTransforms={false}
-          compactType="vertical"
-        >
+      <DashboardGrid
+        layouts={activeLayouts}
+        isDraggable={!isLayoutLocked}
+        isResizable={!isLayoutLocked}
+        onLayoutChange={handleLayoutChange}
+      >
           {/* Left Column */}
           <div key="strategy">
             <DashboardPanel title="Strategies" icon={Zap}>
@@ -488,9 +452,7 @@ export default function DashboardPage() {
               <TradeLogPanel orders={orders} />
             </DashboardPanel>
           </div>
-        </ResponsiveGridLayout>
-      )}
-      </div>
+      </DashboardGrid>
     </div>
   );
 }
