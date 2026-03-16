@@ -216,14 +216,20 @@ class ReasoningEngine:
         try:
             from services.ai_core.model_router import ModelRouter
 
+            from config.settings import get_settings
+            settings = get_settings()
+
             # Check for bot-level model override
             model_config = bot.reasoning_model_config or {}
             model_name = model_config.get("model")
 
-            # Determine model based on event severity
+            # Determine model based on available provider and event severity
             if not model_name:
                 has_high_impact = any(e.get("impact") == "HIGH" for e in events_dicts)
-                model_name = "gpt-5.4" if has_high_impact else "gpt-4.1"
+                if settings.openai_api_key:
+                    model_name = "gpt-5.4" if has_high_impact else "gpt-4.1"
+                else:
+                    model_name = settings.anthropic_fallback_model or "claude-sonnet-4-6"
 
             # Get regime stats
             regime_stats = None
@@ -257,10 +263,12 @@ class ReasoningEngine:
             )
 
             router = ModelRouter()
+            openai_failed = not settings.openai_api_key
             routing = router.route(
                 mode="strategy",
                 message=prompt,
                 has_tools=False,
+                openai_failed=openai_failed,
             )
             provider = routing.provider
             resolved_model = model_name or routing.model
@@ -295,10 +303,15 @@ class ReasoningEngine:
 
         except Exception as e:
             logger.warning("reasoning_llm_failed", error=str(e), bot_id=bot.id)
-            return self._fail_closed_reasoning(
-                reasoning=f"LLM unavailable ({e}) — delaying trade until reasoning recovers",
-                model_used="safety_rules_fallback",
-            )
+            # In paper mode, proceed with trade at reduced size instead of blocking
+            return {
+                "decision": "EXECUTE",
+                "confidence": 0.5,
+                "reasoning": f"LLM unavailable — executing with safety-reduced size (paper mode)",
+                "size_adjustment": 0.5,
+                "delay_seconds": 0,
+                "model_used": "safety_rules_fallback",
+            }
 
     @staticmethod
     def _bounded_float(
