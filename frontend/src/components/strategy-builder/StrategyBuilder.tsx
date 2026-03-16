@@ -1151,7 +1151,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-              <div className="rounded-[24px] border border-border/60 bg-muted/20 p-4">
+              <div className="rounded-[24px] border-2 border-primary/20 bg-primary/[0.02] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="app-label">Symbol / Universe</p>
@@ -1159,15 +1159,20 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
                       Required. The first symbol anchors diagnostics and backtests.
                     </p>
                   </div>
-                  <span className="app-pill font-mono tracking-normal">
+                  <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-[11px] font-semibold font-mono tracking-normal text-primary">
                     {symbols.length} symbol{symbols.length === 1 ? "" : "s"}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {symbols.map((symbol) => (
+                  {symbols.map((symbol, idx) => (
                     <span
                       key={symbol}
-                      className="app-pill items-center gap-1 px-2.5 py-1 text-xs font-mono tracking-normal"
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-mono font-semibold tracking-wide",
+                        idx === 0
+                          ? "border-primary/30 bg-primary/10 text-primary"
+                          : "border-border/60 bg-muted/40 text-foreground"
+                      )}
                     >
                       {symbol}
                       <button
@@ -1239,7 +1244,12 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               </div>
             </div>
 
-            <div className="mt-5 rounded-[24px] border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            <div className={cn(
+              "mt-5 rounded-[24px] border px-4 py-3 text-sm",
+              validationIssues.length > 0
+                ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-300"
+                : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-400"
+            )}>
               {builderHint}
             </div>
 
@@ -1284,12 +1294,13 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
           <AccordionSection
             title="Entry Conditions"
+            subtitle="When to open a position"
             defaultOpen
             badge={`${allValidConditions.length} active`}
-            borderColor="border-l-blue-500"
+            accent="green"
             icon={<Crosshair className="h-3.5 w-3.5" />}
           >
-            <div className="rounded-[22px] border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            <div className="rounded-[22px] border border-emerald-500/15 bg-emerald-500/[0.03] px-4 py-3 text-sm text-muted-foreground">
               Define the entry tree one branch at a time: each branch can mix AND/OR rules internally, then you can join branches with their own AND/OR operator.
             </div>
 
@@ -1323,7 +1334,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
 
             <button
               onClick={addGroup}
-              className="app-inset flex w-full items-center justify-center gap-1.5 py-4 text-sm text-muted-foreground hover:text-foreground"
+              className="app-inset flex w-full items-center justify-center gap-1.5 py-4 text-sm text-emerald-400/70 hover:text-emerald-400 transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
               Add Group
@@ -1357,7 +1368,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           )}
 
-          <AccordionSection title="Exit Conditions" defaultOpen badge={exitLogicLabel} borderColor="border-l-red-500" icon={<LogIn className="h-3.5 w-3.5" />}>
+          <AccordionSection title="Exit Conditions" subtitle="When to close a position" defaultOpen badge={exitLogicLabel} accent="red" icon={<LogIn className="h-3.5 w-3.5" />}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1412,7 +1423,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           </AccordionSection>
 
-          <AccordionSection title="Execution Settings" badge={orderTypeLabel} borderColor="border-l-slate-400" icon={<Settings2 className="h-3.5 w-3.5" />}>
+          <AccordionSection title="Execution Settings" subtitle="Order routing and backtest config" badge={orderTypeLabel} accent="slate" icon={<Settings2 className="h-3.5 w-3.5" />}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1451,7 +1462,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
             </div>
           </AccordionSection>
 
-          <AccordionSection title="Risk Controls" borderColor="border-l-amber-500" icon={<ShieldAlert className="h-3.5 w-3.5" />}>
+          <AccordionSection title="Risk Controls" subtitle="Position limits and circuit breakers" accent="orange" icon={<ShieldAlert className="h-3.5 w-3.5" />}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="app-label">
@@ -1565,6 +1576,21 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               </div>
             )}
           </div>
+
+          {/* Validation Errors */}
+          {validationIssues.length > 0 && (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.04] p-4 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-red-400">
+                {validationIssues.length} validation issue{validationIssues.length !== 1 ? "s" : ""}
+              </p>
+              {validationIssues.map((issue, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm">
+                  <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+                  <span className="text-muted-foreground text-xs">{issue}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Diagnostics + Explainer */}
           {allValidConditions.length === 0 && !diagnostics && !explanation ? (
