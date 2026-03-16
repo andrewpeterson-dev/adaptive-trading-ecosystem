@@ -153,25 +153,25 @@ export function MetricsRow({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-4">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <div
             key={card.label}
-            className="app-panel p-4 transition-transform hover:-translate-y-0.5"
+            className="app-panel p-3 sm:p-4 transition-transform hover:-translate-y-0.5 min-w-0"
           >
-            <div className="flex items-center gap-1.5 mb-2">
-              <Icon className="h-3.5 w-3.5 text-muted-foreground/50" />
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2">
+              <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground truncate">
                 {card.label}
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <div
                 className={cn(
-                  "text-2xl font-mono font-bold tabular-nums tracking-tight",
+                  "text-lg sm:text-xl lg:text-2xl font-mono font-bold tabular-nums tracking-tight truncate",
                   card.valueColor
                 )}
               >
@@ -185,7 +185,7 @@ export function MetricsRow({
             {card.subtitle && (
               <div
                 className={cn(
-                  "text-xs mt-1 truncate",
+                  "text-[10px] sm:text-xs mt-1 truncate",
                   card.subtitleColor || "text-muted-foreground"
                 )}
               >

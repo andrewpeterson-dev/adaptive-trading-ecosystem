@@ -84,7 +84,7 @@ export function MarketIntelligenceBar({
 
   return (
     <div
-      className="flex h-12 items-center justify-between gap-8 rounded-xl border px-3"
+      className="flex min-h-[48px] flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border px-4 py-2"
       style={{
         background: "hsl(var(--surface-1))",
         borderColor: "hsl(var(--border) / 0.6)",

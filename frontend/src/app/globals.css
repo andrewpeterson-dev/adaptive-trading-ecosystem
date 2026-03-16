@@ -284,6 +284,32 @@
     background: linear-gradient(180deg, hsl(var(--surface-3) / 0.8), hsl(var(--surface-2) / 0.42));
   }
 
+  /* ── RGL grid layout fixes ───────────────────────────────────────────── */
+
+  /* RGL gives each child position:absolute with explicit dimensions.
+     The inner wrapper must stretch to fill that space so h-full works. */
+  .dashboard-grid-root .react-grid-item > div {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Thin scrollbar for panels that overflow */
+  .dashboard-grid-root ::-webkit-scrollbar {
+    width: 4px;
+  }
+  .dashboard-grid-root ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dashboard-grid-root ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border) / 0.5);
+    border-radius: 9999px;
+  }
+  .dashboard-grid-root {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border) / 0.5) transparent;
+  }
+
   .app-kicker {
     @apply text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground;
   }

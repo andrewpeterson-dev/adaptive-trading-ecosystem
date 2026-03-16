@@ -109,7 +109,7 @@ function ConfidenceRing({ value }: { value: number }) {
 export function AIReasoningPanel({ decision }: AIReasoningPanelProps) {
   if (!decision) {
     return (
-      <section className="app-panel p-5 sm:p-6">
+      <section className="space-y-4">
         <div className="flex items-center gap-2 mb-5">
           <Brain className="h-4 w-4 text-violet-400" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -130,7 +130,7 @@ export function AIReasoningPanel({ decision }: AIReasoningPanelProps) {
   const { signal, checks, confidence, holdTime, timeline, timestamp } = decision;
 
   return (
-    <section className="app-panel p-5 sm:p-6">
+    <section className="space-y-4">
       {/* ── Signal Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
