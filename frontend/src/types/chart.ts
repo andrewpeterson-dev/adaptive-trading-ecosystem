@@ -37,3 +37,19 @@ export interface PriceLevelLine {
   label: string;
   lineStyle?: number; // 0=solid, 1=dotted, 2=dashed
 }
+
+export interface AISignal {
+  timestamp: number;       // unix epoch seconds
+  price: number;
+  strength: number;        // 0-1
+  type: "buy" | "sell" | "neutral";
+  mock?: boolean;
+}
+
+export interface HeatmapConfig {
+  enabled: boolean;
+  intensity: number;       // 0.3-1.0, multiplier for opacity
+  clusterThreshold: number; // minimum signals to show cluster
+  showBuyZones: boolean;
+  showSellZones: boolean;
+}

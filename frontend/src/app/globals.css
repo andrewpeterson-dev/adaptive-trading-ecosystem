@@ -2,18 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* react-grid-layout */
-.react-grid-item.react-grid-placeholder {
-  background: rgba(56, 189, 248, 0.12) !important;
-  border: 1px dashed rgba(56, 189, 248, 0.3) !important;
-  border-radius: 16px !important;
-}
-.react-grid-item > .react-resizable-handle::after {
-  border-color: rgba(100, 116, 139, 0.3) !important;
-}
-.react-grid-item {
-  transition: none !important;
-}
 
 @layer base {
   :root {

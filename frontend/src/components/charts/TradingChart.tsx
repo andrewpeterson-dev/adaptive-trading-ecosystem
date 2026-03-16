@@ -5,7 +5,9 @@ import { Loader2, AlertTriangle } from "lucide-react";
 import { useTradeStore } from "@/stores/trade-store";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { Button } from "@/components/ui/button";
-import type { CandleData, TradeMarker, TimeFrame, ChartIndicator, PriceLevelLine } from "@/types/chart";
+import { HeatmapOverlay } from "@/components/charts/HeatmapOverlay";
+import { ChartOverlaySettings } from "@/components/charts/ChartOverlaySettings";
+import type { CandleData, TradeMarker, TimeFrame, ChartIndicator, PriceLevelLine, AISignal, HeatmapConfig } from "@/types/chart";
 import type {
   IChartApi,
   ISeriesApi,
@@ -451,6 +453,20 @@ export function TradingChart({
 
   const { quote, positions, showAllExecutions, setShowAllExecutions } = useTradeStore();
   const showAllExecutionsRef = useRef(showAllExecutions);
+
+  // --- AI Heatmap state ---
+  const [aiSignals, setAiSignals] = useState<AISignal[]>([]);
+  const [aiSignalsEnabled, setAiSignalsEnabled] = useState(true);
+  const [tradeMarkersEnabled, setTradeMarkersEnabled] = useState(true);
+  const [indicatorsVisible, setIndicatorsVisible] = useState(true);
+  const [heatmapConfig, setHeatmapConfig] = useState<HeatmapConfig>({
+    enabled: false,
+    intensity: 0.65,
+    clusterThreshold: 1,
+    showBuyZones: true,
+    showSellZones: true,
+  });
+  const [chartDimensions, setChartDimensions] = useState({ width: 0, height: 0 });
 
   const hasSubIndicator = indicators.rsi || indicators.macd;
   const hasBothSub = indicators.rsi && indicators.macd;
@@ -1054,6 +1070,95 @@ export function TradingChart({
   }, [timeframe, symbol, fetchAndRender]);
 
   // ---------------------------------------------------------------------------
+  // Fetch AI signals for heatmap
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!aiSignalsEnabled) {
+      setAiSignals([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchSignals = async () => {
+      try {
+        const res = await fetch(
+          `/api/ai/tools/signals?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=300`,
+        );
+        if (!res.ok) return;
+        const payload = await res.json();
+        if (!cancelled && Array.isArray(payload?.signals)) {
+          setAiSignals(payload.signals as AISignal[]);
+        }
+      } catch {
+        // silently fail -- heatmap is non-critical
+      }
+    };
+
+    void fetchSignals();
+    return () => { cancelled = true; };
+  }, [symbol, timeframe, aiSignalsEnabled]);
+
+  // ---------------------------------------------------------------------------
+  // Track chart container dimensions for heatmap canvas sizing
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const updateDims = () => {
+      setChartDimensions({ width: el.clientWidth, height: el.clientHeight });
+    };
+    updateDims();
+
+    const observer = new ResizeObserver(() => updateDims());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [chartHeight]);
+
+  // ---------------------------------------------------------------------------
+  // Toggle indicators visibility (bulk on/off from overlay settings)
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!indicatorsVisible) {
+      sma20SeriesRef.current?.applyOptions({ visible: false });
+      sma50SeriesRef.current?.applyOptions({ visible: false });
+      ema9SeriesRef.current?.applyOptions({ visible: false });
+      vwapSeriesRef.current?.applyOptions({ visible: false });
+      rsiSeriesRef.current?.applyOptions({ visible: false });
+      macdLineSeriesRef.current?.applyOptions({ visible: false });
+      macdSignalSeriesRef.current?.applyOptions({ visible: false });
+      macdHistSeriesRef.current?.applyOptions({ visible: false });
+    } else {
+      // Re-apply individual indicator states
+      sma20SeriesRef.current?.applyOptions({ visible: indicators.sma20 });
+      sma50SeriesRef.current?.applyOptions({ visible: indicators.sma50 });
+      ema9SeriesRef.current?.applyOptions({ visible: indicators.ema9 });
+      vwapSeriesRef.current?.applyOptions({ visible: indicators.vwap });
+      rsiSeriesRef.current?.applyOptions({ visible: indicators.rsi });
+      macdLineSeriesRef.current?.applyOptions({ visible: indicators.macd });
+      macdSignalSeriesRef.current?.applyOptions({ visible: indicators.macd });
+      macdHistSeriesRef.current?.applyOptions({ visible: indicators.macd });
+    }
+  }, [indicatorsVisible, indicators]);
+
+  // ---------------------------------------------------------------------------
+  // Trade markers visibility toggle
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!candleSeriesRef.current) return;
+    if (!tradeMarkersEnabled) {
+      candleSeriesRef.current.setMarkers([]);
+    } else if (barsRef.current.length > 0) {
+      applyTradeMarkers(barsRef.current);
+    }
+  }, [tradeMarkersEnabled, applyTradeMarkers]);
+
+  // ---------------------------------------------------------------------------
   // Quote display values
   // ---------------------------------------------------------------------------
 
@@ -1149,10 +1254,33 @@ export function TradingChart({
             </button>
           );
         })}
+        <div className="ml-auto">
+          <ChartOverlaySettings
+            heatmapConfig={heatmapConfig}
+            onHeatmapConfigChange={setHeatmapConfig}
+            aiSignalsEnabled={aiSignalsEnabled}
+            onAiSignalsEnabledChange={setAiSignalsEnabled}
+            tradeMarkersEnabled={tradeMarkersEnabled}
+            onTradeMarkersEnabledChange={setTradeMarkersEnabled}
+            indicatorsEnabled={indicatorsVisible}
+            onIndicatorsEnabledChange={setIndicatorsVisible}
+            theme={theme}
+          />
+        </div>
       </div>
 
       <div className="relative" style={{ height: chartHeight }}>
         <div ref={containerRef} className="absolute inset-0" />
+
+        <HeatmapOverlay
+          signals={aiSignals}
+          config={heatmapConfig}
+          chartApi={chartRef.current}
+          candleSeries={candleSeriesRef.current}
+          width={chartDimensions.width}
+          height={chartDimensions.height}
+          theme={theme}
+        />
 
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">

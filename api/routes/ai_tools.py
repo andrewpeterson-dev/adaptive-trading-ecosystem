@@ -963,3 +963,165 @@ async def _fetch_bot_metrics(session, bot_id: str, config: dict[str, Any], user_
     result = await session.execute(stmt.order_by(CerberusTrade.created_at.asc()))
     trades = list(result.scalars().all())
     return calculate_trade_metrics(trades, config)
+
+
+# ---------------------------------------------------------------------------
+# AI Signals endpoint (for heatmap overlay)
+# ---------------------------------------------------------------------------
+
+
+def _generate_mock_signals(symbol: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Generate demo signals when no real data exists."""
+    import hashlib
+    import time as _time
+
+    now = int(_time.time())
+    signals: list[dict[str, Any]] = []
+    # Use a deterministic seed based on symbol so mock data is stable per symbol
+    seed = int(hashlib.md5(symbol.encode()).hexdigest()[:8], 16)
+
+    for i in range(limit):
+        # Pseudo-random but deterministic offsets
+        offset = ((seed + i * 7919) % 3600) * (i + 1)
+        ts = now - offset
+        price_base = 100 + ((seed + i * 31) % 400)
+        price_jitter = ((seed + i * 47) % 100) / 100.0 * 10 - 5
+        price = round(price_base + price_jitter, 2)
+        strength = round(0.3 + ((seed + i * 53) % 70) / 100.0, 2)
+        sig_type = "buy" if (seed + i) % 3 != 0 else "sell"
+
+        signals.append({
+            "timestamp": ts,
+            "price": price,
+            "strength": min(strength, 1.0),
+            "type": sig_type,
+            "mock": True,
+        })
+
+    return signals
+
+
+@router.get("/signals")
+async def get_ai_signals(
+    request: Request,
+    symbol: str,
+    timeframe: str = "1D",
+    limit: int = 300,
+):
+    """Return AI-detected trading signals for heatmap visualization."""
+    from db.cerberus_models import MarketEvent
+
+    user_id = request.state.user_id
+    symbol_upper = symbol.strip().upper()
+    signals: list[dict[str, Any]] = []
+
+    async with get_session() as session:
+        # 1. Gather all bot IDs belonging to this user
+        bot_result = await session.execute(
+            select(CerberusBot.id).where(CerberusBot.user_id == user_id)
+        )
+        bot_ids = [row[0] for row in bot_result.all()]
+
+        # 2. Query TradeDecisions for this symbol from any of the user's bots
+        if bot_ids:
+            td_stmt = (
+                select(TradeDecision)
+                .where(
+                    TradeDecision.bot_id.in_(bot_ids),
+                    func.upper(TradeDecision.symbol) == symbol_upper,
+                )
+                .order_by(desc(TradeDecision.created_at))
+                .limit(limit)
+            )
+            td_result = await session.execute(td_stmt)
+            decisions = td_result.scalars().all()
+
+            for td in decisions:
+                ts = int(td.created_at.timestamp()) if td.created_at else 0
+                if ts == 0:
+                    continue
+                confidence = float(td.ai_confidence) if td.ai_confidence else 0.5
+                decision_str = str(td.decision or "").upper()
+
+                if decision_str == "EXECUTE":
+                    sig_type = "buy" if str(td.strategy_signal or "").upper() in ("BUY", "HOLD") else "sell"
+                elif decision_str in ("DELAY_TRADE", "PAUSE_BOT", "REDUCE_SIZE"):
+                    sig_type = "sell"  # caution zone
+                    confidence = confidence * 0.7  # reduce strength for caution
+                elif decision_str == "EXIT_POSITION":
+                    sig_type = "sell"
+                else:
+                    continue
+
+                # We don't have exact price from TradeDecision — use 0 as placeholder;
+                # frontend can discard signals with price 0 or the backend can augment later.
+                # For now, try to extract from related trades.
+                price = 0.0
+                if bot_ids:
+                    # Look for a recent trade near this time for price reference
+                    trade_stmt = (
+                        select(CerberusTrade.entry_price)
+                        .where(
+                            CerberusTrade.bot_id == td.bot_id,
+                            func.upper(CerberusTrade.symbol) == symbol_upper,
+                        )
+                        .order_by(desc(CerberusTrade.created_at))
+                        .limit(1)
+                    )
+                    trade_result = await session.execute(trade_stmt)
+                    trade_row = trade_result.first()
+                    if trade_row and trade_row[0]:
+                        price = float(trade_row[0])
+
+                signals.append({
+                    "timestamp": ts,
+                    "price": price,
+                    "strength": round(min(max(confidence, 0), 1), 3),
+                    "type": sig_type,
+                    "mock": False,
+                })
+
+        # 3. Query MarketEvents affecting this symbol
+        me_stmt = (
+            select(MarketEvent)
+            .where(
+                (MarketEvent.user_id == user_id) | (MarketEvent.user_id.is_(None)),
+            )
+            .order_by(desc(MarketEvent.detected_at))
+            .limit(limit)
+        )
+        me_result = await session.execute(me_stmt)
+        events = me_result.scalars().all()
+
+        for event in events:
+            event_symbols = event.symbols if isinstance(event.symbols, list) else []
+            event_symbols_upper = [s.upper() for s in event_symbols if isinstance(s, str)]
+            if symbol_upper not in event_symbols_upper and len(event_symbols_upper) > 0:
+                continue
+
+            impact = str(event.impact or "").upper()
+            if impact not in ("HIGH", "MEDIUM"):
+                continue
+
+            ts = int(event.detected_at.timestamp()) if event.detected_at else 0
+            if ts == 0:
+                continue
+
+            strength = 0.8 if impact == "HIGH" else 0.5
+            signals.append({
+                "timestamp": ts,
+                "price": 0.0,  # no direct price from events
+                "strength": strength,
+                "type": "sell",  # high-impact events are caution zones
+                "mock": False,
+            })
+
+    # 4. If no real signals exist, generate mock data for demo
+    if not signals:
+        signals = _generate_mock_signals(symbol_upper, limit=min(limit, 20))
+
+    # Sort by timestamp descending and cap
+    signals.sort(key=lambda s: s["timestamp"], reverse=True)
+    signals = signals[:limit]
+
+    return {"signals": signals}
