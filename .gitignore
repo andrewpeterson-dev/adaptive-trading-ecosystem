@@ -52,3 +52,4 @@ risk/portfolio-risk.json
 Thumbs.db
 .vercel
 .env*.local
+.superpowers/
