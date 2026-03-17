@@ -71,25 +71,51 @@ async def get_drawdown_status(request: Request):
     user_id = request.state.user_id
     mode = request.state.trading_mode
     daily_pnl_pct = 0.0
+    mode_str_check = mode.value if hasattr(mode, "value") else str(mode)
     try:
-        from db.models import PaperPortfolio, PaperTrade
         from sqlalchemy import func
-        async with get_session() as session:
-            portfolio_result = await session.execute(
-                select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
-            )
-            portfolio = portfolio_result.scalar_one_or_none()
-            if portfolio and portfolio.initial_capital:
+        if mode_str_check == "live":
+            from db.cerberus_models import CerberusTrade
+            async with get_session() as session:
                 start_of_day = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
                 trade_result = await session.execute(
-                    select(func.sum(PaperTrade.pnl)).where(
-                        PaperTrade.user_id == user_id,
-                        PaperTrade.exit_time.is_not(None),
-                        PaperTrade.exit_time >= start_of_day,
+                    select(func.sum(CerberusTrade.pnl)).where(
+                        CerberusTrade.user_id == user_id,
+                        CerberusTrade.exit_ts.is_not(None),
+                        CerberusTrade.exit_ts >= start_of_day,
                     )
                 )
                 realized_today = float(trade_result.scalar() or 0.0)
-                daily_pnl_pct = realized_today / float(portfolio.initial_capital) * 100.0
+                # Use allocated capital or fall back to a warning
+                equity_result = await session.execute(
+                    select(func.sum(CerberusTrade.entry_price * CerberusTrade.quantity)).where(
+                        CerberusTrade.user_id == user_id,
+                        CerberusTrade.exit_ts.is_(None),
+                    )
+                )
+                total_exposure = float(equity_result.scalar() or 0.0)
+                if total_exposure > 0:
+                    daily_pnl_pct = realized_today / total_exposure * 100.0
+                elif realized_today != 0.0:
+                    logger.warning("live_drawdown_no_equity_baseline", user_id=user_id)
+        else:
+            from db.models import PaperPortfolio, PaperTrade
+            async with get_session() as session:
+                portfolio_result = await session.execute(
+                    select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+                )
+                portfolio = portfolio_result.scalar_one_or_none()
+                if portfolio and portfolio.initial_capital:
+                    start_of_day = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                    trade_result = await session.execute(
+                        select(func.sum(PaperTrade.pnl)).where(
+                            PaperTrade.user_id == user_id,
+                            PaperTrade.exit_time.is_not(None),
+                            PaperTrade.exit_time >= start_of_day,
+                        )
+                    )
+                    realized_today = float(trade_result.scalar() or 0.0)
+                    daily_pnl_pct = realized_today / float(portfolio.initial_capital) * 100.0
     except Exception as e:
         logger.warning("daily_pnl_calc_error", user_id=user_id, error=str(e))
 
@@ -106,8 +132,8 @@ async def get_drawdown_status(request: Request):
     }
 
 
-@router.put("/limits")
-async def update_risk_limits(req: UpdateRiskLimitsRequest, request: Request):
+@router.put("/advanced-limits")
+async def update_advanced_risk_limits(req: UpdateRiskLimitsRequest, request: Request):
     """Update risk limit thresholds including graduated drawdown settings."""
     mode = request.state.trading_mode
     user_id = request.state.user_id
@@ -149,5 +175,11 @@ async def update_risk_limits(req: UpdateRiskLimitsRequest, request: Request):
             if req.category_block_threshold < 0 or req.category_block_threshold > 100:
                 raise HTTPException(400, "category_block_threshold must be between 0 and 100")
             limits.category_block_threshold = req.category_block_threshold
+        # Cross-validate drawdown tier ordering
+        reduce = limits.drawdown_reduce_pct if limits.drawdown_reduce_pct is not None else -2.0
+        halt = limits.drawdown_halt_pct if limits.drawdown_halt_pct is not None else -4.0
+        kill = limits.drawdown_kill_pct if limits.drawdown_kill_pct is not None else -7.0
+        if not (reduce > halt > kill):
+            raise HTTPException(400, "Thresholds must satisfy: reduce > halt > kill (e.g. -2 > -4 > -7)")
         limits.updated_at = datetime.utcnow()
     return {"success": True, "mode": mode.value if hasattr(mode, "value") else str(mode)}

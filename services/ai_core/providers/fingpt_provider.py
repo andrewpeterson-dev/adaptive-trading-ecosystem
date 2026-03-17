@@ -52,15 +52,6 @@ def _parse_fingpt_response(raw_output: str) -> Dict[str, Any]:
     else:
         sentiment, score = "neutral", 0.0
 
-    score_match = re.search(r"[-+]?\d*\.?\d+", text)
-    if score_match:
-        try:
-            extracted = float(score_match.group())
-            if -1.0 <= extracted <= 1.0:
-                score = extracted
-        except ValueError:
-            pass
-
     confidence = min(abs(score) + 0.3, 1.0) if score != 0.0 else 0.5
     return {"sentiment": sentiment, "score": round(score, 4), "confidence": round(confidence, 4)}
 

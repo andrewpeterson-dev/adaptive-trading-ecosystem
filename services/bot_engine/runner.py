@@ -1121,7 +1121,9 @@ class BotRunner:
                 kelly_equity = bot.allocated_capital
             else:
                 alpaca_client = self._get_alpaca_client(paper=is_paper)
-                kelly_equity = float(alpaca_client.get_account().equity)
+                loop = asyncio.get_running_loop()
+                account = await loop.run_in_executor(None, alpaca_client.get_account)
+                kelly_equity = float(account.equity)
             kelly_frac, kelly_expl = await calculate_kelly_position_size(bot_id=bot.id, total_equity=kelly_equity)
             position_fraction_raw = self._normalize_position_size(position_size_pct)
             position_fraction = min(position_fraction_raw, kelly_frac)
@@ -1151,7 +1153,9 @@ class BotRunner:
                 equity = kelly_equity
             else:
                 alpaca_client = self._get_alpaca_client(paper=is_paper)
-                equity = float(alpaca_client.get_account().equity)
+                loop = asyncio.get_running_loop()
+                account = await loop.run_in_executor(None, alpaca_client.get_account)
+                equity = float(account.equity)
 
             position_value = equity * position_fraction
 

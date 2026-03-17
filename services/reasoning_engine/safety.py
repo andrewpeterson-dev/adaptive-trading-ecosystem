@@ -97,6 +97,8 @@ async def evaluate_drawdown_level(user_id: int, daily_pnl_pct: float = 0.0, mode
     return status
 
 _SECTOR_MAP: Dict[str, str] = {"AAPL": "Technology", "MSFT": "Technology", "GOOGL": "Technology", "GOOG": "Technology", "META": "Technology", "AMZN": "Consumer Cyclical", "TSLA": "Consumer Cyclical", "NVDA": "Technology", "AMD": "Technology", "INTC": "Technology", "CRM": "Technology", "NFLX": "Communication Services", "JPM": "Financial Services", "BAC": "Financial Services", "GS": "Financial Services", "JNJ": "Healthcare", "PFE": "Healthcare", "UNH": "Healthcare", "XOM": "Energy", "CVX": "Energy", "PG": "Consumer Defensive", "KO": "Consumer Defensive", "WMT": "Consumer Defensive", "CAT": "Industrials", "BA": "Industrials", "SPY": "ETF", "QQQ": "ETF", "IWM": "ETF", "DIA": "ETF"}
+_SECTOR_MAP_DEFAULTS = frozenset(_SECTOR_MAP.keys())
+_SECTOR_MAP_MAX_SIZE = 200
 
 async def get_sector_for_symbol(symbol: str) -> str:
     upper = symbol.upper()
@@ -104,8 +106,13 @@ async def get_sector_for_symbol(symbol: str) -> str:
         return _SECTOR_MAP[upper]
     try:
         import yfinance as yf
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         sector = await loop.run_in_executor(None, lambda s=upper: (yf.Ticker(s).info or {}).get("sector", "Unknown"))
+        if len(_SECTOR_MAP) >= _SECTOR_MAP_MAX_SIZE:
+            # Evict dynamically-added entries (preserve the hardcoded defaults)
+            dynamic_keys = [k for k in _SECTOR_MAP if k not in _SECTOR_MAP_DEFAULTS]
+            for k in dynamic_keys[: len(dynamic_keys) // 2]:
+                del _SECTOR_MAP[k]
         _SECTOR_MAP[upper] = sector
         return sector
     except Exception:
@@ -121,7 +128,10 @@ async def check_sector_concentration(user_id: int, symbol: str, proposed_value: 
     try:
         async with get_session() as session:
             rows = (await session.execute(select(CerberusTrade.symbol, CerberusTrade.quantity, CerberusTrade.entry_price).where(and_(CerberusTrade.user_id == user_id, CerberusTrade.exit_ts.is_(None))))).all()
-        sector_value = sum(abs(float(qty or 0)) * float(price or 0) for sym, qty, price in rows if await get_sector_for_symbol(sym) == target_sector)
+        sector_value = 0.0
+        for sym, qty, price in rows:
+            if await get_sector_for_symbol(sym) == target_sector:
+                sector_value += abs(float(qty or 0)) * float(price or 0)
         remaining = total_equity * sector_limit - sector_value
         if sector_value + proposed_value > total_equity * sector_limit:
             if remaining <= 0:
@@ -157,14 +167,19 @@ async def calculate_kelly_position_size(bot_id: str, total_equity: float, kelly_
         logger.warning("kelly_error", bot_id=bot_id, error=str(e))
         return (default_pct, f"Kelly error")
 
-async def update_category_scores(user_id: int, strategy_type: Optional[str] = None) -> None:
+async def update_category_scores(user_id: int, strategy_type: Optional[str] = None, mode: Optional[str] = None) -> None:
     from db.models import StrategyTypeScore, UserRiskLimits, TradingModeEnum
     from db.cerberus_models import CerberusTrade, CerberusBot, CerberusBotVersion
     try:
         block_threshold = 30.0
+        mode_enum = TradingModeEnum.PAPER
+        if isinstance(mode, str) and mode == "live":
+            mode_enum = TradingModeEnum.LIVE
+        elif mode is not None and not isinstance(mode, str):
+            mode_enum = mode
         try:
             async with get_session() as session:
-                limits = (await session.execute(select(UserRiskLimits).where(UserRiskLimits.user_id == user_id, UserRiskLimits.mode == TradingModeEnum.PAPER))).scalar_one_or_none()
+                limits = (await session.execute(select(UserRiskLimits).where(UserRiskLimits.user_id == user_id, UserRiskLimits.mode == mode_enum))).scalar_one_or_none()
                 if limits and limits.category_block_threshold is not None:
                     block_threshold = limits.category_block_threshold
         except Exception:
@@ -273,7 +288,7 @@ async def check_hard_blockers(vix=None, events=None, symbol="", portfolio_exposu
     if daily_pnl_pct <= thresholds["drawdown_reduce_pct"]:
         result.reduce_size, result.drawdown_level = min(result.reduce_size, 0.5), DRAWDOWN_LEVEL_REDUCE
         result.reasons.append(f"Daily loss {daily_pnl_pct:.1f}% exceeds {thresholds['drawdown_reduce_pct']:.1f}%")
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         import yfinance as yf
         hist = await loop.run_in_executor(None, lambda: yf.Ticker("SPY").history(period="1d", interval="1m"))
@@ -337,7 +352,7 @@ async def check_soft_guardrails(vix=None, events=None, symbol="", ai_confidence=
     if open_positions:
         try:
             import yfinance as yf
-            ticker_info = await asyncio.get_event_loop().run_in_executor(None, lambda s=symbol: yf.Ticker(s).info or {})
+            ticker_info = await asyncio.get_running_loop().run_in_executor(None, lambda s=symbol: yf.Ticker(s).info or {})
             sector = ticker_info.get("sector", "")
             if sector:
                 bots = {p["bot_id"] for p in open_positions if p.get("sector") == sector and p.get("bot_id")}

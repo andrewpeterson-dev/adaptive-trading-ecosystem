@@ -23,6 +23,15 @@ _SOURCE_CREDIBILITY: Dict[str, float] = {
 }
 _DEFAULT_CREDIBILITY = 0.5
 _cache: Dict[str, tuple] = {}
+_CACHE_MAX_SIZE = 500
+
+
+def _evict_cache_if_needed() -> None:
+    """Evict oldest half of entries when cache exceeds max size."""
+    if len(_cache) >= _CACHE_MAX_SIZE:
+        sorted_keys = sorted(_cache, key=lambda k: _cache[k][1])
+        for k in sorted_keys[: len(sorted_keys) // 2]:
+            del _cache[k]
 
 
 def _get_source_credibility(source: Optional[str]) -> float:
@@ -73,11 +82,18 @@ async def _fetch_news_for_ticker(ticker: str, lookback_days: int = 7) -> List[Di
             news_items = t.news or []
             results: List[Dict[str, Any]] = []
             for item in news_items[:20]:
+                raw_time = item.get("providerPublishTime")
+                if isinstance(raw_time, (int, float)):
+                    published_at = datetime.utcfromtimestamp(raw_time).isoformat() + "Z"
+                elif raw_time:
+                    published_at = str(raw_time)
+                else:
+                    published_at = ""
                 results.append({
                     "title": item.get("title", ""),
                     "summary": item.get("summary", item.get("title", "")),
                     "url": item.get("link", ""),
-                    "published_at": item.get("providerPublishTime", ""),
+                    "published_at": published_at,
                     "source": item.get("publisher", ""),
                 })
             return results
@@ -116,6 +132,7 @@ class SentimentService:
                 "top_bearish": [], "timestamp": datetime.now(timezone.utc).isoformat(),
                 "message": "No news articles found for sentiment analysis",
             }
+            _evict_cache_if_needed()
             _cache[ticker] = (result, time.time())
             return result
 
@@ -177,12 +194,13 @@ class SentimentService:
             "num_articles": len(scored_articles), "top_bullish": top_bullish,
             "top_bearish": top_bearish, "timestamp": now.isoformat(),
         }
+        _evict_cache_if_needed()
         _cache[ticker] = (result, time.time())
         logger.info("sentiment_analysis_complete", ticker=ticker, sentiment=overall_sentiment, score=round(overall_score, 4), articles=len(scored_articles))
         return result
 
-    async def analyze_batch(self, tickers: List[str]) -> Dict[str, Dict[str, Any]]:
-        tasks = [self.analyze_ticker(t) for t in tickers]
+    async def analyze_batch(self, tickers: List[str], lookback_days: int = 7) -> Dict[str, Dict[str, Any]]:
+        tasks = [self.analyze_ticker(t, lookback_days=lookback_days) for t in tickers]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         output: Dict[str, Dict[str, Any]] = {}
         for ticker, result in zip(tickers, results):

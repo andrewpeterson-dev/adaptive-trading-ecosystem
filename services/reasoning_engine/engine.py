@@ -93,7 +93,7 @@ class ReasoningEngine:
         if type_blocked:
             return await self._build_result(
                 bot_id=bot.id, symbol=symbol, signal=signal, vix=vix,
-                decision="DELAY_TRADE", confidence=0.0,
+                decision="PAUSE_BOT", confidence=0.0,
                 reasoning=f"Strategy type '{strategy_type}' auto-blocked (score: {type_score:.1f})",
                 size_adjustment=0.0, delay_seconds=0,
                 events_considered=[], model_used="category_block",
@@ -199,7 +199,7 @@ class ReasoningEngine:
             try:
                 import asyncio
                 import yfinance as yf
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 for sym in unique_symbols:
                     cached = _sector_cache.get(sym)
                     if cached and (time.time() - cached[0]) < _SECTOR_CACHE_TTL:

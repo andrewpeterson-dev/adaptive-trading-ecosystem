@@ -115,6 +115,17 @@ class ModelRouter:
                 reason="Explicit research mode",
             )
 
+        # Sentiment analysis -> FinGPT provider (must be checked before slow_expert)
+        if intent == RoutingIntent.SENTIMENT_ANALYSIS:
+            return RoutingDecision(
+                provider=self._fingpt,
+                model="fingpt-sentiment_llama2-13b_lora",
+                provider_name="fingpt",
+                intent=intent,
+                store=False,
+                reason="Sentiment analysis request, routing to FinGPT",
+            )
+
         # Slow expert mode (optional, analysis-only)
         if allow_slow_expert and self._settings.feature_slow_expert_mode_enabled:
             return RoutingDecision(
@@ -124,17 +135,6 @@ class ModelRouter:
                 intent=intent,
                 store=False,
                 reason="Slow expert mode enabled",
-            )
-
-        # Sentiment analysis -> FinGPT provider
-        if intent == RoutingIntent.SENTIMENT_ANALYSIS:
-            return RoutingDecision(
-                provider=self._fingpt,
-                model="fingpt-sentiment_llama2-13b_lora",
-                provider_name="fingpt",
-                intent=intent,
-                store=False,
-                reason="Sentiment analysis request, routing to FinGPT",
             )
 
         # Simple help → gpt-4.1 (low latency)
