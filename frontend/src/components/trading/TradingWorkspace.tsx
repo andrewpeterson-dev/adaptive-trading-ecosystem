@@ -13,6 +13,7 @@ import { TradingConnectionStatus } from "./TradingConnectionStatus";
 import { TradingDataTabs } from "./TradingDataTabs";
 import { TradingInfoTabs } from "./TradingInfoTabs";
 import { TradingWatchlistPanel } from "./TradingWatchlistPanel";
+import { TradeAnalysisWidget } from "@/components/trade/TradeAnalysisWidget";
 
 interface TradingWorkspaceProps {
   tradeMarkers: TradeMarker[];
@@ -171,6 +172,7 @@ export function TradingWorkspace({
           onTradeSelect={setHighlightedTradeId}
         />
         <StockOrderTicket onOrderPlaced={onRefresh} isPaperMode={isPaperMode} />
+        <TradeAnalysisWidget />
         <TradingInfoTabs />
         <TradingDataTabs onRefresh={onRefresh} />
       </div>
@@ -220,6 +222,7 @@ export function TradingWorkspace({
           onToggle={toggleRightDrawer}
         >
           <StockOrderTicket onOrderPlaced={onRefresh} isPaperMode={isPaperMode} />
+          <TradeAnalysisWidget />
           <TradingInfoTabs />
         </DrawerShell>
       </div>

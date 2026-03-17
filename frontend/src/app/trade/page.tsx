@@ -75,6 +75,7 @@ export default function TradePage() {
     <div className="app-page">
       <SubNav items={[
         { href: "/trade", label: "Workspace" },
+        { href: "/trade-analysis", label: "Deep Analysis" },
         { href: "/watchlist", label: "Watchlist" },
       ]} />
 
