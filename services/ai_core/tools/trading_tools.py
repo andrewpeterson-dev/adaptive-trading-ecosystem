@@ -429,13 +429,12 @@ def register():
         name="createBot",
         version="1.1",
         description=(
-            "Create and immediately activate a trading bot. The bot starts in RUNNING status "
-            "and will begin evaluating signals on the next 60-second cycle. No separate "
-            "activation step is needed. Config must include: symbols (list of tickers), "
+            "Create a new trading bot in PAUSED state. The user must call resumeBot to "
+            "activate it. Config must include: symbols (list of tickers), "
             "action ('BUY' or 'SELL'), timeframe ('1m','5m','15m','1h','1D'), and at least "
             "one condition with indicator, operator, and value. Include stop_loss_pct and "
             "take_profit_pct as decimals (e.g. 0.03 for 3%). position_size_pct controls "
-            "capital allocation per trade (e.g. 5.0 for 5% of equity)."
+            "capital allocation per trade (e.g. 0.05 for 5% of equity)."
         ),
         category=ToolCategory.TRADING,
         side_effect=ToolSideEffect.WRITE,
