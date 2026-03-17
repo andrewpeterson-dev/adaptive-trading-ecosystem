@@ -119,6 +119,7 @@ class DocumentIngestionService:
             async with get_session() as session:
                 stmt = select(CerberusDocumentFile).where(
                     CerberusDocumentFile.id == document_id,
+                    CerberusDocumentFile.user_id == user_id,
                 )
                 result = await session.execute(stmt)
                 doc = result.scalar_one()
@@ -145,6 +146,7 @@ class DocumentIngestionService:
                 async with get_session() as session:
                     stmt = select(CerberusDocumentFile).where(
                         CerberusDocumentFile.id == document_id,
+                        CerberusDocumentFile.user_id == user_id,
                     )
                     result = await session.execute(stmt)
                     doc = result.scalar_one_or_none()
