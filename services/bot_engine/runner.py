@@ -1551,7 +1551,6 @@ class BotRunner:
             qty=quantity,
             order_type="MKT",
             tif="DAY",
-            **({"outside_rth": True} if extended_hours else {}),
         )
 
         loop = asyncio.get_running_loop()
