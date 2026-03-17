@@ -1042,6 +1042,107 @@ async def run_backtest(req: BacktestRequest, request: Request):
     }
 
 
+
+
+# ── Parameter Sweep Endpoint ──────────────────────────────────────────────
+
+class ParameterSweepRequest(BaseModel):
+    """Request body for running a parameter sweep."""
+    strategy_id: Optional[int] = None
+    conditions: Optional[list[ConditionSchema]] = None
+    condition_groups: Optional[list[dict]] = None
+    parameter_ranges: dict[str, dict[str, Any]] = Field(
+        ...,
+        description=(
+            "Dict mapping parameter key to sweep spec. "
+            "Example: {'rsi_period': {'min': 10, 'max': 30, 'step': 2}}"
+        ),
+    )
+    symbol: str = "SPY"
+    timeframe: str = "1D"
+    lookback_days: int = 252
+    initial_capital: float = 100_000.0
+    commission_pct: float = 0.001
+    slippage_pct: float = 0.0005
+    stop_loss_pct: Optional[float] = None
+    take_profit_pct: Optional[float] = None
+    action: str = "BUY"
+    metric: str = Field(
+        default="sharpe_ratio",
+        description="Metric to optimise: sharpe_ratio, sortino_ratio, total_return, win_rate, profit_factor, calmar_ratio, max_drawdown",
+    )
+
+
+@router.post("/parameter-sweep")
+async def run_parameter_sweep(req: ParameterSweepRequest, request: Request):
+    """Run a parameter sweep over the given ranges and return heatmap data."""
+    import asyncio
+
+    user_id = request.state.user_id
+    if not user_id:
+        raise HTTPException(401, "Not authenticated")
+
+    # Resolve conditions from strategy_id if needed
+    conditions_dicts: Optional[list[dict]] = None
+    condition_groups_raw: Optional[list[dict]] = None
+    stop_loss = req.stop_loss_pct
+    take_profit = req.take_profit_pct
+    action = req.action
+
+    if req.strategy_id is not None:
+        async with get_session() as session:
+            inst_result = await session.execute(
+                select(StrategyInstance)
+                .options(selectinload(StrategyInstance.template))
+                .where(
+                    StrategyInstance.id == req.strategy_id,
+                    StrategyInstance.user_id == user_id,
+                )
+            )
+            inst = inst_result.scalar_one_or_none()
+            if inst:
+                t = inst.template
+                if t.condition_groups:
+                    condition_groups_raw = t.condition_groups
+                else:
+                    conditions_dicts = t.conditions or []
+                stop_loss = stop_loss or t.stop_loss_pct
+                take_profit = take_profit or t.take_profit_pct
+                action = t.action or action
+            else:
+                raise HTTPException(404, f"Strategy {req.strategy_id} not found")
+    elif req.condition_groups:
+        condition_groups_raw = req.condition_groups
+    elif req.conditions:
+        conditions_dicts = [c.model_dump() for c in req.conditions]
+    else:
+        raise HTTPException(400, "Provide strategy_id or inline conditions")
+
+    # Run the sweep in a thread executor
+    from services.backtesting.parameter_sweep import run_parameter_sweep as _sweep
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: _sweep(
+            conditions=conditions_dicts,
+            condition_groups=condition_groups_raw,
+            parameter_ranges=req.parameter_ranges,
+            symbol=req.symbol,
+            timeframe=req.timeframe,
+            lookback_days=req.lookback_days,
+            initial_capital=req.initial_capital,
+            commission_pct=req.commission_pct,
+            slippage_pct=req.slippage_pct,
+            stop_loss_pct=stop_loss,
+            take_profit_pct=take_profit,
+            action=action,
+            metric=req.metric,
+        ),
+    )
+    return result
+
+
 # ── Strategy Config Endpoints ────────────────────────────────────────────
 
 class StrategyConfigUpdate(BaseModel):
