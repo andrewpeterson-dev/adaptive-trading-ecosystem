@@ -83,8 +83,9 @@ class MemoryRetrieval:
             stmt = (
                 select(CerberusMemoryItem)
                 .where(
-                    CerberusMemoryItem.thread_id == thread_id,
-                    CerberusMemoryItem.memory_type == "thread_summary",
+                    CerberusMemoryItem.source_table == "cerberus_conversation_threads",
+                    CerberusMemoryItem.source_id == thread_id,
+                    CerberusMemoryItem.kind == "thread_summary",
                 )
                 .order_by(CerberusMemoryItem.created_at.desc())
                 .limit(1)
@@ -92,7 +93,7 @@ class MemoryRetrieval:
             result = await session.execute(stmt)
             item = result.scalar_one_or_none()
 
-        return item.content_text if item else None
+        return item.content if item else None
 
     async def search_semantic(
         self, user_id: int, query_embedding: list[float], limit: int = 5,
