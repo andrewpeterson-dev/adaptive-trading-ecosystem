@@ -296,7 +296,7 @@ async def webull_cancel_order(client_order_id: str, request: Request):
     if not clients:
         raise HTTPException(status_code=400, detail="No Webull credentials configured")
 
-    result = clients.trading.cancel_order(client_order_id)
+    result = await asyncio.to_thread(clients.trading.cancel_order, client_order_id)
     if result.success:
         return {"success": True}
     raise HTTPException(status_code=400, detail=result.error)
