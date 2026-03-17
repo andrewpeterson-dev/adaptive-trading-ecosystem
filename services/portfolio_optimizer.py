@@ -118,11 +118,15 @@ def _compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
     return np.log(prices / prices.shift(1)).dropna()
 
 
-def _ledoit_wolf_cov(returns: pd.DataFrame) -> pd.DataFrame:
-    """Compute Ledoit-Wolf shrunk covariance matrix."""
+def _ledoit_wolf_cov(prices: pd.DataFrame) -> pd.DataFrame:
+    """Compute Ledoit-Wolf shrunk covariance matrix from *prices*.
+
+    PyPortfolioOpt's CovarianceShrinkage expects a price DataFrame
+    (it computes returns internally).
+    """
     from pypfopt import risk_models
 
-    cov = risk_models.CovarianceShrinkage(returns).ledoit_wolf()
+    cov = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
     return cov
 
 
@@ -131,12 +135,13 @@ def _apply_constraints(
     constraints: OptimizationConstraints,
     tickers: List[str],
 ) -> None:
-    """Apply weight bounds and sector caps to an EfficientFrontier object."""
-    from pypfopt import objective_functions
+    """Apply sector caps and L2 regularization to an EfficientFrontier object.
 
-    # Weight bounds
-    ef.add_constraint(lambda w: w >= constraints.min_weight)
-    ef.add_constraint(lambda w: w <= constraints.max_weight)
+    Note: per-asset weight bounds (min_weight, max_weight) are set via the
+    ``weight_bounds`` parameter at EfficientFrontier construction time — NOT
+    via ``add_constraint``.
+    """
+    from pypfopt import objective_functions
 
     # Sector caps: constraints.sector_caps maps sector_name -> max_weight
     # and we need a ticker -> sector mapping. For now we skip sector caps
@@ -160,7 +165,10 @@ async def optimize_max_sharpe(
     cov = _ledoit_wolf_cov(prices)
 
     def _optimize() -> OptimizationResult:
-        ef = EfficientFrontier(mu, cov)
+        ef = EfficientFrontier(
+            mu, cov,
+            weight_bounds=(constraints.min_weight, constraints.max_weight),
+        )
         _apply_constraints(ef, constraints, tickers)
         ef.max_sharpe(risk_free_rate=RISK_FREE_RATE)
         cleaned = ef.clean_weights()
@@ -190,7 +198,10 @@ async def optimize_min_volatility(
     cov = _ledoit_wolf_cov(prices)
 
     def _optimize() -> OptimizationResult:
-        ef = EfficientFrontier(mu, cov)
+        ef = EfficientFrontier(
+            mu, cov,
+            weight_bounds=(constraints.min_weight, constraints.max_weight),
+        )
         _apply_constraints(ef, constraints, tickers)
         ef.min_volatility()
         cleaned = ef.clean_weights()
@@ -221,6 +232,7 @@ async def optimize_hrp(
     constraints = constraints or OptimizationConstraints()
     prices = await fetch_price_data(tickers, lookback_days)
     returns = _compute_returns(prices)
+    lw_cov = _ledoit_wolf_cov(prices)
 
     def _optimize() -> OptimizationResult:
         hrp = HRPOpt(returns)
@@ -231,10 +243,10 @@ async def optimize_hrp(
         weights = dict(cleaned)
         weights = _clip_and_renormalize(weights, constraints)
 
-        # Compute portfolio metrics
+        # Compute portfolio metrics using Ledoit-Wolf shrunk covariance
         w_array = np.array([weights.get(t, 0.0) for t in returns.columns])
         ann_ret = float(np.sum(returns.mean() * w_array) * 252)
-        ann_vol = float(np.sqrt(np.dot(w_array, np.dot(returns.cov() * 252, w_array))))
+        ann_vol = float(np.sqrt(np.dot(w_array, np.dot(lw_cov.values * 252, w_array))))
         sharpe = (ann_ret - RISK_FREE_RATE) / ann_vol if ann_vol > 0 else 0.0
 
         return OptimizationResult(
@@ -269,6 +281,7 @@ async def optimize_risk_parity(
 
         # Newton-like iteration to equalize risk contribution
         for _ in range(100):
+            prev_weights = weights_arr.copy()
             port_var = weights_arr @ cov_matrix @ weights_arr
             if port_var <= 0:
                 break
@@ -278,6 +291,8 @@ async def optimize_risk_parity(
             adjustment = target_rc / (risk_contrib + 1e-12)
             weights_arr = weights_arr * adjustment
             weights_arr = weights_arr / weights_arr.sum()
+            if np.max(np.abs(weights_arr - prev_weights)) < 1e-8:
+                break
 
         ticker_names = list(cov.columns)
         weights = {ticker_names[i]: float(weights_arr[i]) for i in range(n)}
@@ -285,7 +300,7 @@ async def optimize_risk_parity(
 
         w_array = np.array([weights.get(t, 0.0) for t in returns.columns])
         ann_ret = float(np.sum(returns.mean() * w_array) * 252)
-        ann_vol = float(np.sqrt(np.dot(w_array, np.dot(returns.cov() * 252, w_array))))
+        ann_vol = float(np.sqrt(np.dot(w_array, np.dot(cov.values * 252, w_array))))
         sharpe = (ann_ret - RISK_FREE_RATE) / ann_vol if ann_vol > 0 else 0.0
 
         return OptimizationResult(
@@ -333,7 +348,10 @@ async def optimize_black_litterman(
         bl_returns = bl.bl_returns()
         bl_cov = bl.bl_cov()
 
-        ef = EfficientFrontier(bl_returns, bl_cov)
+        ef = EfficientFrontier(
+            bl_returns, bl_cov,
+            weight_bounds=(constraints.min_weight, constraints.max_weight),
+        )
         _apply_constraints(ef, constraints, tickers)
         ef.max_sharpe(risk_free_rate=RISK_FREE_RATE)
         cleaned = ef.clean_weights()
@@ -377,6 +395,9 @@ async def compute_efficient_frontier(
         ef_max.max_sharpe(risk_free_rate=RISK_FREE_RATE)
         max_ret = ef_max.portfolio_performance()[0]
 
+        if max_ret <= min_ret:
+            return []
+
         # Extend slightly beyond max-sharpe for visualization
         target_returns = np.linspace(min_ret, max_ret * 1.15, n_points)
 
@@ -392,8 +413,9 @@ async def compute_efficient_frontier(
                     sharpe=float(perf[2]),
                     weights=dict(cleaned),
                 ))
-            except Exception:
+            except Exception as exc:
                 # Some target returns may be infeasible
+                logger.debug("frontier_point_failed", target_return=float(target_ret), error=str(exc))
                 continue
 
         return points

@@ -85,6 +85,11 @@ def compute_rebalance_plan(
         slippage_pct: Estimated slippage as fraction.
         enable_tax_loss_harvesting: If True, flag sells where cost_basis > market_value.
     """
+    # Validate target weights sum to ~1.0
+    weight_sum = sum(target_weights.values())
+    if not (0.98 <= weight_sum <= 1.02):
+        logger.warning("rebalance_target_weights_sum_off", total=weight_sum)
+
     orders: List[ProposedOrder] = []
 
     # Build a map of current positions

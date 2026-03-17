@@ -21,6 +21,7 @@ from services.portfolio_optimizer import (
     OptimizationConstraints,
     compute_correlation_matrix,
     compute_efficient_frontier,
+    optimize_black_litterman,
     run_optimization,
 )
 from services.rebalance_planner import (
@@ -44,6 +45,16 @@ class ConstraintsInput(BaseModel):
 class OptimizeRequest(BaseModel):
     tickers: List[str] = Field(..., min_length=2, max_length=50)
     method: str = Field(default="max_sharpe")
+    constraints: Optional[ConstraintsInput] = None
+    lookback_days: int = Field(default=252, ge=30, le=1260)
+
+
+class BlackLittermanRequest(BaseModel):
+    tickers: List[str] = Field(..., min_length=2, max_length=50)
+    views: Dict[str, float] = Field(
+        ...,
+        description="Absolute return views, e.g. {'AAPL': 0.10, 'GOOG': 0.05}",
+    )
     constraints: Optional[ConstraintsInput] = None
     lookback_days: int = Field(default=252, ge=30, le=1260)
 
@@ -151,6 +162,68 @@ async def optimize_portfolio(body: OptimizeRequest, request: Request):
     )
 
 
+@router.post("/optimize/black-litterman", response_model=OptimizeResponse)
+async def optimize_bl(body: BlackLittermanRequest, request: Request):
+    """Run Black-Litterman optimization with user-supplied return views.
+
+    Accepts tickers, a dict of absolute return views, optional constraints,
+    and a lookback period. Returns optimized weights and expected metrics.
+    """
+    user_id = request.state.user_id
+
+    tickers = [t.strip().upper() for t in body.tickers if t.strip()]
+    if len(tickers) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 valid tickers.")
+
+    # Normalize view keys to uppercase
+    views = {k.strip().upper(): v for k, v in body.views.items()}
+
+    # Validate that view tickers are a subset of the provided tickers
+    unknown = set(views.keys()) - set(tickers)
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"View tickers not in ticker list: {sorted(unknown)}",
+        )
+
+    constraints = None
+    if body.constraints:
+        constraints = OptimizationConstraints(
+            max_weight=body.constraints.max_weight,
+            min_weight=body.constraints.min_weight,
+            sector_caps=body.constraints.sector_caps,
+        )
+
+    try:
+        result = await optimize_black_litterman(
+            tickers=tickers,
+            views=views,
+            lookback_days=body.lookback_days,
+            constraints=constraints,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("black_litterman_optimization_failed", user_id=user_id, error=str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Optimization failed. Check ticker symbols and try again.")
+
+    logger.info(
+        "black_litterman_optimized",
+        user_id=user_id,
+        sharpe=f"{result.sharpe:.4f}",
+        num_tickers=len(tickers),
+        num_views=len(views),
+    )
+
+    return OptimizeResponse(
+        weights=result.weights,
+        expected_return=result.expected_return,
+        volatility=result.volatility,
+        sharpe=result.sharpe,
+        method=result.method,
+    )
+
+
 @router.get("/efficient-frontier")
 async def get_efficient_frontier(
     request: Request,
@@ -168,6 +241,8 @@ async def get_efficient_frontier(
 
     if len(ticker_list) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 tickers.")
+    if len(ticker_list) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 tickers allowed")
 
     try:
         points = await compute_efficient_frontier(ticker_list, lookback_days, n_points)
@@ -205,6 +280,8 @@ async def get_correlation_matrix(
 
     if len(ticker_list) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 tickers.")
+    if len(ticker_list) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 tickers allowed")
 
     try:
         result = await compute_correlation_matrix(ticker_list, lookback_days)
@@ -302,8 +379,8 @@ async def get_rebalance_plan(
             constraints=constraints,
         )
     except Exception as exc:
-        logger.error("rebalance_optimization_failed", user_id=user_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Optimization failed: {exc}")
+        logger.error("rebalance_optimization_failed", user_id=user_id, error=str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Optimization failed. Check ticker symbols and try again.")
 
     # Generate rebalance plan
     plan = await generate_rebalance_plan(
