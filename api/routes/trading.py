@@ -2135,10 +2135,18 @@ async def _build_paper_equity_curve(
             qty = trade.quantity or 0
             price = trade.entry_price or 0
 
-            # Closed trades (have PnL) — apply realized P&L and update position tracking.
-            if trade.status == PaperTradeStatus.CLOSED and trade.pnl is not None:
-                cash += float(trade.pnl)
-                # Update position tracking so re-opened positions don't double-count
+            # Closed trades — apply full exit cash flow and clean up positions.
+            # The matching OPEN trade already modified cash, so the CLOSED trade
+            # must apply the EXIT cash flow (not just PnL) to balance it.
+            if trade.status == PaperTradeStatus.CLOSED and trade.exit_price:
+                exit_value = qty * trade.exit_price * multiplier
+                if direction == TradeDirection.SHORT:
+                    # Sell-to-close a long → add sell proceeds
+                    cash += exit_value
+                elif direction == TradeDirection.LONG:
+                    # Buy-to-close a short → deduct buy-back cost
+                    cash -= exit_value
+                # Clean up position tracking
                 if trade.symbol in positions:
                     if direction == TradeDirection.SHORT:
                         positions[trade.symbol]["qty"] -= qty
