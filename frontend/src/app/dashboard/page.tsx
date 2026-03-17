@@ -178,12 +178,15 @@ export default function DashboardPage() {
   const realizedPnl = null; // Not available — needs historical trade P&L data
   const hasRealizedPnl = false;
 
+  const filledOrderCount = useMemo(
+    () => orders.filter((o) => o.status === "filled").length,
+    [orders]
+  );
+
   const winRate = useMemo(() => {
-    const filledOrders = orders.filter((o) => o.status === "filled");
-    if (filledOrders.length === 0) return null; // No data yet
-    // Simplified — would need trade P&L data for real win rate
-    return null;
-  }, [orders]);
+    if (filledOrderCount === 0) return null;
+    return null; // Would need trade P&L data for real win rate
+  }, [filledOrderCount]);
   const hasWinRate = winRate !== null;
 
   // -- Early return states --
@@ -392,7 +395,7 @@ export default function DashboardPage() {
               <RiskMetricsPanel
                 winRate={winRate ?? undefined}
                 maxDrawdown={risk?.current_drawdown_pct ?? 0}
-                totalTrades={orders.filter((o) => o.status === "filled").length}
+                totalTrades={filledOrderCount}
               />
             </DashboardPanel>
           </div>

@@ -24,12 +24,17 @@ import type {
   AblationResult,
   AblationHistogramBin,
 } from "@/types/backtest";
-import { ParameterSweepPanel } from "@/components/backtest/ParameterSweepPanel";
+import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+
+const ParameterSweepPanel = dynamic(
+  () => import("@/components/backtest/ParameterSweepPanel").then((mod) => mod.ParameterSweepPanel),
+  { ssr: false }
+);
 
 function MetricCard({
   label,
