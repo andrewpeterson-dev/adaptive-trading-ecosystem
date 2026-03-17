@@ -170,7 +170,17 @@ async def optimize_max_sharpe(
             weight_bounds=(constraints.min_weight, constraints.max_weight),
         )
         _apply_constraints(ef, constraints, tickers)
-        ef.max_sharpe(risk_free_rate=RISK_FREE_RATE)
+        try:
+            ef.max_sharpe(risk_free_rate=RISK_FREE_RATE)
+        except ValueError:
+            # No asset beats risk-free rate (bearish market) — fall back to min volatility
+            logger.info("max_sharpe_fallback_to_min_vol", reason="no asset exceeds risk-free rate")
+            ef = EfficientFrontier(
+                mu, cov,
+                weight_bounds=(constraints.min_weight, constraints.max_weight),
+            )
+            _apply_constraints(ef, constraints, tickers)
+            ef.min_volatility()
         cleaned = ef.clean_weights()
         perf = ef.portfolio_performance(risk_free_rate=RISK_FREE_RATE)
         return OptimizationResult(
