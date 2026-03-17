@@ -558,8 +558,8 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
             report = StrategyDiagnostics.run_all(
                 conditions_dicts,
                 params,
-                has_stop_loss=bool(inst.stop_loss_pct and inst.stop_loss_pct > 0),
-                has_take_profit=bool(inst.take_profit_pct and inst.take_profit_pct > 0),
+                has_stop_loss=bool(template.stop_loss_pct and template.stop_loss_pct > 0),
+                has_take_profit=bool(template.take_profit_pct and template.take_profit_pct > 0),
             )
             template.diagnostics = report.to_dict()
 
