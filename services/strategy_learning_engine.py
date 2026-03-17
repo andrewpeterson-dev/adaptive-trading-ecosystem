@@ -494,5 +494,17 @@ class StrategyLearningEngine:
                 if index < len(updated.get("conditions") or []):
                     updated["conditions"][index]["value"] = adjustment["new"]
 
+        # Sync condition_groups from the updated flat conditions so backtests
+        # and the bot runner evaluate identical thresholds.
+        if updated.get("condition_groups") and updated.get("conditions"):
+            flat = updated["conditions"]
+            flat_idx = 0
+            for group in updated["condition_groups"]:
+                group_conditions = group.get("conditions", [])
+                for gc in group_conditions:
+                    if flat_idx < len(flat):
+                        gc["value"] = flat[flat_idx].get("value", gc.get("value"))
+                        flat_idx += 1
+
         updated.setdefault("feature_signals", derive_feature_signals(updated.get("conditions") or []))
         return updated
