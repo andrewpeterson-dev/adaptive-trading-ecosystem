@@ -546,12 +546,26 @@ class BotRunner:
 
         exit_conditions = config.get("exit_conditions") or []
 
-        # Compute indicators
-        indicators_needed = [
-            {"indicator": c["indicator"], "params": c.get("params", {})}
-            for c in [*conditions, *exit_conditions]
-            if isinstance(c, dict) and c.get("indicator")
-        ]
+        # Compute indicators — include both explicit conditions AND compare_to refs
+        indicators_needed = []
+        for c in [*conditions, *exit_conditions]:
+            if not isinstance(c, dict) or not c.get("indicator"):
+                continue
+            indicators_needed.append({"indicator": c["indicator"], "params": c.get("params", {})})
+            # Also compute the referenced indicator for dynamic thresholds
+            compare_to = str(c.get("compare_to") or "").strip().lower()
+            if compare_to and compare_to not in ("price", "close"):
+                # Parse "ema_26" → indicator="ema", params={"period": 26}
+                ref_indicator = compare_to
+                ref_params: dict = {}
+                if "." in ref_indicator:
+                    ref_indicator = ref_indicator.split(".")[0]
+                if "_" in ref_indicator:
+                    parts = ref_indicator.rsplit("_", 1)
+                    if parts[1].isdigit():
+                        ref_indicator = parts[0]
+                        ref_params = {"period": int(parts[1])}
+                indicators_needed.append({"indicator": ref_indicator, "params": ref_params})
         indicator_values = compute_indicators(bars, indicators_needed)
 
         # Inject current close price so evaluator can use compare_to="PRICE"
