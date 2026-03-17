@@ -259,6 +259,126 @@ async def execute_backtest_job(backtest_id: str, user_id: int) -> dict:
             raise
 
 
+def _run_walk_forward(
+    conditions: Optional[List[Dict[str, Any]]],
+    condition_groups: Optional[List[Dict[str, Any]]],
+    exit_conditions: Optional[List[Dict[str, Any]]],
+    symbol: str,
+    timeframe: str,
+    lookback_days: int,
+    n_segments: int,
+    commission_pct: float,
+    slippage_pct: float,
+    initial_capital: float,
+) -> Dict[str, Any]:
+    """Run walk-forward validation synchronously (called from async via executor)."""
+    from services.backtesting.walk_forward import run_walk_forward
+
+    return run_walk_forward(
+        conditions=conditions,
+        condition_groups=condition_groups,
+        exit_conditions=exit_conditions,
+        symbol=symbol,
+        timeframe=timeframe,
+        lookback_days=lookback_days,
+        n_segments=n_segments,
+        commission_pct=commission_pct,
+        slippage_pct=slippage_pct,
+        initial_capital=initial_capital,
+    )
+
+
+def _run_ablation_study(
+    conditions: Optional[List[Dict[str, Any]]],
+    condition_groups: Optional[List[Dict[str, Any]]],
+    exit_conditions: Optional[List[Dict[str, Any]]],
+    symbol: str,
+    timeframe: str,
+    lookback_days: int,
+    n_random_trials: int,
+    commission_pct: float,
+    slippage_pct: float,
+    initial_capital: float,
+) -> Dict[str, Any]:
+    """Run ablation study synchronously (called from async via executor)."""
+    from services.backtesting.ablation_study import run_ablation_study
+
+    return run_ablation_study(
+        conditions=conditions,
+        condition_groups=condition_groups,
+        exit_conditions=exit_conditions,
+        symbol=symbol,
+        timeframe=timeframe,
+        lookback_days=lookback_days,
+        n_random_trials=n_random_trials,
+        commission_pct=commission_pct,
+        slippage_pct=slippage_pct,
+        initial_capital=initial_capital,
+    )
+
+
+async def execute_walk_forward_job(
+    conditions: Optional[List[Dict[str, Any]]] = None,
+    condition_groups: Optional[List[Dict[str, Any]]] = None,
+    exit_conditions: Optional[List[Dict[str, Any]]] = None,
+    symbol: str = "SPY",
+    timeframe: str = "1D",
+    lookback_days: int = 756,
+    n_segments: int = 6,
+    commission_pct: float = 0.001,
+    slippage_pct: float = 0.0005,
+    initial_capital: float = 100_000.0,
+) -> dict:
+    """Execute a walk-forward validation job in a thread executor."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: _run_walk_forward(
+            conditions=conditions,
+            condition_groups=condition_groups,
+            exit_conditions=exit_conditions,
+            symbol=symbol,
+            timeframe=timeframe,
+            lookback_days=lookback_days,
+            n_segments=n_segments,
+            commission_pct=commission_pct,
+            slippage_pct=slippage_pct,
+            initial_capital=initial_capital,
+        ),
+    )
+
+
+async def execute_ablation_study_job(
+    conditions: Optional[List[Dict[str, Any]]] = None,
+    condition_groups: Optional[List[Dict[str, Any]]] = None,
+    exit_conditions: Optional[List[Dict[str, Any]]] = None,
+    symbol: str = "SPY",
+    timeframe: str = "1D",
+    lookback_days: int = 252,
+    n_random_trials: int = 1000,
+    commission_pct: float = 0.001,
+    slippage_pct: float = 0.0005,
+    initial_capital: float = 100_000.0,
+) -> dict:
+    """Execute an ablation study job in a thread executor."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: _run_ablation_study(
+            conditions=conditions,
+            condition_groups=condition_groups,
+            exit_conditions=exit_conditions,
+            symbol=symbol,
+            timeframe=timeframe,
+            lookback_days=lookback_days,
+            n_random_trials=n_random_trials,
+            commission_pct=commission_pct,
+            slippage_pct=slippage_pct,
+            initial_capital=initial_capital,
+        ),
+    )
+
+
 async def execute_research_job(query: str, user_id: int, document_ids: Optional[List[str]] = None) -> dict:
     """Execute a real research session and return the assembled output."""
     from services.ai_core.tools.research_tools import _run_research_session

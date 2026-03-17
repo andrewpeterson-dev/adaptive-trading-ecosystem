@@ -99,6 +99,80 @@ def run_adaptation_review_task(self, bot_id: str):
         raise self.retry(exc=exc, countdown=120)
 
 
+@app.task(bind=True, name="services.workers.tasks.run_walk_forward", max_retries=2)
+def run_walk_forward(
+    self,
+    conditions: list[dict] | None = None,
+    condition_groups: list[dict] | None = None,
+    exit_conditions: list[dict] | None = None,
+    symbol: str = "SPY",
+    timeframe: str = "1D",
+    lookback_days: int = 756,
+    n_segments: int = 6,
+    commission_pct: float = 0.001,
+    slippage_pct: float = 0.0005,
+    initial_capital: float = 100_000.0,
+):
+    """Run a walk-forward validation as a Celery task."""
+    logger.info("task_walk_forward", symbol=symbol, n_segments=n_segments)
+    try:
+        from services.workers.job_runners import execute_walk_forward_job
+        result = _run_async(execute_walk_forward_job(
+            conditions=conditions,
+            condition_groups=condition_groups,
+            exit_conditions=exit_conditions,
+            symbol=symbol,
+            timeframe=timeframe,
+            lookback_days=lookback_days,
+            n_segments=n_segments,
+            commission_pct=commission_pct,
+            slippage_pct=slippage_pct,
+            initial_capital=initial_capital,
+        ))
+        logger.info("task_walk_forward_complete", symbol=symbol)
+        return result
+    except Exception as exc:
+        logger.error("task_walk_forward_failed", symbol=symbol, error=str(exc))
+        raise self.retry(exc=exc, countdown=60)
+
+
+@app.task(bind=True, name="services.workers.tasks.run_ablation_study", max_retries=2)
+def run_ablation_study(
+    self,
+    conditions: list[dict] | None = None,
+    condition_groups: list[dict] | None = None,
+    exit_conditions: list[dict] | None = None,
+    symbol: str = "SPY",
+    timeframe: str = "1D",
+    lookback_days: int = 252,
+    n_random_trials: int = 1000,
+    commission_pct: float = 0.001,
+    slippage_pct: float = 0.0005,
+    initial_capital: float = 100_000.0,
+):
+    """Run an ablation study as a Celery task."""
+    logger.info("task_ablation_study", symbol=symbol, n_trials=n_random_trials)
+    try:
+        from services.workers.job_runners import execute_ablation_study_job
+        result = _run_async(execute_ablation_study_job(
+            conditions=conditions,
+            condition_groups=condition_groups,
+            exit_conditions=exit_conditions,
+            symbol=symbol,
+            timeframe=timeframe,
+            lookback_days=lookback_days,
+            n_random_trials=n_random_trials,
+            commission_pct=commission_pct,
+            slippage_pct=slippage_pct,
+            initial_capital=initial_capital,
+        ))
+        logger.info("task_ablation_study_complete", symbol=symbol)
+        return result
+    except Exception as exc:
+        logger.error("task_ablation_study_failed", symbol=symbol, error=str(exc))
+        raise self.retry(exc=exc, countdown=60)
+
+
 @app.task(name="services.workers.tasks.run_research_job")
 def run_research_job(query: str, user_id: int, document_ids: list[str] | None = None):
     """Run a long research job (Perplexity deep research + document analysis)."""

@@ -52,3 +52,58 @@ export interface BacktestRequest {
   commission_pct?: number;
   slippage_pct?: number;
 }
+
+// ── Walk-Forward Validation ──────────────────────────────────────────────
+
+export interface WalkForwardSegment {
+  start: string;
+  end: string;
+  metrics: {
+    sharpe: number;
+    total_return: number;
+    max_drawdown: number;
+    win_rate: number;
+    num_trades: number;
+  };
+}
+
+export interface WalkForwardResult {
+  segments: WalkForwardSegment[];
+  aggregate_metrics: {
+    mean_sharpe: number;
+    std_sharpe: number;
+    mean_return: number;
+    mean_max_drawdown: number;
+    mean_win_rate: number;
+    total_trades: number;
+  };
+  consistency_score: number;
+  regime_adaptability_score: number;
+  symbol: string;
+  timeframe: string;
+  n_segments: number;
+  lookback_days: number;
+}
+
+// ── Ablation Study ───────────────────────────────────────────────────────
+
+export interface AblationHistogramBin {
+  bin_start: number;
+  bin_end: number;
+  count: number;
+  contains_strategy: boolean;
+}
+
+export interface AblationResult {
+  strategy_sharpe: number;
+  random_mean_sharpe: number;
+  random_std: number;
+  percentile: number;
+  p_value: number;
+  is_significant: boolean;
+  random_distribution_histogram: AblationHistogramBin[];
+  n_random_trials: number;
+  symbol: string;
+  timeframe: string;
+  lookback_days: number;
+}
