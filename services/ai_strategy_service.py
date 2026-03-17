@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ValidationError
 from config.settings import get_settings
 from services.ai_core.model_router import ModelRouter
 from services.ai_core.providers.base import ProviderMessage
+from services.strategy_validator import validate_strategy_config
 
 logger = structlog.get_logger(__name__)
 
@@ -329,16 +330,47 @@ class AIStrategyService:
 
         spec, generation = await self._generate_spec(prompt)
         payload = compile_strategy_payload(spec)
+
+        # ── Strategy validation gate ──
+        is_valid, val_errors, val_warnings = validate_strategy_config(payload)
+        if not is_valid:
+            logger.warning(
+                "ai_strategy_validation_failed_retrying",
+                errors=val_errors,
+                prompt_len=len(prompt),
+            )
+            # Retry once with errors included in context
+            retry_prompt = (
+                f"{prompt}\n\n"
+                f"IMPORTANT: A previous attempt failed validation with these errors:\n"
+                + "\n".join(f"- {e}" for e in val_errors)
+                + "\nFix ALL of these issues in the new output."
+            )
+            try:
+                spec, generation = await self._generate_spec(retry_prompt)
+                payload = compile_strategy_payload(spec)
+                is_valid, val_errors, val_warnings = validate_strategy_config(payload)
+            except Exception as exc:
+                logger.warning("ai_strategy_retry_failed", error=str(exc))
+
+            if not is_valid:
+                raise ValueError(
+                    "Generated strategy failed validation: " + "; ".join(val_errors)
+                )
+
         builder_draft = compile_builder_draft(spec)
         payload["ai_context"]["generation"].update(generation)
 
-        return {
+        result = {
             "prompt": prompt,
             "strategy_spec": spec.model_dump(),
             "builder_draft": builder_draft,
             "compiled_strategy": payload,
             "generation": generation,
         }
+        if val_warnings:
+            result["validation_warnings"] = val_warnings
+        return result
 
     async def _generate_spec(self, prompt: str) -> tuple[GeneratedStrategySpec, dict[str, Any]]:
         if self._settings.openai_api_key or self._settings.anthropic_api_key:
@@ -562,14 +594,28 @@ class AIStrategyService:
                     signal="MACD crossed against position direction — momentum lost",
                 ))
 
-        # Always add a moving average trend break exit
+        # Always add an RSI-based exit as a trend exhaustion signal.
+        # Previous code used "ema > 0" which is meaningless (always true for price-based indicators).
+        # Instead, use RSI exhaustion at a moderate level as a smart exit.
+        if not has_rsi:
+            exits.append(GeneratedCondition(
+                logic="OR",
+                indicator="rsi",
+                params={"period": 14},
+                operator=">" if is_long else "<",
+                value=72 if is_long else 28,
+                signal="RSI approaching overbought/oversold — take profit zone" if is_long else "RSI approaching oversold — cover short zone",
+            ))
+
+        # Add EMA crossover exit using crosses_below/crosses_above with a meaningful
+        # dynamic comparison (EMA-20 as trend support/resistance via crossover detection).
         exits.append(GeneratedCondition(
             logic="OR",
             indicator="ema",
             params={"period": 20},
-            operator=">" if is_long else "<",
+            operator="crosses_below" if is_long else "crosses_above",
             value=0,
-            signal="Price broke below EMA-20 — trend support lost" if is_long else "Price broke above EMA-20 — trend resistance broken",
+            signal="Price crossed below EMA-20 — trend support lost" if is_long else "Price crossed above EMA-20 — trend resistance broken",
         ))
 
         if not exits:
@@ -593,7 +639,7 @@ class AIStrategyService:
         # Exit conditions that invert entry signals (long exits shown; SELL variants flipped below)
         _rsi_exit = {"logic": "OR", "indicator": "rsi", "params": {"period": 14}, "operator": ">", "value": 74, "signal": "RSI overbought — momentum exhaustion, exit before reversal"}
         _macd_exit = {"logic": "OR", "indicator": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}, "operator": "<", "value": 0, "signal": "MACD crossed below zero — trend acceleration lost"}
-        _ema_exit = {"logic": "OR", "indicator": "ema", "params": {"period": 20}, "operator": ">", "value": 0, "signal": "Price broke below EMA-20 — near-term trend support lost"}
+        _ema_exit = {"logic": "OR", "indicator": "ema", "params": {"period": 20}, "operator": "crosses_below", "value": 0, "signal": "Price crossed below EMA-20 — near-term trend support lost"}
 
         if "earnings" in prompt_lower:
             template = {
@@ -713,8 +759,8 @@ class AIStrategyService:
                     condition["operator"] = ">"
                     condition["signal"] = "MACD crossed above zero — downward momentum lost"
                 elif condition["indicator"] == "ema":
-                    condition["operator"] = "<"
-                    condition["signal"] = "Price broke above EMA-20 — short-term trend resistance broken"
+                    condition["operator"] = "crosses_above"
+                    condition["signal"] = "Price crossed above EMA-20 — short-term trend resistance broken"
 
         spec_dict = {
             **template,

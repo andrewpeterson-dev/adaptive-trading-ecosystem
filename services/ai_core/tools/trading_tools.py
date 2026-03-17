@@ -13,6 +13,7 @@ import structlog
 from services.ai_core.tools.base import ToolDefinition, ToolCategory, ToolSideEffect
 from services.ai_core.tools.registry import get_registry
 from services.strategy_learning_engine import normalize_bot_config
+from services.strategy_validator import validate_strategy_config
 
 logger = structlog.get_logger(__name__)
 
@@ -117,6 +118,13 @@ async def _create_bot(
         logger.warning("tool_create_bot_rejected", user_id=user_id, name=bot_name, detail=error)
         return {"error": error, "name": bot_name}
 
+    # ── Strategy validation gate ──
+    is_valid, val_errors, val_warnings = validate_strategy_config(normalized_config)
+    if not is_valid:
+        detail = "Bot config failed validation: " + "; ".join(val_errors)
+        logger.warning("tool_create_bot_validation_failed", user_id=user_id, name=bot_name, errors=val_errors)
+        return {"error": detail, "name": bot_name, "validation_errors": val_errors}
+
     learning = normalized_config.get("learning") or {}
     bot_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
@@ -126,12 +134,12 @@ async def _create_bot(
             id=bot_id,
             user_id=user_id,
             name=bot_name,
-            status=BotStatus.RUNNING,
+            status=BotStatus.PAUSED,
             current_version_id=version_id,
             learning_enabled=bool(learning.get("enabled", True)),
             learning_status_json={
                 "status": "monitoring" if learning.get("enabled", True) else "disabled",
-                "summary": learning.get("last_summary", "Bot created and actively trading."),
+                "summary": learning.get("last_summary", "Bot created — review and start when ready."),
                 "metrics": {},
                 "featureSignals": normalized_config.get("feature_signals", []),
                 "parameterAdjustments": [],
@@ -149,15 +157,18 @@ async def _create_bot(
         session.add(bot)
         session.add(version)
 
-    logger.info("bot_created_and_activated", bot_id=bot_id, name=bot_name, user_id=user_id)
-    return {
+    result = {
         "bot_id": bot_id,
         "version_id": version_id,
         "name": bot_name,
-        "status": "running",
+        "status": "paused",
         "version_number": 1,
-        "message": f"Bot '{bot_name}' is now live and will begin trading on the next evaluation cycle (≤60s).",
+        "message": f"Bot '{bot_name}' created in PAUSED state. Use resumeBot to start trading.",
     }
+    if val_warnings:
+        result["warnings"] = val_warnings
+    logger.info("bot_created_paused", bot_id=bot_id, name=bot_name, user_id=user_id)
+    return result
 
 
 async def _modify_bot(

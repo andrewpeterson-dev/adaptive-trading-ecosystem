@@ -29,6 +29,7 @@ from services.strategy_learning_engine import (
     calculate_trade_metrics,
     normalize_bot_config,
 )
+from services.strategy_validator import validate_strategy_config
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -209,6 +210,18 @@ def _ensure_valid_bot_config(
     normalized, errors = _validate_bot_config(config)
     if errors:
         raise HTTPException(status_code=400, detail=f"{error_detail}: {', '.join(errors)}")
+
+    # ── Strategy validation gate ──
+    is_valid, val_errors, val_warnings = validate_strategy_config(normalized)
+    if not is_valid:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": error_detail,
+                "validation_errors": val_errors,
+                "warnings": val_warnings,
+            },
+        )
     return normalized
 
 
@@ -636,11 +649,11 @@ async def create_bot_from_strategy(request: Request, body: DeployFromStrategyReq
             id=bot_id,
             user_id=user_id,
             name=bot_name,
-            status=BotStatus.RUNNING,
+            status=BotStatus.PAUSED,
             learning_enabled=bool(config.get("learning", {}).get("enabled", False)),
             learning_status_json={
                 "status": "learning" if config.get("learning", {}).get("enabled", False) else "monitoring",
-                "summary": config.get("learning", {}).get("last_summary", "Bot deployed and monitoring live performance."),
+                "summary": config.get("learning", {}).get("last_summary", "Bot created from strategy — review and start when ready."),
                 "metrics": {},
                 "featureSignals": config.get("feature_signals", []),
                 "parameterAdjustments": [],
@@ -665,8 +678,9 @@ async def create_bot_from_strategy(request: Request, body: DeployFromStrategyReq
     return {
         "bot_id": bot_id,
         "name": bot_name,
-        "status": "running",
+        "status": "paused",
         "strategy_id": body.strategy_id,
+        "message": f"Bot '{bot_name}' created in PAUSED state. Use the deploy/resume action to start trading.",
     }
 
 

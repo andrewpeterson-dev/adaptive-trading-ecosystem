@@ -25,6 +25,7 @@ from db.models import (
     SystemEventType,
 )
 from services.event_logger import log_event
+from services.strategy_validator import validate_strategy_config
 
 logger = structlog.get_logger(__name__)
 
@@ -342,6 +343,28 @@ async def create_strategy(strategy: StrategySchema, request: Request):
         has_take_profit=bool(strategy.take_profit_pct and strategy.take_profit_pct > 0),
     )
 
+    # ── Strategy validation gate ──
+    validation_config = {
+        "conditions": conditions_dicts,
+        "condition_groups": strategy.condition_groups or [],
+        "action": strategy.action,
+        "timeframe": strategy.timeframe,
+        "symbols": strategy.symbols,
+        "stop_loss_pct": strategy.stop_loss_pct,
+        "take_profit_pct": strategy.take_profit_pct,
+        "position_size_pct": strategy.position_size_pct,
+    }
+    is_valid, val_errors, val_warnings = validate_strategy_config(validation_config)
+    if not is_valid:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Strategy failed validation and cannot be saved",
+                "validation_errors": val_errors,
+                "warnings": val_warnings,
+            },
+        )
+
     async with get_session() as session:
         # Create the template (logic)
         template = StrategyTemplate(
@@ -539,6 +562,28 @@ async def update_strategy(instance_id: int, update: StrategyUpdateSchema, reques
                 has_take_profit=bool(inst.take_profit_pct and inst.take_profit_pct > 0),
             )
             template.diagnostics = report.to_dict()
+
+            # ── Strategy validation gate ──
+            validation_config = {
+                "conditions": conditions_dicts,
+                "condition_groups": template.condition_groups or [],
+                "action": template.action,
+                "timeframe": template.timeframe,
+                "symbols": template.symbols,
+                "stop_loss_pct": template.stop_loss_pct,
+                "take_profit_pct": template.take_profit_pct,
+                "position_size_pct": inst.position_size_pct,
+            }
+            is_valid, val_errors, val_warnings = validate_strategy_config(validation_config)
+            if not is_valid:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "message": "Updated strategy failed validation and cannot be saved",
+                        "validation_errors": val_errors,
+                        "warnings": val_warnings,
+                    },
+                )
 
         await session.flush()
         logger.info("strategy_updated", instance_id=instance_id)
