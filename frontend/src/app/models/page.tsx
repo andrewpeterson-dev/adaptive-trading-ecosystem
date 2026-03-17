@@ -79,14 +79,14 @@ export default function ModelsPage() {
     } finally {
       setLoading(false);
     }
-  }, [mode]);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     fetchAll();
     const interval = setInterval(fetchAll, 30000);
     return () => clearInterval(interval);
-  }, [fetchAll, mode]);
+  }, [fetchAll]);
 
   const handleRetrain = async (modelName: string) => {
     try {

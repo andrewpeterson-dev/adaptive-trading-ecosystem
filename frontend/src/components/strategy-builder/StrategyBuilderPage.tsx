@@ -25,6 +25,8 @@ export default function StrategyBuilderPage({ initialStrategy }: StrategyBuilder
   const [activeMode, setActiveMode] = useState<"ai" | "manual" | "template">("ai");
 
   // ---- On-mount effects: hydrate builder store from edit data or pending spec ----
+  // Intentionally mount-only: initialStrategy is the server-fetched record and must not
+  // re-trigger hydration if the object reference changes between renders.
   useEffect(() => {
     if (initialStrategy) {
       // Edit mode: load the existing strategy — takes priority over any stale pending spec
@@ -39,6 +41,7 @@ export default function StrategyBuilderPage({ initialStrategy }: StrategyBuilder
     if (pendingSpec) {
       useBuilderStore.getState().loadFromSpec(pendingSpec as any);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------------------------------------------------------------------------

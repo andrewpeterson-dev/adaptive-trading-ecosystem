@@ -243,6 +243,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     timeframe,
     trailingStop,
     trailingStopEnabled,
+    extendedHours,
   ]);
   const featureSignals = aiContext.feature_signals ?? [];
   const learningMethods = aiContext.learning_plan?.methods ?? [];
@@ -521,6 +522,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     } else {
       aiBaselineRef.current = null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialStrategy]);
 
   useEffect(() => {
@@ -803,6 +805,7 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
     cooldownBars,
     exitAfterBars,
     exitAfterBarsEnabled,
+    extendedHours,
     maxExposurePct,
     maxLossPct,
     maxTradesPerDay,
