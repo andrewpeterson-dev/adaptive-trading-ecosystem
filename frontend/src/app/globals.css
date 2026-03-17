@@ -650,10 +650,25 @@
 
 .status-bar-live {
   background: linear-gradient(90deg, #fef3c7, #fde68a);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
 }
 
 .dark .status-bar-live {
   background: linear-gradient(90deg, #78350f, #92400e);
+  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.25);
+}
+
+/* Hard flash when switching modes */
+@keyframes mode-switch-flash {
+  0% { opacity: 1; }
+  15% { opacity: 0; }
+  30% { opacity: 1; }
+  45% { opacity: 0.3; }
+  60% { opacity: 1; }
+}
+
+.mode-switching {
+  animation: mode-switch-flash 0.6s ease-out;
 }
 
 /* ── Typography design system tokens ────────────────────────────────── */

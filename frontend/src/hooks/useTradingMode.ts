@@ -69,6 +69,12 @@ export function TradingModeProvider({ children }: { children: ReactNode }) {
       await setServerMode(next);
       setModeState(next);
       broadcastModeReset();
+      // Hard page-wide data invalidation — force all components to re-render
+      // with fresh data from the correct mode. This is the nuclear option
+      // to guarantee no stale paper data shows when live, or vice versa.
+      setTimeout(() => {
+        window.location.reload();
+      }, 300); // small delay so the status bar flash animation plays first
     } catch (err) {
       console.error("Failed to switch mode:", err);
       throw err instanceof Error ? err : new Error("Failed to switch mode");
