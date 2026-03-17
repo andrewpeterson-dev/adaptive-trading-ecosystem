@@ -33,8 +33,12 @@ function resolveStoredMode(): TradingMode {
   return stored === "live" ? "live" : "paper";
 }
 
-function themeForMode(mode: TradingMode): "light" | "dark" {
-  return mode === "live" ? "dark" : "light";
+function themeForMode(_mode: TradingMode): "light" | "dark" {
+  // Always dark — the design system (glassmorphism, CSS variables, component
+  // styling) is built for dark mode. Light mode renders everything unreadable
+  // (white text on white backgrounds). Paper vs live distinction is handled
+  // by the status bar color, not the entire theme.
+  return "dark";
 }
 
 /**
