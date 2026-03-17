@@ -36,7 +36,7 @@ const NAV_ITEMS = [
   { href: "/bots", label: "Bots", icon: Bot, activeFor: ["/bots"] },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, activeFor: ["/dashboard", "/portfolio", "/risk"] },
   { href: "/trade", label: "Trade", icon: CandlestickChart, activeFor: ["/trade", "/watchlist"] },
-  { href: "/ai-intelligence", label: "Intelligence", icon: Brain, activeFor: ["/ai-intelligence", "/models", "/quant"] },
+  { href: "/ai-intelligence", label: "Intelligence", icon: Brain, activeFor: ["/ai-intelligence", "/sentiment", "/models", "/quant"] },
 ];
 
 export function Sidebar() {
