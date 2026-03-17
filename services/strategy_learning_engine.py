@@ -141,7 +141,8 @@ def calculate_trade_metrics(trades: list[CerberusTrade], config: dict[str, Any] 
                         if t.symbol == sym:
                             entry = float(t.entry_price or 0)
                             qty = float(t.quantity or 0)
-                            pnl = round((price - entry) * qty, 2)
+                            is_short = str(t.side or "").lower().startswith("sell")
+                            pnl = round((entry - price) * qty, 2) if is_short else round((price - entry) * qty, 2)
                             unrealized_pnl += pnl
                             open_positions.append({
                                 "symbol": sym, "side": t.side, "quantity": qty,
