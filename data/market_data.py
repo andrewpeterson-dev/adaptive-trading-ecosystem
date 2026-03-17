@@ -358,10 +358,10 @@ async def _polygon_snapshot(symbols: list[str]) -> dict[str, QuoteDict]:
 async def _yf_quote(symbol: str) -> Optional[QuoteDict]:
     try:
         import yfinance as yf
-        ticker = await asyncio.get_event_loop().run_in_executor(
+        ticker = await asyncio.get_running_loop().run_in_executor(
             None, lambda: yf.Ticker(symbol)
         )
-        info = await asyncio.get_event_loop().run_in_executor(None, lambda: ticker.fast_info)
+        info = await asyncio.get_running_loop().run_in_executor(None, lambda: ticker.fast_info)
         price = float(getattr(info, "last_price", None) or getattr(info, "regular_market_price", None) or 0)
         if not price:
             return None
@@ -393,7 +393,7 @@ async def _alpaca_quote(symbol: str) -> Optional[QuoteDict]:
         from alpaca.data.requests import StockLatestTradeRequest
         client = StockHistoricalDataClient(settings.alpaca_api_key, settings.alpaca_secret_key)
         req = StockLatestTradeRequest(symbol_or_symbols=symbol)
-        trades = await asyncio.get_event_loop().run_in_executor(
+        trades = await asyncio.get_running_loop().run_in_executor(
             None, lambda: client.get_stock_latest_trade(req)
         )
         trade = trades.get(symbol)
@@ -463,7 +463,7 @@ async def _yf_bars(symbol: str, timeframe: str = "1D", limit: int = 100) -> Opti
     yf_period = period_map.get(yf_interval, "1y")
     try:
         import yfinance as yf
-        df = await asyncio.get_event_loop().run_in_executor(
+        df = await asyncio.get_running_loop().run_in_executor(
             None, lambda: yf.download(symbol, period=yf_period, interval=yf_interval,
                                        progress=False, auto_adjust=True)
         )
@@ -505,7 +505,7 @@ async def _alpaca_bars(symbol: str, timeframe: str = "1D", limit: int = 100) -> 
         tf = _tf_map.get(timeframe, TimeFrame(1, TimeFrameUnit.Day))
         client = StockHistoricalDataClient(settings.alpaca_api_key, settings.alpaca_secret_key)
         req = StockBarsRequest(symbol_or_symbols=symbol, timeframe=tf, limit=limit)
-        result = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_running_loop().run_in_executor(
             None, lambda: client.get_stock_bars(req)
         )
         raw = result.get(symbol, [])

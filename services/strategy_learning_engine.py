@@ -148,10 +148,10 @@ def calculate_trade_metrics(trades: list[CerberusTrade], config: dict[str, Any] 
                                 "entryPrice": entry, "currentPrice": round(price, 2),
                                 "unrealizedPnl": pnl,
                             })
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as exc:
+                    logger.debug("unrealized_pnl_lookup_failed", symbol=sym, error=str(exc))
+        except Exception as exc:
+            logger.warning("unrealized_pnl_calc_failed", error=str(exc))
 
     sharpe = 0.0
     if len(returns) >= 2:

@@ -36,8 +36,8 @@ import { MarketScannerPanel } from "@/components/terminal/MarketScannerPanel";
 import { TradeInspectorModal } from "@/components/terminal/TradeInspectorModal";
 
 export default function BotDetailPage() {
-  const params = useParams<{ id?: string | string[] }>();
-  const botId = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
+  const params = useParams<{ id: string }>();
+  const botId = params?.id ?? "";
 
   const [detail, setDetail] = useState<BotDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +61,9 @@ export default function BotDetailPage() {
       }
     }
     if (botId) void load();
+    // Auto-refresh every 30s to keep terminal data current with server-side bot updates
+    const interval = setInterval(() => { if (botId) void load(); }, 30_000);
+    return () => clearInterval(interval);
   }, [botId]);
 
   const trackedSymbols = useMemo(() => (detail ? getTrackedSymbols(detail) : []), [detail]);
@@ -74,7 +77,7 @@ export default function BotDetailPage() {
           return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
         })()
       : null;
-    const fallback = tradedSymbol || detail.primarySymbol || trackedSymbols[0] || "SPY";
+    const fallback = tradedSymbol || detail.primarySymbol || trackedSymbols[0] || "";
     setActiveSymbol((current) => (current && trackedSymbols.includes(current) ? current : fallback));
   }, [detail, trackedSymbols]);
 
@@ -197,7 +200,7 @@ export default function BotDetailPage() {
       {activeTab === "terminal" && (
         <div className="mt-4 space-y-4">
           {/* Row 1: Performance + Capital + Settings */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_200px_200px]">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(180px,220px)_minmax(180px,220px)]">
             <PerformanceMetricsPanel detail={detail} />
             <CapitalPanel
               detail={detail}

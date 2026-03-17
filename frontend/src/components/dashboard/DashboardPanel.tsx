@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
-import { Settings, Maximize2, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -24,18 +24,21 @@ function PanelContainer({ children, className }: PanelContainerProps) {
 interface PanelHeaderProps {
   title: string;
   icon?: React.ComponentType<{ className?: string }>;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   headerRight?: React.ReactNode;
 }
 
 function PanelHeader({ title, icon: Icon, onRefresh, headerRight }: PanelHeaderProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     if (!onRefresh || isRefreshing) return;
     setIsRefreshing(true);
-    onRefresh();
-    setTimeout(() => setIsRefreshing(false), 600);
+    try {
+      await onRefresh();
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [onRefresh, isRefreshing]);
 
   return (
@@ -60,18 +63,6 @@ function PanelHeader({ title, icon: Icon, onRefresh, headerRight }: PanelHeaderP
             <RefreshCw className={cn("h-3 w-3", isRefreshing && "animate-spin")} />
           </button>
         )}
-        <button
-          type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-foreground/5 hover:text-muted-foreground"
-        >
-          <Maximize2 className="h-3 w-3" />
-        </button>
-        <button
-          type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-foreground/5 hover:text-muted-foreground"
-        >
-          <Settings className="h-3 w-3" />
-        </button>
       </div>
     </div>
   );
@@ -99,7 +90,7 @@ interface DashboardPanelProps {
   title: string;
   icon?: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   className?: string;
   headerRight?: React.ReactNode;
   noPadding?: boolean;

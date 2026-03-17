@@ -43,8 +43,8 @@ async def record_trade(
                 ).limit(20)
             )
             market_event_ids = [r[0] for r in result.all()]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("journal_market_events_fetch_failed", bot_id=bot_id, symbol=symbol, error=str(exc))
 
     hold_duration = None
     if entry_at and exit_at:
@@ -54,7 +54,7 @@ async def record_trade(
     sector_momentum = None
     try:
         import yfinance as yf
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         ticker_info = await loop.run_in_executor(
             None, lambda s=symbol: yf.Ticker(s).info or {}
@@ -76,8 +76,8 @@ async def record_trade(
                     sector_momentum = float(
                         (etf_hist["Close"].iloc[-1] / etf_hist["Close"].iloc[0] - 1) * 100
                     )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("journal_sector_momentum_failed", symbol=symbol, error=str(exc))
 
     journal_entry = BotTradeJournal(
         id=str(uuid.uuid4()),

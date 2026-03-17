@@ -212,16 +212,18 @@ class ReasoningEngine:
                         sector = info.get("sector", "")
                         symbol_sector[sym] = sector
                         _sector_cache[sym] = (time.time(), sector)
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug("sector_lookup_failed", symbol=sym, error=str(exc))
                         symbol_sector[sym] = ""
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("sector_enrichment_failed", error=str(exc))
 
             return [
                 {"bot_id": row[0], "symbol": row[1], "sector": symbol_sector.get(row[1], "")}
                 for row in rows
             ]
-        except Exception:
+        except Exception as exc:
+            logger.warning("open_positions_fetch_failed", user_id=user_id, error=str(exc))
             return []
 
     async def _get_active_events(self, user_id: int, symbol: str) -> list[MarketEvent]:

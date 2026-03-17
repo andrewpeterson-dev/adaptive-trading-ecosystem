@@ -142,8 +142,8 @@ async function _apiFetchInner<T>(
     }
   }
 
-  // Only retry idempotent methods or explicit opt-in
-  const canRetry = method === "GET" || method === "HEAD" || maxRetries > MAX_RETRIES;
+  // Only retry safe (idempotent) methods — never retry POST/PUT/DELETE
+  const canRetry = SAFE_METHODS.has(method);
 
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= (canRetry ? maxRetries : 0); attempt++) {

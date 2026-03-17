@@ -76,19 +76,19 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
         description: s.description,
         action: s.action,
         condition_groups: s.conditionGroups,
-        stop_loss_pct: s.stopLoss,
-        take_profit_pct: s.takeProfit,
-        position_size_pct: s.positionSize,
+        stop_loss_pct: s.stopLoss / 100,
+        take_profit_pct: s.takeProfit / 100,
+        position_size_pct: s.positionSize / 100,
         timeframe: s.timeframe,
         symbols: s.symbols,
-        commission_pct: s.commissionPct,
-        slippage_pct: s.slippagePct,
-        trailing_stop_pct: s.trailingStopEnabled ? s.trailingStop : null,
+        commission_pct: s.commissionPct / 100,
+        slippage_pct: s.slippagePct / 100,
+        trailing_stop_pct: s.trailingStopEnabled ? s.trailingStop / 100 : null,
         exit_after_bars: s.exitAfterBarsEnabled ? s.exitAfterBars : null,
         cooldown_bars: s.cooldownBars,
         max_trades_per_day: s.maxTradesPerDay,
-        max_exposure_pct: s.maxExposurePct,
-        max_loss_pct: s.maxLossPct,
+        max_exposure_pct: s.maxExposurePct / 100,
+        max_loss_pct: s.maxLossPct / 100,
         strategy_type: s.strategyType,
         source_prompt: s.sourcePrompt || null,
         ai_context: s.aiContext || null,
@@ -104,6 +104,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
     } catch (err) {
       setSaveStatus("error");
       console.error("Save failed:", err);
+      throw err; // Re-throw so callers (e.g. handleDeploy) know the save failed
     } finally {
       setSaving(false);
     }
@@ -116,7 +117,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
   const handleDeploy = async () => {
     setDeploying(true);
     try {
-      // Step 1: Save the strategy first
+      // Step 1: Save the strategy first — will throw on failure
       await handleSave();
 
       // Step 2: Ask Cerberus to deploy as a bot
@@ -129,7 +130,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
         conditions: s.conditionGroups.flatMap((g) => g.conditions),
         stop_loss_pct: s.stopLoss / 100,
         take_profit_pct: s.takeProfit / 100,
-        position_size_pct: s.positionSize,
+        position_size_pct: s.positionSize / 100,
       };
 
       const pageContext: PageContext = {

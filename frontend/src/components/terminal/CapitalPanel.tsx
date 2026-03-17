@@ -24,11 +24,15 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
       await updateBotCapital(detail.id, value);
       onDetailUpdate?.({ allocatedCapital: value });
       setIsEditing(false);
-    } catch {} finally { setSaving(false); }
+    } catch (err) {
+      console.error("Capital update failed:", err);
+    } finally { setSaving(false); }
   };
   const handleToggleAi = async () => {
     const v = !detail.aiCapitalManagement;
-    try { await updateAiCapitalManagement(detail.id, v); onDetailUpdate?.({ aiCapitalManagement: v }); } catch {}
+    try { await updateAiCapitalManagement(detail.id, v); onDetailUpdate?.({ aiCapitalManagement: v }); } catch (err) {
+      console.error("AI capital management toggle failed:", err);
+    }
   };
 
   return (

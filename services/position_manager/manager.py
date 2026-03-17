@@ -10,6 +10,7 @@ so stops fire in near-real-time.
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime
 from typing import Any
 
@@ -28,6 +29,9 @@ from services.activity_bus import BotActivityEvent, activity_bus
 from services.position_manager.stop_tracker import StopConfig, StopSignal, StopTracker
 
 logger = structlog.get_logger(__name__)
+
+# Config cache entries older than this are refreshed from DB
+_CONFIG_CACHE_TTL = 120  # seconds
 
 
 class PositionManager:
@@ -52,8 +56,8 @@ class PositionManager:
         self._stop_tracker = StopTracker()
         self._running = False
         self._task: asyncio.Task | None = None
-        # Cache: bot_id → StopConfig (refreshed when we load the trade list)
-        self._config_cache: dict[str, StopConfig] = {}
+        # Cache: bot_id → (timestamp, StopConfig) — refreshed after _CONFIG_CACHE_TTL
+        self._config_cache: dict[str, tuple[float, StopConfig]] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle

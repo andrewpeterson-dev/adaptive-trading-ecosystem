@@ -46,12 +46,13 @@ export default function PortfolioPage() {
 
   const fetchAll = useCallback(async () => {
     try {
+      setError(false);
       const q = `?mode=${mode}`;
       const [eqRes, allocRes, modRes, regRes] = await Promise.allSettled([
         apiFetch<any>(`/api/dashboard/equity-curve${q}`),
-        apiFetch<any>("/api/models/allocation"),
-        apiFetch<any>("/api/models/list"),
-        apiFetch<any>("/api/models/regime"),
+        apiFetch<any>(`/api/models/allocation${q}`),
+        apiFetch<any>(`/api/models/list${q}`),
+        apiFetch<any>(`/api/models/regime${q}`),
       ]);
 
       let hasData = false;

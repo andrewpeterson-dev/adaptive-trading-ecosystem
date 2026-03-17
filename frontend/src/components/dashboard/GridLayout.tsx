@@ -92,7 +92,7 @@ export function DashboardGrid({
         isResizable={isResizable}
         draggableHandle=".dashboard-panel-header"
         onLayoutChange={onLayoutChange}
-        useCSSTransforms={false}
+        useCSSTransforms={true}
         compactType="vertical"
       >
         {children}

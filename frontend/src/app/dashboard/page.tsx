@@ -12,7 +12,6 @@ import {
   Lock,
   Unlock,
   Brain,
-  BarChart3,
   Activity,
   Crosshair,
   TrendingUp,
@@ -42,11 +41,9 @@ import {
   EquityCurvePanel,
   PortfolioRiskDashPanel,
 } from "@/components/dashboard";
-import { ExecutionChart } from "@/components/dashboard/ExecutionChart";
 import { PortfolioEquityChart } from "@/components/dashboard/PortfolioEquityChart";
 import { DashboardGrid } from "@/components/dashboard/GridLayout";
 import type { Layouts, LayoutItem } from "@/components/dashboard/GridLayout";
-import { SentimentPanel } from "@/components/analytics/SentimentPanel";
 import { MarketMoodWidget } from "@/components/dashboard/MarketMoodWidget";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -393,7 +390,7 @@ export default function DashboardPage() {
           <div key="risk-metrics">
             <DashboardPanel title="Risk Metrics" icon={ShieldCheck}>
               <RiskMetricsPanel
-                winRate={winRate ?? 0}
+                winRate={winRate ?? undefined}
                 maxDrawdown={risk?.current_drawdown_pct ?? 0}
                 totalTrades={orders.filter((o) => o.status === "filled").length}
               />

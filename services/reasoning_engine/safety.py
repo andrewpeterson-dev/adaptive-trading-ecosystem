@@ -182,8 +182,8 @@ async def update_category_scores(user_id: int, strategy_type: Optional[str] = No
                 limits = (await session.execute(select(UserRiskLimits).where(UserRiskLimits.user_id == user_id, UserRiskLimits.mode == mode_enum))).scalar_one_or_none()
                 if limits and limits.category_block_threshold is not None:
                     block_threshold = limits.category_block_threshold
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("category_block_threshold_fetch_error", user_id=user_id, error=str(exc))
         async with get_session() as session:
             bot_configs = (await session.execute(select(CerberusBot.id, CerberusBotVersion.config_json).join(CerberusBotVersion, CerberusBot.current_version_id == CerberusBotVersion.id).where(CerberusBot.user_id == user_id))).all()
         bot_map = {bid: (cfg or {}).get("strategy_type", "manual") for bid, cfg in bot_configs}
@@ -297,8 +297,8 @@ async def check_hard_blockers(vix=None, events=None, symbol="", portfolio_exposu
             if chg < -7.0:
                 result.blocked = True
                 result.reasons.append(f"Circuit breaker: SPY down {abs(chg):.1f}%")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("circuit_breaker_check_failed", symbol="SPY", error=str(exc))
     try:
         import yfinance as yf
         info, full = await loop.run_in_executor(None, lambda s=symbol: (yf.Ticker(s).fast_info, yf.Ticker(s).info or {}))
@@ -311,8 +311,8 @@ async def check_hard_blockers(vix=None, events=None, symbol="", portfolio_exposu
         if bid and ask and bid > 0 and ((ask - bid) / bid) * 100 > 2.0:
             result.blocked = True
             result.reasons.append(f"Wide spread: {symbol}")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("liquidity_check_failed", symbol=symbol, error=str(exc))
     try:
         import yfinance as yf
         hist = await loop.run_in_executor(None, lambda s=symbol: yf.Ticker(s).history(period="1d"))
@@ -359,6 +359,6 @@ async def check_soft_guardrails(vix=None, events=None, symbol="", ai_confidence=
                 if len(bots) >= 2:
                     result.reduce_size = min(result.reduce_size, 0.5)
                     result.reasons.append(f"Correlation: {len(bots)} bots in {sector}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("correlation_check_failed", symbol=symbol, error=str(exc))
     return result

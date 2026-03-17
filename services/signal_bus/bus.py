@@ -331,9 +331,11 @@ class SignalBus:
         except RuntimeError:
             pass
 
-    async def _reconnect_loop(self) -> None:
+    async def _reconnect_loop(self, max_attempts: int = 60) -> None:
         """Periodically try to re-establish the Redis connection."""
-        while self._use_fallback:
+        attempt = 0
+        while self._use_fallback and attempt < max_attempts:
+            attempt += 1
             await asyncio.sleep(_RECONNECT_DELAY_SECONDS)
             try:
                 if self._redis is not None:
@@ -351,10 +353,12 @@ class SignalBus:
                 await self._redis.ping()
                 self._connected = True
                 self._use_fallback = False
-                logger.info("signal_bus_reconnected")
+                logger.info("signal_bus_reconnected", attempts=attempt)
                 return
             except Exception as exc:
-                logger.debug("signal_bus_reconnect_failed", error=str(exc))
+                logger.debug("signal_bus_reconnect_failed", attempt=attempt, error=str(exc))
+        if self._use_fallback:
+            logger.warning("signal_bus_reconnect_exhausted", max_attempts=max_attempts)
 
     # ── Helpers ──────────────────────────────────────────────────────────
 

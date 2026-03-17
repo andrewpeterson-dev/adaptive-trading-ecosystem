@@ -8,10 +8,13 @@ module which uses a separate sync engine.
 
 from contextlib import asynccontextmanager
 
+import structlog
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import DeclarativeBase
 
 from config.settings import get_settings
+
+logger = structlog.get_logger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -105,10 +108,10 @@ async def init_db():
                         await raw_conn.execute(
                             text(f"ALTER TYPE botstatus ADD VALUE IF NOT EXISTS '{val}'")
                         )
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except Exception as exc:
+                        logger.warning("enum_value_add_skipped", value=val, error=str(exc))
+        except Exception as exc:
+            logger.warning("enum_setup_failed", error=str(exc))
     # Compatibility shim for local/dev startups that call create_all directly
     # instead of running Alembic migrations against an existing database.
     await _ensure_auth_schema()

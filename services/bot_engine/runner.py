@@ -84,7 +84,7 @@ class BotRunner:
             try:
                 await self._check_bots()
             except Exception as e:
-                logger.error("bot_runner_error", error=str(e))
+                logger.exception("bot_runner_error", error=str(e))
             await asyncio.sleep(60)
 
     async def _check_bots(self) -> None:
