@@ -79,8 +79,10 @@ class ToolExecutor:
 
         try:
             timeout_s = tool.timeout_ms / 1000.0
+            # Strip user_id from LLM-provided input — always use the authenticated value
+            clean_input = {k: v for k, v in input_data.items() if k != "user_id"}
             result = await asyncio.wait_for(
-                tool.handler(**input_data, user_id=user_id),
+                tool.handler(**clean_input, user_id=user_id),
                 timeout=timeout_s,
             )
         except asyncio.TimeoutError:
