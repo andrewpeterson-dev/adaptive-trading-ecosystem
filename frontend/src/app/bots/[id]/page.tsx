@@ -200,7 +200,7 @@ export default function BotDetailPage() {
       {activeTab === "terminal" && (
         <div className="mt-4 space-y-4">
           {/* Row 1: Performance + Capital + Settings */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(180px,220px)_minmax(180px,220px)]">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(200px,260px)_minmax(180px,220px)]">
             <PerformanceMetricsPanel detail={detail} />
             <CapitalPanel
               detail={detail}
