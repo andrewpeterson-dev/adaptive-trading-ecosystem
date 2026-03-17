@@ -1218,3 +1218,174 @@ async def update_strategy_config(update: StrategyConfigUpdate, request: Request)
         "valid": True,
         "saved_to": path,
     }
+
+
+# ── Walk-Forward Validation Endpoint ──────────────────────────────────────
+
+class WalkForwardRequest(BaseModel):
+    """Request body for walk-forward validation."""
+    strategy_id: Optional[int] = None
+    conditions: Optional[list[ConditionSchema]] = None
+    condition_groups: Optional[list[dict]] = None
+    exit_conditions: Optional[list[ConditionSchema]] = None
+    symbol: str = "SPY"
+    timeframe: str = "1D"
+    lookback_days: int = 756
+    n_segments: int = 6
+    commission_pct: float = 0.001
+    slippage_pct: float = 0.0005
+    initial_capital: float = 100_000.0
+    action: str = "BUY"
+
+
+_walk_forward_semaphore = asyncio.Semaphore(2)
+
+
+@router.post("/walk-forward")
+async def run_walk_forward_endpoint(req: WalkForwardRequest, request: Request):
+    """Run walk-forward validation on a strategy."""
+    user_id = request.state.user_id
+    if not user_id:
+        raise HTTPException(401, "Not authenticated")
+
+    # Resolve conditions
+    conditions_dicts: Optional[list[dict]] = None
+    condition_groups_raw: Optional[list[dict]] = None
+    exit_conditions_dicts: Optional[list[dict]] = None
+
+    if req.strategy_id is not None:
+        async with get_session() as session:
+            inst_result = await session.execute(
+                select(StrategyInstance)
+                .options(selectinload(StrategyInstance.template))
+                .where(
+                    StrategyInstance.id == req.strategy_id,
+                    StrategyInstance.user_id == user_id,
+                )
+            )
+            inst = inst_result.scalar_one_or_none()
+            if inst:
+                t = inst.template
+                if t.condition_groups:
+                    condition_groups_raw = t.condition_groups
+                else:
+                    conditions_dicts = t.conditions or []
+            else:
+                raise HTTPException(404, f"Strategy {req.strategy_id} not found")
+    elif req.condition_groups:
+        condition_groups_raw = req.condition_groups
+    elif req.conditions:
+        conditions_dicts = [c.model_dump() for c in req.conditions]
+    else:
+        raise HTTPException(400, "Provide strategy_id or inline conditions")
+
+    if req.exit_conditions:
+        exit_conditions_dicts = [c.model_dump() for c in req.exit_conditions]
+
+    from services.backtesting.walk_forward import run_walk_forward as _walk_forward
+
+    async with _walk_forward_semaphore:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: _walk_forward(
+                conditions=conditions_dicts,
+                condition_groups=condition_groups_raw,
+                exit_conditions=exit_conditions_dicts,
+                symbol=req.symbol,
+                timeframe=req.timeframe,
+                lookback_days=req.lookback_days,
+                n_segments=req.n_segments,
+                commission_pct=req.commission_pct,
+                slippage_pct=req.slippage_pct,
+                initial_capital=req.initial_capital,
+            ),
+        )
+    return result
+
+
+# ── Ablation Study Endpoint ──────────────────────────────────────────────
+
+class AblationStudyRequest(BaseModel):
+    """Request body for ablation study."""
+    strategy_id: Optional[int] = None
+    conditions: Optional[list[ConditionSchema]] = None
+    condition_groups: Optional[list[dict]] = None
+    exit_conditions: Optional[list[ConditionSchema]] = None
+    symbol: str = "SPY"
+    timeframe: str = "1D"
+    lookback_days: int = 252
+    n_random_trials: int = Field(default=1000, ge=1, le=5000)
+    commission_pct: float = 0.001
+    slippage_pct: float = 0.0005
+    initial_capital: float = 100_000.0
+    action: str = "BUY"
+
+
+_ablation_semaphore = asyncio.Semaphore(2)
+
+
+@router.post("/ablation-study")
+async def run_ablation_study_endpoint(req: AblationStudyRequest, request: Request):
+    """Run an ablation study comparing strategy against random baselines."""
+    user_id = request.state.user_id
+    if not user_id:
+        raise HTTPException(401, "Not authenticated")
+
+    # Resolve conditions
+    conditions_dicts: Optional[list[dict]] = None
+    condition_groups_raw: Optional[list[dict]] = None
+    exit_conditions_dicts: Optional[list[dict]] = None
+
+    if req.strategy_id is not None:
+        async with get_session() as session:
+            inst_result = await session.execute(
+                select(StrategyInstance)
+                .options(selectinload(StrategyInstance.template))
+                .where(
+                    StrategyInstance.id == req.strategy_id,
+                    StrategyInstance.user_id == user_id,
+                )
+            )
+            inst = inst_result.scalar_one_or_none()
+            if inst:
+                t = inst.template
+                if t.condition_groups:
+                    condition_groups_raw = t.condition_groups
+                else:
+                    conditions_dicts = t.conditions or []
+            else:
+                raise HTTPException(404, f"Strategy {req.strategy_id} not found")
+    elif req.condition_groups:
+        condition_groups_raw = req.condition_groups
+    elif req.conditions:
+        conditions_dicts = [c.model_dump() for c in req.conditions]
+    else:
+        raise HTTPException(400, "Provide strategy_id or inline conditions")
+
+    if req.exit_conditions:
+        exit_conditions_dicts = [c.model_dump() for c in req.exit_conditions]
+
+    # Cap random trials to prevent abuse
+    n_trials = min(req.n_random_trials, 5000)
+
+    from services.backtesting.ablation_study import run_ablation_study as _ablation
+
+    async with _ablation_semaphore:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: _ablation(
+                conditions=conditions_dicts,
+                condition_groups=condition_groups_raw,
+                exit_conditions=exit_conditions_dicts,
+                symbol=req.symbol,
+                timeframe=req.timeframe,
+                lookback_days=req.lookback_days,
+                n_random_trials=n_trials,
+                commission_pct=req.commission_pct,
+                slippage_pct=req.slippage_pct,
+                initial_capital=req.initial_capital,
+            ),
+        )
+    return result
