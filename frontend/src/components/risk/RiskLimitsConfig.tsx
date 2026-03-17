@@ -120,8 +120,24 @@ export function RiskLimitsConfig() {
 
   const fetchData = useCallback(async () => {
     try {
-      const result = await apiFetch<RiskLimitsData>("/api/risk/advanced-limits");
-      setData(result);
+      // Fetch both basic limits and drawdown thresholds to populate config
+      const [limitsRes, drawdownRes] = await Promise.allSettled([
+        apiFetch<Record<string, any>>("/api/risk/limits"),
+        apiFetch<Record<string, any>>("/api/risk/drawdown-status"),
+      ]);
+      const limits = limitsRes.status === "fulfilled" ? limitsRes.value : {};
+      const drawdown = drawdownRes.status === "fulfilled" ? drawdownRes.value : {};
+      const t = drawdown.thresholds || {};
+      setData({
+        reduce_threshold: t.drawdown_reduce_pct ?? -2,
+        halt_threshold: t.drawdown_halt_pct ?? -4,
+        daily_kill_threshold: t.drawdown_kill_pct ?? -7,
+        weekly_kill_threshold: t.weekly_drawdown_kill_pct ?? -10,
+        sector_cap: limits.sector_concentration_limit ?? 30,
+        category_block_threshold: limits.category_block_threshold ?? 30,
+        max_position_size: (limits.max_position_size_pct ?? 0.25) * 100,
+        kill_switch_active: limits.kill_switch_active ?? false,
+      });
     } catch {
       // Use defaults
     } finally {

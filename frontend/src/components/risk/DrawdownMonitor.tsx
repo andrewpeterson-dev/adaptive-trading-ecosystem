@@ -18,10 +18,14 @@ interface DrawdownStatus {
   size_multiplier: number;
   restrictions: string[];
   thresholds: {
-    reduce: number;
-    halt: number;
-    daily_kill: number;
-    weekly_kill: number;
+    drawdown_reduce_pct?: number;
+    drawdown_halt_pct?: number;
+    drawdown_kill_pct?: number;
+    weekly_drawdown_kill_pct?: number;
+    reduce?: number;
+    halt?: number;
+    daily_kill?: number;
+    weekly_kill?: number;
   };
 }
 
@@ -214,7 +218,13 @@ export function DrawdownMonitor() {
     );
   }
 
-  const thresholds = [-2, -4, -7, -10];
+  const t = data.thresholds || {};
+  const thresholds = [
+    t.drawdown_reduce_pct ?? t.reduce ?? -2,
+    t.drawdown_halt_pct ?? t.halt ?? -4,
+    t.drawdown_kill_pct ?? t.daily_kill ?? -7,
+    t.weekly_drawdown_kill_pct ?? t.weekly_kill ?? -10,
+  ];
   const isActive = data.level !== "NORMAL";
 
   return (
