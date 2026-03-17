@@ -144,17 +144,15 @@ def _validate_structure(config: Dict[str, Any], errors: List[str]) -> None:
     if not conditions:
         errors.append("must have at least 1 entry condition with an indicator and operator")
 
-    # stop_loss_pct
+    # stop_loss_pct — accept both decimal (0.03) and percentage (3.0) formats
     sl = config.get("stop_loss_pct")
     if sl is not None:
         try:
             sl_val = float(sl)
             if sl_val <= 0:
                 errors.append(f"stop_loss_pct ({sl_val}) must be > 0")
-            elif sl_val >= 1:
-                errors.append(
-                    f"stop_loss_pct ({sl_val}) must be < 1 (expressed as a decimal, e.g. 0.03 for 3%)"
-                )
+            elif sl_val > 100:
+                errors.append(f"stop_loss_pct ({sl_val}) must be <= 100%")
         except (TypeError, ValueError):
             errors.append(f"stop_loss_pct '{sl}' is not a valid number")
 
@@ -168,17 +166,15 @@ def _validate_structure(config: Dict[str, Any], errors: List[str]) -> None:
         except (TypeError, ValueError):
             errors.append(f"take_profit_pct '{tp}' is not a valid number")
 
-    # position_size_pct
+    # position_size_pct — accept both decimal (0.10) and percentage (10.0) formats
     ps = config.get("position_size_pct")
     if ps is not None:
         try:
             ps_val = float(ps)
             if ps_val <= 0:
                 errors.append(f"position_size_pct ({ps_val}) must be > 0")
-            elif ps_val > 1:
-                errors.append(
-                    f"position_size_pct ({ps_val}) must be <= 1 (expressed as a decimal, e.g. 0.10 for 10%)"
-                )
+            elif ps_val > 100:
+                errors.append(f"position_size_pct ({ps_val}) must be <= 100%")
         except (TypeError, ValueError):
             errors.append(f"position_size_pct '{ps}' is not a valid number")
 
