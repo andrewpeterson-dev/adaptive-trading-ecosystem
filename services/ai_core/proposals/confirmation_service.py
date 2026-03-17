@@ -59,6 +59,7 @@ class ConfirmationService:
             async with get_session() as session:
                 stmt = select(CerberusTradeProposal).where(
                     CerberusTradeProposal.id == proposal_id,
+                    CerberusTradeProposal.user_id == user_id,
                 )
                 result = await session.execute(stmt)
                 p = result.scalar_one()
@@ -91,6 +92,7 @@ class ConfirmationService:
             # Update proposal status
             stmt = select(CerberusTradeProposal).where(
                 CerberusTradeProposal.id == proposal_id,
+                CerberusTradeProposal.user_id == user_id,
             )
             result = await session.execute(stmt)
             p = result.scalar_one()
@@ -176,6 +178,7 @@ class ConfirmationService:
             async with get_session() as session:
                 stmt = select(CerberusTradeProposal).where(
                     CerberusTradeProposal.id == proposal_id,
+                    CerberusTradeProposal.user_id == user_id,
                 )
                 result = await session.execute(stmt)
                 p = result.scalar_one()
@@ -183,6 +186,7 @@ class ConfirmationService:
 
                 conf_stmt = select(CerberusTradeConfirmation).where(
                     CerberusTradeConfirmation.id == confirmation.id,
+                    CerberusTradeConfirmation.user_id == user_id,
                 )
                 conf_result = await session.execute(conf_stmt)
                 c = conf_result.scalar_one()
@@ -196,6 +200,7 @@ class ConfirmationService:
         async with get_session() as session:
             stmt = select(CerberusTradeProposal).where(
                 CerberusTradeProposal.id == proposal_id,
+                CerberusTradeProposal.user_id == user_id,
             )
             result = await session.execute(stmt)
             p = result.scalar_one()
@@ -203,6 +208,7 @@ class ConfirmationService:
 
             conf_stmt = select(CerberusTradeConfirmation).where(
                 CerberusTradeConfirmation.id == confirmation.id,
+                CerberusTradeConfirmation.user_id == user_id,
             )
             conf_result = await session.execute(conf_stmt)
             c = conf_result.scalar_one()
