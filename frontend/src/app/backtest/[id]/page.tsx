@@ -41,6 +41,11 @@ function MetricCard({
   format?: string;
 }) {
   const formatted = (() => {
+    if (value == null || !Number.isFinite(value)) {
+      if (value === Infinity) return "\u221e";
+      if (value === -Infinity) return "-\u221e";
+      return "\u2014";
+    }
     if (format === "percent") return `${(value * 100).toFixed(1)}%`;
     if (format === "ratio") return value.toFixed(3);
     if (format === "currency") {
@@ -383,8 +388,8 @@ function AblationPanel({ data }: { data: AblationResult }) {
 type TabKey = "equity" | "drawdown" | "metrics" | "trades" | "walk-forward" | "ablation";
 
 export default function BacktestPage() {
-  const params = useParams<{ id?: string | string[] }>();
-  const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
+  const params = useParams<{ id: string }>();
+  const id = params?.id ?? "";
   const [strategy, setStrategy] = useState<StrategyRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
