@@ -33,6 +33,7 @@ def build_trade_decision_prompt(
     recent_trades: list[dict] | None = None,
     vix: float | None = None,
     ai_thinking: str | None = None,
+    sentiment: dict | None = None,
 ) -> str:
     parts = [f"## Trade Signal\nBot: {bot_name}\nSymbol: {symbol}\nSignal: {signal}"]
 
@@ -41,6 +42,25 @@ def build_trade_decision_prompt(
 
     if vix is not None:
         parts.append(f"## Market Conditions\nVIX: {vix:.1f}")
+
+    if sentiment:
+        sentiment_lines = [
+            f"Overall: {sentiment.get('overall_sentiment', 'unknown')}",
+            f"Score: {sentiment.get('score', 0):.4f}",
+            f"Confidence: {sentiment.get('confidence', 0):.4f}",
+            f"Articles Analyzed: {sentiment.get('num_articles', 0)}",
+        ]
+        bullish = sentiment.get("top_bullish") or []
+        bearish = sentiment.get("top_bearish") or []
+        if bullish:
+            sentiment_lines.append("Top Bullish Headlines:")
+            for article in bullish[:3]:
+                sentiment_lines.append(f"  - {article.get('title', '')} (score: {article.get('score', 0):.2f})")
+        if bearish:
+            sentiment_lines.append("Top Bearish Headlines:")
+            for article in bearish[:3]:
+                sentiment_lines.append(f"  - {article.get('title', '')} (score: {article.get('score', 0):.2f})")
+        parts.append("## Sentiment Analysis\n" + "\n".join(sentiment_lines))
 
     if active_events:
         event_lines = []

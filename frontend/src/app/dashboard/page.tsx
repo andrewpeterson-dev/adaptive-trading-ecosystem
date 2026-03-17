@@ -43,6 +43,7 @@ import {
   PortfolioRiskDashPanel,
 } from "@/components/dashboard";
 import { ExecutionChart } from "@/components/dashboard/ExecutionChart";
+import { PortfolioEquityChart } from "@/components/dashboard/PortfolioEquityChart";
 import { DashboardGrid } from "@/components/dashboard/GridLayout";
 import type { Layouts, LayoutItem } from "@/components/dashboard/GridLayout";
 import { SentimentPanel } from "@/components/analytics/SentimentPanel";
@@ -372,8 +373,8 @@ export default function DashboardPage() {
 
           {/* Center Column */}
           <div key="execution-chart">
-            <DashboardPanel title="Execution Chart" icon={BarChart3} noPadding>
-              <ExecutionChart symbol={positions[0]?.symbol || orders[0]?.symbol || "SPY"} height={340} />
+            <DashboardPanel title="Portfolio Equity" icon={TrendingUp} noPadding>
+              <PortfolioEquityChart height={340} />
             </DashboardPanel>
           </div>
 

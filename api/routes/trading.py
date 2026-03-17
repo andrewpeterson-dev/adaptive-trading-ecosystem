@@ -1994,3 +1994,198 @@ async def get_portfolio_analytics(request: Request, symbols: Optional[str] = Non
         return analyzer.generate_risk_report([], pd.DataFrame())
 
     return analyzer.generate_risk_report(positions, pd.DataFrame())
+
+
+# ---------------------------------------------------------------------------
+# Equity history — portfolio equity curve over time
+# ---------------------------------------------------------------------------
+
+
+@router.get("/equity-history")
+async def get_equity_history(
+    request: Request,
+    period: str = Query("1M", regex="^(1D|1W|1M|3M|1Y|ALL)$"),
+):
+    """Return portfolio equity points over time for charting.
+
+    Paper mode: reconstructs equity curve from paper trade history.
+    Live mode: returns current equity as a single point (no historical snapshots yet).
+
+    Returns ``{"points": [{"date": "...", "equity": ...}, ...], "initial_capital": ...}``
+    """
+    from datetime import timedelta
+
+    user_id = getattr(request.state, "user_id", None)
+    mode = getattr(request.state, "trading_mode", TradingModeEnum.PAPER)
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Determine the lookback cutoff
+    now = datetime.utcnow()
+    period_map = {
+        "1D": timedelta(days=1),
+        "1W": timedelta(weeks=1),
+        "1M": timedelta(days=30),
+        "3M": timedelta(days=90),
+        "1Y": timedelta(days=365),
+        "ALL": timedelta(days=3650),
+    }
+    cutoff = now - period_map.get(period, timedelta(days=30))
+
+    if mode == TradingModeEnum.PAPER or mode == TradingModeEnum.BACKTEST:
+        return await _build_paper_equity_curve(user_id, cutoff, now)
+
+    # Live mode — no historical snapshots stored yet, return current equity
+    try:
+        account_data = await get_account(request)
+        current_equity = account_data.get("equity", 0)
+        return {
+            "points": [
+                {"date": now.strftime("%Y-%m-%d"), "equity": current_equity},
+            ],
+            "initial_capital": current_equity,
+        }
+    except Exception:
+        return {"points": [], "initial_capital": 0}
+
+
+async def _build_paper_equity_curve(
+    user_id: int,
+    cutoff: datetime,
+    now: datetime,
+) -> dict:
+    """Reconstruct a paper portfolio equity curve from trade history.
+
+    Strategy: walk through all paper trades chronologically, track cash +
+    position values after each trade event, and emit equity snapshots.
+    """
+    async with get_session() as session:
+        # Get portfolio
+        result = await session.execute(
+            select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+        )
+        portfolio = result.scalar_one_or_none()
+
+        if not portfolio:
+            return {"points": [], "initial_capital": 1_000_000.0}
+
+        initial_capital = portfolio.initial_capital or 1_000_000.0
+
+        # Fetch ALL trades ordered chronologically (we need the full history
+        # to reconstruct equity, then filter points by cutoff for display)
+        trade_result = await session.execute(
+            select(PaperTrade)
+            .where(PaperTrade.portfolio_id == portfolio.id)
+            .order_by(PaperTrade.entry_time.asc())
+        )
+        all_trades = trade_result.scalars().all()
+
+        if not all_trades:
+            # No trades — show flat line at initial capital
+            return {
+                "points": [
+                    {"date": cutoff.strftime("%Y-%m-%dT%H:%M:%S"), "equity": initial_capital},
+                    {"date": now.strftime("%Y-%m-%dT%H:%M:%S"), "equity": initial_capital},
+                ],
+                "initial_capital": initial_capital,
+            }
+
+        # Walk through trades and reconstruct equity at each trade event
+        cash = initial_capital
+        positions: dict[str, dict] = {}  # symbol -> {qty, avg_price}
+        points: list[dict] = []
+
+        # Add starting point
+        first_trade_time = all_trades[0].entry_time or cutoff
+        if first_trade_time > cutoff:
+            points.append({
+                "date": cutoff.strftime("%Y-%m-%dT%H:%M:%S"),
+                "equity": initial_capital,
+            })
+
+        for trade in all_trades:
+            trade_time = trade.entry_time or now
+            multiplier = _position_multiplier(trade.symbol)
+            direction = trade.direction
+            qty = trade.quantity or 0
+            price = trade.entry_price or 0
+
+            if direction == TradeDirection.BUY:
+                cost = qty * price * multiplier
+                cash -= cost
+                if trade.symbol in positions:
+                    pos = positions[trade.symbol]
+                    total_qty = pos["qty"] + qty
+                    if total_qty > 0:
+                        pos["avg_price"] = (
+                            (pos["qty"] * pos["avg_price"] + qty * price) / total_qty
+                        )
+                    pos["qty"] = total_qty
+                else:
+                    positions[trade.symbol] = {"qty": qty, "avg_price": price, "multiplier": multiplier}
+            elif direction == TradeDirection.SELL:
+                proceeds = qty * price * multiplier
+                cash += proceeds
+                if trade.symbol in positions:
+                    positions[trade.symbol]["qty"] -= qty
+                    if positions[trade.symbol]["qty"] <= 0.001:
+                        del positions[trade.symbol]
+
+            # Also handle exit events
+            if trade.exit_price and trade.exit_time:
+                if direction == TradeDirection.BUY and trade.symbol in positions:
+                    # Exit means we sold
+                    exit_proceeds = qty * trade.exit_price * multiplier
+                    cash += exit_proceeds
+                    if trade.symbol in positions:
+                        positions[trade.symbol]["qty"] -= qty
+                        if positions[trade.symbol]["qty"] <= 0.001:
+                            del positions[trade.symbol]
+
+            # Calculate total equity at this point
+            positions_value = sum(
+                p["qty"] * p.get("avg_price", 0) * p.get("multiplier", 1)
+                for p in positions.values()
+            )
+            equity = cash + positions_value
+
+            points.append({
+                "date": trade_time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "equity": round(equity, 2),
+            })
+
+        # Add current point using the portfolio's actual current state
+        pos_result = await session.execute(
+            select(PaperPosition).where(PaperPosition.portfolio_id == portfolio.id)
+        )
+        current_positions = pos_result.scalars().all()
+        current_positions_value = sum(
+            (p.current_price or p.avg_entry_price) * p.quantity * _position_multiplier(p.symbol)
+            for p in current_positions
+        )
+        current_equity = portfolio.cash + current_positions_value
+        points.append({
+            "date": now.strftime("%Y-%m-%dT%H:%M:%S"),
+            "equity": round(current_equity, 2),
+        })
+
+        # Filter to the requested period
+        cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S")
+        filtered_points = [p for p in points if p["date"] >= cutoff_str]
+
+        # Ensure we always have at least the starting point
+        if not filtered_points and points:
+            filtered_points = [points[-1]]
+
+        # Deduplicate by date (keep the last value for each date)
+        seen: dict[str, dict] = {}
+        for p in filtered_points:
+            day_key = p["date"][:10]
+            seen[day_key] = p
+        deduped = sorted(seen.values(), key=lambda x: x["date"])
+
+        return {
+            "points": deduped,
+            "initial_capital": initial_capital,
+        }

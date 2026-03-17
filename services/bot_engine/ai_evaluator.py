@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from typing import Optional
 
 import structlog
 
@@ -106,6 +107,7 @@ def _build_evaluation_prompt(
     timeframe: str,
     symbol_data: list[dict],
     open_positions: list[str],
+    sentiment_data: Optional[dict] = None,
 ) -> str:
     """Build the user prompt with all market data for the LLM."""
     lines = [
@@ -186,6 +188,17 @@ def _build_evaluation_prompt(
         if vwap is not None:
             lines.append(f"  VWAP: {vwap:.2f}")
 
+    if sentiment_data:
+        sentiment_lines = ["\n## Sentiment Context"]
+        for sym, sdata in sentiment_data.items():
+            sentiment_lines.append(
+                f"  {sym}: {sdata.get('overall_sentiment', 'unknown')} "
+                f"(score: {sdata.get('score', 0):.4f}, "
+                f"confidence: {sdata.get('confidence', 0):.4f}, "
+                f"articles: {sdata.get('num_articles', 0)})"
+            )
+        lines.extend(sentiment_lines)
+
     if open_positions:
         lines.append(f"\n## Open Positions (SKIP these symbols): {', '.join(open_positions)}")
     else:
@@ -207,6 +220,7 @@ async def ai_evaluate_entries(
     symbol_data: list[dict],
     open_positions: list[str] | None = None,
     mode: str = "paper",
+    sentiment_data: Optional[dict] = None,
 ) -> list[AIEntrySignal]:
     """
     Use an LLM to evaluate which symbols should be entered.
@@ -239,6 +253,7 @@ async def ai_evaluate_entries(
         timeframe=timeframe,
         symbol_data=symbol_data,
         open_positions=open_positions,
+        sentiment_data=sentiment_data,
     )
 
     router = _get_router()

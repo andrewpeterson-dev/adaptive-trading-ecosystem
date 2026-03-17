@@ -1,12 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import {
-  TrendingUp,
-  TrendingDown,
-  ExternalLink,
-} from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 
 // ---------------------------------------------------------------------------
@@ -55,10 +51,56 @@ function moodColorClasses(mood: string): string {
   }
 }
 
+function moodGlowStyle(mood: string): React.CSSProperties {
+  switch (mood) {
+    case "bullish":
+      return { boxShadow: "0 0 12px rgba(52,211,153,0.3), 0 0 4px rgba(52,211,153,0.15)" };
+    case "cautiously_optimistic":
+      return { boxShadow: "0 0 10px rgba(110,231,183,0.22)" };
+    case "mixed":
+    case "neutral":
+      return { boxShadow: "0 0 10px rgba(251,191,36,0.2)" };
+    case "cautiously_pessimistic":
+      return { boxShadow: "0 0 10px rgba(251,146,60,0.22)" };
+    case "bearish":
+      return { boxShadow: "0 0 12px rgba(248,113,113,0.3), 0 0 4px rgba(248,113,113,0.15)" };
+    default:
+      return {};
+  }
+}
+
 function scoreColor(score: number): string {
   if (score >= 0.5) return "text-emerald-400";
   if (score > -0.5) return "text-zinc-400";
   return "text-red-400";
+}
+
+// ---------------------------------------------------------------------------
+// Animated score bar dot
+// ---------------------------------------------------------------------------
+
+function ScoreBarDot({ score, size = 3 }: { score: number; size?: number }) {
+  const [mounted, setMounted] = useState(false);
+  const targetLeft = `${((score + 5) / 10) * 100}%`;
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const px = size === 3 ? "h-3 w-3" : "h-2.5 w-2.5";
+
+  return (
+    <div
+      className={`absolute top-1/2 ${px} rounded-full border-2 border-white bg-foreground`}
+      style={{
+        left: mounted ? targetLeft : "50%",
+        transform: "translate(-50%, -50%)",
+        transition: "left 700ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+        boxShadow: "0 1px 6px rgba(0,0,0,0.25), 0 0 0 1.5px rgba(255,255,255,0.12)",
+      }}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +111,7 @@ export function MarketMoodWidget() {
   const [mood, setMood] = useState<MoodOverview | null>(null);
   const [topTickers, setTopTickers] = useState<TickerMini[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hovered, setHovered] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -103,7 +146,7 @@ export function MarketMoodWidget() {
         setTopTickers(tickers);
       }
     } catch {
-      // Silently fail - widget is non-critical
+      // Silently fail — widget is non-critical
     } finally {
       setLoading(false);
     }
@@ -117,14 +160,25 @@ export function MarketMoodWidget() {
 
   if (loading) {
     return (
-      <div className="space-y-3 animate-pulse p-1">
-        <div className="h-7 w-32 rounded-full bg-muted mx-auto" />
-        <div className="h-3 w-full rounded bg-muted" />
-        <div className="space-y-2">
+      <div className="space-y-3 p-1">
+        {/* Pill skeleton */}
+        <div className="flex justify-center">
+          <div className="h-7 w-32 app-skeleton rounded-full" />
+        </div>
+        {/* Bar skeleton */}
+        <div className="h-2.5 w-full app-skeleton rounded-full" />
+        {/* Ticker rows skeleton */}
+        <div className="space-y-2 pt-0.5">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-5 bg-muted rounded" />
+            <div key={i} className="flex items-center gap-2">
+              <div className="h-4 w-10 app-skeleton rounded" />
+              <div className="h-1.5 flex-1 app-skeleton rounded-full" />
+              <div className="h-4 w-8 app-skeleton rounded" />
+            </div>
           ))}
         </div>
+        {/* Link skeleton */}
+        <div className="h-4 w-32 app-skeleton rounded mx-auto" />
       </div>
     );
   }
@@ -138,13 +192,23 @@ export function MarketMoodWidget() {
   }
 
   return (
-    <div className="space-y-3 p-1">
+    <div
+      className="space-y-3 p-1 rounded-xl transition-all duration-300"
+      style={
+        hovered
+          ? { boxShadow: "0 0 0 1px hsl(var(--ring) / 0.25), 0 0 16px hsl(var(--ring) / 0.1)" }
+          : {}
+      }
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {/* Mood pill */}
       <div className="flex items-center justify-center">
         <span
-          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${moodColorClasses(
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-shadow ${moodColorClasses(
             mood.market_mood
           )}`}
+          style={moodGlowStyle(mood.market_mood)}
         >
           {mood.score >= 0 ? (
             <TrendingUp className="h-3 w-3" />
@@ -160,33 +224,21 @@ export function MarketMoodWidget() {
         <div className="relative h-2 w-full rounded-full overflow-hidden bg-gradient-to-r from-red-500/25 via-zinc-500/15 to-emerald-500/25">
           {mood.score >= 0 ? (
             <div
-              className="absolute top-0 h-full rounded-r-full bg-emerald-400/60"
-              style={{
-                left: "50%",
-                width: `${(mood.score / 5) * 50}%`,
-              }}
+              className="absolute top-0 h-full rounded-r-full bg-gradient-to-r from-emerald-500/50 to-emerald-400/70"
+              style={{ left: "50%", width: `${(mood.score / 5) * 50}%` }}
             />
           ) : (
             <div
-              className="absolute top-0 h-full rounded-l-full bg-red-400/60"
-              style={{
-                right: "50%",
-                width: `${(Math.abs(mood.score) / 5) * 50}%`,
-              }}
+              className="absolute top-0 h-full rounded-l-full bg-gradient-to-l from-red-500/50 to-red-400/70"
+              style={{ right: "50%", width: `${(Math.abs(mood.score) / 5) * 50}%` }}
             />
           )}
-          <div
-            className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-white shadow bg-foreground"
-            style={{
-              left: `${((mood.score + 5) / 10) * 100}%`,
-              transform: "translate(-50%, -50%)",
-            }}
-          />
+          <ScoreBarDot score={mood.score} size={3} />
           <div className="absolute left-1/2 top-0 w-px h-full bg-white/20" />
         </div>
         <div className="flex justify-between text-[9px] font-mono text-muted-foreground">
           <span>-5</span>
-          <span className="font-semibold">
+          <span className="font-semibold tabular-nums">
             {mood.score > 0 ? "+" : ""}
             {mood.score.toFixed(1)}
           </span>
@@ -198,17 +250,19 @@ export function MarketMoodWidget() {
       <div className="space-y-1.5">
         {topTickers.map((t) => (
           <div key={t.ticker} className="flex items-center justify-between gap-2">
-            <span className="text-xs font-mono font-medium w-10">{t.ticker}</span>
-            <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden relative">
+            <span className="text-xs font-mono font-medium w-10 text-foreground">{t.ticker}</span>
+            <div className="flex-1 h-1.5 rounded-full overflow-hidden relative"
+              style={{ background: "hsl(var(--muted) / 0.5)" }}
+            >
               <div className="absolute left-1/2 top-0 w-px h-full bg-white/15" />
               {t.score >= 0 ? (
                 <div
-                  className="absolute top-0 h-full rounded-r-full bg-emerald-400/50"
+                  className="absolute top-0 h-full rounded-r-full bg-emerald-400/55"
                   style={{ left: "50%", width: `${(t.score / 5) * 50}%` }}
                 />
               ) : (
                 <div
-                  className="absolute top-0 h-full rounded-l-full bg-red-400/50"
+                  className="absolute top-0 h-full rounded-l-full bg-red-400/55"
                   style={{ right: "50%", width: `${(Math.abs(t.score) / 5) * 50}%` }}
                 />
               )}
@@ -223,13 +277,13 @@ export function MarketMoodWidget() {
         ))}
       </div>
 
-      {/* Link to full page */}
+      {/* Link to full page — arrow animates on hover */}
       <Link
         href="/sentiment"
-        className="flex items-center justify-center gap-1 text-[10px] font-medium text-primary hover:underline pt-1"
+        className="group flex items-center justify-center gap-1 text-[10px] font-medium text-primary hover:text-primary/80 pt-1 transition-colors"
       >
-        Full Sentiment Analysis
-        <ExternalLink className="h-2.5 w-2.5" />
+        View Details
+        <ArrowRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" />
       </Link>
     </div>
   );

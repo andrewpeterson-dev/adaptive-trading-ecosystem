@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   AreaChart,
   Area,
@@ -19,6 +19,7 @@ import {
   BarChart3,
   RefreshCw,
   Loader2,
+  LineChart,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -96,6 +97,24 @@ function moodColorClasses(mood: string): string {
   }
 }
 
+function moodGlowStyle(mood: string): React.CSSProperties {
+  switch (mood) {
+    case "bullish":
+      return { boxShadow: "0 0 14px rgba(52,211,153,0.35), 0 0 4px rgba(52,211,153,0.2)" };
+    case "cautiously_optimistic":
+      return { boxShadow: "0 0 12px rgba(110,231,183,0.28)" };
+    case "mixed":
+    case "neutral":
+      return { boxShadow: "0 0 12px rgba(251,191,36,0.25)" };
+    case "cautiously_pessimistic":
+      return { boxShadow: "0 0 12px rgba(251,146,60,0.28)" };
+    case "bearish":
+      return { boxShadow: "0 0 14px rgba(248,113,113,0.35), 0 0 4px rgba(248,113,113,0.2)" };
+    default:
+      return {};
+  }
+}
+
 function scoreColor(score: number): string {
   if (score >= 2) return "text-emerald-400";
   if (score >= 0.5) return "text-emerald-300";
@@ -125,6 +144,17 @@ function headlineDotColor(score: number): string {
   return "bg-red-400";
 }
 
+// Returns true if time string indicates article is < 2 hours old
+function isRecent(time: string): boolean {
+  const match = time.match(/^(\d+(?:\.\d+)?)(m|h)\s+ago$/);
+  if (!match) return false;
+  const val = parseFloat(match[1]);
+  const unit = match[2];
+  if (unit === "m") return true;
+  if (unit === "h") return val < 2;
+  return false;
+}
+
 // Generate mock timeline data if API doesn't return it
 function generateTimeline(score: number): TimelinePoint[] {
   const points: TimelinePoint[] = [];
@@ -139,7 +169,6 @@ function generateTimeline(score: number): TimelinePoint[] {
       score: Math.max(-5, Math.min(5, trend + noise)),
     });
   }
-  // Add some event annotations
   if (points.length > 7) points[7].event = "Fed Meeting";
   if (points.length > 18) points[18].event = "NVDA Earnings";
   if (points.length > 24) points[24].event = "CPI Data";
@@ -177,7 +206,6 @@ function generateHeadlines(tickers: TickerSentimentResult[]): HeadlineItem[] {
     }
   });
 
-  // If no headlines from API, generate some placeholder ones
   if (headlines.length === 0) {
     const placeholders = [
       { title: "Markets rally on strong earnings season outlook", score: 2.1, sentiment: "bullish" },
@@ -203,29 +231,48 @@ function generateHeadlines(tickers: TickerSentimentResult[]): HeadlineItem[] {
   return headlines.slice(0, 12);
 }
 
-// Simple SVG sparkline
+// ---------------------------------------------------------------------------
+// Sparkline with gradient fill
+// ---------------------------------------------------------------------------
+
 function MiniSparkline({ data, positive }: { data: number[]; positive: boolean }) {
   if (!data || data.length < 2) return null;
-  const height = 24;
-  const width = 64;
+
+  const height = 28;
+  const width = 68;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
 
-  const points = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * width;
-      const y = height - ((v - min) / range) * height;
-      return `${x},${y}`;
-    })
+  const pts = data.map((v, i) => ({
+    x: (i / (data.length - 1)) * width,
+    y: height - ((v - min) / range) * (height - 4) - 2,
+  }));
+
+  const linePath = pts
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
     .join(" ");
 
+  const fillPath =
+    linePath +
+    ` L ${width} ${height} L 0 ${height} Z`;
+
+  const color = positive ? "#34d399" : "#f87171";
+  const gradId = `spark-${positive ? "g" : "r"}-${Math.random().toString(36).slice(2, 6)}`;
+
   return (
-    <svg width={width} height={height} className="shrink-0">
-      <polyline
-        points={points}
+    <svg width={width} height={height} className="shrink-0 overflow-visible">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={fillPath} fill={`url(#${gradId})`} />
+      <path
+        d={linePath}
         fill="none"
-        stroke={positive ? "hsl(var(--positive))" : "hsl(var(--negative))"}
+        stroke={color}
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -235,24 +282,166 @@ function MiniSparkline({ data, positive }: { data: number[]; positive: boolean }
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton
+// Custom Recharts Tooltip
+// ---------------------------------------------------------------------------
+
+function SentimentTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const val: number = payload[0].value;
+  return (
+    <div
+      className="rounded-xl border px-3 py-2 text-xs backdrop-blur-xl"
+      style={{
+        background: "hsl(var(--surface-overlay) / 0.95)",
+        borderColor: "hsl(var(--border))",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+      }}
+    >
+      <div className="font-medium text-muted-foreground mb-0.5">{label}</div>
+      <div className={`font-semibold font-mono ${scoreColor(val)}`}>
+        {val > 0 ? "+" : ""}
+        {val.toFixed(2)}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Confidence Bar (animated on mount)
+// ---------------------------------------------------------------------------
+
+function ConfidenceBar({ value }: { value: number }) {
+  const [width, setWidth] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setWidth(value * 100);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return (
+    <div className="app-progress-track">
+      <div
+        ref={ref}
+        className="app-progress-bar bg-primary/70"
+        style={{
+          width: `${width}%`,
+          transition: "width 600ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+        }}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Score Bar Dot (animated on mount)
+// ---------------------------------------------------------------------------
+
+function ScoreBarDot({ score }: { score: number }) {
+  const [mounted, setMounted] = useState(false);
+  const targetLeft = `${((score + 5) / 10) * 100}%`;
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return (
+    <div
+      className="absolute top-1/2 h-4 w-4 rounded-full border-2 border-white bg-foreground"
+      style={{
+        left: mounted ? targetLeft : "50%",
+        transform: "translate(-50%, -50%)",
+        transition: "left 700ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.3), 0 0 0 2px rgba(255,255,255,0.15)",
+      }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ticker Card Skeleton
+// ---------------------------------------------------------------------------
+
+function TickerCardSkeleton() {
+  return (
+    <div className="app-card p-3 space-y-2.5">
+      <div className="flex items-center justify-between">
+        <div className="h-5 w-14 app-skeleton rounded" />
+        <div className="h-5 w-10 app-skeleton rounded" />
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="h-5 w-20 app-skeleton rounded-full" />
+        <div className="h-4 w-16 app-skeleton rounded" />
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 space-y-1">
+          <div className="flex justify-between">
+            <div className="h-3 w-16 app-skeleton rounded" />
+            <div className="h-3 w-8 app-skeleton rounded" />
+          </div>
+          <div className="h-2 w-full app-skeleton rounded-full" />
+        </div>
+        <div className="h-7 w-16 app-skeleton rounded" />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Empty State
+// ---------------------------------------------------------------------------
+
+function EmptyState() {
+  return (
+    <div className="app-panel p-12 flex flex-col items-center gap-4 text-center">
+      <div
+        className="flex h-14 w-14 items-center justify-center rounded-full border"
+        style={{
+          borderColor: "hsl(var(--border) / 0.78)",
+          background: "hsl(var(--surface-3) / 0.8)",
+        }}
+      >
+        <LineChart className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-foreground">No sentiment data available</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Sentiment data will appear once analysis is available.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page Skeleton
 // ---------------------------------------------------------------------------
 
 function PageSkeleton() {
   return (
-    <div className="space-y-5 animate-pulse">
-      <div className="app-panel p-5">
-        <div className="h-10 w-48 rounded-full bg-muted mx-auto mb-4" />
-        <div className="h-6 w-full rounded bg-muted" />
+    <div className="space-y-5">
+      {/* Mood panel skeleton */}
+      <div className="app-panel p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-36 app-skeleton rounded-full" />
+          <div className="h-4 w-32 app-skeleton rounded" />
+        </div>
+        <div className="h-3 w-full app-skeleton rounded-full" />
       </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="app-card p-3 space-y-3">
-            <div className="h-5 w-20 bg-muted rounded" />
-            <div className="h-3 w-full bg-muted rounded" />
-            <div className="h-6 w-16 bg-muted rounded" />
-          </div>
-        ))}
+      {/* Ticker grid skeleton */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <div className="h-4 w-32 app-skeleton rounded" />
+          <div className="h-5 w-20 app-skeleton rounded-full" />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <TickerCardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -285,7 +474,6 @@ export default function SentimentPage() {
 
       if (moodRes.status === "fulfilled") {
         const moodData = moodRes.value;
-        // Fill defaults
         setMood({
           market_mood: moodData.market_mood || "neutral",
           score: moodData.score ?? 0,
@@ -298,7 +486,6 @@ export default function SentimentPage() {
         });
         setTimeline(generateTimeline(moodData.score ?? 0));
       } else {
-        // Use defaults on failure
         setMood({
           market_mood: "neutral",
           score: 0,
@@ -322,7 +509,9 @@ export default function SentimentPage() {
             score: d?.score ?? 0,
             confidence: d?.confidence ?? 0.5,
             num_articles: d?.num_articles ?? 0,
-            sparkline: d?.sparkline || Array.from({ length: 7 }, () => (d?.score ?? 0) + (Math.random() - 0.5) * 2),
+            sparkline:
+              d?.sparkline ||
+              Array.from({ length: 7 }, () => (d?.score ?? 0) + (Math.random() - 0.5) * 2),
             top_bullish: d?.top_bullish || [],
             top_bearish: d?.top_bearish || [],
           };
@@ -330,7 +519,6 @@ export default function SentimentPage() {
         setTickers(results);
         setHeadlines(generateHeadlines(results));
       } else {
-        // Generate placeholder tickers
         const placeholders = TRACKED_TICKERS.map((t) => ({
           ticker: t,
           overall_sentiment: "neutral",
@@ -405,6 +593,8 @@ export default function SentimentPage() {
         </div>
       )}
 
+      {!loading && !error && !mood && <EmptyState />}
+
       {mood && (
         <>
           {/* ── Section 1: Overall Market Mood ──────────────────────────── */}
@@ -413,10 +603,12 @@ export default function SentimentPage() {
               {/* Mood label + score bar */}
               <div className="flex-1 space-y-3">
                 <div className="flex items-center gap-3">
+                  {/* Mood pill with color-matched glow */}
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold ${moodColorClasses(
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold transition-shadow ${moodColorClasses(
                       mood.market_mood
                     )}`}
+                    style={moodGlowStyle(mood.market_mood)}
                   >
                     {mood.score >= 0 ? (
                       <TrendingUp className="h-3.5 w-3.5" />
@@ -425,39 +617,26 @@ export default function SentimentPage() {
                     )}
                     {moodLabel(mood.market_mood)}
                   </span>
-                  <span className="app-label">Overall Market Score</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                    Overall Market Score
+                  </span>
                 </div>
 
                 {/* Score bar */}
                 <div className="space-y-1">
                   <div className="relative h-3 w-full rounded-full overflow-hidden bg-gradient-to-r from-red-500/30 via-zinc-500/20 to-emerald-500/30">
-                    {/* Fill from center */}
                     {mood.score >= 0 ? (
                       <div
                         className="absolute top-0 h-full rounded-r-full bg-gradient-to-r from-emerald-500/60 to-emerald-400"
-                        style={{
-                          left: "50%",
-                          width: `${(mood.score / 5) * 50}%`,
-                        }}
+                        style={{ left: "50%", width: `${(mood.score / 5) * 50}%` }}
                       />
                     ) : (
                       <div
                         className="absolute top-0 h-full rounded-l-full bg-gradient-to-l from-red-500/60 to-red-400"
-                        style={{
-                          right: "50%",
-                          width: `${(Math.abs(mood.score) / 5) * 50}%`,
-                        }}
+                        style={{ right: "50%", width: `${(Math.abs(mood.score) / 5) * 50}%` }}
                       />
                     )}
-                    {/* Dot indicator */}
-                    <div
-                      className="absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full border-2 border-white shadow-lg bg-foreground"
-                      style={{
-                        left: `${((mood.score + 5) / 10) * 100}%`,
-                        transform: "translate(-50%, -50%)",
-                      }}
-                    />
-                    {/* Center line */}
+                    <ScoreBarDot score={mood.score} />
                     <div className="absolute left-1/2 top-0 w-px h-full bg-white/30" />
                   </div>
                   <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
@@ -507,62 +686,69 @@ export default function SentimentPage() {
               <Badge variant="neutral">{tickers.length} TRACKED</Badge>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {tickers.map((t) => (
-                <div key={t.ticker} className="app-card p-3 space-y-2.5">
-                  {/* Header row: ticker + score */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-semibold tracking-tight">
-                      {t.ticker}
-                    </span>
-                    <span className={`text-lg font-semibold font-mono tabular-nums ${scoreColor(t.score)}`}>
-                      {t.score > 0 ? "+" : ""}
-                      {t.score.toFixed(1)}
-                    </span>
-                  </div>
-
-                  {/* Badge + article count */}
-                  <div className="flex items-center gap-2">
-                    <Badge variant={sentimentBadgeVariant(t.overall_sentiment)} className="text-[10px]">
-                      {t.overall_sentiment === "bullish" || t.overall_sentiment === "cautiously_optimistic" ? (
-                        <TrendingUp className="h-3 w-3" />
-                      ) : t.overall_sentiment === "bearish" || t.overall_sentiment === "cautiously_pessimistic" ? (
-                        <TrendingDown className="h-3 w-3" />
-                      ) : (
-                        <Activity className="h-3 w-3" />
-                      )}
-                      {moodLabel(t.overall_sentiment)}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground">
-                      {t.num_articles} articles
-                    </span>
-                  </div>
-
-                  {/* Confidence bar + sparkline */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Confidence
-                        </span>
-                        <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
-                          {(t.confidence * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="app-progress-track">
-                        <div
-                          className="app-progress-bar bg-primary/70"
-                          style={{ width: `${t.confidence * 100}%` }}
-                        />
-                      </div>
+            {tickers.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {tickers.map((t) => (
+                  <div
+                    key={t.ticker}
+                    className="app-card p-3 space-y-2.5 cursor-default transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    {/* Header row: ticker + score */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-base font-semibold tracking-tight">{t.ticker}</span>
+                      <span
+                        className={`text-lg font-semibold font-mono tabular-nums ${scoreColor(t.score)}`}
+                      >
+                        {t.score > 0 ? "+" : ""}
+                        {t.score.toFixed(1)}
+                      </span>
                     </div>
-                    {t.sparkline && (
-                      <MiniSparkline data={t.sparkline} positive={t.score >= 0} />
-                    )}
+
+                    {/* Badge + article count */}
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={sentimentBadgeVariant(t.overall_sentiment)}
+                        className="text-[10px]"
+                      >
+                        {t.overall_sentiment === "bullish" ||
+                        t.overall_sentiment === "cautiously_optimistic" ? (
+                          <TrendingUp className="h-3 w-3" />
+                        ) : t.overall_sentiment === "bearish" ||
+                          t.overall_sentiment === "cautiously_pessimistic" ? (
+                          <TrendingDown className="h-3 w-3" />
+                        ) : (
+                          <Activity className="h-3 w-3" />
+                        )}
+                        {moodLabel(t.overall_sentiment)}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">
+                        {t.num_articles} articles
+                      </span>
+                    </div>
+
+                    {/* Confidence bar + sparkline */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Confidence
+                          </span>
+                          <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
+                            {(t.confidence * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <ConfidenceBar value={t.confidence} />
+                      </div>
+                      {t.sparkline && (
+                        <MiniSparkline data={t.sparkline} positive={t.score >= 0} />
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── Section 3: Timeline + Headlines ────────────────────────── */}
@@ -584,17 +770,18 @@ export default function SentimentPage() {
                   >
                     <defs>
                       <linearGradient id="sentimentGreen" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--positive))" stopOpacity={0.35} />
+                        <stop offset="0%" stopColor="hsl(var(--positive))" stopOpacity={0.4} />
                         <stop offset="100%" stopColor="hsl(var(--positive))" stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="sentimentRed" x1="0" y1="1" x2="0" y2="0">
-                        <stop offset="0%" stopColor="hsl(var(--negative))" stopOpacity={0.3} />
+                        <stop offset="0%" stopColor="hsl(var(--negative))" stopOpacity={0.35} />
                         <stop offset="100%" stopColor="hsl(var(--negative))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="hsl(var(--border) / 0.3)"
+                      strokeDasharray="0"
+                      stroke="hsl(var(--border))"
+                      strokeOpacity={0.06}
                       vertical={false}
                     />
                     <XAxis
@@ -611,7 +798,12 @@ export default function SentimentPage() {
                       axisLine={false}
                       tickFormatter={(v) => (v > 0 ? `+${v}` : String(v))}
                     />
-                    <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1} />
+                    <ReferenceLine
+                      y={0}
+                      stroke="hsl(var(--border))"
+                      strokeWidth={1}
+                      strokeOpacity={0.5}
+                    />
                     {/* Event annotations */}
                     {timeline
                       .filter((p) => p.event)
@@ -619,7 +811,8 @@ export default function SentimentPage() {
                         <ReferenceLine
                           key={p.date}
                           x={p.date}
-                          stroke="hsl(var(--muted-foreground) / 0.4)"
+                          stroke="hsl(var(--muted-foreground))"
+                          strokeOpacity={0.25}
                           strokeDasharray="4 4"
                           label={{
                             value: p.event!,
@@ -629,18 +822,7 @@ export default function SentimentPage() {
                           }}
                         />
                       ))}
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--surface-overlay))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                      }}
-                      formatter={(val: number) => [
-                        val > 0 ? `+${val.toFixed(2)}` : val.toFixed(2),
-                        "Score",
-                      ]}
-                    />
+                    <Tooltip content={<SentimentTooltip />} />
                     <Area
                       type="monotone"
                       dataKey="score"
@@ -648,7 +830,12 @@ export default function SentimentPage() {
                       fill="url(#sentimentGreen)"
                       strokeWidth={2}
                       dot={false}
-                      activeDot={{ r: 4, fill: "hsl(var(--positive))" }}
+                      activeDot={{
+                        r: 4,
+                        fill: "hsl(var(--positive))",
+                        stroke: "white",
+                        strokeWidth: 2,
+                      }}
                       baseValue={0}
                     />
                   </AreaChart>
@@ -665,36 +852,56 @@ export default function SentimentPage() {
                 </div>
                 <Badge variant="neutral">{headlines.length}</Badge>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="divide-y divide-border/40">
-                  {headlines.map((h, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-muted/20"
-                    >
-                      <div
-                        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${headlineDotColor(h.score)}`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium leading-snug text-foreground line-clamp-2">
-                          {h.title}
-                        </p>
-                        <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                          <span>{h.source}</span>
-                          <span>&middot;</span>
-                          <span>{h.time}</span>
-                        </div>
-                      </div>
-                      <span
-                        className={`shrink-0 text-xs font-mono font-medium tabular-nums ${scoreColor(h.score)}`}
-                      >
-                        {h.score > 0 ? "+" : ""}
-                        {h.score.toFixed(1)}
-                      </span>
-                    </div>
-                  ))}
+
+              {headlines.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center py-10 text-xs text-muted-foreground">
+                  No headlines available
                 </div>
-              </div>
+              ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <div className="divide-y divide-border/40">
+                    {headlines.map((h, i) => {
+                      const recent = isRecent(h.time);
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-muted/20 cursor-default"
+                        >
+                          {/* Colored dot — pulses if recent */}
+                          <div
+                            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${headlineDotColor(h.score)} ${
+                              recent ? "animate-pulse" : ""
+                            }`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium leading-snug text-foreground line-clamp-2">
+                              {h.title}
+                            </p>
+                            <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground/70">
+                              <span className="font-medium text-muted-foreground">{h.source}</span>
+                              <span>&middot;</span>
+                              <span>{h.time}</span>
+                            </div>
+                          </div>
+                          {/* Score badge */}
+                          <span
+                            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-mono font-semibold tabular-nums ${scoreColor(h.score)} ${
+                              h.score >= 0.5
+                                ? "bg-emerald-400/10"
+                                : h.score <= -0.5
+                                ? "bg-red-400/10"
+                                : "bg-zinc-400/10"
+                            }`}
+                          >
+                            {h.score > 0 ? "+" : ""}
+                            {h.score.toFixed(1)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>

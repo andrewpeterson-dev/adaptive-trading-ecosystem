@@ -21,6 +21,8 @@ export type { StrategyItem, StrategyPanelProps } from "./StrategyPanel";
 
 export { ExecutionChart } from "./ExecutionChart";
 
+export { PortfolioEquityChart } from "./PortfolioEquityChart";
+
 export { EquityCurvePanel } from "./EquityCurvePanel";
 
 export { PortfolioRiskDashPanel } from "./PortfolioRiskDashPanel";

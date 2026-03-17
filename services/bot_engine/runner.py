@@ -357,6 +357,33 @@ class BotRunner:
 
         trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
 
+        # Fetch sentiment for all symbols — required for informed trading
+        batch_sentiment = None
+        try:
+            from services.sentiment.sentiment_service import get_sentiment_service
+            eval_symbols = [sd["symbol"] for sd in symbol_data]
+            batch_sentiment = await get_sentiment_service().analyze_batch(eval_symbols)
+            logger.info(
+                "bot_runner_sentiment_fetched",
+                bot_id=bot.id,
+                symbols=list(batch_sentiment.keys()),
+                count=len(batch_sentiment),
+            )
+        except Exception as exc:
+            logger.error(
+                "bot_runner_sentiment_failed_skipping",
+                bot_id=bot.id,
+                error=str(exc),
+                exc_info=True,
+            )
+            logger.info(
+                "bot_skipping_cycle",
+                bot_id=bot.id,
+                reason="sentiment data unavailable — will not trade blind",
+            )
+            self._last_eval[bot.id] = datetime.utcnow()
+            return
+
         signals = await ai_evaluate_entries(
             strategy_name=config.get("name", bot.name),
             strategy_description=full_description,
@@ -368,6 +395,7 @@ class BotRunner:
             symbol_data=symbol_data,
             open_positions=open_position_symbols,
             mode=trading_mode,
+            sentiment_data=batch_sentiment,
         )
 
         # Step 3: Process AI signals — execute entries with high confidence

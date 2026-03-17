@@ -280,6 +280,23 @@ class ReasoningEngine:
                 for t in result.scalars().all():
                     recent_trades.append({"symbol": t.symbol, "side": t.side, "pnl_pct": t.pnl_pct or 0})
 
+            # Fetch sentiment data — required for informed trade decisions
+            sentiment_data = None
+            try:
+                from services.sentiment.sentiment_service import get_sentiment_service
+                sentiment_data = await get_sentiment_service().analyze_ticker(symbol)
+                logger.info("reasoning_sentiment_fetched", symbol=symbol, sentiment=sentiment_data.get("overall_sentiment"), score=sentiment_data.get("score"))
+            except Exception as exc:
+                logger.error("reasoning_sentiment_failed", symbol=symbol, error=str(exc), exc_info=True)
+                return {
+                    "decision": "DELAY_TRADE",
+                    "confidence": 0.0,
+                    "reasoning": f"Sentiment data unavailable for {symbol} — will not trade without market context",
+                    "size_adjustment": 0.0,
+                    "delay_seconds": 120,
+                    "model_used": "sentiment_required",
+                }
+
             prompt = build_trade_decision_prompt(
                 bot_name=bot.name, symbol=symbol, signal=signal,
                 strategy_config=strategy_config, active_events=events_dicts,
@@ -289,6 +306,7 @@ class ReasoningEngine:
                     strategy_config.get("aiThinking")
                     or (strategy_config.get("ai_context") or {}).get("ai_thinking")
                 ),
+                sentiment=sentiment_data,
             )
 
             router = ModelRouter()
