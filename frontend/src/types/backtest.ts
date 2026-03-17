@@ -107,3 +107,25 @@ export interface AblationResult {
   timeframe: string;
   lookback_days: number;
 }
+
+// ── Parameter Sweep ─────────────────────────────────────────────────────
+
+export interface SweepDataPoint {
+  params: Record<string, number>;
+  value: number;
+  metrics?: {
+    total_return?: number;
+    max_drawdown?: number;
+    win_rate?: number;
+    profit_factor?: number;
+    equity_curve?: { date: string; value: number }[];
+  };
+}
+
+export interface SweepResult {
+  heatmap_data: SweepDataPoint[];
+  best_params: Record<string, number>;
+  best_value: number;
+  param_axes: Record<string, number[]>;
+  matrix?: number[][];
+}

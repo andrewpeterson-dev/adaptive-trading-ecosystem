@@ -11,6 +11,7 @@ import {
   TrendingDown,
   Shuffle,
   FlaskConical,
+  Grid3X3,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { EquityCurveChart } from "@/components/charts/EquityCurveChart";
@@ -23,6 +24,7 @@ import type {
   AblationResult,
   AblationHistogramBin,
 } from "@/types/backtest";
+import { ParameterSweepPanel } from "@/components/backtest/ParameterSweepPanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -404,6 +406,9 @@ export default function BacktestPage() {
   const [abError, setAbError] = useState<string | null>(null);
   const [abResult, setAbResult] = useState<AblationResult | null>(null);
 
+  // Parameter sweep state
+  const [showSweep, setShowSweep] = useState(false);
+
   useEffect(() => {
     async function load() {
       if (!id) {
@@ -617,6 +622,14 @@ export default function BacktestPage() {
             )}
             {abRunning ? "Running Ablation..." : "Ablation Study"}
           </Button>
+          <Button
+            onClick={() => setShowSweep(true)}
+            variant="secondary"
+            size="sm"
+          >
+            <Grid3X3 className="h-3.5 w-3.5" />
+            Parameter Sweep
+          </Button>
         </div>
       </div>
 
@@ -755,6 +768,16 @@ export default function BacktestPage() {
             <AblationPanel data={abResult} />
           )}
         </div>
+      )}
+
+      {showSweep && strategy && (
+        <ParameterSweepPanel
+          strategyId={strategy.id}
+          strategyName={strategy.name}
+          symbol={symbol}
+          timeframe="1D"
+          conditions={strategy.conditions || strategy.condition_groups?.[0]?.conditions || []}
+        />
       )}
     </div>
   );
