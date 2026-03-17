@@ -2135,11 +2135,17 @@ async def _build_paper_equity_curve(
             qty = trade.quantity or 0
             price = trade.entry_price or 0
 
-            # Closed trades (have PnL) — just apply the realized P&L to cash.
-            # This avoids complex entry/exit cash simulation that breaks for
-            # short round-trips where entry_price is the original credit price.
+            # Closed trades (have PnL) — apply realized P&L and update position tracking.
             if trade.status == PaperTradeStatus.CLOSED and trade.pnl is not None:
                 cash += float(trade.pnl)
+                # Update position tracking so re-opened positions don't double-count
+                if trade.symbol in positions:
+                    if direction == TradeDirection.SHORT:
+                        positions[trade.symbol]["qty"] -= qty
+                    elif direction == TradeDirection.LONG:
+                        positions[trade.symbol]["qty"] += qty
+                    if abs(positions[trade.symbol]["qty"]) <= 0.001:
+                        del positions[trade.symbol]
 
             elif direction == TradeDirection.LONG:
                 # Open BUY — deduct cost, track position
