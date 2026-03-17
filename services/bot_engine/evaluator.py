@@ -171,7 +171,16 @@ def evaluate_conditions(
         if compare_to == "PRICE":
             threshold = float(indicator_values.get("CLOSE", 0))
         elif compare_to and compare_to in indicator_values:
-            threshold = float(indicator_values[compare_to])
+            val = indicator_values[compare_to]
+            threshold = float(val) if not isinstance(val, dict) else float(cond.get("value", 0))
+        elif compare_to and "." in compare_to:
+            # Handle composite refs like "MACD.SIGNAL" or "BBANDS.LOWER"
+            parent_key, sub_field = compare_to.split(".", 1)
+            parent_data = indicator_values.get(parent_key, {})
+            if isinstance(parent_data, dict) and sub_field.lower() in parent_data:
+                threshold = float(parent_data[sub_field.lower()])
+            else:
+                threshold = float(cond.get("value", 0))
         else:
             threshold = float(cond.get("value", 0))
 
