@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { href: "/strategies", label: "Strategies", icon: Shield, activeFor: ["/strategies"] },
   { href: "/bots", label: "Bots", icon: Bot, activeFor: ["/bots"] },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, activeFor: ["/dashboard", "/portfolio", "/risk"] },
-  { href: "/trade", label: "Trade", icon: CandlestickChart, activeFor: ["/trade", "/watchlist"] },
+  { href: "/trade", label: "Trade", icon: CandlestickChart, activeFor: ["/trade", "/trade-analysis", "/watchlist"] },
   { href: "/ai-intelligence", label: "Intelligence", icon: Brain, activeFor: ["/ai-intelligence", "/models", "/quant"] },
 ];
 
