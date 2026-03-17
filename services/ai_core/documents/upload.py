@@ -149,8 +149,12 @@ class DocumentUploadService:
                 logger.info("upload_finalize_skipped", document_id=document_id, user_id=user_id, reason="already_indexed")
                 return {"document_id": document_id, "status": "indexed"}
             if doc.status == DocumentStatus.PROCESSING:
-                logger.info("upload_finalize_skipped", document_id=document_id, user_id=user_id, reason="already_processing")
-                return {"document_id": document_id, "status": "processing"}
+                # Allow retry if stuck in PROCESSING for >5 minutes (background task likely crashed)
+                age_minutes = (datetime.now(timezone.utc) - (doc.created_at or datetime.min)).total_seconds() / 60
+                if age_minutes < 5:
+                    logger.info("upload_finalize_skipped", document_id=document_id, user_id=user_id, reason="already_processing")
+                    return {"document_id": document_id, "status": "processing"}
+                logger.warning("upload_finalize_retry_stuck", document_id=document_id, user_id=user_id, stuck_minutes=round(age_minutes, 1))
 
             doc.status = DocumentStatus.PROCESSING
 
