@@ -133,7 +133,7 @@ export default function DashboardPage() {
 
       if (ordRes.status === "fulfilled") {
         const list = ordRes.value.orders || [];
-        setOrders(list.slice(0, 20));
+        setOrders(list);
       }
 
       if (riskRes.status === "fulfilled") {

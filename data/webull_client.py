@@ -38,8 +38,8 @@ def _load_petebot_webull_creds() -> tuple[str, str]:
             cfg = json.loads(_PETEBOT_CONFIG.read_text())
             wb = cfg.get("webull", {})
             return wb.get("app_key", ""), wb.get("app_secret", "")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("petebot_webull_config_parse_failed", path=str(_PETEBOT_CONFIG), error=str(exc))
     return "", ""
 
 
@@ -150,8 +150,10 @@ class _WebullBase:
                             profile = profile_resp.json()
                             acct_type = str(profile.get("account_type", "")).lower()
                         else:
+                            logger.warning("webull_profile_fetch_non_200", account_id=acct_id, status=profile_resp.status_code)
                             acct_type = ""
-                    except Exception:
+                    except Exception as exc:
+                        logger.warning("webull_profile_fetch_failed", account_id=acct_id, error=str(exc))
                         acct_type = ""
 
                     if "paper" in acct_type or "virtual" in acct_type or "demo" in acct_type or "simulated" in acct_type:
@@ -238,7 +240,8 @@ class _WebullBase:
         if _CONFIG_FILE.exists():
             try:
                 return json.loads(_CONFIG_FILE.read_text())
-            except Exception:
+            except Exception as exc:
+                logger.warning("webull_config_load_failed", path=str(_CONFIG_FILE), error=str(exc))
                 return None
         return None
 

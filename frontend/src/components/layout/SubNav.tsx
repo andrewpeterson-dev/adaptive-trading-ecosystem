@@ -17,7 +17,7 @@ export function SubNav({ items }: { items: SubNavItem[] }) {
     <div className="flex items-center gap-1 rounded-full border border-border/50 bg-muted/20 p-1 w-fit">
       {items.map((item) => {
         const Icon = item.icon;
-        const active = pathname === item.href;
+        const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
         return (
           <Link
             key={item.href}

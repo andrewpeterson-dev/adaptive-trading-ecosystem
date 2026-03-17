@@ -81,7 +81,8 @@ function scoreColor(score: number): string {
 
 function ScoreBarDot({ score, size = 3 }: { score: number; size?: number }) {
   const [mounted, setMounted] = useState(false);
-  const targetLeft = `${((score + 5) / 10) * 100}%`;
+  const clamped = Math.max(-5, Math.min(5, score));
+  const targetLeft = `${((clamped + 5) / 10) * 100}%`;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setMounted(true));
@@ -225,12 +226,12 @@ export function MarketMoodWidget() {
           {mood.score >= 0 ? (
             <div
               className="absolute top-0 h-full rounded-r-full bg-gradient-to-r from-emerald-500/50 to-emerald-400/70"
-              style={{ left: "50%", width: `${(mood.score / 5) * 50}%` }}
+              style={{ left: "50%", width: `${(Math.min(mood.score, 5) / 5) * 50}%` }}
             />
           ) : (
             <div
               className="absolute top-0 h-full rounded-l-full bg-gradient-to-l from-red-500/50 to-red-400/70"
-              style={{ right: "50%", width: `${(Math.abs(mood.score) / 5) * 50}%` }}
+              style={{ right: "50%", width: `${(Math.min(Math.abs(mood.score), 5) / 5) * 50}%` }}
             />
           )}
           <ScoreBarDot score={mood.score} size={3} />

@@ -116,7 +116,7 @@ export function RiskMetricsPanel({
   sharpeRatio,
   totalTrades,
 }: RiskMetricsPanelProps) {
-  const hasSufficientTrades = (totalTrades ?? 0) >= 30;
+  const hasSufficientTrades = (totalTrades ?? 0) >= 5;
 
   const metrics: MetricCellProps[] = [
     {

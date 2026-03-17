@@ -36,7 +36,7 @@ export function PerformanceMetricsPanel({ detail }: PerformanceMetricsPanelProps
         <Metric label="Win Rate" value={hasClosed ? formatPercent(stats.winRatePct, 1, false) : "N/A"} color={hasClosed ? (stats.winRatePct >= 50 ? "text-emerald-400" : "text-rose-400") : "text-muted-foreground"} />
         <Metric label="Open" value={String(openCount)} />
         <Metric label="Total Trades" value={String(stats.tradeCount)} />
-        <Metric label="Sharpe" value={closedCount >= 30 ? stats.sharpeRatio.toFixed(2) : "N/A"} show={true} color={closedCount >= 30 ? (stats.sharpeRatio >= 1 ? "text-emerald-400" : "text-muted-foreground") : "text-muted-foreground"} />
+        <Metric label="Sharpe" value={closedCount >= 5 ? stats.sharpeRatio.toFixed(2) : "N/A"} show={true} color={closedCount >= 5 ? (stats.sharpeRatio >= 1 ? "text-emerald-400" : "text-muted-foreground") : "text-muted-foreground"} />
         <Metric label="Max Drawdown" value={hasClosed ? formatPercent(stats.maxDrawdownPct, 1, false) : "N/A"} color={hasClosed ? "text-amber-400" : "text-muted-foreground"} />
         <Metric label="Volume" value={formatCompactCurrency(perf.total_volume)} />
         <Metric label="Profit Factor" value={hasClosed && stats.profitFactor != null ? (Number.isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : "\u221e") : "N/A"} color={stats.profitFactor != null && stats.profitFactor >= 1 ? "text-emerald-400" : "text-muted-foreground"} />

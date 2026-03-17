@@ -239,47 +239,64 @@ export function specToBuilderFields(spec: StrategySpec): {
   timeframe: string;
   conditions: StrategyCondition[];
   conditionGroups: ConditionGroup[];
+  exitConditionGroups: ConditionGroup[];
   symbols?: string[];
   strategyType?: StrategyType;
   sourcePrompt?: string;
   aiContext?: StrategyAiContext;
 } {
-  let condId = 0;
-  const conditions: StrategyCondition[] = spec.entryConditions.map((c) => {
-    condId++;
-    const operator = (
-      c.operator && VALID_OPERATORS.includes(c.operator as Operator)
-        ? c.operator
-        : "<"
-    ) as Operator;
-    const value = typeof c.value === "number" ? c.value : 0;
+  // Use a single incrementing counter for stable, unique IDs within a single call
+  let idCounter = 0;
+  const nextId = (prefix: string) => `${prefix}_${++idCounter}`;
 
-    return {
-      id: `spec_${Date.now()}_${condId}`,
-      indicator: c.indicator.toLowerCase(),
-      operator,
-      value,
-      compare_to: c.compare_to,
-      field: c.field,
-      params: c.params || {},
-      action: spec.action,
-    };
-  });
+  function mapConditions(specConditions: SpecCondition[], action: Action): StrategyCondition[] {
+    return specConditions.map((c) => {
+      const operator = (
+        c.operator && VALID_OPERATORS.includes(c.operator as Operator)
+          ? c.operator
+          : "<"
+      ) as Operator;
+      const value = typeof c.value === "number" ? c.value : 0;
 
-  const conditionGroups = conditions.reduce<ConditionGroup[]>((groups, condition, index) => {
-    const raw = spec.entryConditions[index];
-    if (raw.logic === "OR" || groups.length === 0) {
-      groups.push({
-        id: `group_${Date.now()}_${groups.length + 1}`,
-        label: `Group ${String.fromCharCode(65 + groups.length)}`,
-        conditions: [condition],
-      });
+      return {
+        id: nextId("cond"),
+        indicator: c.indicator.toLowerCase(),
+        operator,
+        value,
+        compare_to: c.compare_to,
+        field: c.field,
+        params: c.params || {},
+        action,
+      };
+    });
+  }
+
+  function groupConditions(conditions: StrategyCondition[], specConditions: SpecCondition[]): ConditionGroup[] {
+    return conditions.reduce<ConditionGroup[]>((groups, condition, index) => {
+      const raw = specConditions[index];
+      if (raw.logic === "OR" || groups.length === 0) {
+        groups.push({
+          id: nextId("group"),
+          label: `Group ${String.fromCharCode(65 + groups.length)}`,
+          conditions: [condition],
+        });
+        return groups;
+      }
+      groups[groups.length - 1].conditions.push(condition);
       return groups;
-    }
+    }, []);
+  }
 
-    groups[groups.length - 1].conditions.push(condition);
-    return groups;
-  }, []);
+  const conditions = mapConditions(spec.entryConditions, spec.action);
+  const conditionGroups = groupConditions(conditions, spec.entryConditions);
+
+  // Map exit conditions to proper ConditionGroups (not just raw aiContext)
+  const exitConditions = spec.exitConditions?.length
+    ? mapConditions(spec.exitConditions, spec.action)
+    : [];
+  const exitConditionGroups = spec.exitConditions?.length
+    ? groupConditions(exitConditions, spec.exitConditions)
+    : [];
 
   return {
     name: spec.name,
@@ -291,6 +308,7 @@ export function specToBuilderFields(spec: StrategySpec): {
     timeframe: spec.timeframe,
     conditions,
     conditionGroups,
+    exitConditionGroups,
     symbols: spec.symbols,
     strategyType: spec.strategyType,
     sourcePrompt: spec.sourcePrompt,

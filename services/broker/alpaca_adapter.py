@@ -129,7 +129,14 @@ class AlpacaAdapter(BrokerAdapter):
                 partial(self._client.get_open_position, symbol_or_asset_id=symbol),
             )
             return self._to_position(raw)
-        except Exception:
+        except Exception as exc:
+            # Alpaca raises 404/APIError when position doesn't exist — that's expected.
+            # Log other errors (network, auth) at warning level for visibility.
+            exc_str = str(exc).lower()
+            if "404" in exc_str or "not found" in exc_str or "no position" in exc_str:
+                logger.debug("alpaca_position_not_found", symbol=symbol)
+            else:
+                logger.warning("alpaca_position_fetch_failed", symbol=symbol, error=str(exc))
             return None
 
     # -- orders --------------------------------------------------------------

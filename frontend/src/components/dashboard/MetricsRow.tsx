@@ -150,7 +150,7 @@ export function MetricsRow({
       valueColor: exposureColor,
     },
     {
-      label: "Trades Today",
+      label: "Trades / Hour",
       icon: Activity,
       value: tradesToday.toString(),
       valueColor: "text-foreground",

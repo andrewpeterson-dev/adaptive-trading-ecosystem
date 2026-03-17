@@ -298,11 +298,20 @@ class PositionManager:
             return list(result.scalars().all())
 
     async def _refresh_config_cache(self, bot_ids: list[str]) -> None:
-        """Load the latest bot version configs for the given bot IDs."""
+        """Load the latest bot version configs for the given bot IDs.
+
+        Entries expire after _CONFIG_CACHE_TTL seconds so config changes
+        (e.g. stop-loss adjustments) take effect within ~2 minutes.
+        """
+        now = time.monotonic()
         unique_ids = list(set(bid for bid in bot_ids if bid))
-        # Only fetch bots we haven't cached yet
-        missing = [bid for bid in unique_ids if bid not in self._config_cache]
-        if not missing:
+        # Fetch bots that are missing or stale
+        stale = [
+            bid for bid in unique_ids
+            if bid not in self._config_cache
+            or (now - self._config_cache[bid][0]) > _CONFIG_CACHE_TTL
+        ]
+        if not stale:
             return
 
         async with get_session() as session:
@@ -312,16 +321,22 @@ class PositionManager:
                     CerberusBotVersion,
                     CerberusBot.current_version_id == CerberusBotVersion.id,
                 )
-                .where(CerberusBot.id.in_(missing))
+                .where(CerberusBot.id.in_(stale))
             )
             for bot, version in result.all():
                 raw_config = version.config_json if isinstance(version.config_json, dict) else {}
-                self._config_cache[bot.id] = StopConfig.from_bot_config(raw_config)
+                self._config_cache[bot.id] = (now, StopConfig.from_bot_config(raw_config))
+
+        # Evict entries for bots no longer active (prevents unbounded growth)
+        active_set = set(unique_ids)
+        stale_keys = [k for k in self._config_cache if k not in active_set]
+        for k in stale_keys:
+            del self._config_cache[k]
 
     def _resolve_stop_config(self, trade: CerberusTrade) -> StopConfig:
         """Resolve the StopConfig for a trade, falling back to defaults."""
         if trade.bot_id and trade.bot_id in self._config_cache:
-            return self._config_cache[trade.bot_id]
+            return self._config_cache[trade.bot_id][1]
 
         # Check if the trade's payload_json has inline stop config
         payload = trade.payload_json if isinstance(trade.payload_json, dict) else {}

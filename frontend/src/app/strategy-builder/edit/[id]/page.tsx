@@ -45,5 +45,5 @@ export default function EditStrategyRoute() {
     );
   }
 
-  return <StrategyBuilderPage mode="edit" initialStrategy={strategy} />;
+  return <StrategyBuilderPage initialStrategy={strategy} />;
 }

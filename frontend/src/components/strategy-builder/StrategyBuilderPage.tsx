@@ -14,7 +14,6 @@ import type { StrategyRecord } from "@/types/strategy";
 // ---------------------------------------------------------------------------
 
 interface StrategyBuilderPageProps {
-  mode?: "create" | "edit";
   initialStrategy?: StrategyRecord;
 }
 
@@ -22,19 +21,22 @@ interface StrategyBuilderPageProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function StrategyBuilderPage({ mode, initialStrategy }: StrategyBuilderPageProps) {
+export default function StrategyBuilderPage({ initialStrategy }: StrategyBuilderPageProps) {
   const [activeMode, setActiveMode] = useState<"ai" | "manual" | "template">("ai");
 
   // ---- On-mount effects: hydrate builder store from edit data or pending spec ----
   useEffect(() => {
     if (initialStrategy) {
+      // Edit mode: load the existing strategy — takes priority over any stale pending spec
       useBuilderStore.getState().loadFromStrategy(initialStrategy);
+      // Consume and discard any stale pending spec to prevent it from overwriting on future navigation
+      useStrategyBuilderStore.getState().consumePendingSpec();
+      return;
     }
 
+    // Create mode: check for Cerberus widget → builder handoff
     const pendingSpec = useStrategyBuilderStore.getState().consumePendingSpec();
     if (pendingSpec) {
-      // Cerberus widget → builder handoff: map PendingStrategy to builder fields
-      // TODO: align PendingStrategy shape with StrategySpec for type-safe handoff
       useBuilderStore.getState().loadFromSpec(pendingSpec as any);
     }
   }, []);
@@ -70,7 +72,7 @@ export default function StrategyBuilderPage({ mode, initialStrategy }: StrategyB
       </div>
 
       {/* ---- 60/40 split layout ---- */}
-      <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] h-[calc(100vh-120px)]">
+      <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] flex-1 min-h-0">
         {/* Left panel */}
         <div className="overflow-y-auto border-r border-border">
           {activeMode === "ai" && <AIChat />}

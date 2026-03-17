@@ -88,6 +88,20 @@ export default function TemplateGallery({ onModeSwitch }: TemplateGalleryProps) 
     const config = template.config_json || {};
     const store = useBuilderStore.getState();
 
+    // Try to load the full spec (conditions, groups, etc.) via loadFromSpec
+    try {
+      const parsed = parseStrategySpec(JSON.stringify(config));
+      if (parsed.ok) {
+        store.loadFromSpec(parsed.spec);
+        onModeSwitch("ai");
+        return;
+      }
+    } catch {
+      // Fall through to field-by-field approach
+    }
+
+    // Fallback: set fields individually when config doesn't match StrategySpec shape
+    store.reset();
     store.setField("name", config.name || template.name || "");
     store.setField("description", config.description || template.description || "");
     store.setField("action", config.action || "BUY");
@@ -98,17 +112,6 @@ export default function TemplateGallery({ onModeSwitch }: TemplateGalleryProps) 
     store.setField("positionSize", config.positionPct || 5);
     store.setField("strategyType", "custom");
 
-    // Try to load conditions via loadFromSpec if the config matches StrategySpec shape
-    try {
-      const parsed = parseStrategySpec(JSON.stringify(config));
-      if (parsed.ok) {
-        store.loadFromSpec(parsed.spec);
-      }
-    } catch {
-      // silently ignore — fields were already set above
-    }
-
-    // Switch to AI mode so user can refine with Cerberus
     onModeSwitch("ai");
   };
 

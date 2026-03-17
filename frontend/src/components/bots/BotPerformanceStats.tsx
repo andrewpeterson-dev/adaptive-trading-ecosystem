@@ -92,9 +92,9 @@ export function BotPerformanceStats({
         />
         <StatCard
           label="Sharpe Ratio"
-          value={closedCount >= 2 ? stats.sharpeRatio.toFixed(2) : "N/A"}
+          value={closedCount >= 5 ? stats.sharpeRatio.toFixed(2) : "N/A"}
           hint="Risk-adjusted return"
-          className={closedCount >= 2 ? metricTone(stats.sharpeRatio - 1) : "text-muted-foreground"}
+          className={closedCount >= 5 ? metricTone(stats.sharpeRatio - 1) : "text-muted-foreground"}
         />
         <StatCard
           label="Max Drawdown"

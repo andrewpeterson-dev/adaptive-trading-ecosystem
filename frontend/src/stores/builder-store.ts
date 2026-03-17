@@ -135,6 +135,7 @@ export const useBuilderStore = create<BuilderState & BuilderActions>()(
           positionSize: fields.positionSize,
           timeframe: fields.timeframe,
           conditionGroups: fields.conditionGroups,
+          exitConditionGroups: fields.exitConditionGroups,
           symbols: fields.symbols ?? [],
           strategyType: fields.strategyType ?? "ai_generated",
           sourcePrompt: fields.sourcePrompt ?? "",
