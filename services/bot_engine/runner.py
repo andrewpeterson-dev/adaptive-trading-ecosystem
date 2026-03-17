@@ -37,6 +37,11 @@ from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
 from services.bot_engine.ai_evaluator import ai_evaluate_entries
 from services.reasoning_engine import ReasoningEngine
+from services.reasoning_engine.safety import (
+    calculate_kelly_position_size,
+    check_sector_concentration,
+    update_category_scores,
+)
 from services.strategy_learning_engine import normalize_bot_config
 
 logger = structlog.get_logger(__name__)
@@ -913,6 +918,10 @@ class BotRunner:
                 closed_trades=closed_count,
                 reasons=reasons,
             )
+            try:
+                await update_category_scores(bot.user_id)
+            except Exception as e:
+                logger.warning("category_update_error", bot_id=bot.id, error=str(e))
 
     def _calculate_realized_pnl(self, trade: CerberusTrade, current_price: float) -> float:
         entry_price = float(trade.entry_price or 0.0)
@@ -1105,14 +1114,28 @@ class BotRunner:
                 reasons = []
             reasons.append("Extended hours: position size halved for lower liquidity")
 
-        position_fraction = self._normalize_position_size(position_size_pct)
+        # Quarter-Kelly position sizing
+        kelly_equity = 0.0
+        try:
+            if bot.allocated_capital and bot.allocated_capital > 0:
+                kelly_equity = bot.allocated_capital
+            else:
+                alpaca_client = self._get_alpaca_client(paper=is_paper)
+                kelly_equity = float(alpaca_client.get_account().equity)
+            kelly_frac, kelly_expl = await calculate_kelly_position_size(bot_id=bot.id, total_equity=kelly_equity)
+            position_fraction_raw = self._normalize_position_size(position_size_pct)
+            position_fraction = min(position_fraction_raw, kelly_frac)
+            if position_fraction < position_fraction_raw:
+                if reasons is None:
+                    reasons = []
+                reasons.append(f"Kelly sizing: {kelly_expl}")
+                logger.info("kelly_applied", bot_id=bot.id, symbol=symbol, configured=position_fraction_raw, kelly=kelly_frac)
+        except Exception as e:
+            logger.warning("kelly_error", bot_id=bot.id, error=str(e))
+            position_fraction = self._normalize_position_size(position_size_pct)
+
         if position_fraction <= 0:
-            logger.warning(
-                "bot_invalid_position_size",
-                bot_id=bot.id,
-                symbol=symbol,
-                position_size_pct=position_size_pct,
-            )
+            logger.warning("bot_invalid_position_size", bot_id=bot.id, symbol=symbol, position_size_pct=position_size_pct)
             return None
 
         # Map action to side
@@ -1122,15 +1145,35 @@ class BotRunner:
         broker = await self._resolve_broker(user_id)
 
         try:
-            # Use bot's allocated capital if set, otherwise fall back to Alpaca equity
             if bot.allocated_capital and bot.allocated_capital > 0:
                 equity = bot.allocated_capital
+            elif kelly_equity > 0:
+                equity = kelly_equity
             else:
                 alpaca_client = self._get_alpaca_client(paper=is_paper)
-                account = alpaca_client.get_account()
-                equity = float(account.equity)
+                equity = float(alpaca_client.get_account().equity)
 
             position_value = equity * position_fraction
+
+            # Sector concentration check
+            try:
+                sector_limit = 0.30
+                async with get_session() as session:
+                    rl = (await session.execute(select(UserRiskLimits).where(UserRiskLimits.user_id == user_id, UserRiskLimits.mode == mode_enum))).scalar_one_or_none()
+                    if rl and rl.sector_concentration_limit is not None:
+                        sector_limit = rl.sector_concentration_limit
+                allowed, max_val, sector_reason = await check_sector_concentration(user_id=user_id, symbol=symbol, proposed_value=position_value, total_equity=equity, sector_limit=sector_limit)
+                if not allowed:
+                    if max_val <= 0:
+                        logger.info("sector_blocked", bot_id=bot.id, symbol=symbol, reason=sector_reason)
+                        return None
+                    position_value = max_val
+                    if reasons is None:
+                        reasons = []
+                    reasons.append(sector_reason)
+            except Exception as e:
+                logger.warning("sector_check_error", bot_id=bot.id, error=str(e))
+
             quantity = int(position_value / current_price)
             if quantity < 1:
                 logger.warning(

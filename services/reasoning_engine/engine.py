@@ -18,6 +18,9 @@ from db.models import User
 from services.ai_core.providers.base import ProviderMessage
 from services.reasoning_engine.safety import (
     check_hard_blockers, check_soft_guardrails,
+    get_drawdown_thresholds, compute_weekly_pnl_pct,
+    is_strategy_type_blocked,
+    DRAWDOWN_LEVEL_KILL_DAILY, DRAWDOWN_LEVEL_KILL_WEEKLY,
 )
 from services.reasoning_engine.prompts import TRADE_DECISION_SYSTEM, build_trade_decision_prompt
 
@@ -84,6 +87,18 @@ class ReasoningEngine:
                     model_used="rate_limit",
                 )
 
+        # Category block
+        strategy_type = strategy_config.get("strategy_type", "manual")
+        type_blocked, type_score = await is_strategy_type_blocked(bot.user_id, strategy_type)
+        if type_blocked:
+            return await self._build_result(
+                bot_id=bot.id, symbol=symbol, signal=signal, vix=vix,
+                decision="DELAY_TRADE", confidence=0.0,
+                reasoning=f"Strategy type '{strategy_type}' auto-blocked (score: {type_score:.1f})",
+                size_adjustment=0.0, delay_seconds=0,
+                events_considered=[], model_used="category_block",
+            )
+
         override_level = "soft"
         if bot.current_version_id:
             async with get_session() as session:
@@ -107,15 +122,25 @@ class ReasoningEngine:
             for e in events_raw
         ]
 
-        # Hard blockers
+        # Graduated drawdown + hard blockers
+        drawdown_thresholds = await get_drawdown_thresholds(bot.user_id)
+        weekly_pnl_pct = await compute_weekly_pnl_pct(bot.user_id)
         hard = await check_hard_blockers(
             vix=vix, events=events_dicts, symbol=symbol,
             portfolio_exposure=portfolio_exposure, daily_pnl_pct=daily_pnl_pct,
+            user_id=bot.user_id, weekly_pnl_pct=weekly_pnl_pct,
+            drawdown_thresholds=drawdown_thresholds,
         )
         if hard.blocked:
+            if hard.drawdown_level in (DRAWDOWN_LEVEL_KILL_DAILY, DRAWDOWN_LEVEL_KILL_WEEKLY):
+                _dd_decision = "PAUSE_BOT"
+            elif hard.exits_only:
+                _dd_decision = "DELAY_TRADE"
+            else:
+                _dd_decision = "PAUSE_BOT" if daily_pnl_pct < -5.0 else "DELAY_TRADE"
             return await self._build_result(
                 bot_id=bot.id, symbol=symbol, signal=signal, vix=vix,
-                decision="PAUSE_BOT" if daily_pnl_pct < -5.0 else "DELAY_TRADE",
+                decision=_dd_decision,
                 confidence=0.0, reasoning="; ".join(hard.reasons),
                 size_adjustment=0.0, delay_seconds=300,
                 events_considered=[e["id"] for e in events_dicts[:20]],

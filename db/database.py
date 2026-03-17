@@ -255,6 +255,14 @@ async def _ensure_reasoning_schema() -> None:
             add_column_if_missing("portfolio_snapshots", "user_id", "INTEGER")
             add_column_if_missing("capital_allocations", "mode", "VARCHAR(8) DEFAULT 'paper' NOT NULL")
 
+
+            add_column_if_missing("user_risk_limits", "drawdown_reduce_pct", "FLOAT DEFAULT -2.0")
+            add_column_if_missing("user_risk_limits", "drawdown_halt_pct", "FLOAT DEFAULT -4.0")
+            add_column_if_missing("user_risk_limits", "drawdown_kill_pct", "FLOAT DEFAULT -7.0")
+            add_column_if_missing("user_risk_limits", "weekly_drawdown_kill_pct", "FLOAT DEFAULT -10.0")
+            add_column_if_missing("user_risk_limits", "sector_concentration_limit", "FLOAT DEFAULT 0.30")
+            add_column_if_missing("user_risk_limits", "category_block_threshold", "FLOAT DEFAULT 30.0")
+
         await conn.run_sync(_ensure)
 
 

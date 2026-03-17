@@ -580,6 +580,12 @@ class UserRiskLimits(Base):
     max_open_positions = Column(Integer, default=10)
     kill_switch_active = Column(Boolean, default=False)
     live_bot_trading_confirmed = Column(Boolean, default=False)
+    drawdown_reduce_pct = Column(Float, default=-2.0)
+    drawdown_halt_pct = Column(Float, default=-4.0)
+    drawdown_kill_pct = Column(Float, default=-7.0)
+    weekly_drawdown_kill_pct = Column(Float, default=-10.0)
+    sector_concentration_limit = Column(Float, default=0.30)
+    category_block_threshold = Column(Float, default=30.0)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -676,4 +682,23 @@ class OptionSimTrade(Base):
     __table_args__ = (
         Index("ix_option_sim_user", "user_id"),
         Index("ix_option_sim_status", "status"),
+    )
+
+
+class StrategyTypeScore(Base):
+    __tablename__ = "strategy_type_scores"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    strategy_type = Column(String(64), nullable=False)
+    score = Column(Float, default=50.0)
+    roi_component = Column(Float, default=0.0)
+    trend_component = Column(Float, default=0.0)
+    sample_size_component = Column(Float, default=0.0)
+    win_rate_component = Column(Float, default=0.0)
+    total_trades = Column(Integer, default=0)
+    is_blocked = Column(Boolean, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (
+        Index("ix_strategy_type_score_user", "user_id"),
+        Index("ix_strategy_type_score_user_type", "user_id", "strategy_type", unique=True),
     )
