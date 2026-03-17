@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 VALID_TIMEFRAMES = {"1m", "5m", "15m", "1H", "4H", "1D", "1W"}
 VALID_ACTIONS = {"BUY", "SELL"}
 VALID_OPERATORS = {">", "<", ">=", "<=", "==", "crosses_above", "crosses_below"}
-SUPPORTED_INDICATORS = {"rsi", "sma", "ema", "macd", "atr", "stochastic", "vwap", "volume"}
+SUPPORTED_INDICATORS = {"rsi", "sma", "ema", "macd", "atr", "stochastic", "vwap", "volume", "bollinger_bands", "obv"}
 DEFAULT_METHODS = [
     "reinforcement_learning",
     "parameter_optimization",
@@ -146,8 +146,8 @@ def default_learning_plan(strategy_type: str = "manual") -> dict[str, Any]:
 def _normalize_condition(condition: GeneratedCondition) -> dict[str, Any]:
     indicator = condition.indicator.strip().lower()
     indicator = {
-        "bollinger_bands": "atr",
-        "obv": "volume",
+        "bb": "bollinger_bands",
+        "bollinger": "bollinger_bands",
     }.get(indicator, indicator)
 
     if indicator not in SUPPORTED_INDICATORS:
