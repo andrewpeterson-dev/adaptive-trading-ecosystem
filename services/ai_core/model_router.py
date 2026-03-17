@@ -126,6 +126,17 @@ class ModelRouter:
                 reason="Slow expert mode enabled",
             )
 
+        # Sentiment analysis -> FinGPT provider
+        if intent == RoutingIntent.SENTIMENT_ANALYSIS:
+            return RoutingDecision(
+                provider=self._fingpt,
+                model="fingpt-sentiment_llama2-13b_lora",
+                provider_name="fingpt",
+                intent=intent,
+                store=False,
+                reason="Sentiment analysis request, routing to FinGPT",
+            )
+
         # Simple help → gpt-4.1 (low latency)
         if intent == RoutingIntent.SIMPLE_HELP:
             return RoutingDecision(
