@@ -735,3 +735,35 @@ class BotAdaptation(Base):
         Index("ix_bot_adaptation_bot", "bot_id"),
         Index("ix_bot_adaptation_bot_created", "bot_id", "created_at"),
     )
+
+
+# ── Multi-Agent Trade Analysis ───────────────────────────────────────────────
+
+class TradeAnalysis(Base):
+    """Persisted multi-agent trade analysis results."""
+    __tablename__ = "cerberus_trade_analyses"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    symbol = Column(String(32), nullable=False)
+    action = Column(String(16), nullable=False)
+    proposed_size = Column(Float, nullable=True)
+    current_price = Column(Float, nullable=True)
+    technical_report = Column(Text, nullable=True)
+    fundamental_report = Column(Text, nullable=True)
+    sentiment_report = Column(Text, nullable=True)
+    bull_case = Column(Text, nullable=True)
+    bear_case = Column(Text, nullable=True)
+    risk_assessment = Column(Text, nullable=True)
+    recommendation = Column(String(32), nullable=True)
+    confidence = Column(Float, nullable=True)
+    reasoning = Column(Text, nullable=True)
+    node_trace = Column(JSON, default=list)
+    errors = Column(JSON, default=list)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_trade_analysis_user", "user_id"),
+        Index("ix_trade_analysis_symbol", "symbol"),
+        Index("ix_trade_analysis_created", "created_at"),
+    )
