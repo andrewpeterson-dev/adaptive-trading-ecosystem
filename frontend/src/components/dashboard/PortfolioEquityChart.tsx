@@ -265,12 +265,22 @@ export function PortfolioEquityChart({ height = 340 }: PortfolioEquityChartProps
           </div>
         )}
 
-        {!loading && !error && data.length === 0 && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2">
-            <TrendingUp className="h-8 w-8 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">
-              Portfolio equity will appear after your first trade.
-            </p>
+        {!loading && !error && (data.length === 0 || (data.length <= 2 && totalChange === 0)) && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <TrendingUp className="h-6 w-6 text-primary/50" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-foreground">No trading activity yet</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                Your portfolio equity chart will come alive once bots start trading or you execute your first trade.
+              </p>
+            </div>
+            {initialCapital > 0 && (
+              <p className="text-xs text-muted-foreground/60 font-mono">
+                Starting capital: ${initialCapital.toLocaleString()}
+              </p>
+            )}
           </div>
         )}
 
