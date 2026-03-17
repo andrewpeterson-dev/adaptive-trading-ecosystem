@@ -36,9 +36,9 @@ export function ConfirmationModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="confirm-trade-title">
       <div className="bg-background border border-border rounded-xl shadow-2xl max-w-md w-full mx-4 p-5 space-y-4">
-        <h3 className="text-base font-semibold text-foreground">Confirm Trade</h3>
+        <h3 id="confirm-trade-title" className="text-base font-semibold text-foreground">Confirm Trade</h3>
 
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">

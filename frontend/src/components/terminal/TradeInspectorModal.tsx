@@ -72,7 +72,7 @@ export function TradeInspectorModal({ trade, config, onClose }: TradeInspectorMo
   const riskLabel = trade.riskAssessment ?? "N/A";
 
   const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Trade details for ${trade.symbol}`}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 

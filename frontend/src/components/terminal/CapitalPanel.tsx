@@ -41,14 +41,14 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
       icon={<DollarSign className="h-3.5 w-3.5" />}
       accent="text-emerald-400"
       compact
-      actions={!isEditing ? <button type="button" onClick={handleEdit} className="p-1 text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3 w-3" /></button> : undefined}
+      actions={!isEditing ? <button type="button" onClick={handleEdit} aria-label="Edit capital" className="p-1 text-muted-foreground hover:text-foreground transition-colors"><Pencil className="h-3 w-3" /></button> : undefined}
     >
       {isEditing ? (
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">$</span>
-          <input type="text" inputMode="decimal" value={input} onChange={(e) => setInput(e.target.value)} placeholder="25000" className="app-input flex-1 text-sm" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setIsEditing(false); }} />
-          <button type="button" onClick={handleSave} disabled={saving} className="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded-full"><Check className="h-4 w-4" /></button>
-          <button type="button" onClick={() => setIsEditing(false)} className="p-1 text-muted-foreground hover:bg-muted/60 rounded-full"><X className="h-4 w-4" /></button>
+          <input type="text" inputMode="decimal" value={input} onChange={(e) => setInput(e.target.value)} placeholder="25000" aria-label="Capital amount" className="app-input flex-1 text-sm" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setIsEditing(false); }} />
+          <button type="button" onClick={handleSave} disabled={saving} aria-label="Save capital" className="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded-full"><Check className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setIsEditing(false)} aria-label="Cancel editing" className="p-1 text-muted-foreground hover:bg-muted/60 rounded-full"><X className="h-4 w-4" /></button>
         </div>
       ) : (
         <div className="text-center">
