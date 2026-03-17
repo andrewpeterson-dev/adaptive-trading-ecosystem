@@ -442,10 +442,10 @@ export function PortfolioOptimizer() {
                     borderRadius: "12px",
                     fontSize: "12px",
                   }}
-                  formatter={(val: number, name: string) => [
-                    `${(val * 100).toFixed(2)}%`,
-                    name === "expected_return" ? "Return" : name === "volatility" ? "Volatility" : name,
-                  ]}
+                  formatter={((val?: number, name?: string) => [
+                    `${((val ?? 0) * 100).toFixed(2)}%`,
+                    name === "expected_return" ? "Return" : name === "volatility" ? "Volatility" : name ?? "",
+                  ]) as any}
                 />
                 <Scatter
                   data={frontierData}
