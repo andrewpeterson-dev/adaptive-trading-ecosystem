@@ -19,6 +19,7 @@ import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { CorrelationHeatmap } from "@/components/analytics/CorrelationHeatmap";
 
 function getRiskLevel(summary: RiskSummaryExtended): {
   label: string;
@@ -232,6 +233,9 @@ export default function RiskPage() {
       )}
 
       <RiskEventLog events={events} />
+
+      {/* Correlation Heatmap */}
+      <CorrelationHeatmap />
       </>
       )}
     </div>
