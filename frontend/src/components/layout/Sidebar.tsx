@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Builder", icon: Blocks, activeFor: ["/"] },
+  { href: "/strategy-builder", label: "Builder", icon: Blocks, activeFor: ["/strategy-builder"] },
   { href: "/strategies", label: "Strategies", icon: Shield, activeFor: ["/strategies"] },
   { href: "/bots", label: "Bots", icon: Bot, activeFor: ["/bots"] },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, activeFor: ["/dashboard", "/portfolio", "/risk"] },
