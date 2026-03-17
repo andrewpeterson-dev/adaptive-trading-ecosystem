@@ -51,7 +51,8 @@ async def fetch_stocktwits_events() -> list[dict]:
                         "source_id": source_id,
                         "expires_at": datetime.utcnow() + timedelta(hours=1),
                     })
-                except Exception:
+                except Exception as exc:
+                    logger.debug("stocktwits_message_skipped", error=str(exc))
                     continue
     except Exception as e:
         logger.warning("stocktwits_fetch_failed", error=str(e))

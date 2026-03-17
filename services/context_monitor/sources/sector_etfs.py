@@ -37,7 +37,8 @@ def _fetch_sector_data_sync() -> list[dict]:
                 curr_close = float(hist.iloc[-1]["Close"])
                 change_pct = ((curr_close - prev_close) / prev_close) * 100
                 results.append({"symbol": symbol, "name": name, "change_pct": change_pct})
-            except Exception:
+            except Exception as exc:
+                logger.debug("sector_etf_fetch_skipped", symbol=symbol, error=str(exc))
                 continue
     except Exception as e:
         logger.warning("sector_etf_fetch_failed", error=str(e))

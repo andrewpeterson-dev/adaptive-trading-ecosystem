@@ -60,7 +60,8 @@ def _fetch_yfinance_news_sync() -> list[dict]:
                         "source": source_name,
                         "pub_time": pub_time,
                     })
-            except Exception:
+            except Exception as exc:
+                logger.debug("yfinance_news_item_skipped", error=str(exc))
                 continue
     except Exception as e:
         logger.warning("yfinance_news_fetch_failed", error=str(e))
