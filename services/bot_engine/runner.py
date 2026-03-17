@@ -974,6 +974,16 @@ class BotRunner:
 
             closed_count += 1
 
+            # Record result for per-bot circuit breaker
+            try:
+                from services.trading_orchestrator import orchestrator
+                if orchestrator.risk_engine:
+                    orchestrator.risk_engine.bot_cb.record_result(
+                        bot.id, is_loss=(pnl < 0),
+                    )
+            except Exception:
+                pass  # Never let circuit breaker bookkeeping break the exit flow
+
         if closed_count:
             logger.info(
                 "bot_position_closed",
