@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Loader2, BarChart3, ShieldOff } from "lucide-react";
+import { BarChart3, ShieldOff } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -38,10 +38,103 @@ function formatStrategyName(name: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function ScoreRowSkeleton() {
+  return (
+    <div className="space-y-1.5 py-0.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="app-skeleton h-3 w-36 rounded-full" />
+        <div className="app-skeleton h-3 w-12 rounded-full" />
+      </div>
+      <div className="app-skeleton h-2 w-full rounded-full" />
+      <div className="app-skeleton h-2 w-40 rounded-full" />
+    </div>
+  );
+}
+
+function ScoreRow({
+  cat,
+  animate,
+}: {
+  cat: CategoryScore;
+  animate: boolean;
+}) {
+  const isBlocked = cat.score < 30;
+  const scoreColor = getScoreColor(cat.score);
+  const fillPct = Math.min(cat.score, 100);
+  const [displayWidth, setDisplayWidth] = useState(animate ? 0 : fillPct);
+
+  useEffect(() => {
+    if (animate) {
+      const raf = requestAnimationFrame(() => setDisplayWidth(fillPct));
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setDisplayWidth(fillPct);
+    }
+  }, [fillPct, animate]);
+
+  return (
+    <div
+      className="space-y-1 transition-opacity duration-200"
+      style={{ opacity: isBlocked ? 0.6 : 1 }}
+    >
+      {/* Name + Badge + Score */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-semibold text-foreground truncate">
+            {formatStrategyName(cat.strategy_type)}
+          </span>
+          {isBlocked && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 border border-red-500/25 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-400 shrink-0">
+              <ShieldOff className="h-2.5 w-2.5" />
+              Blocked
+            </span>
+          )}
+        </div>
+        <span
+          className="text-xs font-mono font-semibold tabular-nums shrink-0 transition-colors duration-300"
+          style={{ color: scoreColor }}
+        >
+          {cat.score}/100
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="app-progress-track h-2">
+        <div
+          className="app-progress-bar h-full"
+          style={{
+            width: `${displayWidth}%`,
+            backgroundColor: scoreColor,
+            transition: animate
+              ? "width 600ms cubic-bezier(0.4, 0, 0.2, 1), background-color 300ms ease"
+              : "background-color 300ms ease",
+          }}
+        />
+      </div>
+
+      {/* Stats line */}
+      <div className="flex items-center gap-2 text-[9px] text-muted-foreground font-mono">
+        <span>{cat.num_trades} trades</span>
+        <span className="text-muted-foreground/30">|</span>
+        <span>{(cat.win_rate * 100).toFixed(0)}% win rate</span>
+        <span className="text-muted-foreground/30">|</span>
+        <span
+          className="transition-colors duration-300"
+          style={{ color: cat.roi >= 0 ? "#4ade80" : "#ef4444" }}
+        >
+          {cat.roi >= 0 ? "+" : ""}
+          {cat.roi.toFixed(1)}% ROI
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function CategoryScoring() {
   const [data, setData] = useState<CategoryScoresResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -63,11 +156,26 @@ export function CategoryScoring() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  useEffect(() => {
+    if (!loading && data) {
+      const raf = requestAnimationFrame(() => setMounted(true));
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [loading, data]);
+
   if (loading) {
     return (
       <Surface>
-        <SurfaceBody className="flex items-center justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <SurfaceHeader>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <SurfaceTitle>Strategy Category Scoring</SurfaceTitle>
+          </div>
+        </SurfaceHeader>
+        <SurfaceBody className="p-3 space-y-3">
+          {[0, 1, 2, 3].map((i) => (
+            <ScoreRowSkeleton key={i} />
+          ))}
         </SurfaceBody>
       </Surface>
     );
@@ -83,9 +191,13 @@ export function CategoryScoring() {
           </div>
         </SurfaceHeader>
         <SurfaceBody>
-          <p className="text-xs text-muted-foreground text-center py-4">
-            Category scoring data unavailable.
-          </p>
+          <div className="app-empty">
+            <div className="app-empty-icon">
+              <BarChart3 className="h-5 w-5 text-muted-foreground/60" />
+            </div>
+            <p className="text-xs font-medium text-muted-foreground">Scoring data unavailable</p>
+            <p className="text-[11px] text-muted-foreground/60">Backend may be offline</p>
+          </div>
         </SurfaceBody>
       </Surface>
     );
@@ -111,73 +223,21 @@ export function CategoryScoring() {
           </div>
         </div>
       </SurfaceHeader>
-      <SurfaceBody className="p-3 space-y-2">
-        {data.scores.map((cat) => {
-          const isBlocked = cat.score < 30;
-          const scoreColor = getScoreColor(cat.score);
-          const fillPct = Math.min(cat.score, 100);
-
-          return (
-            <div
-              key={cat.strategy_type}
-              className="space-y-1"
-              style={{ opacity: isBlocked ? 0.65 : 1 }}
-            >
-              {/* Name + Badge + Score */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-semibold text-foreground truncate">
-                    {formatStrategyName(cat.strategy_type)}
-                  </span>
-                  {isBlocked && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 border border-red-500/25 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-400 shrink-0">
-                      <ShieldOff className="h-2.5 w-2.5" />
-                      Blocked
-                    </span>
-                  )}
-                </div>
-                <span
-                  className="text-xs font-mono font-semibold tabular-nums shrink-0"
-                  style={{ color: scoreColor }}
-                >
-                  {cat.score}/100
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div className="app-progress-track h-2">
-                <div
-                  className="app-progress-bar h-full"
-                  style={{
-                    width: `${fillPct}%`,
-                    backgroundColor: scoreColor,
-                  }}
-                />
-              </div>
-
-              {/* Stats line */}
-              <div className="flex items-center gap-2 text-[9px] text-muted-foreground font-mono">
-                <span>{cat.num_trades} trades</span>
-                <span className="text-muted-foreground/30">|</span>
-                <span>{(cat.win_rate * 100).toFixed(0)}% win rate</span>
-                <span className="text-muted-foreground/30">|</span>
-                <span
-                  style={{
-                    color: cat.roi >= 0 ? "#4ade80" : "#ef4444",
-                  }}
-                >
-                  {cat.roi >= 0 ? "+" : ""}
-                  {cat.roi.toFixed(1)}% ROI
-                </span>
-              </div>
+      <SurfaceBody className="p-3 space-y-2.5">
+        {data.scores.length === 0 ? (
+          <div className="app-empty">
+            <div className="app-empty-icon">
+              <BarChart3 className="h-5 w-5 text-muted-foreground/60" />
             </div>
-          );
-        })}
-
-        {data.scores.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            No category scores recorded yet.
-          </p>
+            <p className="text-xs font-medium text-muted-foreground">No category scores yet</p>
+            <p className="text-[11px] text-muted-foreground/60">
+              Scores appear after strategies run their first trades
+            </p>
+          </div>
+        ) : (
+          data.scores.map((cat) => (
+            <ScoreRow key={cat.strategy_type} cat={cat} animate={mounted} />
+          ))
         )}
       </SurfaceBody>
     </Surface>
