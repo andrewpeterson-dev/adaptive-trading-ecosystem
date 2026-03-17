@@ -341,12 +341,9 @@ class ConfirmationService:
                 if position:
                     total_cost = (position.avg_entry_price * position.quantity) + cost
                     position.quantity += quantity
-                    if abs(position.quantity) <= 0.0001:
-                        await session.delete(position)
-                    else:
-                        position.avg_entry_price = total_cost / position.quantity
-                        position.current_price = current_price
-                elif not position:
+                    position.avg_entry_price = total_cost / position.quantity
+                    position.current_price = current_price
+                else:
                     position = PaperPosition(
                         portfolio_id=portfolio.id, user_id=user_id,
                         symbol=symbol, quantity=quantity,
