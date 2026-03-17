@@ -63,7 +63,7 @@ async def run_analysis(request: Request, body: TradeAnalysisRequest):
         )
     except Exception as exc:
         logger.error("trade_analysis_api_error", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Trade analysis failed. Please try again.") from exc
 
     return result.to_dict()
 

@@ -30,7 +30,7 @@ async def get_batch_sentiment(
         return {"results": results, "count": len(results)}
     except Exception as exc:
         logger.error("sentiment_batch_error", tickers=ticker_list, error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Batch sentiment analysis failed: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Batch sentiment analysis failed. Please try again.")
 
 
 @router.get("/market-mood/overview")
@@ -40,7 +40,7 @@ async def get_market_mood(request: Request) -> dict:
         return await service.market_mood()
     except Exception as exc:
         logger.error("market_mood_error", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Market mood analysis failed: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Market mood analysis failed. Please try again.")
 
 
 @router.get("/{ticker}")
@@ -54,4 +54,4 @@ async def get_sentiment(
         return await service.analyze_ticker(ticker=ticker, lookback_days=lookback_days)
     except Exception as exc:
         logger.error("sentiment_endpoint_error", ticker=ticker, error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Sentiment analysis failed: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Sentiment analysis failed. Please try again.")
