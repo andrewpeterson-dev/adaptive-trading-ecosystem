@@ -2004,7 +2004,7 @@ async def get_portfolio_analytics(request: Request, symbols: Optional[str] = Non
 @router.get("/equity-history")
 async def get_equity_history(
     request: Request,
-    period: str = Query("1M", regex="^(1D|1W|1M|3M|1Y|ALL)$"),
+    period: str = Query("1M", pattern="^(1D|1W|1M|3M|1Y|ALL)$"),
 ):
     """Return portfolio equity points over time for charting.
 
