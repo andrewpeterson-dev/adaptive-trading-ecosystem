@@ -317,7 +317,23 @@ async def _place_alpaca_order(
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported order type: {order_type}")
 
-        order = client.submit_order(order_request)
+        try:
+            order = client.submit_order(order_request)
+        except Exception as exc:
+            # Surface Alpaca API errors (insufficient funds, market closed, etc.)
+            # as structured responses instead of unhandled 500s
+            error_msg = str(exc)
+            logger.error(
+                "alpaca_order_rejected",
+                symbol=symbol,
+                direction=direction,
+                qty=quantity,
+                error=error_msg,
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=f"Order rejected by Alpaca: {error_msg}",
+            ) from exc
         return {
             "executed": True,
             "mode": "live",
