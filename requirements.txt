@@ -41,7 +41,7 @@ numba>=0.58.0
 pyarrow>=14.0.0
 
 # Portfolio Optimization
-pyportfolioopt>=1.5.5
+pyportfolioopt==1.5.5
 cvxpy>=1.4.0
 
 # LLM

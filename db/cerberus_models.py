@@ -741,7 +741,7 @@ class BotAdaptation(Base):
 
 class TradeAnalysis(Base):
     """Persisted multi-agent trade analysis results."""
-    __tablename__ = "trade_analyses"
+    __tablename__ = "cerberus_trade_analyses"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)

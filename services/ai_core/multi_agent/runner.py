@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from datetime import datetime
@@ -80,7 +81,21 @@ async def run_trade_analysis(
         from services.ai_core.multi_agent.graph import get_trade_analysis_graph
 
         graph = get_trade_analysis_graph()
-        final_state = await graph.ainvoke(initial_state)
+        final_state = await asyncio.wait_for(
+            graph.ainvoke(initial_state),
+            timeout=120.0,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "trade_analysis_graph_timeout",
+            analysis_id=analysis_id,
+            symbol=symbol,
+        )
+        final_state = dict(initial_state)
+        final_state["recommendation"] = "hold"
+        final_state["confidence"] = 0.0
+        final_state["reasoning"] = "Analysis pipeline timed out after 120 seconds."
+        final_state.setdefault("errors", []).append("graph_execution: timeout after 120s")
     except Exception as exc:
         logger.error(
             "trade_analysis_graph_failed",

@@ -17,9 +17,6 @@ merge nodes that simply pass state through.
 
 from __future__ import annotations
 
-from typing import Annotated
-
-import operator
 import structlog
 from langgraph.graph import END, START, StateGraph
 
@@ -35,22 +32,6 @@ from services.ai_core.multi_agent.nodes import (
 )
 
 logger = structlog.get_logger(__name__)
-
-
-def _merge_lists(left: list, right: list) -> list:
-    """Reducer that concatenates two lists."""
-    return (left or []) + (right or [])
-
-
-# We need Annotated state so LangGraph knows how to merge list fields
-# when parallel branches write to the same key.
-class AnnotatedTradeAnalysisState(TradeAnalysisState, total=False):
-    """State with annotation hints for LangGraph reducers.
-
-    For plain string/float keys the default last-write-wins applies.
-    For list keys (node_trace, errors) we use add/concatenation.
-    """
-    pass
 
 
 def build_trade_analysis_graph():

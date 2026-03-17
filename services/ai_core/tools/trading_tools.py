@@ -576,7 +576,7 @@ def register():
         category=ToolCategory.ANALYTICS,
         side_effect=ToolSideEffect.READ,
         timeout_ms=120000,
-        cache_ttl_s=300,
+        cache_ttl_s=0,
         input_schema={
             "type": "object",
             "properties": {

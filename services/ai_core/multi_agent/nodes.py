@@ -13,38 +13,30 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from typing import Any
-
 import structlog
 
-from services.ai_core.model_router import ModelRouter
-from services.ai_core.providers.base import ProviderMessage
 from services.ai_core.multi_agent.state import TradeAnalysisState
 
 logger = structlog.get_logger(__name__)
-
-# Shared router instance for all nodes
-_router = ModelRouter()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """Call the primary LLM via the existing model router."""
-    routing = _router.route(
-        mode="analysis",
-        message=user_prompt[:200],
-        has_tools=False,
-        has_documents=False,
-        has_sensitive_data=True,
-    )
+    """Call the primary LLM for multi-agent analysis nodes."""
+    from services.ai_core.providers.openai_provider import OpenAIProvider
+    from services.ai_core.providers.base import ProviderMessage
+    from config.settings import get_settings
+
+    settings = get_settings()
+    provider = OpenAIProvider()
     messages = [
         ProviderMessage(role="system", content=system_prompt),
         ProviderMessage(role="user", content=user_prompt),
     ]
-    response = await routing.provider.complete(
+    response = await provider.complete(
         messages=messages,
-        model=routing.model,
+        model=settings.openai_primary_model,
         temperature=0.3,
         max_tokens=2048,
     )
@@ -70,7 +62,7 @@ async def technical_analyst(state: TradeAnalysisState) -> dict:
             _get_indicators,
         )
 
-        price_data, hist_data, indicator_data = await asyncio.gather(
+        results = await asyncio.gather(
             _call_tool_handler(_get_price, user_id=user_id, symbol=symbol),
             _call_tool_handler(
                 _get_historical_prices,
@@ -90,7 +82,11 @@ async def technical_analyst(state: TradeAnalysisState) -> dict:
                 period="3mo",
                 interval="1d",
             ),
+            return_exceptions=True,
         )
+        price_data = results[0] if not isinstance(results[0], BaseException) else {}
+        hist_data = results[1] if not isinstance(results[1], BaseException) else {}
+        indicator_data = results[2] if not isinstance(results[2], BaseException) else {}
 
         # Compute support/resistance from recent bars
         bars = hist_data.get("bars", [])
@@ -157,6 +153,8 @@ async def fundamental_analyst(state: TradeAnalysisState) -> dict:
         def _fetch_fundamentals() -> dict:
             ticker = yf.Ticker(symbol)
             info = ticker.info or {}
+            if not info or info.get("regularMarketPrice") is None:
+                return {}
             return {
                 "pe_ratio": info.get("trailingPE"),
                 "forward_pe": info.get("forwardPE"),
@@ -179,6 +177,13 @@ async def fundamental_analyst(state: TradeAnalysisState) -> dict:
             }
 
         fundamentals = await asyncio.to_thread(_fetch_fundamentals)
+
+        if not fundamentals:
+            return {
+                "fundamental_report": f"No fundamental data available for {symbol}.",
+                "node_trace": [node_name],
+            }
+
         data_summary = json.dumps(fundamentals, indent=2, default=str)
 
         system = (
@@ -220,7 +225,7 @@ async def sentiment_analyst(state: TradeAnalysisState) -> dict:
         from services.ai_core.tools.sentiment_tools import _get_sentiment_analysis
         from services.ai_core.tools.research_tools import _get_market_news
 
-        sentiment_data, news_data = await asyncio.gather(
+        results = await asyncio.gather(
             _call_tool_handler(
                 _get_sentiment_analysis,
                 user_id=user_id,
@@ -233,7 +238,10 @@ async def sentiment_analyst(state: TradeAnalysisState) -> dict:
                 query=symbol,
                 max_results=5,
             ),
+            return_exceptions=True,
         )
+        sentiment_data = results[0] if not isinstance(results[0], BaseException) else {}
+        news_data = results[1] if not isinstance(results[1], BaseException) else {}
 
         data_summary = json.dumps(
             {
@@ -366,7 +374,7 @@ async def risk_assessor(state: TradeAnalysisState) -> dict:
             _calculate_var,
         )
 
-        exposure_data, concentration_data, var_data = await asyncio.gather(
+        results = await asyncio.gather(
             _call_tool_handler(_portfolio_exposure, user_id=user_id),
             _call_tool_handler(_concentration_risk, user_id=user_id),
             _call_tool_handler(
@@ -376,7 +384,11 @@ async def risk_assessor(state: TradeAnalysisState) -> dict:
                 horizon_days=1,
                 method="historical",
             ),
+            return_exceptions=True,
         )
+        exposure_data = results[0] if not isinstance(results[0], BaseException) else {}
+        concentration_data = results[1] if not isinstance(results[1], BaseException) else {}
+        var_data = results[2] if not isinstance(results[2], BaseException) else {}
 
         data_summary = json.dumps(
             {

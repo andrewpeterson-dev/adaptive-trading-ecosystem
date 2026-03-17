@@ -37,7 +37,7 @@ router = APIRouter()
 
 
 class ConstraintsInput(BaseModel):
-    max_weight: float = Field(default=0.25, ge=0.01, le=1.0)
+    max_weight: float = Field(default=0.40, ge=0.01, le=1.0)
     min_weight: float = Field(default=0.0, ge=0.0, le=1.0)
     sector_caps: Dict[str, float] = Field(default_factory=dict)
 
@@ -302,7 +302,7 @@ async def get_rebalance_plan(
     request: Request,
     method: str = Query(default="max_sharpe"),
     lookback_days: int = Query(default=252, ge=30, le=1260),
-    max_weight: float = Query(default=0.25, ge=0.01, le=1.0),
+    max_weight: float = Query(default=0.40, ge=0.01, le=1.0),
     min_trade_value: float = Query(default=50.0, ge=0),
     tax_loss_harvesting: bool = Query(default=False),
 ):
