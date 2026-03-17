@@ -11,7 +11,7 @@ from sqlalchemy import select, and_
 
 from db.database import get_session
 from db.cerberus_models import MarketEvent
-from services.context_monitor.classifier import classify_impact
+from services.context_monitor.classifier import classify_impact_async
 
 logger = structlog.get_logger(__name__)
 _ET = ZoneInfo("America/New_York")
@@ -103,7 +103,7 @@ class ContextMonitor:
                 if existing.scalar_one_or_none():
                     continue
 
-                evt["impact"] = classify_impact(evt)
+                evt["impact"] = await classify_impact_async(evt)
 
                 record = MarketEvent(
                     id=str(uuid.uuid4()),

@@ -31,8 +31,6 @@ def classify_impact(event: dict) -> str:
     # VIX-based
     if event_type == "volatility":
         vix = raw_data.get("vix", 0)
-        if vix > 40:
-            return "HIGH"
         if vix > 25:
             return "HIGH"
         if vix > 18:
@@ -79,8 +77,6 @@ async def classify_impact_async(event: dict) -> str:
     # VIX-based
     if event_type == "volatility":
         vix = raw_data.get("vix", 0)
-        if vix > 40:
-            return "HIGH"
         if vix > 25:
             return "HIGH"
         if vix > 18:
