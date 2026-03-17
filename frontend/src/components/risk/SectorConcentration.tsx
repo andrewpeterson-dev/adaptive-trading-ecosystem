@@ -160,7 +160,7 @@ function computeSectorAllocations(positions: Position[]): SectorAllocation[] {
   if (totalPortfolioValue === 0) return [];
 
   const allocations: SectorAllocation[] = [];
-  for (const [sector, data] of sectorMap.entries()) {
+  for (const [sector, data] of Array.from(sectorMap.entries())) {
     allocations.push({
       sector,
       allocation_pct: (data.totalValue / totalPortfolioValue) * 100,
