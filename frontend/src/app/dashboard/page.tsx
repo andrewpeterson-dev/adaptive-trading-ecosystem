@@ -46,6 +46,7 @@ import { ExecutionChart } from "@/components/dashboard/ExecutionChart";
 import { DashboardGrid } from "@/components/dashboard/GridLayout";
 import type { Layouts, LayoutItem } from "@/components/dashboard/GridLayout";
 import { SentimentPanel } from "@/components/analytics/SentimentPanel";
+import { MarketMoodWidget } from "@/components/dashboard/MarketMoodWidget";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -388,8 +389,8 @@ export default function DashboardPage() {
           </div>
 
           <div key="sentiment">
-            <DashboardPanel title="Market Sentiment" icon={Activity} noPadding>
-              <SentimentPanel />
+            <DashboardPanel title="Market Sentiment" icon={Activity}>
+              <MarketMoodWidget />
             </DashboardPanel>
           </div>
 
