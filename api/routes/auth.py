@@ -48,6 +48,8 @@ _PASSWORD_MIN_LENGTH = 10
 _MAX_SECRET_FIELD_LENGTH = 2048
 _VERIFICATION_EXPIRY_HOURS = 24
 _PASSWORD_RESET_EXPIRY_MINUTES = 30
+# Dummy hash for constant-time comparison when user doesn't exist (prevents timing oracle)
+_DUMMY_HASH = bcrypt.hashpw(b"timing-attack-dummy", bcrypt.gensalt()).decode()
 
 
 def _client_ip(request: Request) -> str:
@@ -346,7 +348,12 @@ async def login(req: LoginRequest, request: Request):
         result = await db.execute(select(User).where(func.lower(User.email) == email))
         user = result.scalar_one_or_none()
 
-        if not user or not _check_password(req.password, user.password_hash):
+        if not user:
+            # Constant-time: always run bcrypt even when user is missing to prevent timing oracle
+            _check_password(req.password, _DUMMY_HASH)
+            logger.warning("login_failed", email=email, client_ip=client_ip, reason="invalid_credentials")
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not _check_password(req.password, user.password_hash):
             logger.warning("login_failed", email=email, client_ip=client_ip, reason="invalid_credentials")
             raise HTTPException(status_code=401, detail="Invalid email or password")
 

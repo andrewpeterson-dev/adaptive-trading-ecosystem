@@ -44,6 +44,7 @@ class SafetyGuard:
         r"innerHTML",
         r"document\.write",
         r"window\.location\s*=",
+        r"data:text/html",
     ]
 
     # Sensitive fields that must be redacted before sending to models

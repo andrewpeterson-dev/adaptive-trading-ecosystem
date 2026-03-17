@@ -216,7 +216,8 @@ def _extract_metric(pf: Any, metric: str) -> float:
                 return 0.0
             wins = len(trades[trades.get("PnL", trades.get("Return", pd.Series())) > 0])
             return wins / len(trades)
-        except Exception:
+        except Exception as exc:
+            logger.debug("sweep_win_rate_extraction_failed", error=str(exc))
             return 0.0
     elif metric == "profit_factor":
         try:
@@ -227,7 +228,8 @@ def _extract_metric(pf: Any, metric: str) -> float:
             gross_profit = float(pnl[pnl > 0].sum())
             gross_loss = abs(float(pnl[pnl < 0].sum()))
             return gross_profit / gross_loss if gross_loss > 0 else 0.0
-        except Exception:
+        except Exception as exc:
+            logger.debug("sweep_profit_factor_extraction_failed", error=str(exc))
             return 0.0
     elif metric == "calmar_ratio":
         tr = safe_float(pf.total_return())

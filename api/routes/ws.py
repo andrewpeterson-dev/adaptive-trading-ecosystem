@@ -117,8 +117,10 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
                     symbol = data.get("symbol", "")
                     if symbol in subscribed:
                         await websocket.send_json({"type": "price_update", "data": data})
-                except Exception:
-                    pass
+                except WebSocketDisconnect:
+                    break
+                except Exception as exc:
+                    logger.debug("ws_price_forward_error", error=str(exc))
         except asyncio.CancelledError:
             raise
         except Exception as e:

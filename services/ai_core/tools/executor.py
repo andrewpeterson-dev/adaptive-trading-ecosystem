@@ -89,7 +89,7 @@ class ToolExecutor:
                 f"Timeout after {tool.timeout_ms}ms", start_time
             )
         except Exception as e:
-            logger.error("tool_execution_error", tool=tool_name, error=str(e))
+            logger.exception("tool_execution_error", tool=tool_name, error=str(e))
             return self._error_result(tool_call_id, tool_name, str(e), start_time)
 
         latency_ms = int((time.monotonic() - start_time) * 1000)

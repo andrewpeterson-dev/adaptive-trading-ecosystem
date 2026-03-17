@@ -211,7 +211,7 @@ def _build_condition_mask(
         threshold = _resolve_threshold_series(df, all_conditions, compare_to)
     else:
         raw_val = condition.get("value", 0)
-        threshold = float(raw_val) if not isinstance(raw_val, (int, float)) else raw_val
+        threshold = safe_float(raw_val, default=0.0)
 
     if operator == ">":
         return series > threshold
@@ -482,18 +482,15 @@ def _extract_results(
 
     avg_trade_duration = 0.0
     if trades_list:
-        try:
-            durations = []
-            for t in trades_list:
-                try:
-                    ed = pd.to_datetime(t["entry_date"])
-                    xd = pd.to_datetime(t["exit_date"])
-                    durations.append((xd - ed).days)
-                except Exception:
-                    pass
-            avg_trade_duration = sum(durations) / len(durations) if durations else 0.0
-        except Exception:
-            pass
+        durations = []
+        for t in trades_list:
+            try:
+                ed = pd.to_datetime(t["entry_date"])
+                xd = pd.to_datetime(t["exit_date"])
+                durations.append((xd - ed).days)
+            except (ValueError, TypeError):
+                continue
+        avg_trade_duration = sum(durations) / len(durations) if durations else 0.0
 
     calmar = abs(total_return / max_drawdown) if max_drawdown > 0 else 0.0
 

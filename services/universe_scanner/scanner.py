@@ -76,9 +76,11 @@ def _score_candidates_sync(symbols: list[str], strategy_type: str) -> list[dict]
                             reason = f"Composite: mom={momentum*100:.1f}%, vol_ratio={vol_ratio:.1f}x, ATR={atr_pct*100:.1f}%"
 
                         results.append({"symbol": symbol, "score": round(score, 4), "reason": reason})
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug("score_symbol_failed", symbol=symbol, error=str(exc))
                         continue
-            except Exception:
+            except Exception as exc:
+                logger.warning("score_batch_failed", batch_start=i, batch_size=batch_size, error=str(exc))
                 continue
     except Exception as e:
         logger.warning("score_candidates_failed", error=str(e))
@@ -119,7 +121,7 @@ class UniverseScanner:
                 else:
                     interval = 3600  # 1 hour outside market
             except Exception as e:
-                logger.error("universe_scanner_error", error=str(e))
+                logger.exception("universe_scanner_error", error=str(e))
                 interval = 900
             await asyncio.sleep(interval)
 
@@ -180,7 +182,12 @@ class UniverseScanner:
 
         top = scored[:max_symbols]
 
-        # Replace old candidates for this bot
+        # Guard: never delete existing candidates if scoring returned nothing
+        if not top:
+            logger.warning("universe_scan_empty_results", bot_id=bot.id, candidates_pool=len(candidates))
+            return
+
+        # Replace old candidates for this bot (atomic within session transaction)
         async with get_session() as session:
             await session.execute(
                 delete(UniverseCandidate).where(UniverseCandidate.bot_id == bot.id)

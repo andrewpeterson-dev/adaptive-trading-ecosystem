@@ -1340,11 +1340,15 @@ async def execute_signal(request: Request, req: ExecuteSignalRequest):
                     quantity=adjusted_quantity,
                 )
             except Exception as exc:
-                logger.warning(
+                logger.error(
                     "alpaca_trade_persist_failed",
                     user_id=user_id,
                     symbol=req.symbol.upper(),
+                    direction=req.direction,
+                    quantity=adjusted_quantity,
+                    order_id=order_result.get("order_id", "unknown"),
                     error=str(exc),
+                    hint="Order executed in broker but NOT saved to database — reconciliation needed",
                 )
             order_result["resolved_quantity"] = adjusted_quantity
             return order_result
@@ -1670,10 +1674,11 @@ async def get_risk_summary(request: Request):
         summary = _legacy_risk_manager.get_risk_summary(account["equity"])
         summary["mode"] = mode.value
         return summary
-    except Exception:
+    except Exception as exc:
+        logger.warning("risk_summary_fetch_failed", mode=mode.value, error=str(exc))
         return {
-            "is_halted": False,
-            "halt_reason": None,
+            "is_halted": True,
+            "halt_reason": "Risk data unavailable — halting as precaution",
             "current_drawdown_pct": 0.0,
             "max_drawdown_limit": settings.max_drawdown_pct,
             "max_drawdown_limit_pct": settings.max_drawdown_pct,
@@ -1686,6 +1691,7 @@ async def get_risk_summary(request: Request):
             "open_positions": 0,
             "recent_risk_events": 0,
             "mode": mode.value,
+            "data_unavailable": True,
         }
 
 
@@ -1807,7 +1813,8 @@ async def get_trade_log(request: Request, limit: int = Query(default=100, ge=1, 
     # Fallback to executor log
     try:
         return _get_legacy_executor().get_trade_log(limit=limit)
-    except Exception:
+    except Exception as exc:
+        logger.warning("legacy_trade_log_failed", mode=mode.value, error=str(exc))
         return {"trades": [], "mode": mode.value}
 
 
@@ -2046,8 +2053,9 @@ async def get_equity_history(
             ],
             "initial_capital": current_equity,
         }
-    except Exception:
-        return {"points": [], "initial_capital": 0}
+    except Exception as exc:
+        logger.warning("live_equity_curve_failed", error=str(exc))
+        return {"points": [], "initial_capital": 0, "data_unavailable": True}
 
 
 async def _build_paper_equity_curve(

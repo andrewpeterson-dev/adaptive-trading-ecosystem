@@ -168,17 +168,29 @@ class ChatController:
             )
             # Fallback to Anthropic
             if routing.provider_name != "anthropic":
-                fallback = self._router.route(
-                    mode=mode, message=message, openai_failed=True,
-                )
-                response = await fallback.provider.complete(
-                    messages=provider_messages,
-                    model=fallback.model,
-                    tools=provider_tools if provider_tools else None,
-                )
-                result.model_name = fallback.model
-                result.provider_name = fallback.provider_name
-                result.warnings.append("Primary model unavailable, used fallback")
+                try:
+                    fallback = self._router.route(
+                        mode=mode, message=message, openai_failed=True,
+                    )
+                    response = await fallback.provider.complete(
+                        messages=provider_messages,
+                        model=fallback.model,
+                        tools=provider_tools if provider_tools else None,
+                    )
+                    result.model_name = fallback.model
+                    result.provider_name = fallback.provider_name
+                    result.warnings.append("Primary model unavailable, used fallback")
+                except Exception as fallback_exc:
+                    logger.error(
+                        "all_providers_failed",
+                        primary_provider=routing.provider_name,
+                        fallback_provider="anthropic",
+                        primary_error=str(e),
+                        fallback_error=str(fallback_exc),
+                    )
+                    raise RuntimeError(
+                        "All AI providers are currently unavailable. Please try again shortly."
+                    ) from fallback_exc
             else:
                 raise
 
@@ -258,6 +270,7 @@ class ChatController:
         # Validate
         message = self._safety.validate_message_input(message)
         self._safety.check_feature_enabled("cerberus")
+        self._safety.check_rate_limit(user_id)
 
         thread_id = await self._ensure_thread(user_id, thread_id, mode)
         turn_id = str(uuid.uuid4())
@@ -324,8 +337,10 @@ class ChatController:
                 if chunk.finish_reason:
                     break
         except Exception as e:
-            logger.error("stream_error", error=str(e))
-            yield {"type": "error", "data": {"message": str(e)}}
+            logger.exception("stream_error", error=str(e))
+            # Sanitize error message — never expose raw internals to the client
+            safe_msg = "An error occurred while generating a response. Please try again."
+            yield {"type": "error", "data": {"message": safe_msg}}
             return
 
         # Sanitize and store
@@ -488,5 +503,5 @@ class ChatController:
                 elif isinstance(cmd, dict):
                     commands.append(cmd)
             except json.JSONDecodeError:
-                pass
+                logger.debug("malformed_ui_command_json", raw=match.group(1)[:200])
         return commands

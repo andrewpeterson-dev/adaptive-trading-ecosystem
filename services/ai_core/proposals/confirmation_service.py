@@ -367,7 +367,7 @@ class ConfirmationService:
                 pnl = proceeds - (position.avg_entry_price * quantity)
                 portfolio.cash += proceeds
                 position.quantity -= quantity
-                if position.quantity <= 0.0001:
+                if abs(position.quantity) <= 0.0001:
                     await session.delete(position)
 
                 trade = PaperTrade(

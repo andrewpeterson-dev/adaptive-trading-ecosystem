@@ -404,7 +404,7 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
                 pnl = (current_price - avg_cost) * qty * multiplier
                 portfolio.cash += trade_value
                 position.quantity -= qty
-                if position.quantity <= 0.0001:
+                if abs(position.quantity) <= 0.0001:
                     await session.delete(position)
                 else:
                     position.current_price = current_price
@@ -541,9 +541,9 @@ async def get_paper_positions(request: Request):
                     current,
                     p.quantity,
                 )
-            except Exception:
-                # Keep stale price if refresh fails
-                pass
+            except Exception as exc:
+                # Keep stale price if refresh fails, but log for visibility
+                logger.debug("paper_position_price_refresh_failed", symbol=p.symbol, error=str(exc))
 
             current_price = p.current_price or p.avg_entry_price
             payload = {

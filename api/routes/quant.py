@@ -189,7 +189,8 @@ def _profit_heatmap(trades: List[Dict]) -> Dict:
             hour = dt.hour
             if hour in grid[day_name]:
                 grid[day_name][hour].append(t.get("pnl_pct", 0))
-        except Exception:
+        except Exception as exc:
+            logger.debug("heatmap_trade_parse_skipped", error=str(exc))
             continue
 
     # Compute averages — empty cells stay as null

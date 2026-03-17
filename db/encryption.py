@@ -1,8 +1,11 @@
 """Fernet symmetric encryption for broker API credentials."""
 
-from cryptography.fernet import Fernet
+import structlog
+from cryptography.fernet import Fernet, InvalidToken
 
 from config.settings import get_settings
+
+logger = structlog.get_logger(__name__)
 
 
 def _get_fernet() -> Fernet:
@@ -12,7 +15,13 @@ def _get_fernet() -> Fernet:
             "ENCRYPTION_KEY not set. Generate one with: "
             "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
         )
-    return Fernet(key.encode())
+    try:
+        return Fernet(key.encode())
+    except (ValueError, Exception) as exc:
+        raise RuntimeError(
+            f"ENCRYPTION_KEY is invalid (not a valid Fernet key): {exc}. "
+            "Generate a new one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        ) from exc
 
 
 def encrypt_value(plaintext: str) -> str:
@@ -22,4 +31,14 @@ def encrypt_value(plaintext: str) -> str:
 
 def decrypt_value(ciphertext: str) -> str:
     """Decrypt a base64-encoded ciphertext back to plaintext."""
-    return _get_fernet().decrypt(ciphertext.encode()).decode()
+    try:
+        return _get_fernet().decrypt(ciphertext.encode()).decode()
+    except InvalidToken:
+        logger.error(
+            "decryption_failed",
+            hint="ENCRYPTION_KEY may have changed since this value was encrypted — credentials need re-entry",
+        )
+        raise RuntimeError(
+            "Unable to decrypt stored credentials. The encryption key may have changed. "
+            "Please re-enter your broker credentials."
+        )

@@ -46,7 +46,7 @@ class ContextMonitor:
                 await self._poll_sources()
                 await self._expire_events()
             except Exception as e:
-                logger.error("context_monitor_error", error=str(e))
+                logger.exception("context_monitor_error", error=str(e))
                 interval = 120
             await asyncio.sleep(interval)
 
@@ -122,16 +122,14 @@ class ContextMonitor:
                 session.add(record)
 
     async def _expire_events(self) -> None:
+        from sqlalchemy import delete as sa_delete
         now = datetime.utcnow()
         async with get_session() as session:
             result = await session.execute(
-                select(MarketEvent).where(
+                sa_delete(MarketEvent).where(
                     and_(MarketEvent.expires_at.isnot(None), MarketEvent.expires_at < now)
                 )
             )
-            expired = result.scalars().all()
-            for evt in expired:
-                await session.delete(evt)
-            if expired:
-                await session.flush()
-                logger.info("context_monitor_expired_events", count=len(expired))
+            count = result.rowcount
+            if count:
+                logger.info("context_monitor_expired_events", count=count)

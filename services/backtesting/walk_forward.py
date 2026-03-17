@@ -183,8 +183,8 @@ def _run_segment_backtest(
             pnl_col = trades.get("PnL", trades.get("Return", pd.Series(dtype=float)))
             wins = int((pnl_col > 0).sum())
             win_rate = wins / num_trades
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("segment_trade_extraction_failed", error=str(exc))
 
     return {
         "sharpe": sharpe,
