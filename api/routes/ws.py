@@ -86,13 +86,19 @@ async def ws_market(websocket: WebSocket, token: str = Query("")):
     await websocket.accept()
     ws_id = id(websocket)
     subscribed: set[str] = set()
-    _subscriptions[ws_id] = subscribed
     settings = get_settings()
     stop_event = asyncio.Event()
     listener_task: Optional[asyncio.Task] = None
     poll_task: Optional[asyncio.Task] = None
 
-    await websocket.send_json({"type": "connected", "message": "Market data stream ready"})
+    # Register AFTER defining cleanup scope — moved into try/finally below
+    _subscriptions[ws_id] = subscribed
+
+    try:
+        await websocket.send_json({"type": "connected", "message": "Market data stream ready"})
+    except Exception:
+        _subscriptions.pop(ws_id, None)
+        return
     logger.info("ws_client_connected", user_id=user_id)
 
     async def redis_listener():
