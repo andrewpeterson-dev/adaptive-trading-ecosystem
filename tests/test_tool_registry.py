@@ -140,7 +140,7 @@ class TestRegisterAllTools:
         register_all_tools()
         reg = get_registry()
         tools = reg.list_all()
-        assert len(tools) == 35, f"Expected 35, got {len(tools)}: {[t.name for t in tools]}"
+        assert len(tools) == 38, f"Expected 35, got {len(tools)}: {[t.name for t in tools]}"
 
     def test_all_categories_represented(self):
         from services.ai_core.tools.register_all import register_all_tools
@@ -164,7 +164,7 @@ class TestRegisterAllTools:
         register_all_tools()
         reg = get_registry()
         fmt = reg.to_provider_format()
-        assert len(fmt) == 35
+        assert len(fmt) == 38
         for entry in fmt:
             assert "name" in entry
             assert "description" in entry

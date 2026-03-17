@@ -331,14 +331,15 @@ class ReasoningEngine:
             }
 
         except Exception as e:
-            logger.warning("reasoning_llm_failed", error=str(e), bot_id=bot.id)
-            # In paper mode, proceed with trade at reduced size instead of blocking
+            logger.error("reasoning_llm_failed", error=str(e), bot_id=bot.id, exc_info=True)
+            # Fail-closed: skip the trade when LLM reasoning is unavailable.
+            # Never execute without risk evaluation, especially in live mode.
             return {
-                "decision": "EXECUTE",
-                "confidence": 0.5,
-                "reasoning": "LLM unavailable — executing with safety-reduced size (paper mode)",
-                "size_adjustment": 0.5,
-                "delay_seconds": 0,
+                "decision": "DELAY_TRADE",
+                "confidence": 0.0,
+                "reasoning": "LLM unavailable — skipping trade (fail-closed)",
+                "size_adjustment": 0.0,
+                "delay_seconds": 60,
                 "model_used": "safety_rules_fallback",
             }
 

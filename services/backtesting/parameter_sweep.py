@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 import structlog
-import vectorbt as vbt
 
 from services.backtesting.data_fetcher import fetch_ohlcv
 from services.backtesting.vectorbt_engine import (
@@ -53,6 +52,11 @@ def run_parameter_sweep(
     Returns dict with: heatmap, best_params, best_value, param_axes,
     matrix (if 2 params), total_combinations.
     """
+    try:
+        import vectorbt as vbt  # noqa: F811
+    except ImportError as exc:
+        raise RuntimeError("vectorbt is not installed: pip install vectorbt") from exc
+
     if not parameter_ranges:
         raise ValueError("parameter_ranges is required for a sweep")
 

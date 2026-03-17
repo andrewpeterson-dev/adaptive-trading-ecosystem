@@ -338,8 +338,24 @@ async def test_execute_backtest_job_uses_bot_version_config(session, session_fac
             "trades": [{"symbol": req.symbol, "pnl": 21000}],
         }
 
+    def fake_vectorbt_backtest(**kwargs):
+        captured["symbol"] = kwargs.get("symbol")
+        captured["timeframe"] = kwargs.get("timeframe")
+        captured["conditions"] = kwargs.get("conditions")
+        captured["condition_groups"] = kwargs.get("condition_groups")
+        return {
+            "symbol": kwargs.get("symbol", "SPY"),
+            "timeframe": kwargs.get("timeframe", "1D"),
+            "commission_pct": kwargs.get("commission_pct", 0.001),
+            "slippage_pct": kwargs.get("slippage_pct", 0.0005),
+            "metrics": {"total_return": 0.21},
+            "equity_curve": [{"date": "2026-03-11", "value": 121000}],
+            "benchmark_equity_curve": [{"date": "2026-03-11", "value": 110000}],
+            "trades": [{"symbol": kwargs.get("symbol", "SPY"), "pnl": 21000}],
+        }
+
     with _patch_get_session(session_factory):
-        with patch("api.routes.strategies.run_backtest", AsyncMock(side_effect=fake_run_backtest)):
+        with patch("services.workers.job_runners._run_vectorbt_backtest", side_effect=fake_vectorbt_backtest):
             payload = await execute_backtest_job(backtest.id, user_id)
 
     assert payload["metrics"]["total_return"] == 0.21

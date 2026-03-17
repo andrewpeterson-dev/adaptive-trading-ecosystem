@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 import structlog
-import vectorbt as vbt
 
 from services.backtesting.data_fetcher import fetch_ohlcv
 
@@ -317,6 +316,11 @@ def run_vectorbt_backtest(
     benchmark_equity_curve, symbol, timeframe, commission_pct, slippage_pct,
     diagnostics.
     """
+    try:
+        import vectorbt as vbt
+    except ImportError as exc:
+        raise RuntimeError("vectorbt is not installed: pip install vectorbt") from exc
+
     df = fetch_ohlcv(symbol, timeframe, lookback_days)
     if df.empty or len(df) < 20:
         raise ValueError(f"Insufficient data for {symbol} on {timeframe} ({len(df)} bars)")
