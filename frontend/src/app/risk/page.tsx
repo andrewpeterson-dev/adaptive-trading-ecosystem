@@ -20,6 +20,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CorrelationHeatmap } from "@/components/analytics/CorrelationHeatmap";
+import { DrawdownMonitor } from "@/components/risk/DrawdownMonitor";
+import { CategoryScoring } from "@/components/risk/CategoryScoring";
+import { SectorConcentration } from "@/components/risk/SectorConcentration";
+import { RiskLimitsConfig } from "@/components/risk/RiskLimitsConfig";
 
 function getRiskLevel(summary: RiskSummaryExtended): {
   label: string;
@@ -236,6 +240,16 @@ export default function RiskPage() {
 
       {/* Correlation Heatmap */}
       <CorrelationHeatmap />
+
+      {/* Advanced Risk Panels */}
+      <DrawdownMonitor />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <CategoryScoring />
+        <SectorConcentration />
+      </div>
+
+      <RiskLimitsConfig />
       </>
       )}
     </div>
