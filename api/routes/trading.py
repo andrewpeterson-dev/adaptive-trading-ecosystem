@@ -2135,7 +2135,7 @@ async def _build_paper_equity_curve(
             qty = trade.quantity or 0
             price = trade.entry_price or 0
 
-            if direction == TradeDirection.BUY:
+            if direction == TradeDirection.LONG:
                 cost = qty * price * multiplier
                 cash -= cost
                 if trade.symbol in positions:
@@ -2148,24 +2148,28 @@ async def _build_paper_equity_curve(
                     pos["qty"] = total_qty
                 else:
                     positions[trade.symbol] = {"qty": qty, "avg_price": price, "multiplier": multiplier}
-            elif direction == TradeDirection.SELL:
+            elif direction == TradeDirection.SHORT:
                 proceeds = qty * price * multiplier
                 cash += proceeds
                 if trade.symbol in positions:
                     positions[trade.symbol]["qty"] -= qty
-                    if positions[trade.symbol]["qty"] <= 0.001:
+                    if abs(positions[trade.symbol]["qty"]) <= 0.001:
                         del positions[trade.symbol]
 
-            # Also handle exit events
+            # Also handle exit events (closed trades have both entry and exit)
             if trade.exit_price and trade.exit_time:
-                if direction == TradeDirection.BUY and trade.symbol in positions:
-                    # Exit means we sold
+                if direction == TradeDirection.LONG and trade.symbol in positions:
+                    # LONG exit = sold the position
                     exit_proceeds = qty * trade.exit_price * multiplier
                     cash += exit_proceeds
                     if trade.symbol in positions:
                         positions[trade.symbol]["qty"] -= qty
-                        if positions[trade.symbol]["qty"] <= 0.001:
+                        if abs(positions[trade.symbol]["qty"]) <= 0.001:
                             del positions[trade.symbol]
+                elif direction == TradeDirection.SHORT:
+                    # SHORT exit = bought back to cover
+                    exit_cost = qty * trade.exit_price * multiplier
+                    cash -= exit_cost
 
             # Calculate total equity at this point
             positions_value = sum(
