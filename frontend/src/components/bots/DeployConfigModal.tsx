@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Rocket, Globe, Cpu, ShieldCheck, DollarSign, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,20 @@ export function DeployConfigModal({
   const [capitalInput, setCapitalInput] = useState("");
   const [extendedHours, setExtendedHours] = useState(false);
 
+  // Reset all form state when modal opens to prevent stale config from previous deploy
+  useEffect(() => {
+    if (open) {
+      setUniverseMode("fixed");
+      setSymbolsText("");
+      setSelectedSectors(new Set());
+      setSelectedIndex(INDEX_OPTIONS[0]);
+      setBlacklistText("");
+      setOverrideLevel("soft");
+      setCapitalInput("");
+      setExtendedHours(false);
+    }
+  }, [open]);
+
   const toggleSector = useCallback((sector: string) => {
     setSelectedSectors((prev) => {
       const next = new Set(prev);
@@ -105,7 +119,22 @@ export function DeployConfigModal({
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
 
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   const handleDeploy = () => {
+    // Validate universe configuration
+    if (universeMode === "fixed") {
+      const symbols = parseCommaSeparated(symbolsText);
+      if (symbols.length === 0) {
+        setValidationError("Enter at least one symbol to trade.");
+        return;
+      }
+    } else if (universeMode === "sector" && selectedSectors.size === 0) {
+      setValidationError("Select at least one sector.");
+      return;
+    }
+
+    setValidationError(null);
     const blacklist = parseCommaSeparated(blacklistText);
 
     const universeConfig: UniverseConfig = { mode: universeMode };
@@ -368,6 +397,13 @@ export function DeployConfigModal({
               Trades 4 AM &ndash; 8 PM ET instead of 9:30 AM &ndash; 4 PM. Position sizes auto-reduce 50% outside regular hours due to lower liquidity.
             </p>
           </section>
+
+          {/* ── Validation Error ──────────────────────────────────────── */}
+          {validationError && (
+            <div className="rounded-xl border border-red-400/30 bg-red-400/8 px-4 py-2.5 text-sm text-red-400">
+              {validationError}
+            </div>
+          )}
 
           {/* ── Actions ───────────────────────────────────────────────── */}
           <div className="flex gap-3 pt-1">

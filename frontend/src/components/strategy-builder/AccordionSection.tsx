@@ -66,8 +66,6 @@ interface AccordionSectionProps {
   title: string;
   defaultOpen?: boolean;
   badge?: string;
-  /** @deprecated Use `accent` instead */
-  borderColor?: string;
   accent?: AccordionAccent;
   icon?: React.ReactNode;
   subtitle?: string;
@@ -78,7 +76,6 @@ export function AccordionSection({
   title,
   defaultOpen = false,
   badge,
-  borderColor,
   accent = "slate",
   icon,
   subtitle,

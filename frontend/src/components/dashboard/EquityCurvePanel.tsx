@@ -196,7 +196,7 @@ export function EquityCurvePanel({
             tick={{ fill: textColor, fontSize: 10 }}
             axisLine={false}
             tickLine={false}
-            domain={["dataMin", 0]}
+            domain={[(dataMin: number) => Math.min(dataMin, -1), 0]}
             width={48}
           />
 

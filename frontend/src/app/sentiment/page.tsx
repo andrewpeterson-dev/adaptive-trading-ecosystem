@@ -155,81 +155,6 @@ function isRecent(time: string): boolean {
   return false;
 }
 
-// Generate mock timeline data if API doesn't return it
-function generateTimeline(score: number): TimelinePoint[] {
-  const points: TimelinePoint[] = [];
-  const now = new Date();
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const noise = (Math.random() - 0.5) * 1.5;
-    const trend = score * (1 - i / 40);
-    points.push({
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      score: Math.max(-5, Math.min(5, trend + noise)),
-    });
-  }
-  if (points.length > 7) points[7].event = "Fed Meeting";
-  if (points.length > 18) points[18].event = "NVDA Earnings";
-  if (points.length > 24) points[24].event = "CPI Data";
-  return points;
-}
-
-// Generate mock headlines if API doesn't return them
-function generateHeadlines(tickers: TickerSentimentResult[]): HeadlineItem[] {
-  const headlines: HeadlineItem[] = [];
-  const sources = ["Reuters", "Bloomberg", "CNBC", "WSJ", "MarketWatch", "Seeking Alpha", "Barrons"];
-  const times = ["2m ago", "5m ago", "12m ago", "18m ago", "25m ago", "32m ago", "45m ago", "1h ago", "1.5h ago", "2h ago"];
-
-  tickers.forEach((t) => {
-    if (t.top_bullish) {
-      t.top_bullish.slice(0, 2).forEach((h, i) => {
-        headlines.push({
-          title: h,
-          source: sources[Math.floor(Math.random() * sources.length)],
-          time: times[Math.min(i + headlines.length, times.length - 1)],
-          score: 0.5 + Math.random() * 2,
-          sentiment: "bullish",
-        });
-      });
-    }
-    if (t.top_bearish) {
-      t.top_bearish.slice(0, 1).forEach((h, i) => {
-        headlines.push({
-          title: h,
-          source: sources[Math.floor(Math.random() * sources.length)],
-          time: times[Math.min(i + headlines.length, times.length - 1)],
-          score: -(0.5 + Math.random() * 2),
-          sentiment: "bearish",
-        });
-      });
-    }
-  });
-
-  if (headlines.length === 0) {
-    const placeholders = [
-      { title: "Markets rally on strong earnings season outlook", score: 2.1, sentiment: "bullish" },
-      { title: "Tech sector leads gains amid AI optimism", score: 1.8, sentiment: "bullish" },
-      { title: "Fed signals patience on rate cuts, markets hold steady", score: 0.2, sentiment: "neutral" },
-      { title: "NVDA announces new chip architecture, stock surges", score: 3.2, sentiment: "bullish" },
-      { title: "Inflation concerns weigh on consumer discretionary", score: -1.4, sentiment: "bearish" },
-      { title: "Apple Vision Pro sales miss expectations", score: -0.8, sentiment: "bearish" },
-      { title: "Tesla deliveries beat estimates for Q1", score: 1.5, sentiment: "bullish" },
-      { title: "Oil prices steady as OPEC maintains production levels", score: 0.1, sentiment: "neutral" },
-      { title: "Regional banks face renewed pressure on CRE exposure", score: -1.9, sentiment: "bearish" },
-      { title: "Meta AI investments show early revenue promise", score: 1.2, sentiment: "bullish" },
-    ];
-    placeholders.forEach((p, i) => {
-      headlines.push({
-        ...p,
-        source: sources[i % sources.length],
-        time: times[i % times.length],
-      });
-    });
-  }
-
-  return headlines.slice(0, 12);
-}
 
 // ---------------------------------------------------------------------------
 // Sparkline with gradient fill
@@ -285,7 +210,7 @@ function MiniSparkline({ data, positive, ticker }: { data: number[]; positive: b
 // Custom Recharts Tooltip
 // ---------------------------------------------------------------------------
 
-function SentimentTooltip({ active, payload, label }: any) {
+function SentimentTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
   if (!active || !payload?.length) return null;
   const val: number = payload[0].value;
   return (
@@ -341,7 +266,8 @@ function ConfidenceBar({ value }: { value: number }) {
 
 function ScoreBarDot({ score }: { score: number }) {
   const [mounted, setMounted] = useState(false);
-  const targetLeft = `${((score + 5) / 10) * 100}%`;
+  const clamped = Math.max(-5, Math.min(5, score));
+  const targetLeft = `${((clamped + 5) / 10) * 100}%`;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setMounted(true));
@@ -499,8 +425,8 @@ export default function SentimentPage() {
           sources_count: 17,
           indices: {},
         });
-        setTimeline(generateTimeline(0));
-        setTimelineSimulated(true);
+        setTimeline([]);
+        setTimelineSimulated(false);
       }
 
       if (batchRes.status === "fulfilled") {
@@ -655,12 +581,12 @@ export default function SentimentPage() {
                     {mood.score >= 0 ? (
                       <div
                         className="absolute top-0 h-full rounded-r-full bg-gradient-to-r from-emerald-500/60 to-emerald-400"
-                        style={{ left: "50%", width: `${(mood.score / 5) * 50}%` }}
+                        style={{ left: "50%", width: `${(Math.min(mood.score, 5) / 5) * 50}%` }}
                       />
                     ) : (
                       <div
                         className="absolute top-0 h-full rounded-l-full bg-gradient-to-l from-red-500/60 to-red-400"
-                        style={{ right: "50%", width: `${(Math.abs(mood.score) / 5) * 50}%` }}
+                        style={{ right: "50%", width: `${(Math.min(Math.abs(mood.score), 5) / 5) * 50}%` }}
                       />
                     )}
                     <ScoreBarDot score={mood.score} />
@@ -899,11 +825,11 @@ export default function SentimentPage() {
               ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="divide-y divide-border/40">
-                    {headlines.map((h, i) => {
+                    {headlines.map((h) => {
                       const recent = isRecent(h.time);
                       return (
                         <div
-                          key={i}
+                          key={`${h.source}-${h.title}`}
                           className="flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-muted/20 cursor-default"
                         >
                           {/* Colored dot — pulses if recent */}

@@ -259,9 +259,6 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
           </div>
         )}
 
-        <p className="text-xs text-slate-500 mt-3">
-          Stop Loss: {stopLoss}% &middot; Take Profit: {takeProfit}%
-        </p>
       </div>
 
       {/* ---- Risk controls card ---- */}

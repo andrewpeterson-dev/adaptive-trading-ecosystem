@@ -50,6 +50,7 @@ export default function RiskPage() {
 
   const fetchAll = useCallback(async () => {
     try {
+      setError(false);
       const query = `?mode=${mode}`;
       const [riskRes, eventsRes] = await Promise.allSettled([
         apiFetch<RiskSummaryExtended>(`/api/trading/risk-summary${query}`),

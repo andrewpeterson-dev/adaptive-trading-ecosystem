@@ -58,7 +58,8 @@ function parseValidationChecks(trade: BotTrade | null, detail: BotDetail): Valid
       lower.includes("below") ||
       lower.includes("failed") ||
       lower.includes("bearish") ||
-      lower.includes("risk") ||
+      lower.includes("high risk") ||
+      lower.includes("at risk") ||
       lower.includes("declining") ||
       lower.includes("weak") ||
       lower.includes("negative") ||
@@ -280,9 +281,9 @@ export function AIReasoningPanel({ detail, trade }: AIDecisionPanelProps) {
               Validation
             </div>
             <div className="mt-1.5 space-y-1">
-              {validationChecks.map((check, i) => (
+              {validationChecks.map((check) => (
                 <div
-                  key={i}
+                  key={check.label}
                   className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs"
                 >
                   {getStatusIcon(check.status)}
@@ -356,7 +357,7 @@ export function AIReasoningPanel({ detail, trade }: AIDecisionPanelProps) {
             </div>
             <div className="mt-1.5 space-y-0">
               {timeline.map((event, i) => (
-                <div key={i} className="flex items-start gap-2.5 py-1.5">
+                <div key={`${event.type}-${event.timestamp}`} className="flex items-start gap-2.5 py-1.5">
                   <div className="flex flex-col items-center pt-1">
                     <span className={`h-2 w-2 rounded-full ${getTimelineDotColor(event.type)}`} />
                     {i < timeline.length - 1 && (

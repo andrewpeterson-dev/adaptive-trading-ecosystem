@@ -214,8 +214,8 @@ export function AIReasoningPanel({ decision }: AIReasoningPanelProps) {
               style={{ background: "hsl(var(--border) / 0.6)" }}
             />
             <div className="space-y-3">
-              {timeline.map((entry, idx) => (
-                <div key={idx} className="relative flex items-start gap-3">
+              {timeline.map((entry) => (
+                <div key={`${entry.time}-${entry.event}`} className="relative flex items-start gap-3">
                   {/* Dot */}
                   <div
                     className="absolute -left-5 top-[5px] h-2.5 w-2.5 rounded-full border-2 border-violet-400 bg-background"

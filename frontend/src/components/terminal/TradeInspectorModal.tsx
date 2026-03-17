@@ -140,8 +140,8 @@ export function TradeInspectorModal({ trade, config, onClose }: TradeInspectorMo
             <div className="border-t border-border/30 pt-4">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Indicator Signals</span>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {trade.indicatorSignals.map((signal, i) => (
-                  <span key={i} className="rounded-md bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {trade.indicatorSignals.map((signal) => (
+                  <span key={signal} className="rounded-md bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     {signal}
                   </span>
                 ))}

@@ -327,8 +327,8 @@ export default function StrategiesPage() {
 
                     {expandedIssues === strategy.id && strategy.diagnostics?.diagnostics && (
                       <div className="mt-3 space-y-2 rounded-xl border border-amber-500/15 bg-amber-500/5 p-3">
-                        {strategy.diagnostics.diagnostics.map((issue: { message: string; severity: string }, idx: number) => (
-                          <div key={idx} className="flex items-start gap-2 text-sm">
+                        {strategy.diagnostics.diagnostics.map((issue: { message: string; severity: string }) => (
+                          <div key={issue.message} className="flex items-start gap-2 text-sm">
                             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
                             <span className="text-muted-foreground">{issue.message}</span>
                           </div>

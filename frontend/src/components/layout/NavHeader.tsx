@@ -6,14 +6,11 @@ import { usePathname } from "next/navigation";
 import {
   LogOut,
   Menu,
-  Moon,
   Settings,
   ShieldAlert,
-  Sun,
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useThemeMode } from "@/hooks/useThemeMode";
 import { useTradingMode } from "@/hooks/useTradingMode";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
@@ -46,11 +43,8 @@ export function NavHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmLiveOpen, setConfirmLiveOpen] = useState(false);
   const { mode, setMode, switching } = useTradingMode();
-  const { theme, toggleTheme } = useThemeMode();
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  const nextTheme = theme === "dark" ? "light" : "dark";
-  const ThemeIcon = theme === "dark" ? Sun : Moon;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -184,21 +178,6 @@ export function NavHeader() {
 
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={toggleTheme}
-                      aria-label={`Switch to ${nextTheme} theme`}
-                      className="app-button-secondary hidden px-4 md:inline-flex"
-                    >
-                      <ThemeIcon className="h-4 w-4" />
-                      <span>Theme</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Switch to {nextTheme} theme</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
                     <Link
                       href="/settings"
                       aria-label="Settings"
@@ -305,15 +284,7 @@ export function NavHeader() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={toggleTheme}
-                    className="app-button-secondary justify-center px-4 py-2 text-xs"
-                  >
-                    <ThemeIcon className="h-4 w-4" />
-                    Theme
-                  </button>
+                <div className="grid gap-3 sm:grid-cols-2">
                   <Link
                     href="/settings"
                     className="app-button-secondary justify-center px-4 py-2 text-xs"

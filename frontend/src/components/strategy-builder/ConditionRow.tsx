@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { GripVertical, Trash2 } from "lucide-react";
+import React, { useMemo } from "react";
+import { Trash2 } from "lucide-react";
 import { IndicatorInfoButton } from "@/components/indicators/IndicatorInfoButton";
 import { getAllIndicators } from "@/lib/indicatorRegistry";
 import type { IndicatorId } from "@/types/indicators";
@@ -60,7 +60,7 @@ export function ConditionRow({
   onChange,
   onRemove,
 }: ConditionRowProps) {
-  const allIndicators = getAllIndicators();
+  const allIndicators = useMemo(() => getAllIndicators(), []);
   const selected = allIndicators.find((metadata) => metadata.id === condition.indicator);
   const catColor = selected ? CATEGORY_COLORS[selected.category] ?? "" : "";
   const comparisonTarget = condition.compare_to ?? "__value__";
@@ -96,8 +96,8 @@ export function ConditionRow({
   return (
     <div className="app-inset group flex flex-col gap-4 rounded-[24px] p-4">
       <div className="flex items-start gap-3">
-        <div className="mt-8 cursor-grab text-muted-foreground/40">
-          <GripVertical className="h-4 w-4" />
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted/30 mt-8">
+          <span className="text-[10px] font-bold text-muted-foreground">{index + 1}</span>
         </div>
 
         <div className="flex-1 space-y-4">
