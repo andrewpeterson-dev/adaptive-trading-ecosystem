@@ -557,29 +557,51 @@ async def list_bots(request: Request):
             .where(CerberusBot.user_id == user_id)
             .order_by(CerberusBot.created_at.desc())
         )
-        bots = result.scalars().all()
+        bots = list(result.scalars().all())
+
+        # Batch-load versions to avoid N+1 (1 query instead of N)
+        version_ids = [b.current_version_id for b in bots if b.current_version_id]
+        versions_map: dict[str, CerberusBotVersion] = {}
+        if version_ids:
+            ver_result = await session.execute(
+                select(CerberusBotVersion).where(CerberusBotVersion.id.in_(version_ids))
+            )
+            versions_map = {v.id: v for v in ver_result.scalars().all()}
+
+        # Batch-load latest trade decisions (1 query instead of N)
+        bot_ids = [b.id for b in bots]
+        decisions_map: dict[str, TradeDecision] = {}
+        if bot_ids:
+            # Fetch most recent TradeDecision per bot using a correlated subquery
+            from sqlalchemy import and_
+            latest_sub = (
+                select(func.max(TradeDecision.created_at))
+                .where(TradeDecision.bot_id == CerberusBot.id)
+                .correlate(CerberusBot)
+                .scalar_subquery()
+            )
+            td_result = await session.execute(
+                select(TradeDecision)
+                .where(
+                    TradeDecision.bot_id.in_(bot_ids),
+                    TradeDecision.created_at.in_(
+                        select(func.max(TradeDecision.created_at))
+                        .where(TradeDecision.bot_id.in_(bot_ids))
+                        .group_by(TradeDecision.bot_id)
+                    ),
+                )
+            )
+            for td in td_result.scalars().all():
+                decisions_map[td.bot_id] = td
 
         bot_list: list[dict[str, Any]] = []
         for bot in bots:
-            version = None
-            config: dict[str, Any] | None = None
-            if bot.current_version_id:
-                version_result = await session.execute(
-                    select(CerberusBotVersion).where(CerberusBotVersion.id == bot.current_version_id)
-                )
-                version = version_result.scalar_one_or_none()
-                config = normalize_bot_config(version.config_json if version else {})
-            metrics = await _fetch_bot_metrics(session, bot.id, config or {}, user_id=user_id)
+            version = versions_map.get(bot.current_version_id) if bot.current_version_id else None
+            config = normalize_bot_config(version.config_json if version else {})
+            metrics = await _fetch_bot_metrics(session, bot.id, config, user_id=user_id)
 
-            # Fetch latest TradeDecision for AI confidence + risk badges
             latest_decision_dict = None
-            td_result = await session.execute(
-                select(TradeDecision)
-                .where(TradeDecision.bot_id == bot.id)
-                .order_by(desc(TradeDecision.created_at))
-                .limit(1)
-            )
-            latest_td = td_result.scalar_one_or_none()
+            latest_td = decisions_map.get(bot.id)
             if latest_td:
                 latest_decision_dict = {
                     "ai_confidence": latest_td.ai_confidence,
@@ -595,12 +617,12 @@ async def list_bots(request: Request):
                     "status": bot.status.value if bot.status else "draft",
                     "createdAt": bot.created_at.isoformat() if bot.created_at else None,
                     "config": config,
-                    "strategyId": (config or {}).get("strategy_id"),
-                    "strategyType": (config or {}).get("strategy_type", "manual"),
-                    "overview": (config or {}).get("overview") or (config or {}).get("description") or "",
-                    "primarySymbol": ((config or {}).get("symbols") or ["SPY"])[0],
+                    "strategyId": config.get("strategy_id"),
+                    "strategyType": config.get("strategy_type", "manual"),
+                    "overview": config.get("overview") or config.get("description") or "",
+                    "primarySymbol": (config.get("symbols") or ["SPY"])[0],
                     "performance": metrics,
-                    "learningStatus": _learning_status(bot, config or {}, metrics),
+                    "learningStatus": _learning_status(bot, config, metrics),
                     "currentVersion": _version_to_dict(version) if version else None,
                     "latestDecision": latest_decision_dict,
                     "allocatedCapital": bot.allocated_capital,
@@ -712,6 +734,7 @@ async def get_bot_detail(bot_id: str, request: Request):
             select(CerberusTrade)
             .where(CerberusTrade.bot_id == bot.id, CerberusTrade.user_id == user_id)
             .order_by(CerberusTrade.created_at.desc())
+            .limit(500)
         )
         trades = list(trade_result.scalars().all())
 
