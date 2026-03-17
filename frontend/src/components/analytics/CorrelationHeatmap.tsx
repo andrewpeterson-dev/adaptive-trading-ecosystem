@@ -51,8 +51,8 @@ export function CorrelationHeatmap() {
         { cacheTtlMs: 0 }
       );
       setData(result);
-    } catch (e: any) {
-      setError(e?.message || "Failed to fetch correlation data.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to fetch correlation data.");
     } finally {
       setLoading(false);
     }

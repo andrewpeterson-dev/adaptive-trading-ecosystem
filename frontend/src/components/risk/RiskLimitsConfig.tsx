@@ -161,8 +161,8 @@ export function RiskLimitsConfig() {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e: any) {
-      setError(e?.message || "Failed to save limits.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to save limits.");
     } finally {
       setSaving(false);
     }
@@ -181,10 +181,10 @@ export function RiskLimitsConfig() {
         newValue ? "Kill switch activated — all trading halted" : "Kill switch deactivated — trading resumed",
         newValue ? "warning" : "success"
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Revert on failure
       setData((prev) => ({ ...prev, kill_switch_active: !newValue }));
-      toast(e?.message || "Failed to update kill switch", "error");
+      toast(e instanceof Error ? e.message : "Failed to update kill switch", "error");
     }
   };
 

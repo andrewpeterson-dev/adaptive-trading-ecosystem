@@ -129,8 +129,8 @@ export function PortfolioOptimizer() {
       } finally {
         setFrontierLoading(false);
       }
-    } catch (e: any) {
-      setError(e?.message || "Optimization failed. Check your tickers and try again.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Optimization failed. Check your tickers and try again.");
     } finally {
       setLoading(false);
     }
@@ -145,8 +145,8 @@ export function PortfolioOptimizer() {
         { cacheTtlMs: 0 }
       );
       setRebalancePlan(plan);
-    } catch (e: any) {
-      setError(e?.message || "Failed to generate rebalance plan. Make sure you have Webull positions.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to generate rebalance plan. Make sure you have Webull positions.");
     } finally {
       setRebalanceLoading(false);
     }
