@@ -203,33 +203,25 @@ def run_ablation_study(
     rng = np.random.default_rng(seed=42)
     random_sharpes: List[float] = []
 
-    # Pre-generate all random entry matrices for vectorized processing
-    # Process in batches to manage memory
-    batch_size = min(200, n_random_trials)
+    for i in range(n_random_trials):
+        rand_entries = pd.Series(
+            _random_signals(n_bars, trade_frequency, rng),
+            index=df.index,
+        )
+        rand_exits = pd.Series(False, index=df.index)
 
-    for batch_start in range(0, n_random_trials, batch_size):
-        batch_end = min(batch_start + batch_size, n_random_trials)
-        actual_batch = batch_end - batch_start
-
-        for _ in range(actual_batch):
-            rand_entries = pd.Series(
-                _random_signals(n_bars, trade_frequency, rng),
-                index=df.index,
+        try:
+            pf_rand = vbt.Portfolio.from_signals(
+                close=close,
+                entries=rand_entries,
+                exits=rand_exits,
+                init_cash=initial_capital,
+                fees=fees,
+                freq=freq,
             )
-            rand_exits = pd.Series(False, index=df.index)
-
-            try:
-                pf_rand = vbt.Portfolio.from_signals(
-                    close=close,
-                    entries=rand_entries,
-                    exits=rand_exits,
-                    init_cash=initial_capital,
-                    fees=fees,
-                    freq=freq,
-                )
-                random_sharpes.append(_sharpe_from_portfolio(pf_rand))
-            except Exception:
-                random_sharpes.append(0.0)
+            random_sharpes.append(_sharpe_from_portfolio(pf_rand))
+        except Exception:
+            random_sharpes.append(0.0)
 
     random_arr = np.array(random_sharpes, dtype=float)
     # Replace NaN/Inf with 0

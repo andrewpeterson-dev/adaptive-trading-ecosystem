@@ -122,13 +122,13 @@ def _run_segment_backtest(
     slippage_pct: float,
     initial_capital: float,
     timeframe: str,
+    test_start_bar: int = 0,
 ) -> Dict[str, float]:
     """Run a VectorBT backtest on a single segment DataFrame.
 
     We build signals on the *full* df (which includes training warmup +
-    test window) but only measure the portfolio over the test period.
-    The caller is expected to pass a df that covers training + test,
-    with the test_start index already determined externally.
+    test window) so indicators warm up properly, but only measure
+    metrics over the test period starting at ``test_start_bar``.
     """
     try:
         import vectorbt as vbt
@@ -149,15 +149,35 @@ def _run_segment_backtest(
         freq=freq_from_timeframe(timeframe),
     )
 
-    sharpe = safe_float(pf.sharpe_ratio())
-    total_return = safe_float(pf.total_return())
-    max_drawdown = abs(safe_float(pf.max_drawdown()))
+    # Slice portfolio value to test period only
+    equity = pf.value().iloc[test_start_bar:]
+    returns = equity.pct_change().dropna()
+    sharpe = (
+        float(returns.mean() / returns.std(ddof=1) * np.sqrt(252))
+        if len(returns) > 1 and returns.std() > 0
+        else 0.0
+    )
+    total_return = (
+        float(equity.iloc[-1] / equity.iloc[0] - 1)
+        if len(equity) > 1
+        else 0.0
+    )
+    max_drawdown = abs(float((equity / equity.cummax() - 1).min()))
 
-    # Win rate from trades
+    # Win rate from trades — only count trades entered during test period
+    test_start_date = df.index[test_start_bar] if test_start_bar < len(df) else df.index[-1]
     num_trades = 0
     win_rate = 0.0
     try:
         trades = pf.trades.records_readable
+        # Filter to trades with entry timestamp >= test start date
+        entry_col = None
+        for col_name in ("Entry Timestamp", "Entry Index", "entry_idx"):
+            if col_name in trades.columns:
+                entry_col = col_name
+                break
+        if entry_col is not None:
+            trades = trades[trades[entry_col] >= test_start_date]
         num_trades = len(trades)
         if num_trades > 0:
             pnl_col = trades.get("PnL", trades.get("Return", pd.Series(dtype=float)))
@@ -263,6 +283,8 @@ def run_walk_forward(
         vol = _segment_volatility(test_slice["close"])
         segment_volatilities.append(vol)
 
+        train_bars = test_start_idx  # number of training bars in this segment
+
         try:
             metrics = _run_segment_backtest(
                 df=full_slice,
@@ -273,6 +295,7 @@ def run_walk_forward(
                 slippage_pct=slippage_pct,
                 initial_capital=initial_capital,
                 timeframe=timeframe,
+                test_start_bar=train_bars,
             )
 
             seg = SegmentMetrics(

@@ -1248,9 +1248,6 @@ async def run_walk_forward_endpoint(req: WalkForwardRequest, request: Request):
     if not user_id:
         raise HTTPException(401, "Not authenticated")
 
-    if _walk_forward_semaphore.locked():
-        raise HTTPException(429, "Too many concurrent walk-forward runs, try again shortly")
-
     # Resolve conditions
     conditions_dicts: Optional[list[dict]] = None
     condition_groups_raw: Optional[list[dict]] = None
@@ -1318,7 +1315,7 @@ class AblationStudyRequest(BaseModel):
     symbol: str = "SPY"
     timeframe: str = "1D"
     lookback_days: int = 252
-    n_random_trials: int = 1000
+    n_random_trials: int = Field(default=1000, ge=1, le=5000)
     commission_pct: float = 0.001
     slippage_pct: float = 0.0005
     initial_capital: float = 100_000.0
@@ -1334,9 +1331,6 @@ async def run_ablation_study_endpoint(req: AblationStudyRequest, request: Reques
     user_id = request.state.user_id
     if not user_id:
         raise HTTPException(401, "Not authenticated")
-
-    if _ablation_semaphore.locked():
-        raise HTTPException(429, "Too many concurrent ablation studies, try again shortly")
 
     # Resolve conditions
     conditions_dicts: Optional[list[dict]] = None

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import List, Optional
 
 import structlog
 
@@ -26,7 +27,7 @@ async def _execute_backtest(backtest_id: str, user_id: int) -> dict:
     return await execute_backtest_job(backtest_id, user_id)
 
 
-async def _execute_research_job(query: str, user_id: int, document_ids: list[str] | None = None) -> dict:
+async def _execute_research_job(query: str, user_id: int, document_ids: Optional[List[str]] = None) -> dict:
     """Execute a real research session and return the assembled output."""
     from services.workers.job_runners import execute_research_job
 
@@ -102,9 +103,9 @@ def run_adaptation_review_task(self, bot_id: str):
 @app.task(bind=True, name="services.workers.tasks.run_walk_forward", max_retries=2)
 def run_walk_forward(
     self,
-    conditions: list[dict] | None = None,
-    condition_groups: list[dict] | None = None,
-    exit_conditions: list[dict] | None = None,
+    conditions: Optional[List[dict]] = None,
+    condition_groups: Optional[List[dict]] = None,
+    exit_conditions: Optional[List[dict]] = None,
     symbol: str = "SPY",
     timeframe: str = "1D",
     lookback_days: int = 756,
@@ -139,9 +140,9 @@ def run_walk_forward(
 @app.task(bind=True, name="services.workers.tasks.run_ablation_study", max_retries=2)
 def run_ablation_study(
     self,
-    conditions: list[dict] | None = None,
-    condition_groups: list[dict] | None = None,
-    exit_conditions: list[dict] | None = None,
+    conditions: Optional[List[dict]] = None,
+    condition_groups: Optional[List[dict]] = None,
+    exit_conditions: Optional[List[dict]] = None,
     symbol: str = "SPY",
     timeframe: str = "1D",
     lookback_days: int = 252,
@@ -174,7 +175,7 @@ def run_ablation_study(
 
 
 @app.task(name="services.workers.tasks.run_research_job")
-def run_research_job(query: str, user_id: int, document_ids: list[str] | None = None):
+def run_research_job(query: str, user_id: int, document_ids: Optional[List[str]] = None):
     """Run a long research job (Perplexity deep research + document analysis)."""
     logger.info("task_research_job", query=query, user_id=user_id)
     try:

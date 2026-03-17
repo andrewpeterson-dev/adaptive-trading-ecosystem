@@ -31,7 +31,7 @@ RISK_FREE_RATE = 0.05
 @dataclass
 class OptimizationConstraints:
     """User-configurable constraints for portfolio optimization."""
-    max_weight: float = 0.25
+    max_weight: float = 0.40
     min_weight: float = 0.0
     sector_caps: Dict[str, float] = field(default_factory=dict)
 
