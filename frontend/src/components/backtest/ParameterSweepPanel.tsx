@@ -6,7 +6,7 @@ import {
   Trophy,
   ChevronDown,
   Zap,
-  ArrowRight,
+  Copy,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
@@ -900,17 +900,23 @@ export function ParameterSweepPanel({
                   </div>
                 )}
 
-              {/* Apply to Strategy button with gradient */}
+              {/* Copy best parameters to clipboard */}
               <button
                 className="w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold text-white"
                 style={{
                   background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--info)))",
                   boxShadow: "0 4px 14px -4px hsl(var(--primary)/0.45)",
                 }}
-                onClick={() => {/* TODO: wire to strategy application */}}
+                onClick={() => {
+                  const params = sweepResult?.best_params;
+                  if (params) {
+                    const text = JSON.stringify(params, null, 2);
+                    navigator.clipboard.writeText(text).catch(() => {});
+                  }
+                }}
               >
-                <ArrowRight className="h-3.5 w-3.5" />
-                Apply to Strategy
+                <Copy className="h-3.5 w-3.5" />
+                Copy Parameters
               </button>
             </div>
           )}

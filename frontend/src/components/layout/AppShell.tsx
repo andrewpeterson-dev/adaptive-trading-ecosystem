@@ -40,15 +40,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener("storage", handleStorage);
 
-    // Also listen for direct changes via MutationObserver on localStorage
-    const interval = setInterval(() => {
-      const current = localStorage.getItem("sidebar_collapsed") === "true";
-      setSidebarCollapsed(current);
-    }, 200);
+    const handleSidebarToggle = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setSidebarCollapsed(detail?.collapsed ?? false);
+    };
+    window.addEventListener("sidebar-toggle", handleSidebarToggle);
 
     return () => {
       window.removeEventListener("storage", handleStorage);
-      clearInterval(interval);
+      window.removeEventListener("sidebar-toggle", handleSidebarToggle);
     };
   }, []);
 

@@ -93,6 +93,7 @@ export default function DashboardPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [risk, setRisk] = useState<RiskSummary | null>(null);
+  const [equityCurve, setEquityCurve] = useState<{ date: string; equity: number; drawdown: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -114,11 +115,12 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const q = `?mode=${mode}`;
-      const [accRes, posRes, ordRes, riskRes] = await Promise.allSettled([
+      const [accRes, posRes, ordRes, riskRes, eqRes] = await Promise.allSettled([
         apiFetch<Account>(`/api/trading/account${q}`),
         apiFetch<{ positions: Position[] }>(`/api/trading/positions${q}`),
         apiFetch<{ orders: Order[] }>(`/api/trading/orders${q}`),
         apiFetch<RiskSummary>(`/api/trading/risk-summary${q}`),
+        apiFetch<any>(`/api/dashboard/equity-curve${q}`),
       ]);
 
       if (accRes.status === "fulfilled") {
@@ -139,6 +141,11 @@ export default function DashboardPage() {
 
       if (riskRes.status === "fulfilled") {
         setRisk(riskRes.value);
+      }
+
+      if (eqRes.status === "fulfilled") {
+        const eqData = eqRes.value;
+        setEquityCurve(eqData.equity_curve || eqData || []);
       }
 
       setLastRefresh(new Date());
@@ -171,14 +178,16 @@ export default function DashboardPage() {
   }, [positions]);
 
   const unrealizedPnl = totalPnl;
-  const realizedPnl = 0; // From trades, would need historical data
+  const realizedPnl = null; // Not available — needs historical trade P&L data
+  const hasRealizedPnl = false;
 
   const winRate = useMemo(() => {
     const filledOrders = orders.filter((o) => o.status === "filled");
-    if (filledOrders.length === 0) return 0;
+    if (filledOrders.length === 0) return null; // No data yet
     // Simplified — would need trade P&L data for real win rate
-    return 0;
+    return null;
   }, [orders]);
+  const hasWinRate = winRate !== null;
 
   // -- Early return states --
   if (loading) {
@@ -327,13 +336,15 @@ export default function DashboardPage() {
       <MetricsRow
         totalPnl={totalPnl}
         unrealizedPnl={unrealizedPnl}
-        realizedPnl={realizedPnl}
+        realizedPnl={realizedPnl ?? 0}
         expectancy={0}
-        winRate={winRate}
+        winRate={winRate ?? 0}
         maxDrawdown={risk?.current_drawdown_pct ?? 0}
         exposure={risk?.current_exposure_pct ?? 0}
         tradesToday={risk?.trades_this_hour ?? 0}
         tradeHistory={[]}
+        realizedPnlUnavailable={!hasRealizedPnl}
+        winRateUnavailable={!hasWinRate}
       />
 
       {/* Market Intelligence Bar (outside grid — static, never draggable) */}
@@ -382,7 +393,7 @@ export default function DashboardPage() {
           <div key="risk-metrics">
             <DashboardPanel title="Risk Metrics" icon={ShieldCheck}>
               <RiskMetricsPanel
-                winRate={winRate}
+                winRate={winRate ?? 0}
                 maxDrawdown={risk?.current_drawdown_pct ?? 0}
                 totalTrades={orders.filter((o) => o.status === "filled").length}
               />
@@ -398,7 +409,7 @@ export default function DashboardPage() {
           {/* Row 3 */}
           <div key="equity-curve">
             <DashboardPanel title="Equity Curve" icon={TrendingUp}>
-              <EquityCurvePanel data={[]} />
+              <EquityCurvePanel data={equityCurve} />
             </DashboardPanel>
           </div>
 

@@ -235,7 +235,7 @@ function generateHeadlines(tickers: TickerSentimentResult[]): HeadlineItem[] {
 // Sparkline with gradient fill
 // ---------------------------------------------------------------------------
 
-function MiniSparkline({ data, positive }: { data: number[]; positive: boolean }) {
+function MiniSparkline({ data, positive, ticker }: { data: number[]; positive: boolean; ticker: string }) {
   if (!data || data.length < 2) return null;
 
   const height = 28;
@@ -258,7 +258,7 @@ function MiniSparkline({ data, positive }: { data: number[]; positive: boolean }
     ` L ${width} ${height} L 0 ${height} Z`;
 
   const color = positive ? "#34d399" : "#f87171";
-  const gradId = `spark-${positive ? "g" : "r"}-${Math.random().toString(36).slice(2, 6)}`;
+  const gradId = `spark-${positive ? "g" : "r"}-${ticker}`;
 
   return (
     <svg width={width} height={height} className="shrink-0 overflow-visible">
@@ -456,6 +456,7 @@ export default function SentimentPage() {
   const [tickers, setTickers] = useState<TickerSentimentResult[]>([]);
   const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
   const [headlines, setHeadlines] = useState<HeadlineItem[]>([]);
+  const [timelineSimulated, setTimelineSimulated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -484,7 +485,9 @@ export default function SentimentPage() {
           sources_count: moodData.sources_count ?? 17,
           indices: moodData.indices ?? {},
         });
-        setTimeline(generateTimeline(moodData.score ?? 0));
+        // Use real timeline data from API; only fall back to simulated if unavailable
+        setTimeline([]);
+        setTimelineSimulated(false);
       } else {
         setMood({
           market_mood: "neutral",
@@ -497,6 +500,7 @@ export default function SentimentPage() {
           indices: {},
         });
         setTimeline(generateTimeline(0));
+        setTimelineSimulated(true);
       }
 
       if (batchRes.status === "fulfilled") {
@@ -509,15 +513,39 @@ export default function SentimentPage() {
             score: d?.score ?? 0,
             confidence: d?.confidence ?? 0.5,
             num_articles: d?.num_articles ?? 0,
-            sparkline:
-              d?.sparkline ||
-              Array.from({ length: 7 }, () => (d?.score ?? 0) + (Math.random() - 0.5) * 2),
+            sparkline: d?.sparkline || undefined,
             top_bullish: d?.top_bullish || [],
             top_bearish: d?.top_bearish || [],
           };
         });
         setTickers(results);
-        setHeadlines(generateHeadlines(results));
+        // Use real headline data from API responses only — no fabricated headlines
+        const realHeadlines: HeadlineItem[] = [];
+        results.forEach((t) => {
+          if (t.top_bullish) {
+            t.top_bullish.forEach((h) => {
+              realHeadlines.push({
+                title: h,
+                source: t.ticker,
+                time: t.timestamp || "",
+                score: t.score,
+                sentiment: "bullish",
+              });
+            });
+          }
+          if (t.top_bearish) {
+            t.top_bearish.forEach((h) => {
+              realHeadlines.push({
+                title: h,
+                source: t.ticker,
+                time: t.timestamp || "",
+                score: -Math.abs(t.score),
+                sentiment: "bearish",
+              });
+            });
+          }
+        });
+        setHeadlines(realHeadlines.slice(0, 12));
       } else {
         const placeholders = TRACKED_TICKERS.map((t) => ({
           ticker: t,
@@ -525,10 +553,9 @@ export default function SentimentPage() {
           score: 0,
           confidence: 0.5,
           num_articles: 0,
-          sparkline: Array.from({ length: 7 }, () => (Math.random() - 0.5) * 2),
         }));
         setTickers(placeholders);
-        setHeadlines(generateHeadlines(placeholders));
+        setHeadlines([]);
       }
 
       setLastRefresh(new Date());
@@ -742,7 +769,7 @@ export default function SentimentPage() {
                         <ConfidenceBar value={t.confidence} />
                       </div>
                       {t.sparkline && (
-                        <MiniSparkline data={t.sparkline} positive={t.score >= 0} />
+                        <MiniSparkline data={t.sparkline} positive={t.score >= 0} ticker={t.ticker} />
                       )}
                     </div>
                   </div>
@@ -759,9 +786,19 @@ export default function SentimentPage() {
                 <div className="flex items-center gap-2">
                   <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
                   <h3 className="app-section-title">Sentiment Timeline</h3>
+                  {timelineSimulated && timeline.length > 0 && (
+                    <Badge variant="warning" className="text-[9px]">[SIMULATED]</Badge>
+                  )}
                 </div>
                 <Badge variant="neutral">30 DAYS</Badge>
               </div>
+              {timeline.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <BarChart3 className="h-6 w-6 mb-2 opacity-40" />
+                  <p className="text-xs font-medium">No timeline data available</p>
+                  <p className="text-[11px] text-muted-foreground/60 mt-1">Timeline will populate with historical sentiment data</p>
+                </div>
+              ) : (
               <div className="p-3">
                 <ResponsiveContainer width="100%" height={260}>
                   <AreaChart
@@ -841,6 +878,7 @@ export default function SentimentPage() {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
+              )}
             </div>
 
             {/* Headlines */}
@@ -854,8 +892,9 @@ export default function SentimentPage() {
               </div>
 
               {headlines.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center py-10 text-xs text-muted-foreground">
-                  No headlines available
+                <div className="flex flex-1 flex-col items-center justify-center py-10 gap-2 text-muted-foreground">
+                  <Newspaper className="h-6 w-6 opacity-40" />
+                  <p className="text-xs font-medium">No recent headlines available</p>
                 </div>
               ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto">

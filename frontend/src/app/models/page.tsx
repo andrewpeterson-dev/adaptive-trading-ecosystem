@@ -79,7 +79,7 @@ export default function ModelsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     setLoading(true);

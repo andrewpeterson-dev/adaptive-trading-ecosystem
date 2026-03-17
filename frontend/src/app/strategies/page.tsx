@@ -258,7 +258,7 @@ export default function StrategiesPage() {
           }
           actions={
             <Button asChild variant="primary" size="sm">
-              <Link href="/">New Strategy</Link>
+              <Link href="/strategy-builder">New Strategy</Link>
             </Button>
           }
         />
@@ -276,7 +276,7 @@ export default function StrategiesPage() {
             description="Build your first systematic setup to start backtesting and deploying bots."
             action={
               <Button asChild variant="primary" size="sm">
-                <Link href="/">Build your first strategy &rarr;</Link>
+                <Link href="/strategy-builder">Build your first strategy &rarr;</Link>
               </Button>
             }
           />

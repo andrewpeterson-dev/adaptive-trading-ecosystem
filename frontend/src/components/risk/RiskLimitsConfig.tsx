@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/toast";
 import {
   Surface,
   SurfaceBody,
@@ -115,6 +116,7 @@ export function RiskLimitsConfig() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
     try {
@@ -150,8 +152,24 @@ export function RiskLimitsConfig() {
     }
   };
 
-  const toggleKillSwitch = () => {
-    setData((prev) => ({ ...prev, kill_switch_active: !prev.kill_switch_active }));
+  const toggleKillSwitch = async () => {
+    const newValue = !data.kill_switch_active;
+    setData((prev) => ({ ...prev, kill_switch_active: newValue }));
+    try {
+      await apiFetch("/api/risk/advanced-limits", {
+        method: "PUT",
+        body: JSON.stringify({ kill_switch_active: newValue }),
+        cacheTtlMs: 0,
+      });
+      toast(
+        newValue ? "Kill switch activated — all trading halted" : "Kill switch deactivated — trading resumed",
+        newValue ? "warning" : "success"
+      );
+    } catch (e: any) {
+      // Revert on failure
+      setData((prev) => ({ ...prev, kill_switch_active: !newValue }));
+      toast(e?.message || "Failed to update kill switch", "error");
+    }
   };
 
   if (loading) {

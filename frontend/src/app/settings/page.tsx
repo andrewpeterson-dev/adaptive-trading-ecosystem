@@ -168,7 +168,14 @@ function ProfileSection() {
                 <p className="text-sm font-semibold text-red-400">Delete Account</p>
                 <p className="text-xs text-muted-foreground">Permanently delete your account and all data</p>
               </div>
-              <button className="rounded-full border border-red-500/25 bg-red-500/12 px-4 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors">
+              <button
+                onClick={() => {
+                  if (confirm("Are you sure you want to delete your account? This action is permanent and cannot be undone.")) {
+                    toast("Contact support to delete your account: support@adaptivetrading.com", "info");
+                  }
+                }}
+                className="rounded-full border border-red-500/25 bg-red-500/12 px-4 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors"
+              >
                 Delete Account
               </button>
             </div>
@@ -178,7 +185,14 @@ function ProfileSection() {
                 <p className="text-sm font-semibold text-red-400">Reset Workspace</p>
                 <p className="text-xs text-muted-foreground">Clear all strategies, bots, and settings</p>
               </div>
-              <button className="rounded-full border border-red-500/25 bg-red-500/12 px-4 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors">
+              <button
+                onClick={() => {
+                  if (confirm("Are you sure you want to reset your workspace? All strategies, bots, and settings will be cleared.")) {
+                    toast("Contact support to reset your workspace: support@adaptivetrading.com", "info");
+                  }
+                }}
+                className="rounded-full border border-red-500/25 bg-red-500/12 px-4 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors"
+              >
                 Reset
               </button>
             </div>

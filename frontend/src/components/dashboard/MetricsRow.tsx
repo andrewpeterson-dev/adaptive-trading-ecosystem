@@ -22,6 +22,8 @@ interface MetricsRowProps {
   exposure: number;
   tradesToday: number;
   tradeHistory?: number[];
+  realizedPnlUnavailable?: boolean;
+  winRateUnavailable?: boolean;
 }
 
 function formatCurrency(value: number, showSign = false): string {
@@ -100,6 +102,8 @@ export function MetricsRow({
   exposure,
   tradesToday,
   tradeHistory,
+  realizedPnlUnavailable,
+  winRateUnavailable,
 }: MetricsRowProps) {
   const pnlPositive = totalPnl >= 0;
   const expectancyPositive = expectancy >= 0;
@@ -110,13 +114,15 @@ export function MetricsRow({
     return "text-emerald-400";
   })();
 
+  const realizedLabel = realizedPnlUnavailable ? "Realized: --" : `Realized: ${formatCurrency(realizedPnl)}`;
+
   const cards: MetricCardConfig[] = [
     {
       label: "Total P&L",
       icon: pnlPositive ? TrendingUp : TrendingDown,
       value: formatCurrency(totalPnl, true),
       valueColor: pnlPositive ? "text-emerald-400" : "text-red-400",
-      subtitle: `Unrealized: ${formatCurrency(unrealizedPnl)} / Realized: ${formatCurrency(realizedPnl)}`,
+      subtitle: `Unrealized: ${formatCurrency(unrealizedPnl)} / ${realizedLabel}`,
       subtitleColor: "text-muted-foreground",
     },
     {
@@ -128,8 +134,8 @@ export function MetricsRow({
     {
       label: "Win Rate",
       icon: Trophy,
-      value: `${winRate.toFixed(1)}%`,
-      valueColor: winRate >= 50 ? "text-emerald-400" : "text-red-400",
+      value: winRateUnavailable ? "--" : `${winRate.toFixed(1)}%`,
+      valueColor: winRateUnavailable ? "text-muted-foreground/50" : winRate >= 50 ? "text-emerald-400" : "text-red-400",
     },
     {
       label: "Max Drawdown",

@@ -255,7 +255,7 @@ export default function QuantPage() {
             }
             action={
               <Button asChild variant="primary" size="sm">
-                <Link href="/">Create strategy</Link>
+                <Link href="/strategy-builder">Create strategy</Link>
               </Button>
             }
             className="py-10"
@@ -653,7 +653,7 @@ export default function QuantPage() {
             description="Strategy performance comparisons will appear here once your bots have completed trades. Deploy and run a strategy to see analytics like Sharpe ratios, equity curves, and radar plots."
             action={
               <Button asChild variant="primary" size="sm">
-                <Link href="/">
+                <Link href="/strategy-builder">
                   <Plus className="h-3.5 w-3.5" />
                   Build your first strategy
                 </Link>

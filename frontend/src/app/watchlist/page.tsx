@@ -52,10 +52,22 @@ function loadSymbols(): string[] {
 }
 
 export default function WatchlistPage() {
-  const [symbols, setSymbolsRaw] = useState<string[]>(loadSymbols);
+  const [symbols, setSymbolsRaw] = useState<string[]>([]);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [addInput, setAddInput] = useState("");
   const [regime, setRegime] = useState<string | null>(null);
+
+  // Hydrate watchlist from localStorage after mount
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        setSymbolsRaw(JSON.parse(stored));
+      } catch {
+        // ignore corrupt data
+      }
+    }
+  }, []);
 
   const setSymbols = useCallback((next: string[] | ((prev: string[]) => string[])) => {
     setSymbolsRaw((prev) => {
@@ -73,6 +85,7 @@ export default function WatchlistPage() {
   const { data: quotes, loading, refresh } = usePolling<QuoteData[]>({
     fetcher: quoteFetcher,
     interval: 60000,
+    enabled: symbols.length > 0,
   });
 
   useEffect(() => {

@@ -472,7 +472,7 @@ export default function TradeAnalysisPage() {
   const [result, setResult] = useState<TradeAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["reasoning"]));
-  const [pastAnalyses, setPastAnalyses] = useState<TradeAnalysisResult[]>([]);
+  const [pastAnalyses, setPastAnalyses] = useState<(TradeAnalysisResult & { created_at?: string })[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -515,7 +515,10 @@ export default function TradeAnalysisPage() {
       });
       setResult(data);
       setExpandedSections(new Set(["reasoning"]));
-      setPastAnalyses((prev) => [data, ...prev.filter((a) => a.analysis_id !== data.analysis_id)]);
+      setPastAnalyses((prev) => [
+        { ...data, created_at: new Date().toISOString() },
+        ...prev.filter((a) => a.analysis_id !== data.analysis_id),
+      ]);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Analysis failed. Please try again.";
       setError(message);
@@ -770,7 +773,7 @@ export default function TradeAnalysisPage() {
                   {analysis.confidence}%
                 </span>
                 <span className="ml-auto text-[11px] text-muted-foreground">
-                  {analysis.analysis_id ? formatTimestamp(new Date().toISOString()) : ""}
+                  {analysis.created_at ? formatTimestamp(analysis.created_at) : ""}
                 </span>
                 <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" />
               </button>

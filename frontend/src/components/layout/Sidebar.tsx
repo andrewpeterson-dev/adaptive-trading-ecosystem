@@ -60,8 +60,10 @@ export function Sidebar() {
 
   const toggle = () => {
     setCollapsed((prev) => {
-      localStorage.setItem("sidebar_collapsed", String(!prev));
-      return !prev;
+      const next = !prev;
+      localStorage.setItem("sidebar_collapsed", String(next));
+      window.dispatchEvent(new CustomEvent("sidebar-toggle", { detail: { collapsed: next } }));
+      return next;
     });
   };
 
@@ -259,7 +261,7 @@ export function Sidebar() {
 
       {/* Mobile bottom tab bar */}
       <nav className="mobile-bottom-tabs lg:hidden">
-        {NAV_ITEMS.slice(0, 5).map((item) => {
+        {NAV_ITEMS.slice(1, 6).map((item) => {
           const active = isActive(item);
           const Icon = item.icon;
           return (

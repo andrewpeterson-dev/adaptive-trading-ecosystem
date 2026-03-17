@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { PieChart, AlertTriangle } from "lucide-react";
+import { PieChart, AlertTriangle, Info } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,17 +11,37 @@ import {
   SurfaceTitle,
 } from "@/components/ui/surface";
 
+interface Position {
+  ticker?: string;
+  symbol?: string;
+  quantity?: number;
+  market_value?: number;
+}
+
 interface SectorAllocation {
   sector: string;
   allocation_pct: number;
   position_count: number;
 }
 
-interface SectorConcentrationData {
-  sectors: SectorAllocation[];
-  cap_pct: number;
-  total_positions: number;
-}
+// Simple ticker-to-sector map for client-side computation
+const TICKER_SECTOR_MAP: Record<string, string> = {
+  AAPL: "Technology", MSFT: "Technology", GOOG: "Technology", GOOGL: "Technology",
+  META: "Technology", NVDA: "Technology", AMD: "Technology", INTC: "Technology",
+  TSLA: "Consumer Disc.", AMZN: "Consumer Disc.", HD: "Consumer Disc.", NKE: "Consumer Disc.",
+  JPM: "Financials", BAC: "Financials", GS: "Financials", MS: "Financials", V: "Financials",
+  JNJ: "Healthcare", UNH: "Healthcare", PFE: "Healthcare", ABBV: "Healthcare", MRK: "Healthcare",
+  XOM: "Energy", CVX: "Energy", COP: "Energy", SLB: "Energy",
+  CAT: "Industrials", UPS: "Industrials", BA: "Industrials", GE: "Industrials",
+  PG: "Consumer Staples", KO: "Consumer Staples", PEP: "Consumer Staples", WMT: "Consumer Staples",
+  T: "Communication", VZ: "Communication", DIS: "Communication", NFLX: "Communication",
+  NEE: "Utilities", DUK: "Utilities", SO: "Utilities",
+  AMT: "Real Estate", PLD: "Real Estate", SPG: "Real Estate",
+  LIN: "Materials", APD: "Materials", FCX: "Materials",
+  SPY: "ETF", QQQ: "ETF", IWM: "ETF", DIA: "ETF",
+};
+
+const DEFAULT_CAP_PCT = 30;
 
 function SectorRowSkeleton() {
   return (
@@ -120,37 +140,59 @@ function SectorBar({
   );
 }
 
+/** Compute sector allocations client-side from position data. */
+function computeSectorAllocations(positions: Position[]): SectorAllocation[] {
+  const sectorMap = new Map<string, { totalValue: number; count: number }>();
+  let totalPortfolioValue = 0;
+
+  for (const pos of positions) {
+    const ticker = pos.ticker || pos.symbol || "";
+    const value = pos.market_value ?? 0;
+    const sector = TICKER_SECTOR_MAP[ticker.toUpperCase()] || "Other";
+    totalPortfolioValue += value;
+
+    const existing = sectorMap.get(sector) || { totalValue: 0, count: 0 };
+    existing.totalValue += value;
+    existing.count += 1;
+    sectorMap.set(sector, existing);
+  }
+
+  if (totalPortfolioValue === 0) return [];
+
+  const allocations: SectorAllocation[] = [];
+  for (const [sector, data] of sectorMap.entries()) {
+    allocations.push({
+      sector,
+      allocation_pct: (data.totalValue / totalPortfolioValue) * 100,
+      position_count: data.count,
+    });
+  }
+
+  return allocations.sort((a, b) => b.allocation_pct - a.allocation_pct);
+}
+
 export function SectorConcentration() {
-  const [data, setData] = useState<SectorConcentrationData | null>(null);
+  const [sectors, setSectors] = useState<SectorAllocation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [hasPositions, setHasPositions] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const result = await apiFetch<SectorConcentrationData>(
-        "/api/risk/category-scores"
+      const result = await apiFetch<{ positions?: Position[]; holdings?: Position[] }>(
+        "/api/trading/positions"
       );
-      if (result && "sectors" in (result as any)) {
-        setData(result as unknown as SectorConcentrationData);
+      const positions = result?.positions || result?.holdings || [];
+      if (positions.length > 0) {
+        setHasPositions(true);
+        setSectors(computeSectorAllocations(positions));
       } else {
-        setData({
-          sectors: [
-            { sector: "Technology", allocation_pct: 28.5, position_count: 12 },
-            { sector: "Healthcare", allocation_pct: 18.2, position_count: 7 },
-            { sector: "Financials", allocation_pct: 15.8, position_count: 9 },
-            { sector: "Energy", allocation_pct: 12.4, position_count: 5 },
-            { sector: "Consumer Disc.", allocation_pct: 10.1, position_count: 6 },
-            { sector: "Industrials", allocation_pct: 8.3, position_count: 4 },
-            { sector: "Materials", allocation_pct: 6.7, position_count: 3 },
-          ],
-          cap_pct: 30,
-          total_positions: 46,
-        });
+        setHasPositions(false);
+        setSectors([]);
       }
-      setError(false);
     } catch {
-      setError(true);
+      setHasPositions(false);
+      setSectors([]);
     } finally {
       setLoading(false);
     }
@@ -158,16 +200,18 @@ export function SectorConcentration() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
   useEffect(() => {
-    if (!loading && data) {
+    if (!loading && sectors.length > 0) {
       const raf = requestAnimationFrame(() => setMounted(true));
       return () => cancelAnimationFrame(raf);
     }
-  }, [loading, data]);
+  }, [loading, sectors]);
+
+  const capThreshold = DEFAULT_CAP_PCT;
 
   if (loading) {
     return (
@@ -187,30 +231,32 @@ export function SectorConcentration() {
     );
   }
 
-  if (error || !data) {
+  if (!hasPositions || sectors.length === 0) {
     return (
       <Surface>
         <SurfaceHeader>
-          <div className="flex items-center gap-2">
-            <PieChart className="h-4 w-4 text-muted-foreground" />
-            <SurfaceTitle>Sector Concentration</SurfaceTitle>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <PieChart className="h-4 w-4 text-muted-foreground" />
+              <SurfaceTitle>Sector Concentration</SurfaceTitle>
+            </div>
+            <Badge variant="info" className="text-[9px] py-0.5">
+              CAP: {capThreshold}%
+            </Badge>
           </div>
         </SurfaceHeader>
         <SurfaceBody>
           <div className="app-empty">
             <div className="app-empty-icon">
-              <PieChart className="h-5 w-5 text-muted-foreground/60" />
+              <Info className="h-5 w-5 text-muted-foreground/60" />
             </div>
-            <p className="text-xs font-medium text-muted-foreground">No sector data</p>
-            <p className="text-[11px] text-muted-foreground/60">Connect a broker to see allocations</p>
+            <p className="text-xs font-medium text-muted-foreground">Sector tracking requires broker positions data</p>
+            <p className="text-[11px] text-muted-foreground/60">Connect a broker and open positions to see concentration</p>
           </div>
         </SurfaceBody>
       </Surface>
     );
   }
-
-  const capThreshold = data.cap_pct;
-  const sorted = [...data.sectors].sort((a, b) => b.allocation_pct - a.allocation_pct);
 
   return (
     <Surface>
@@ -225,48 +271,36 @@ export function SectorConcentration() {
               CAP: {capThreshold}%
             </Badge>
             <span className="text-[10px] font-mono text-muted-foreground/60">
-              {data.total_positions} pos
+              {sectors.reduce((sum, s) => sum + s.position_count, 0)} pos
             </span>
           </div>
         </div>
       </SurfaceHeader>
       <SurfaceBody className="p-3 space-y-2">
-        {sorted.length === 0 ? (
-          <div className="app-empty">
-            <div className="app-empty-icon">
-              <PieChart className="h-5 w-5 text-muted-foreground/60" />
-            </div>
-            <p className="text-xs font-medium text-muted-foreground">No sector allocations</p>
-            <p className="text-[11px] text-muted-foreground/60">Open positions to see concentration</p>
-          </div>
-        ) : (
-          sorted.map((sector) => (
-            <SectorBar
-              key={sector.sector}
-              sector={sector}
-              capThreshold={capThreshold}
-              animate={mounted}
-            />
-          ))
-        )}
+        {sectors.map((sector) => (
+          <SectorBar
+            key={sector.sector}
+            sector={sector}
+            capThreshold={capThreshold}
+            animate={mounted}
+          />
+        ))}
 
         {/* Legend */}
-        {sorted.length > 0 && (
-          <div className="flex items-center gap-4 pt-1.5 border-t border-border/40 mt-1">
-            <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-blue-500" />
-              <span className="text-[9px] text-muted-foreground">Within limit</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-orange-500" />
-              <span className="text-[9px] text-muted-foreground">Near cap</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-px w-3 bg-red-400/60" />
-              <span className="text-[9px] text-muted-foreground">{capThreshold}% cap</span>
-            </div>
+        <div className="flex items-center gap-4 pt-1.5 border-t border-border/40 mt-1">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-blue-500" />
+            <span className="text-[9px] text-muted-foreground">Within limit</span>
           </div>
-        )}
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-orange-500" />
+            <span className="text-[9px] text-muted-foreground">Near cap</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-px w-3 bg-red-400/60" />
+            <span className="text-[9px] text-muted-foreground">{capThreshold}% cap</span>
+          </div>
+        </div>
       </SurfaceBody>
     </Surface>
   );
