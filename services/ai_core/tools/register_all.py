@@ -15,6 +15,7 @@ def register_all_tools():
         trading_tools,
         analytics_tools,
         research_tools,
+        sentiment_tools,
     )
 
     portfolio_tools.register()
@@ -23,6 +24,7 @@ def register_all_tools():
     trading_tools.register()
     analytics_tools.register()
     research_tools.register()
+    sentiment_tools.register()
 
     from .registry import get_registry
     count = len(get_registry().list_all())

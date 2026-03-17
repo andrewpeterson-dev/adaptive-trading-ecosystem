@@ -12,6 +12,7 @@ from services.ai_core.providers.base import BaseProvider
 from services.ai_core.providers.openai_provider import OpenAIProvider
 from services.ai_core.providers.anthropic_provider import AnthropicProvider
 from services.ai_core.providers.perplexity_provider import PerplexityProvider
+from services.ai_core.providers.fingpt_provider import FinGPTProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -29,6 +30,7 @@ class RoutingIntent(str, Enum):
     DEEP_RESEARCH = "deep_research"
     DOCUMENT_ANALYSIS = "document_analysis"
     UI_COMMAND = "ui_command"
+    SENTIMENT_ANALYSIS = "sentiment_analysis"
     GENERAL = "general"
 
 
@@ -50,6 +52,7 @@ class ModelRouter:
         self._openai = OpenAIProvider()
         self._anthropic = AnthropicProvider()
         self._perplexity = PerplexityProvider()
+        self._fingpt = FinGPTProvider()
         self._settings = get_settings()
 
     def route(
@@ -183,6 +186,14 @@ class ModelRouter:
         # Document analysis
         if has_documents:
             return RoutingIntent.DOCUMENT_ANALYSIS
+
+        # Sentiment analysis
+        if any(kw in msg_lower for kw in [
+            "sentiment", "market mood", "news impact", "bullish or bearish",
+            "market feeling", "investor sentiment", "news sentiment",
+            "how does the market feel", "what is the mood",
+        ]):
+            return RoutingIntent.SENTIMENT_ANALYSIS
 
         # Trade actions
         if any(kw in msg_lower for kw in ["buy", "sell", "trade", "order", "execute"]):

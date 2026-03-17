@@ -163,6 +163,12 @@ class Settings(BaseSettings):
     perplexity_deep_research_model: str = "sonar-deep-research"
     broker_kms_key_id: str = ""
 
+    # --- FinGPT Sentiment ---
+    fingpt_endpoint: str = ""  # HuggingFace Inference API endpoint (leave empty for default)
+    fingpt_api_key: str = ""   # HuggingFace API token
+    fingpt_enabled: bool = False  # Feature flag -- falls back to GPT-based sentiment if disabled
+    sentiment_cache_ttl: int = 900  # Cache TTL in seconds (15 minutes)
+
     # --- S3 Storage ---
     s3_bucket: str = ""
     s3_region: str = "us-east-1"
