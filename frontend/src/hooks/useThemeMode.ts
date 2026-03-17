@@ -35,22 +35,10 @@ function applyTheme(theme: ThemeMode): void {
 
 export function ThemeModeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "light";
-
-    const storedMode = window.localStorage.getItem(TRADING_MODE_KEY);
-    if (storedMode === "live") {
-      return "dark";
-    }
-    if (storedMode === "paper") {
-      return "light";
-    }
-
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark") {
-      return stored;
-    }
-
-    return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    // Always dark — the design system (glassmorphism, CSS variables, all
+    // component colors) is built for dark mode only. Light mode renders
+    // white text on white backgrounds across the entire app.
+    return "dark";
   });
 
   useEffect(() => {

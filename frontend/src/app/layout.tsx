@@ -7,23 +7,9 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const initialThemeScript = `
 (() => {
-  try {
-    const html = document.documentElement;
-    const storedMode = window.localStorage.getItem("trading_mode");
-    const storedTheme = window.localStorage.getItem("workspace_theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const theme =
-      storedMode === "live"
-        ? "dark"
-        : storedMode === "paper"
-          ? "light"
-          : storedTheme === "light" || storedTheme === "dark"
-            ? storedTheme
-        : prefersDark
-          ? "dark"
-          : "light";
-    html.classList.toggle("dark", theme === "dark");
-  } catch (_) {}
+  // Always dark — the design system is dark-only.
+  document.documentElement.classList.add("dark");
+  try { window.localStorage.setItem("workspace_theme", "dark"); } catch (_) {}
 })();
 `;
 
