@@ -10,7 +10,9 @@
 - **DO NOT create or run Streamlit dashboards** — Streamlit was removed. The `dashboard/` directory no longer exists.
 - **DO NOT recreate `dashboard/` or any Streamlit files.**
 - **Webull is per-user** — credentials are encrypted in `broker_credentials` table. Only users with stored credentials can access broker data. Andrew's account (user_id=2) is the only one with Webull access.
-- **Trades require explicit confirmation** — `user_confirmed=True` must be passed to place any order. The UI submit button is the ONLY place this is set.
+- **Two trading paths exist:**
+  - **Bot Runner (autonomous):** User creates and starts a bot (via Cerberus chat `createBot` tool or UI). `BotRunner` (`services/bot_engine/runner.py`) evaluates running bots every 60s and executes trades automatically — no per-trade confirmation. `ReasoningEngine` acts as a risk filter. Kill switch: `UserRiskLimits.kill_switch_active` halts all bot trading for a user.
+  - **Cerberus Chat (one-off proposals):** AI drafts a trade proposal, user confirms with SHA-256 token. `user_confirmed=True` safety gate applies here only.
 
 ## Key Files
 | File | Purpose |
@@ -26,6 +28,10 @@
 | `data/webull_client.py` | Webull SDK wrapper (paper + live clients) |
 | `frontend/` | Next.js app (the ONLY frontend) |
 | `db/cerberus_models.py` | 18 Cerberus SQLAlchemy models (conversations, memory, documents, proposals, audit) |
+| `services/bot_engine/runner.py` | BotRunner — autonomous bot loop, evaluates every 60s, executes trades |
+| `services/bot_engine/evaluator.py` | Condition evaluation against market data |
+| `services/bot_engine/ai_evaluator.py` | AI-powered entry evaluation for bots |
+| `services/reasoning_engine/engine.py` | ReasoningEngine — risk filter for bot trades |
 | `services/ai_core/chat_controller.py` | Main AI orchestration — context → route → prompt → model → tools → stream |
 | `services/ai_core/model_router.py` | Deterministic LLM routing (gpt-5.4, gpt-4.1, claude-sonnet-4-6, Perplexity) |
 | `services/ai_core/tools/` | 35 Cerberus tools across 6 categories (portfolio, risk, market, trading, analytics, research) |
@@ -63,9 +69,9 @@ cd ~/adaptive-trading-ecosystem/frontend && npm run dev
 - App key/secret stored encrypted in DB, decrypted per-request
 
 ## Cerberus AI
-- **LLM is assistant, not trader** — AI analyzes, explains, drafts. Never owns execution authority.
+- **Two trading paths:** (1) Bot Runner — autonomous execution every 60s for user-created bots, ReasoningEngine as risk filter. (2) Chat proposals — AI drafts, user confirms via SHA-256 token.
 - Model routing: gpt-5.4 (primary), gpt-4.1 (simple), claude-sonnet-4-6 (fallback/research), Perplexity (search)
-- Trade safety: draft → risk check → user confirm → token validate → re-check → execute → audit
+- Bots support paper/live mode (from `UserTradingSession`), kill switch via `UserRiskLimits.kill_switch_active`
 - Feature flags control progressive rollout (FEATURE_CERBERUS_ENABLED, etc.)
 - Workers: `celery -A services.workers.celery_app worker -Q documents` / `-Q backtests`
 - Frontend widget: floating bubble → 420px slide-out panel with 5 tabs (Chat, Strategy, Portfolio, Bots, Research)

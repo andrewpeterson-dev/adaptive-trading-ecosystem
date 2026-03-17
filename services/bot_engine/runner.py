@@ -9,6 +9,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime, time as dtime
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -23,7 +24,14 @@ from db.cerberus_models import (
     UniverseCandidate,
     BotStatus,
 )
-from db.models import UserApiSettings, UserApiConnection, ApiProvider
+from db.models import (
+    UserApiSettings,
+    UserApiConnection,
+    ApiProvider,
+    UserRiskLimits,
+    UserTradingSession,
+    TradingModeEnum,
+)
 from services.activity_bus import BotActivityEvent, activity_bus
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
@@ -95,6 +103,31 @@ class BotRunner:
         # Evaluate bots outside the query session — each bot fetches its own market data
         error_bot_ids: list[str] = []
         for bot, version in bots:
+            # ── Kill-switch gate (primary) ───────────────────────────────
+            try:
+                if await self._is_kill_switch_active(bot.user_id):
+                    logger.warning(
+                        "bot_skipped_kill_switch",
+                        bot_id=bot.id,
+                        user_id=bot.user_id,
+                    )
+                    await self._pause_bot(
+                        bot.id, "Kill switch active — bot paused automatically"
+                    )
+                    self._publish_activity(
+                        "kill_switch_block", bot, None,
+                        f"{bot.name} skipped — user kill switch is active",
+                        {"reason": "kill_switch_active"},
+                    )
+                    continue
+            except Exception as e:
+                logger.error(
+                    "kill_switch_check_error",
+                    bot_id=bot.id,
+                    error=str(e),
+                )
+                continue  # fail-closed: skip bot on error
+
             try:
                 await self._evaluate_bot(bot, version)
             except Exception as e:
@@ -272,6 +305,7 @@ class BotRunner:
             symbol_indicators[symbol] = indicator_values
 
         if not symbol_data:
+            self._last_eval[bot.id] = datetime.utcnow()
             return
 
         # Step 2: Call AI evaluator with all symbol data
@@ -316,6 +350,8 @@ class BotRunner:
                 "Volume-based indicators (VWAP, volume) are unreliable during this session."
             )
 
+        trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
+
         signals = await ai_evaluate_entries(
             strategy_name=config.get("name", bot.name),
             strategy_description=full_description,
@@ -326,6 +362,7 @@ class BotRunner:
             timeframe=config.get("timeframe", "1D"),
             symbol_data=symbol_data,
             open_positions=open_position_symbols,
+            mode=trading_mode,
         )
 
         # Step 3: Process AI signals — execute entries with high confidence
@@ -371,6 +408,7 @@ class BotRunner:
                         f"{bot.name} paused — {decision.reasoning}",
                         {"decision": decision.decision, "reasoning": decision.reasoning},
                     )
+                    self._last_eval[bot.id] = datetime.utcnow()
                     return
 
                 if decision.decision in ("EXIT_POSITION", "DELAY_TRADE"):
@@ -396,9 +434,19 @@ class BotRunner:
                 adjusted_size = adjusted_size * confidence_scale
 
             except Exception as e:
-                logger.warning("reasoning_engine_error", bot_id=bot.id, error=str(e))
-                # In paper mode, still execute at reduced size
-                adjusted_size = position_size_pct * 0.5
+                logger.error(
+                    "reasoning_engine_error",
+                    bot_id=bot.id,
+                    symbol=symbol,
+                    error=str(e),
+                    exc_info=True,
+                )
+                logger.info(
+                    "bot_skipping_cycle",
+                    bot_id=bot.id,
+                    reason=f"reasoning engine error: {e}",
+                )
+                continue
 
             executed_trade = await self._execute_trade(
                 bot, symbol, action, adjusted_size, current_price,
@@ -426,6 +474,8 @@ class BotRunner:
                 )
             except Exception as e:
                 logger.warning("journal_record_error", bot_id=bot.id, error=str(e))
+
+        self._last_eval[bot.id] = datetime.utcnow()
 
     async def _evaluate_symbol(
         self,
@@ -589,7 +639,18 @@ class BotRunner:
                         adjusted_size=adjusted_size,
                     )
             except Exception as e:
-                logger.warning("reasoning_engine_error", bot_id=bot.id, error=str(e))
+                logger.error(
+                    "reasoning_engine_error",
+                    bot_id=bot.id,
+                    symbol=symbol,
+                    error=str(e),
+                    exc_info=True,
+                )
+                logger.info(
+                    "bot_skipping_cycle",
+                    bot_id=bot.id,
+                    reason=f"reasoning engine error: {e}",
+                )
                 return
 
             executed_trade = await self._execute_trade(
@@ -780,8 +841,10 @@ class BotRunner:
         reasons: list[str],
         extended_hours: bool = False,
     ) -> None:
-        # Resolve broker once for all exit orders in this batch
+        # Resolve broker and trading mode once for all exit orders in this batch
         broker = await self._resolve_broker(bot.user_id)
+        trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
+        is_paper = trading_mode != "live"
 
         closed_count = 0
         for open_trade in open_trades:
@@ -796,6 +859,7 @@ class BotRunner:
                             side=exit_side,
                             quantity=int(open_trade.quantity or 0),
                             extended_hours=extended_hours,
+                            mode=trading_mode,
                         )
                     except Exception as e:
                         logger.warning(
@@ -808,6 +872,7 @@ class BotRunner:
                         side=exit_side,
                         quantity=int(open_trade.quantity or 0),
                         extended_hours=extended_hours,
+                        paper=is_paper,
                     )
             except Exception as e:
                 logger.error("bot_exit_order_failed", bot_id=bot.id, symbol=symbol, error=str(e))
@@ -882,6 +947,50 @@ class BotRunner:
             learning_status["summary"] = reason or learning_status.get("summary") or "Paused by AI reasoning."
             db_bot.learning_status_json = learning_status
 
+    async def _is_kill_switch_active(
+        self, user_id: int, mode: Optional[TradingModeEnum] = None
+    ) -> bool:
+        """Check whether the user's kill switch is active for a trading mode.
+
+        When *mode* is supplied the caller has already resolved it (avoiding a
+        redundant DB round-trip and a possible TOCTOU race).  When omitted the
+        method resolves it internally, returning ``True`` (fail-closed) if the
+        mode lookup itself fails.
+        """
+        if mode is None:
+            try:
+                resolved = await self._resolve_trading_mode(user_id)
+                mode = (
+                    TradingModeEnum.LIVE if resolved == "live"
+                    else TradingModeEnum.PAPER
+                )
+            except Exception as e:
+                logger.error(
+                    "kill_switch_mode_lookup_failed_fail_closed",
+                    user_id=user_id,
+                    error=str(e),
+                )
+                return True  # fail-closed: block trading when mode unknown
+
+        try:
+            async with get_session() as session:
+                result = await session.execute(
+                    select(UserRiskLimits).where(
+                        UserRiskLimits.user_id == user_id,
+                        UserRiskLimits.mode == mode,
+                    )
+                )
+                limits = result.scalar_one_or_none()
+                if limits and limits.kill_switch_active:
+                    return True
+        except Exception as e:
+            logger.warning(
+                "kill_switch_lookup_error",
+                user_id=user_id,
+                error=str(e),
+            )
+        return False
+
     async def _fetch_bars(self, symbol: str, timeframe: str) -> list[dict]:
         """Fetch OHLCV bars using yfinance (run in thread to avoid blocking)."""
         loop = asyncio.get_running_loop()
@@ -945,6 +1054,46 @@ class BotRunner:
         """Execute a trade via the user's active broker (Webull or Alpaca)."""
         user_id = bot.user_id
 
+        # ── Resolve trading mode ONCE for both kill-switch and order routing ──
+        try:
+            trading_mode = await self._resolve_trading_mode(user_id, bot_id=bot.id)
+        except Exception as e:
+            logger.error(
+                "trade_mode_resolve_error",
+                bot_id=bot.id,
+                error=str(e),
+            )
+            # Cannot determine mode — fail closed (same as kill-switch active).
+            return None
+
+        mode_enum = (
+            TradingModeEnum.LIVE if trading_mode == "live"
+            else TradingModeEnum.PAPER
+        )
+
+        # ── Kill-switch safety gate (secondary) ─────────────────────────
+        # Re-check at execution time in case the switch was flipped after
+        # the initial _check_bots() evaluation started.
+        try:
+            if await self._is_kill_switch_active(user_id, mode=mode_enum):
+                logger.warning(
+                    "trade_blocked_kill_switch",
+                    bot_id=bot.id,
+                    symbol=symbol,
+                    user_id=user_id,
+                )
+                return None
+        except Exception as e:
+            logger.error(
+                "kill_switch_exec_check_error",
+                bot_id=bot.id,
+                error=str(e),
+            )
+            # Fail-open would be dangerous for a kill switch — fail closed.
+            return None
+
+        is_paper = trading_mode != "live"
+
         if current_price <= 0:
             logger.warning("bot_no_price", bot_id=bot.id, symbol=symbol)
             return None
@@ -977,7 +1126,7 @@ class BotRunner:
             if bot.allocated_capital and bot.allocated_capital > 0:
                 equity = bot.allocated_capital
             else:
-                alpaca_client = self._get_alpaca_client()
+                alpaca_client = self._get_alpaca_client(paper=is_paper)
                 account = alpaca_client.get_account()
                 equity = float(account.equity)
 
@@ -1002,6 +1151,7 @@ class BotRunner:
                     order = await self._submit_webull_order(
                         user_id=user_id, symbol=symbol, side=side, quantity=quantity,
                         extended_hours=extended_hours,
+                        mode=trading_mode,
                     )
                 except Exception as e:
                     logger.warning(
@@ -1010,19 +1160,20 @@ class BotRunner:
                         symbol=symbol,
                         error=str(e),
                     )
-                    # Fall back to Alpaca paper
+                    # Fall back to Alpaca
                     used_broker = "alpaca"
 
             if order is None:
                 order = await self._submit_alpaca_order(
                     symbol=symbol, side=side, quantity=quantity,
                     extended_hours=extended_hours,
+                    paper=is_paper,
                 )
                 used_broker = "alpaca"
 
             order_id = order.get("id") or order.get("order_id") or order.get("client_order_id")
             fill_price = float(order.get("filled_avg_price") or current_price)
-            broker_tag = f"webull_{order.get('mode', 'paper')}" if used_broker == "webull" else "alpaca_paper"
+            broker_tag = f"webull_{order.get('mode', trading_mode)}" if used_broker == "webull" else f"alpaca_{trading_mode}"
 
             logger.info(
                 "bot_trade_executed",
@@ -1069,38 +1220,47 @@ class BotRunner:
             )
         return None
 
-    def _get_alpaca_client(self):
-        """Get Alpaca paper trading client."""
-        if not hasattr(self, "_alpaca_client") or self._alpaca_client is None:
+    def _get_alpaca_client(self, paper: bool = True):
+        """Get Alpaca trading client for the given mode.
+
+        Caches one client per mode (paper vs live) so repeated calls
+        within the same mode are fast.
+        """
+        if not hasattr(self, "_alpaca_clients"):
+            self._alpaca_clients: dict[bool, object] = {}
+
+        if paper not in self._alpaca_clients:
             from config.settings import get_settings
             from alpaca.trading.client import TradingClient
             settings = get_settings()
-            self._alpaca_client = TradingClient(
+            self._alpaca_clients[paper] = TradingClient(
                 settings.alpaca_api_key,
                 settings.alpaca_secret_key,
-                paper=True,
+                paper=paper,
             )
-        return self._alpaca_client
+        return self._alpaca_clients[paper]
 
     async def _submit_alpaca_order(
         self, *, symbol: str, side: str, quantity: int,
         extended_hours: bool = False,
+        paper: bool = True,
     ) -> dict:
-        """Submit a market order to Alpaca paper trading."""
+        """Submit a market order to Alpaca."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None, self._submit_alpaca_order_sync, symbol, side, quantity,
-            extended_hours,
+            extended_hours, paper,
         )
 
     def _submit_alpaca_order_sync(
         self, symbol: str, side: str, quantity: int,
         extended_hours: bool = False,
+        paper: bool = True,
     ) -> dict:
         from alpaca.trading.requests import MarketOrderRequest
         from alpaca.trading.enums import OrderSide, TimeInForce
 
-        client = self._get_alpaca_client()
+        client = self._get_alpaca_client(paper=paper)
         order_data = MarketOrderRequest(
             symbol=symbol.upper(),
             qty=quantity,
@@ -1158,6 +1318,33 @@ class BotRunner:
             logger.warning("broker_resolve_error", user_id=user_id, error=str(e))
 
         return "alpaca"
+
+    async def _resolve_trading_mode(self, user_id: int, bot_id: Optional[int] = None) -> str:
+        """Look up the user's active trading mode from UserTradingSession.
+
+        Returns "paper" or "live".  Defaults to "paper" when no session row
+        exists.  Raises on DB errors so the caller can decide the fallback
+        (e.g. fail-closed for kill-switch checks, or paper for order routing).
+        """
+        async with get_session() as session:
+            result = await session.execute(
+                select(UserTradingSession).where(
+                    UserTradingSession.user_id == user_id
+                )
+            )
+            trading_session = result.scalar_one_or_none()
+            if trading_session and trading_session.active_mode == TradingModeEnum.LIVE:
+                mode = "live"
+            else:
+                mode = "paper"
+
+        logger.info(
+            "bot_trading_mode_resolved",
+            bot_id=bot_id,
+            user_id=user_id,
+            mode=mode,
+        )
+        return mode
 
     # ── Webull order submission ───────────────────────────────────────────
 
@@ -1221,12 +1408,13 @@ class BotRunner:
     async def _submit_webull_order(
         self, *, user_id: int, symbol: str, side: str, quantity: int,
         extended_hours: bool = False,
+        mode: str = "paper",
     ) -> dict:
         """Submit a market order via Webull. Returns a dict matching the Alpaca
         order result shape for consistency, or raises on failure."""
         from data.webull.trading import OrderRequest as WBOrderRequest
 
-        clients = await self._get_webull_clients(user_id, mode="paper")
+        clients = await self._get_webull_clients(user_id, mode=mode)
         if not clients:
             raise RuntimeError("No Webull credentials found for user")
 

@@ -17,7 +17,7 @@ An AI-powered trading platform with a Next.js web dashboard, FastAPI backend, re
 
 - **Strategy Builder** — build multi-condition trading strategies with 20+ technical indicators
 - **Backtesting** — replay strategies against historical OHLCV data
-- **Paper & Live Trading** — execute via Webull or Alpaca with confirmation gate
+- **Paper & Live Trading** — execute via Webull or Alpaca (autonomous bots or confirmed one-off trades)
 - **Real-time Prices** — WebSocket price streaming with Redis pub/sub
 - **Risk Management** — portfolio exposure, drawdown limits, position sizing
 - **Market Sentiment** — AI-powered news sentiment aggregated per ticker
@@ -74,6 +74,12 @@ adaptive-trading-ecosystem/
 │   │   ├── proposals/          # Trade proposal + confirmation flow
 │   │   ├── memory/             # Short-term, operational, semantic memory
 │   │   └── documents/          # Document ingestion pipeline
+│   ├── bot_engine/     # Autonomous bot execution
+│   │   ├── runner.py           # BotRunner — evaluates running bots every 60s
+│   │   ├── evaluator.py        # Condition evaluation against market data
+│   │   ├── ai_evaluator.py     # AI-powered entry evaluation
+│   │   └── indicators.py       # Technical indicator computation
+│   ├── reasoning_engine/       # ReasoningEngine — risk filter for bot trades
 │   └── workers/        # Celery workers (documents, backtests, analytics)
 ├── frontend/           # Next.js app (the ONLY frontend)
 │   └── src/
@@ -113,7 +119,7 @@ adaptive-trading-ecosystem/
 
 ## Cerberus AI
 
-An AI-powered assistant embedded in the trading dashboard. Cerberus can analyze portfolios, explain risk, draft trade proposals, run backtests, and answer research questions — but **never executes trades autonomously**. Every trade requires explicit user confirmation.
+An AI-powered assistant embedded in the trading dashboard. Cerberus can analyze portfolios, explain risk, draft trade proposals, run backtests, create and manage autonomous bots, and answer research questions. The system supports **two trading paths**: autonomous bot execution and one-off chat-based trade proposals (which require explicit user confirmation).
 
 ### Architecture
 
@@ -150,10 +156,21 @@ User message
 - **Operational**: PostgreSQL — user preferences, trade history summaries, learned patterns
 - **Semantic**: pgvector embeddings for document search and long-term knowledge retrieval
 
-**Trade Safety Flow**:
-1. AI drafts a trade proposal (never executes directly)
+**Trade Safety Flow** — the system has two distinct trading paths:
+
+*Path 1: Bot Runner (autonomous)*
+1. User creates a bot via the Cerberus chat (`createBot` tool) or the Strategy Builder UI
+2. User starts the bot — this is the user's confirmation of intent
+3. `BotRunner` (`services/bot_engine/runner.py`) evaluates all running bots every 60 seconds
+4. When conditions are met, `ReasoningEngine` acts as a risk filter before execution
+5. Trade is executed automatically via broker API (no per-trade confirmation needed)
+6. Bots respect paper/live mode (resolved from `UserTradingSession`) and `UserRiskLimits.kill_switch_active` (stops all bot trading for a user)
+7. Full audit trail logged per trade
+
+*Path 2: Cerberus Chat (one-off proposals)*
+1. AI drafts a trade proposal in chat (never executes directly)
 2. Risk checks run automatically (position size, exposure, drawdown limits)
-3. User reviews and clicks "Confirm" in the UI
+3. User reviews and clicks "Confirm" in the UI (`user_confirmed=True` safety gate)
 4. SHA-256 confirmation token is validated server-side
 5. Pre-execution risk re-check runs
 6. Order is placed via broker API

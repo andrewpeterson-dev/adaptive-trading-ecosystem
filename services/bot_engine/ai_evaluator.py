@@ -38,8 +38,35 @@ class AIEntrySignal:
     reasoning: str
 
 
-SYSTEM_PROMPT = """\
-You are an AI trading analyst making entry decisions for a paper trading bot.
+def _get_system_prompt(mode: str = "paper") -> str:
+    """Return the system prompt tailored for the bot's trading mode.
+
+    Parameters
+    ----------
+    mode : str
+        "paper" or "live". Defaults to "paper".
+    """
+    if mode == "live":
+        mode_label = "live trading bot"
+        selectivity_line = (
+            "3. Be HIGHLY selective — only enter with strong conviction. "
+            "This is LIVE capital at risk. Prefer fewer, higher-quality setups over volume."
+        )
+        risk_line = (
+            "11. This is LIVE MODE — real money is on the line. Err on the side of caution. "
+            "If in doubt, hold. A missed trade is better than a losing one."
+        )
+    else:
+        mode_label = "paper trading bot"
+        selectivity_line = (
+            "3. Be selective but not impossible — 1-3 entries per evaluation is ideal for paper trading."
+        )
+        risk_line = ""
+
+    risk_section = f"\n{risk_line}" if risk_line else ""
+
+    return f"""\
+You are an AI trading analyst making entry decisions for a {mode_label}.
 You receive the bot's strategy description, current indicator values, and price
 data for each symbol in its universe.
 
@@ -48,22 +75,22 @@ Your job: decide which symbols (if any) to ENTER a position on RIGHT NOW.
 IMPORTANT RULES:
 1. The strategy description is GUIDANCE — use your judgment, not rigid thresholds.
 2. Consider the FULL picture: trend, momentum, volatility, and price levels.
-3. Be selective but not impossible — 1-3 entries per evaluation is ideal for paper trading.
+{selectivity_line}
 4. For BUY strategies: look for upward momentum, trend support, favorable risk/reward.
 5. For SELL strategies: look for weakness, breakdowns, bearish divergences.
 6. Confidence >= 60 means you'd take the trade. Below 60 means hold.
 7. Think about the risk/reward relative to the stop loss and take profit levels.
 8. If a symbol is near a key support/resistance, that can be a catalyst.
 9. Volume and ATR indicate conviction and opportunity size.
-10. Don't require ALL indicators to be perfect — real trading is about edge, not perfection.
+10. Don't require ALL indicators to be perfect — real trading is about edge, not perfection.{risk_section}
 
 Return ONLY valid JSON (no markdown, no explanation outside JSON):
-{
+{{
   "decisions": [
-    {"symbol": "SPY", "action": "enter", "confidence": 72, "reasoning": "RSI recovering from oversold with bullish MACD crossover forming"},
-    {"symbol": "QQQ", "action": "hold", "confidence": 40, "reasoning": "Momentum still deteriorating, wait for stabilization"}
+    {{"symbol": "SPY", "action": "enter", "confidence": 72, "reasoning": "RSI recovering from oversold with bullish MACD crossover forming"}},
+    {{"symbol": "QQQ", "action": "hold", "confidence": 40, "reasoning": "Momentum still deteriorating, wait for stabilization"}}
   ]
-}
+}}
 
 Include ALL symbols in your response. "enter" means open a new position. "hold" means wait."""
 
@@ -179,6 +206,7 @@ async def ai_evaluate_entries(
     timeframe: str,
     symbol_data: list[dict],
     open_positions: list[str] | None = None,
+    mode: str = "paper",
 ) -> list[AIEntrySignal]:
     """
     Use an LLM to evaluate which symbols should be entered.
@@ -232,7 +260,7 @@ async def ai_evaluate_entries(
     try:
         response = await provider.complete(
             messages=[
-                ProviderMessage(role="system", content=SYSTEM_PROMPT),
+                ProviderMessage(role="system", content=_get_system_prompt(mode)),
                 ProviderMessage(role="user", content=prompt),
             ],
             model=model,
@@ -275,7 +303,7 @@ async def ai_evaluate_entries(
         return signals
 
     except Exception as e:
-        logger.error("ai_evaluator_error", error=str(e))
+        logger.error("ai_evaluator_error", error=str(e), exc_info=True)
         return []
 
 

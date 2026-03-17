@@ -6,7 +6,7 @@ import json
 import re
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 import structlog
 from pydantic import BaseModel, Field, ValidationError
@@ -65,8 +65,8 @@ class ExecutionConfig(BaseModel):
     """AI-inferred execution parameters based on strategy description."""
     orderType: Literal["market", "limit", "stop"] = "market"
     exitLogic: Literal["stop_target", "indicator_reversal", "time_stop", "hybrid"] = "hybrid"
-    trailingStopPct: float | None = None
-    exitAfterBars: int | None = None
+    trailingStopPct: Optional[float] = None
+    exitAfterBars: Optional[int] = None
     cooldownBars: int = 0
     maxTradesPerDay: int = 0
     maxExposurePct: float = 100.0
