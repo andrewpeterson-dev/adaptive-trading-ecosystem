@@ -124,6 +124,7 @@ export interface SweepDataPoint {
 
 export interface SweepResult {
   heatmap_data: SweepDataPoint[];
+  heatmap?: SweepDataPoint[];
   best_params: Record<string, number>;
   best_value: number;
   param_axes: Record<string, number[]>;

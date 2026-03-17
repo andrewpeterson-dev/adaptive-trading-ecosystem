@@ -343,7 +343,12 @@ export function ParameterSweepPanel({
           }),
         }
       );
-      setSweepResult(data);
+      // Normalize: backend sends "heatmap", frontend expects "heatmap_data"
+      const normalized = {
+        ...data,
+        heatmap_data: data.heatmap_data || data.heatmap || [],
+      };
+      setSweepResult(normalized);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Parameter sweep failed");
     } finally {

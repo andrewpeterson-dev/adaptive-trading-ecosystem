@@ -1130,9 +1130,6 @@ async def run_parameter_sweep(req: ParameterSweepRequest, request: Request):
     if not user_id:
         raise HTTPException(401, "Not authenticated")
 
-    if _sweep_semaphore.locked():
-        raise HTTPException(429, "Too many concurrent sweeps, try again shortly")
-
     # Resolve conditions from strategy_id if needed
     conditions_dicts: Optional[list[dict]] = None
     condition_groups_raw: Optional[list[dict]] = None
