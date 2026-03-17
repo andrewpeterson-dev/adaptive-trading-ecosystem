@@ -28,6 +28,7 @@ from api.routes import risk_limits as risk_limits_routes
 from api.routes import quant as quant_routes
 from api.routes import reasoning as reasoning_routes
 from api.routes import risk_analytics as risk_analytics_routes
+from api.routes import portfolio_optimization as portfolio_optimization_routes
 from api.middleware.auth import JWTAuthMiddleware
 from api.middleware.trading_mode import TradingModeMiddleware
 from config.settings import get_settings
@@ -287,8 +288,8 @@ app.include_router(risk_limits_routes.router, prefix="/api/risk", tags=["Risk"])
 app.include_router(quant_routes.router, prefix="/api/quant", tags=["Quant Intelligence"])
 app.include_router(reasoning_routes.router, prefix="/api/reasoning", tags=["AI Reasoning"])
 app.include_router(sentiment_routes.router, prefix="/api/sentiment", tags=["Sentiment"])
-
 app.include_router(risk_analytics_routes.router, prefix="/api/risk", tags=["Risk Analytics"])
+app.include_router(portfolio_optimization_routes.router, prefix="/api/portfolio", tags=["Portfolio Optimization"])
 
 
 @app.get("/health")

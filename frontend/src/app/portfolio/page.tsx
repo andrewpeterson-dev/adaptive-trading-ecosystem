@@ -19,6 +19,7 @@ import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PortfolioOptimizer } from "@/components/analytics/PortfolioOptimizer";
 
 function MetricCell({ value, format }: { value: number | null; format?: string }) {
   if (value === null || value === undefined) return <span className="text-muted-foreground/50">—</span>;
@@ -226,6 +227,9 @@ export default function PortfolioPage() {
           )}
         </div>
       </div>
+
+      {/* Portfolio Optimization Section */}
+      <PortfolioOptimizer />
       </>
       )}
     </div>

@@ -40,6 +40,10 @@ vectorbt>=0.26.0
 numba>=0.58.0
 pyarrow>=14.0.0
 
+# Portfolio Optimization
+pyportfolioopt>=1.5.5
+cvxpy>=1.4.0
+
 # LLM
 anthropic>=0.39.0
 huggingface_hub>=0.20.0
