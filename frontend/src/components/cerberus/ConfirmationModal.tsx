@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCerberusStore } from '@/stores/cerberus-store';
 import { confirmTrade, executeTrade } from '@/lib/cerberus-api';
 
@@ -8,6 +8,16 @@ export function ConfirmationModal() {
   const { pendingProposal, setPendingProposal } = useCerberusStore();
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Escape key to dismiss
+  useEffect(() => {
+    if (!pendingProposal) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isConfirming) setPendingProposal(null);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [pendingProposal, isConfirming, setPendingProposal]);
 
   if (!pendingProposal) return null;
 
@@ -18,8 +28,8 @@ export function ConfirmationModal() {
       const { confirmationToken } = await confirmTrade(pendingProposal.id);
       await executeTrade(pendingProposal.id, confirmationToken);
       setPendingProposal(null);
-    } catch (e: any) {
-      setError(e.message || 'Failed to execute trade');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to execute trade');
     } finally {
       setIsConfirming(false);
     }

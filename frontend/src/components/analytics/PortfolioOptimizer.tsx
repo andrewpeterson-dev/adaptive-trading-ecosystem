@@ -27,11 +27,7 @@ import { apiFetch } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Surface, SurfaceBody, SurfaceHeader, SurfaceTitle } from "@/components/ui/surface";
-
-const PIE_COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#a855f7",
-];
+import { PIE_COLORS } from "@/lib/utils";
 
 const METHODS = [
   { value: "max_sharpe", label: "Max Sharpe Ratio" },
@@ -287,8 +283,8 @@ export function PortfolioOptimizer() {
                     paddingAngle={2}
                     label={({ name, value }) => `${name} ${value.toFixed(1)}%`}
                   >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    {pieData.map((entry, i) => (
+                      <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
