@@ -772,11 +772,9 @@ export default function BacktestPage() {
 
       {showSweep && strategy && (
         <ParameterSweepPanel
-          strategyId={strategy.id}
-          strategyName={strategy.name}
+          strategy={strategy}
           symbol={symbol}
-          timeframe="1D"
-          conditions={strategy.conditions || strategy.condition_groups?.[0]?.conditions || []}
+          lookbackDays={lookbackDays}
         />
       )}
     </div>
