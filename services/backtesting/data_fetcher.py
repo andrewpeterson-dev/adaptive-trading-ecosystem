@@ -130,7 +130,9 @@ def fetch_ohlcv(
 
     # Persist cache
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(cache)
+    tmp = cache.with_suffix(".tmp")
+    df.to_parquet(tmp)
+    tmp.rename(cache)  # atomic on POSIX
 
     logger.info("backtest_data_fetched", symbol=symbol, rows=len(df))
     return df

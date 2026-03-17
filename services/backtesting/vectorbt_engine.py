@@ -35,7 +35,7 @@ _INDICATOR_ALIASES: Dict[str, str] = {
 }
 
 
-def _canon(name: str) -> str:
+def canon(name: str) -> str:
     n = name.strip().lower().replace(" ", "_").replace("-", "_")
     return _INDICATOR_ALIASES.get(n, n)
 
@@ -48,7 +48,7 @@ def _compute_indicator_series(
 ) -> pd.Series:
     """Return a pandas Series for the requested indicator/field."""
     params = dict(params or {})
-    canon = _canon(name)
+    canonical = canon(name)
 
     close = df["close"]
     high = df["high"]
@@ -58,7 +58,7 @@ def _compute_indicator_series(
     # Normalise 'period' -> the key each indicator expects
     period = params.pop("period", params.pop("length", None))
 
-    if canon == "rsi":
+    if canonical == "rsi":
         length = int(period or 14)
         delta = close.diff()
         gain = delta.where(delta > 0, 0.0)
@@ -68,15 +68,15 @@ def _compute_indicator_series(
         rs = avg_gain / avg_loss.replace(0, np.nan)
         return 100 - (100 / (1 + rs))
 
-    elif canon == "sma":
+    elif canonical == "sma":
         length = int(period or 20)
         return close.rolling(window=length, min_periods=length).mean()
 
-    elif canon == "ema":
+    elif canonical == "ema":
         length = int(period or 20)
         return close.ewm(span=length, adjust=False, min_periods=length).mean()
 
-    elif canon == "macd":
+    elif canonical == "macd":
         fast = int(params.get("fast", 12))
         slow = int(params.get("slow", 26))
         sig = int(params.get("signal", 9))
@@ -89,11 +89,11 @@ def _compute_indicator_series(
         target = (field or "macd").strip().lower()
         return components.get(target, macd_line)
 
-    elif canon == "bbands":
+    elif canonical == "bbands":
         length = int(period or 20)
         std_dev = float(params.get("std", params.get("std_dev", 2.0)))
         middle = close.rolling(window=length).mean()
-        std = close.rolling(window=length).std()
+        std = close.rolling(window=length).std(ddof=0)
         upper = middle + std_dev * std
         lower = middle - std_dev * std
         width = (upper - lower) / middle
@@ -102,19 +102,20 @@ def _compute_indicator_series(
         target = (field or "middle").strip().lower()
         return components.get(target, middle)
 
-    elif canon == "atr":
+    elif canonical == "atr":
         length = int(period or 14)
         prev_close = close.shift(1)
         tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
         return tr.ewm(alpha=1 / length, min_periods=length).mean()
 
-    elif canon == "vwap":
+    elif canonical == "vwap":
         tp = (high + low + close) / 3
-        cum_tp_vol = (tp * volume).cumsum()
-        cum_vol = volume.cumsum()
+        date_key = df.index.normalize()
+        cum_tp_vol = (tp * volume).groupby(date_key).cumsum()
+        cum_vol = volume.groupby(date_key).cumsum()
         return cum_tp_vol / cum_vol.replace(0, np.nan)
 
-    elif canon == "stochastic":
+    elif canonical == "stochastic":
         k_period = int(period or params.get("k_period", 14))
         d_period = int(params.get("d_period", 3))
         smooth_k = int(params.get("smooth_k", 3))
@@ -127,10 +128,10 @@ def _compute_indicator_series(
         target = (field or "k").strip().lower()
         return components.get(target, k)
 
-    elif canon == "volume":
+    elif canonical == "volume":
         return volume.astype(float)
 
-    elif canon == "obv":
+    elif canonical == "obv":
         direction = np.sign(close.diff())
         direction.iloc[0] = 0
         return (volume * direction).cumsum()
@@ -170,7 +171,7 @@ def _resolve_threshold_series(
 
     # Check if any condition matches this indicator ref
     for cond in conditions:
-        cond_name = _canon(cond.get("indicator", ""))
+        cond_name = canon(cond.get("indicator", ""))
         cond_params = cond.get("params") or {}
         cond_period = cond_params.get("period", cond_params.get("length"))
         aliases = {cond_name}
@@ -344,7 +345,7 @@ def run_vectorbt_backtest(
             fees=fees,
             sl_stop=sl_stop,
             tp_stop=tp_stop,
-            freq=_freq_from_timeframe(timeframe),
+            freq=freq_from_timeframe(timeframe),
         )
     else:
         pf = vbt.Portfolio.from_signals(
@@ -355,7 +356,7 @@ def run_vectorbt_backtest(
             fees=fees,
             sl_stop=sl_stop,
             tp_stop=tp_stop,
-            freq=_freq_from_timeframe(timeframe),
+            freq=freq_from_timeframe(timeframe),
         )
 
     return _extract_results(
@@ -366,15 +367,15 @@ def run_vectorbt_backtest(
     )
 
 
-def _freq_from_timeframe(tf: str) -> str:
+def freq_from_timeframe(tf: str) -> str:
     mapping = {
-        "1m": "1T", "5m": "5T", "15m": "15T",
-        "1H": "1H", "4H": "4H", "1D": "1D", "1W": "1W",
+        "1m": "1min", "5m": "5min", "15m": "15min",
+        "1H": "1h", "4H": "4h", "1D": "1D", "1W": "1W",
     }
     return mapping.get(tf, "1D")
 
 
-def _safe_float(val: Any, default: float = 0.0) -> float:
+def safe_float(val: Any, default: float = 0.0) -> float:
     """Convert to float, handling NaN/Inf/None."""
     if val is None:
         return default
@@ -418,7 +419,7 @@ def _extract_results(
     for ts, val in dd_series.items():
         drawdown_curve.append({
             "date": ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts),
-            "drawdown_pct": round(_safe_float(val), 4),
+            "drawdown_pct": round(safe_float(val), 4),
         })
 
     # Trade records
@@ -429,10 +430,10 @@ def _extract_results(
             for _, row in trade_records.iterrows():
                 entry_ts = row.get("Entry Timestamp", row.get("Entry Index", ""))
                 exit_ts = row.get("Exit Timestamp", row.get("Exit Index", ""))
-                entry_price = _safe_float(row.get("Avg Entry Price", row.get("Entry Price", 0)))
-                exit_price = _safe_float(row.get("Avg Exit Price", row.get("Exit Price", 0)))
-                pnl = _safe_float(row.get("PnL", 0))
-                ret = _safe_float(row.get("Return", 0))
+                entry_price = safe_float(row.get("Avg Entry Price", row.get("Entry Price", 0)))
+                exit_price = safe_float(row.get("Avg Exit Price", row.get("Exit Price", 0)))
+                pnl = safe_float(row.get("PnL", 0))
+                ret = safe_float(row.get("Return", 0))
 
                 entry_date = entry_ts.strftime("%Y-%m-%d") if hasattr(entry_ts, "strftime") else str(entry_ts)
                 exit_date = exit_ts.strftime("%Y-%m-%d") if hasattr(exit_ts, "strftime") else str(exit_ts)
@@ -461,10 +462,10 @@ def _extract_results(
     ]
 
     # Metrics
-    total_return = _safe_float(pf.total_return())
-    sharpe = _safe_float(pf.sharpe_ratio())
-    sortino = _safe_float(pf.sortino_ratio())
-    max_drawdown = abs(_safe_float(pf.max_drawdown()))
+    total_return = safe_float(pf.total_return())
+    sharpe = safe_float(pf.sharpe_ratio())
+    sortino = safe_float(pf.sortino_ratio())
+    max_drawdown = abs(safe_float(pf.max_drawdown()))
     num_trades = len(trades_list)
 
     wins = [t for t in trades_list if t["pnl"] > 0]

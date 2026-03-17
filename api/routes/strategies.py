@@ -6,6 +6,8 @@ All strategy queries are scoped to the user's active trading mode.
 """
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from typing import Any, Optional, Union
@@ -1073,14 +1075,18 @@ class ParameterSweepRequest(BaseModel):
     )
 
 
+_sweep_semaphore = asyncio.Semaphore(3)
+
+
 @router.post("/parameter-sweep")
 async def run_parameter_sweep(req: ParameterSweepRequest, request: Request):
     """Run a parameter sweep over the given ranges and return heatmap data."""
-    import asyncio
-
     user_id = request.state.user_id
     if not user_id:
         raise HTTPException(401, "Not authenticated")
+
+    if _sweep_semaphore.locked():
+        raise HTTPException(429, "Too many concurrent sweeps, try again shortly")
 
     # Resolve conditions from strategy_id if needed
     conditions_dicts: Optional[list[dict]] = None
@@ -1121,25 +1127,26 @@ async def run_parameter_sweep(req: ParameterSweepRequest, request: Request):
     # Run the sweep in a thread executor
     from services.backtesting.parameter_sweep import run_parameter_sweep as _sweep
 
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None,
-        lambda: _sweep(
-            conditions=conditions_dicts,
-            condition_groups=condition_groups_raw,
-            parameter_ranges=req.parameter_ranges,
-            symbol=req.symbol,
-            timeframe=req.timeframe,
-            lookback_days=req.lookback_days,
-            initial_capital=req.initial_capital,
-            commission_pct=req.commission_pct,
-            slippage_pct=req.slippage_pct,
-            stop_loss_pct=stop_loss,
-            take_profit_pct=take_profit,
-            action=action,
-            metric=req.metric,
-        ),
-    )
+    async with _sweep_semaphore:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: _sweep(
+                conditions=conditions_dicts,
+                condition_groups=condition_groups_raw,
+                parameter_ranges=req.parameter_ranges,
+                symbol=req.symbol,
+                timeframe=req.timeframe,
+                lookback_days=req.lookback_days,
+                initial_capital=req.initial_capital,
+                commission_pct=req.commission_pct,
+                slippage_pct=req.slippage_pct,
+                stop_loss_pct=stop_loss,
+                take_profit_pct=take_profit,
+                action=action,
+                metric=req.metric,
+            ),
+        )
     return result
 
 

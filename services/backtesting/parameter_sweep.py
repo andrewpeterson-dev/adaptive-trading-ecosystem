@@ -21,9 +21,9 @@ import vectorbt as vbt
 
 from services.backtesting.data_fetcher import fetch_ohlcv
 from services.backtesting.vectorbt_engine import (
-    _canon,
-    _freq_from_timeframe,
-    _safe_float,
+    canon,
+    freq_from_timeframe,
+    safe_float,
     build_entry_signals,
 )
 
@@ -121,14 +121,14 @@ def run_parameter_sweep(
                     close=close, short_entries=entries, short_exits=exits,
                     init_cash=initial_capital, fees=fees,
                     sl_stop=sl_val, tp_stop=tp_val,
-                    freq=_freq_from_timeframe(timeframe),
+                    freq=freq_from_timeframe(timeframe),
                 )
             else:
                 pf = vbt.Portfolio.from_signals(
                     close=close, entries=entries, exits=exits,
                     init_cash=initial_capital, fees=fees,
                     sl_stop=sl_val, tp_stop=tp_val,
-                    freq=_freq_from_timeframe(timeframe),
+                    freq=freq_from_timeframe(timeframe),
                 )
 
             metric_val = _extract_metric(pf, metric)
@@ -138,7 +138,7 @@ def run_parameter_sweep(
 
         results.append({
             "params": combo_dict,
-            "value": round(_safe_float(metric_val), 6),
+            "value": round(safe_float(metric_val), 6),
         })
 
     valid_results = [r for r in results if not math.isnan(r["value"])]
@@ -183,12 +183,13 @@ def _apply_overrides(
             continue
         parts = key.rsplit("_", 1)
         if len(parts) != 2:
+            logger.warning("sweep_unrecognized_param_key", key=key)
             continue
         indicator_part, param_type = parts
-        indicator_canon = _canon(indicator_part)
+        indicator_canon = canon(indicator_part)
 
         for cond in result:
-            if _canon(cond.get("indicator", "")) == indicator_canon:
+            if canon(cond.get("indicator", "")) == indicator_canon:
                 if param_type == "period":
                     cond.setdefault("params", {})["period"] = int(val)
                 elif param_type == "value":
@@ -225,11 +226,11 @@ def _extract_metric(pf: Any, metric: str) -> float:
         except Exception:
             return 0.0
     elif metric == "calmar_ratio":
-        tr = _safe_float(pf.total_return())
-        md = abs(_safe_float(pf.max_drawdown()))
+        tr = safe_float(pf.total_return())
+        md = abs(safe_float(pf.max_drawdown()))
         return abs(tr / md) if md > 0 else 0.0
     elif metric == "max_drawdown":
-        return abs(_safe_float(pf.max_drawdown()))
+        return abs(safe_float(pf.max_drawdown()))
     else:
         return float(pf.sharpe_ratio())
 

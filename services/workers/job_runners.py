@@ -187,7 +187,7 @@ async def execute_backtest_job(backtest_id: str, user_id: int) -> dict:
 
         try:
             # Run VectorBT in a thread executor to avoid blocking the event loop
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             if parameter_ranges:
                 # Sweep mode
