@@ -23,6 +23,7 @@ from api.routes import market as market_routes
 from api.routes import ws as ws_routes
 from api.routes import ai_chat, ai_tools, documents as documents_routes
 from api.routes import sentiment as sentiment_routes
+from api.routes import trade_analysis as trade_analysis_routes
 from api.routes import user_mode as user_mode_routes
 from api.routes import risk_limits as risk_limits_routes
 from api.routes import quant as quant_routes
@@ -290,6 +291,7 @@ app.include_router(reasoning_routes.router, prefix="/api/reasoning", tags=["AI R
 app.include_router(sentiment_routes.router, prefix="/api/sentiment", tags=["Sentiment"])
 app.include_router(risk_analytics_routes.router, prefix="/api/risk", tags=["Risk Analytics"])
 app.include_router(portfolio_optimization_routes.router, prefix="/api/portfolio", tags=["Portfolio Optimization"])
+app.include_router(trade_analysis_routes.router, prefix="/api/trade-analysis", tags=["Trade Analysis"])
 
 
 @app.get("/health")

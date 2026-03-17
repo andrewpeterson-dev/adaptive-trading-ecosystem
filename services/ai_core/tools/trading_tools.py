@@ -381,6 +381,32 @@ async def _create_trade_proposal(
     return result
 
 
+async def _run_deep_trade_analysis(
+    user_id: int,
+    symbol: str,
+    action: str = "buy",
+    size: float = 0,
+) -> dict:
+    """Run multi-agent deep trade analysis pipeline.
+
+    Invokes a LangGraph pipeline with 7 specialist agents:
+    Technical Analyst, Fundamental Analyst, Sentiment Analyst,
+    Bull Researcher, Bear Researcher, Risk Assessor, and
+    Decision Synthesizer.
+
+    Returns structured result with all reports and final recommendation.
+    """
+    from services.ai_core.multi_agent.runner import run_trade_analysis
+
+    result = await run_trade_analysis(
+        symbol=symbol,
+        action=action,
+        size=size,
+        user_id=user_id,
+    )
+    return result.to_dict()
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
@@ -534,4 +560,44 @@ def register():
         },
         output_schema={"type": "object"},
         handler=_create_trade_proposal,
+    ))
+
+    registry.register(ToolDefinition(
+        name="runDeepTradeAnalysis",
+        version="1.0",
+        description=(
+            "Run a multi-agent deep trade analysis pipeline. Uses 7 specialist AI agents "
+            "(Technical Analyst, Fundamental Analyst, Sentiment Analyst, Bull Researcher, "
+            "Bear Researcher, Risk Assessor, Decision Synthesizer) to thoroughly evaluate "
+            "a proposed trade. Takes 30-90 seconds. Returns structured analysis with all "
+            "reports, bull/bear cases, risk assessment, and a final recommendation with "
+            "confidence score. Use this when the user asks for deep analysis of a trade."
+        ),
+        category=ToolCategory.ANALYTICS,
+        side_effect=ToolSideEffect.READ,
+        timeout_ms=120000,
+        cache_ttl_s=300,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Ticker symbol (e.g. AAPL, TSLA, SPY)",
+                },
+                "action": {
+                    "type": "string",
+                    "enum": ["buy", "sell"],
+                    "description": "Proposed trade action",
+                    "default": "buy",
+                },
+                "size": {
+                    "type": "number",
+                    "description": "Proposed position size (shares/contracts)",
+                    "default": 0,
+                },
+            },
+            "required": ["symbol"],
+        },
+        output_schema={"type": "object"},
+        handler=_run_deep_trade_analysis,
     ))
