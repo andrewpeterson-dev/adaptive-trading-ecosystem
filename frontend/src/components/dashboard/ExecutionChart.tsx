@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from "react"
 import { Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useThemeMode } from "@/hooks/useThemeMode";
+import { useTradeStore } from "@/stores/trade-store";
 import type {
   IChartApi,
   ISeriesApi,
@@ -120,10 +121,12 @@ function findNearestBarTime(
 // ---------------------------------------------------------------------------
 
 export function ExecutionChart({
-  symbol = "SPY",
+  symbol: symbolProp,
   signals = [],
   height = 400,
 }: ExecutionChartProps) {
+  const storeSymbol = useTradeStore((state) => state.symbol);
+  const symbol = symbolProp || storeSymbol || "";
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -184,14 +187,15 @@ export function ExecutionChart({
 
   const fetchAndRender = useCallback(
     async (tf: DashboardTimeFrame) => {
-      if (!chartRef.current) return;
+      if (!chartRef.current || !symbol) return;
 
       setLoading(true);
       setError(null);
 
       try {
+        const safeLimit = Math.max(300, 50);
         const res = await fetch(
-          `/api/trading/bars?symbol=${encodeURIComponent(symbol)}&timeframe=${tf}&limit=300`,
+          `/api/trading/bars?symbol=${encodeURIComponent(symbol)}&timeframe=${tf}&limit=${safeLimit}`,
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload = (await res.json()) as BarsResponse;
@@ -388,6 +392,17 @@ export function ExecutionChart({
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  if (!symbol) {
+    return (
+      <div
+        className="flex items-center justify-center rounded-md bg-muted/20 text-xs text-muted-foreground"
+        style={{ height }}
+      >
+        Select a symbol to view chart
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
