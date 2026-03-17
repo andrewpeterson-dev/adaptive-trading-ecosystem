@@ -20,7 +20,7 @@ Return JSON:
   "delay_seconds": 0
 }
 
-Be conservative. When uncertain, reduce size rather than block entirely."""
+When uncertain, reduce size rather than block entirely. Match your aggression to the strategy style — aggressive strategies should trade aggressively (higher confidence, larger sizes) while conservative strategies should be more cautious."""
 
 def build_trade_decision_prompt(
     *,

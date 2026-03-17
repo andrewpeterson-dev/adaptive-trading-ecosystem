@@ -60,6 +60,7 @@ class ReasoningEngine:
         vix: float | None = None,
         portfolio_exposure: float = 0.0,
         daily_pnl_pct: float = 0.0,
+        trading_mode: str = "paper",
     ) -> TradeDecision:
         # ── Tier-aware rate limiting ────────────────────────────────────
         tier_info = await self._check_tier_limits(bot.user_id)
@@ -151,7 +152,7 @@ class ReasoningEngine:
         llm_result = await self._try_llm_reasoning(
             bot=bot, symbol=symbol, signal=signal,
             strategy_config=strategy_config, events_dicts=events_dicts,
-            vix=vix,
+            vix=vix, trading_mode=trading_mode,
         )
 
         # Fetch open positions across all bots for correlation risk check
@@ -242,6 +243,7 @@ class ReasoningEngine:
 
     async def _try_llm_reasoning(
         self, *, bot, symbol, signal, strategy_config, events_dicts, vix,
+        trading_mode: str = "paper",
     ) -> dict:
         """Call LLM for reasoning. Falls back to defaults on failure."""
         try:
@@ -290,14 +292,20 @@ class ReasoningEngine:
                 logger.info("reasoning_sentiment_fetched", symbol=symbol, sentiment=sentiment_data.get("overall_sentiment"), score=sentiment_data.get("score"))
             except Exception as exc:
                 logger.error("reasoning_sentiment_failed", symbol=symbol, error=str(exc), exc_info=True)
-                return {
-                    "decision": "DELAY_TRADE",
-                    "confidence": 0.0,
-                    "reasoning": f"Sentiment data unavailable for {symbol} — will not trade without market context",
-                    "size_adjustment": 0.0,
-                    "delay_seconds": 120,
-                    "model_used": "sentiment_required",
-                }
+                # Paper mode: proceed without sentiment — no real money at risk.
+                # Live mode: block the trade until sentiment is available.
+                if trading_mode != "live":
+                    logger.info("reasoning_sentiment_skip_paper", symbol=symbol, reason="Paper mode — proceeding without sentiment")
+                    sentiment_data = None  # Continue without sentiment
+                else:
+                    return {
+                        "decision": "DELAY_TRADE",
+                        "confidence": 0.0,
+                        "reasoning": f"Sentiment data unavailable for {symbol} — will not trade without market context",
+                        "size_adjustment": 0.0,
+                        "delay_seconds": 120,
+                        "model_used": "sentiment_required",
+                    }
 
             prompt = build_trade_decision_prompt(
                 bot_name=bot.name, symbol=symbol, signal=signal,
@@ -352,13 +360,27 @@ class ReasoningEngine:
 
         except Exception as e:
             logger.error("reasoning_llm_failed", error=str(e), bot_id=bot.id, exc_info=True)
-            # Fail-closed: skip the trade when LLM reasoning is unavailable.
-            # Never execute without risk evaluation, especially in live mode.
+            # Paper mode: trust the signal if conditions passed — no real money at risk.
+            # Live mode: fail-closed — never execute without risk evaluation.
+            if trading_mode != "live":
+                logger.info(
+                    "reasoning_paper_fallback",
+                    bot_id=bot.id, symbol=symbol,
+                    reason="LLM unavailable, paper mode — proceeding with safety-only checks",
+                )
+                return {
+                    "decision": "EXECUTE",
+                    "confidence": 0.7,
+                    "reasoning": "LLM unavailable — paper mode, proceeding with signal (safety rules still apply)",
+                    "size_adjustment": 1.0,
+                    "delay_seconds": 0,
+                    "model_used": "safety_rules_fallback_paper",
+                }
             return {
                 "decision": "DELAY_TRADE",
-                "confidence": 0.0,
-                "reasoning": "LLM unavailable — skipping trade (fail-closed)",
-                "size_adjustment": 0.0,
+                "confidence": 0.5,
+                "reasoning": "LLM unavailable — live mode, skipping trade (fail-closed)",
+                "size_adjustment": 0.5,
                 "delay_seconds": 60,
                 "model_used": "safety_rules_fallback",
             }

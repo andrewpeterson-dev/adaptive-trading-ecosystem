@@ -218,11 +218,13 @@ class BotRunner:
                 await self._ai_evaluate_bot(bot, config, symbols, action, position_size_pct, risk_context)
                 return
         if True:  # rigid condition path for manual strategies
+            trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
             for symbol in symbols:
                 try:
                     await self._evaluate_symbol(
                         bot, config, symbol, conditions, action,
                         position_size_pct, risk_context,
+                        trading_mode=trading_mode,
                     )
                 except Exception as e:
                     logger.error(
@@ -371,18 +373,26 @@ class BotRunner:
             )
         except Exception as exc:
             logger.error(
-                "bot_runner_sentiment_failed_skipping",
+                "bot_runner_sentiment_failed",
                 bot_id=bot.id,
                 error=str(exc),
                 exc_info=True,
             )
+            # Paper mode: proceed without sentiment — no real money at risk.
+            # Live mode: skip cycle until sentiment is available.
+            if trading_mode == "live":
+                logger.info(
+                    "bot_skipping_cycle",
+                    bot_id=bot.id,
+                    reason="sentiment data unavailable — live mode, will not trade blind",
+                )
+                self._last_eval[bot.id] = datetime.utcnow()
+                return
             logger.info(
-                "bot_skipping_cycle",
+                "bot_sentiment_skip_paper",
                 bot_id=bot.id,
-                reason="sentiment data unavailable — will not trade blind",
+                reason="sentiment unavailable — paper mode, proceeding without",
             )
-            self._last_eval[bot.id] = datetime.utcnow()
-            return
 
         signals = await ai_evaluate_entries(
             strategy_name=config.get("name", bot.name),
@@ -431,6 +441,7 @@ class BotRunner:
                         risk_context, symbol, current_price,
                     ),
                     daily_pnl_pct=float(risk_context.get("daily_pnl_pct") or 0.0),
+                    trading_mode=trading_mode,
                 )
 
                 if decision.decision == "PAUSE_BOT":
@@ -519,6 +530,7 @@ class BotRunner:
         action: str,
         position_size_pct: float,
         risk_context: dict,
+        trading_mode: str = "paper",
     ) -> None:
         """Evaluate conditions for one symbol and execute if triggered."""
         # Fetch OHLCV bars using yfinance
@@ -607,6 +619,7 @@ class BotRunner:
                         current_price,
                     ),
                     daily_pnl_pct=float(risk_context.get("daily_pnl_pct") or 0.0),
+                    trading_mode=trading_mode,
                 )
 
                 if decision.decision == "PAUSE_BOT":
@@ -836,8 +849,16 @@ class BotRunner:
         current_price: float,
     ) -> tuple[bool, list[str]]:
         reasons: list[str] = []
+        settings = get_settings()
+        # Use config values, falling back to global defaults so exits always fire
         stop_loss_pct = float(config.get("stop_loss_pct") or 0.0)
+        if stop_loss_pct <= 0:
+            stop_loss_pct = settings.default_stop_loss_pct / 100.0  # Convert from percent to fraction
         take_profit_pct = float(config.get("take_profit_pct") or 0.0)
+        if take_profit_pct <= 0:
+            take_profit_pct = settings.default_take_profit_pct / 100.0  # Convert from percent to fraction
+        # Emergency exit: if loss exceeds emergency threshold, always exit
+        emergency_loss_pct = settings.emergency_loss_pct / 100.0
 
         for trade in open_trades:
             entry_price = float(trade.entry_price or 0.0)
@@ -854,6 +875,21 @@ class BotRunner:
                 target_price = entry_price * (1 - take_profit_pct if is_short else 1 + take_profit_pct)
                 if (is_short and current_price <= target_price) or (not is_short and current_price >= target_price):
                     reasons.append(f"Take profit triggered at {current_price:.2f}")
+
+            # Emergency exit — always fire regardless of config
+            if emergency_loss_pct > 0:
+                if is_short:
+                    loss_pct = (current_price - entry_price) / entry_price
+                else:
+                    loss_pct = (entry_price - current_price) / entry_price
+                if loss_pct >= emergency_loss_pct:
+                    reasons.append(f"EMERGENCY exit: loss {loss_pct:.1%} exceeds {emergency_loss_pct:.1%} threshold")
+
+            # Max hold time check
+            if trade.entry_ts:
+                hold_hours = (datetime.utcnow() - trade.entry_ts).total_seconds() / 3600.0
+                if hold_hours > settings.max_hold_hours:
+                    reasons.append(f"Max hold time exceeded ({hold_hours:.0f}h > {settings.max_hold_hours:.0f}h)")
 
         exit_conditions = config.get("exit_conditions") or []
         if exit_conditions:
@@ -1152,8 +1188,13 @@ class BotRunner:
                 loop = asyncio.get_running_loop()
                 account = await loop.run_in_executor(None, alpaca_client.get_account)
                 kelly_equity = float(account.equity)
-            kelly_frac, kelly_expl = await calculate_kelly_position_size(bot_id=bot.id, total_equity=kelly_equity)
             position_fraction_raw = self._normalize_position_size(position_size_pct)
+            kelly_frac, kelly_expl = await calculate_kelly_position_size(
+                bot_id=bot.id,
+                total_equity=kelly_equity,
+                configured_pct=position_fraction_raw,
+                trading_mode=trading_mode,
+            )
             position_fraction = min(position_fraction_raw, kelly_frac)
             if position_fraction < position_fraction_raw:
                 if reasons is None:
@@ -1630,12 +1671,15 @@ class BotRunner:
             logger.warning("ai_capital_adjust_error", bot_id=bot.id, error=str(e))
 
     def _normalize_position_size(self, position_size_pct: float) -> float:
-        """Accept both fractional sizing (0.1 = 10%) and percent sizing (10 = 10%)."""
+        """Accept both fractional sizing (0.1 = 10%) and percent sizing (10 = 10%).
+
+        Hard cap at 25% of equity regardless of input.
+        """
         if position_size_pct <= 0:
             return 0.0
         if position_size_pct <= 1:
-            return position_size_pct
-        return position_size_pct / 100.0
+            return min(position_size_pct, 0.25)
+        return min(position_size_pct / 100.0, 0.25)
 
     @staticmethod
     def _publish_activity(

@@ -142,30 +142,53 @@ async def check_sector_concentration(user_id: int, symbol: str, proposed_value: 
         logger.warning("sector_check_error", error=str(e))
         return (True, proposed_value, "")
 
-async def calculate_kelly_position_size(bot_id: str, total_equity: float, kelly_fraction: float = 0.25, min_trades: int = 20, default_pct: float = 0.01) -> Tuple[float, str]:
+async def calculate_kelly_position_size(
+    bot_id: str,
+    total_equity: float,
+    kelly_fraction: float = 0.25,
+    min_trades: int = 20,
+    default_pct: float = 0.01,
+    configured_pct: float | None = None,
+    trading_mode: str = "paper",
+) -> Tuple[float, str]:
+    """Calculate Kelly-criterion position size.
+
+    When insufficient trade history exists:
+    - Paper mode: use the user's configured position size (no real money at risk)
+    - Live mode: use the conservative default_pct (1%)
+    """
     from db.cerberus_models import CerberusTrade
     if total_equity <= 0:
         return (0.0, "No equity")
+
+    # Determine the fallback when Kelly can't calculate
+    if trading_mode != "live" and configured_pct is not None and configured_pct > 0:
+        insufficient_fallback = min(configured_pct, 0.25)  # Cap at 25% even in paper
+        insufficient_label = "paper_configured"
+    else:
+        insufficient_fallback = default_pct
+        insufficient_label = "conservative_default"
+
     try:
         async with get_session() as session:
             trades = list((await session.execute(select(CerberusTrade).where(and_(CerberusTrade.bot_id == bot_id, CerberusTrade.exit_ts.is_not(None), CerberusTrade.return_pct.is_not(None))).order_by(CerberusTrade.exit_ts.desc()).limit(100))).scalars().all())
         if len(trades) < min_trades:
-            return (default_pct, f"Insufficient history ({len(trades)}/{min_trades})")
+            return (insufficient_fallback, f"Insufficient history ({len(trades)}/{min_trades}), using {insufficient_label}={insufficient_fallback:.3f}")
         wins = [t for t in trades if (t.return_pct or 0) > 0]
         losses = [t for t in trades if (t.return_pct or 0) < 0]
         if not wins or not losses:
-            return (default_pct, "Missing wins or losses")
+            return (insufficient_fallback, f"Missing wins or losses, using {insufficient_label}")
         win_rate = len(wins) / len(trades)
         avg_win = sum(abs(t.return_pct) for t in wins) / len(wins)
         avg_loss = sum(abs(t.return_pct) for t in losses) / len(losses)
         if avg_loss <= 0:
-            return (default_pct, "Avg loss zero")
+            return (insufficient_fallback, f"Avg loss zero, using {insufficient_label}")
         full_kelly = win_rate - ((1.0 - win_rate) / (avg_win / avg_loss))
         clamped = max(0.005, min(0.05, full_kelly * kelly_fraction))
         return (clamped, f"Kelly: wr={win_rate:.2f}, full={full_kelly:.3f}, clamped={clamped:.3f}")
     except Exception as e:
         logger.warning("kelly_error", bot_id=bot_id, error=str(e))
-        return (default_pct, f"Kelly error")
+        return (insufficient_fallback, f"Kelly error, using {insufficient_label}")
 
 async def update_category_scores(user_id: int, strategy_type: Optional[str] = None, mode: Optional[str] = None) -> None:
     from db.models import StrategyTypeScore, UserRiskLimits, TradingModeEnum

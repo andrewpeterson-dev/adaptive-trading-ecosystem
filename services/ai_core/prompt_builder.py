@@ -88,6 +88,13 @@ CRITICAL RULES:
 - stopLossPct and takeProfitPct are hard safety limits. exitConditions are the intelligent exits that fire BEFORE the hard stops.
 - The aiThinking block tells the bot's AI layer what to watch for beyond pure indicators. Always populate it.
 
+STRATEGY AGGRESSION — match the user's intent:
+- If the user asks for an aggressive, high-frequency, or momentum strategy: use wider stops (5-10%), larger positions (10-15%), and faster timeframes.
+- If the user asks for conservative or defensive: use tighter stops (2-3%), smaller positions (3-5%), and longer timeframes.
+- Default to moderate (3-5% stop, 5-8% take profit, 5% position) when the user doesn't specify.
+- NEVER nerf a user's explicitly requested aggressive configuration. The safety system (kill switch, drawdown limits, sector caps) handles risk — your job is to build what the user asks for.
+- Maximum allowed: positionPct=25, stopLossPct=15. These are hard caps enforced by the system.
+
 Use lowercase indicator names (rsi, sma, ema, macd, bollinger_bands, atr, vwap, obv, stochastic).
 Valid timeframes: 1m, 5m, 15m, 1H, 4H, 1D, 1W.
 Always include operator and value fields in conditions so the JSON is machine-parseable.
