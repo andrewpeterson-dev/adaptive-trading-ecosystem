@@ -1056,13 +1056,14 @@ class BotRunner:
                 limits = result.scalar_one_or_none()
                 if limits and limits.kill_switch_active:
                     return True
+                return False
         except Exception as e:
-            logger.warning(
-                "kill_switch_lookup_error",
+            logger.error(
+                "kill_switch_lookup_failed_fail_closed",
                 user_id=user_id,
                 error=str(e),
             )
-        return False
+            return True  # fail-closed: block trading when kill switch state unknown
 
     async def _fetch_bars(self, symbol: str, timeframe: str) -> list[dict]:
         """Fetch OHLCV bars using yfinance (run in thread to avoid blocking)."""
