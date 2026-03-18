@@ -106,6 +106,8 @@ export interface BotTrade {
 
 export interface BotDetail extends BotSummary {
   sourcePrompt?: string | null;
+  aiBrainConfig?: Record<string, unknown> | null;
+  overrideLevel?: string;
   equityCurve: Array<{ date: string; value: number }>;
   trades: BotTrade[];
   versionHistory: BotVersionSummary[];

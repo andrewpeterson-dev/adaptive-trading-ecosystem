@@ -16,7 +16,7 @@ type OverrideLevel = "advisory" | "soft" | "full";
 const OVERRIDE_OPTIONS: { value: OverrideLevel; label: string; icon: typeof Shield; color: string; desc: string }[] = [
   { value: "advisory", label: "Advisory", icon: Shield, color: "text-sky-400", desc: "AI logs only" },
   { value: "soft", label: "Guided", icon: Brain, color: "text-violet-400", desc: "Can delay or reduce size" },
-  { value: "full", label: "Full Auto", icon: Zap, color: "text-amber-400", desc: "Can cancel, reduce, or exit" },
+  { value: "full", label: "Full Auto", icon: Zap, color: "text-amber-400", desc: "AI makes all trading decisions" },
 ];
 
 export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
@@ -24,13 +24,21 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
   const [input, setInput] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Derive override level from the current version (syncs on refresh/re-fetch)
+  // Derive override level — check ai_brain_config first, then version override
   const versionData = detail.currentVersion as Record<string, unknown> | null;
-  const serverOverride = (versionData?.overrideLevel as OverrideLevel | undefined) ?? "soft";
+  const aiBrainConfig = detail.aiBrainConfig;
+  const aiBrainMode = aiBrainConfig?.execution_mode as string | undefined;
+
+  // If ai_brain_config says ai_driven, override level is "full"
+  const serverOverride: OverrideLevel = aiBrainMode === "ai_driven"
+    ? "full"
+    : aiBrainMode === "ai_assisted"
+    ? "soft"
+    : (detail.overrideLevel as OverrideLevel | undefined) ?? (versionData?.overrideLevel as OverrideLevel | undefined) ?? "soft";
+
   const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>(serverOverride);
   const [overrideSaving, setOverrideSaving] = useState(false);
 
-  // Re-sync when the detail prop updates (e.g. after page refresh or 30s polling)
   useEffect(() => {
     setOverrideLevel(serverOverride);
   }, [serverOverride]);
@@ -64,10 +72,19 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     const prev = overrideLevel;
     setOverrideLevel(level);
     try {
+      // Update override level
       await apiFetch(`/api/ai/tools/bots/${detail.id}/override-level`, {
         method: "PATCH",
         body: JSON.stringify({ override_level: level }),
       });
+      // If switching to/from full, also update ai_brain_config execution_mode
+      if (level === "full" || prev === "full") {
+        const newMode = level === "full" ? "ai_driven" : level === "soft" ? "ai_assisted" : "manual";
+        await apiFetch(`/api/ai/tools/bots/${detail.id}/ai-config`, {
+          method: "PATCH",
+          body: JSON.stringify({ execution_mode: newMode }),
+        });
+      }
     } catch (err) {
       console.error("Override level update failed:", err);
       setOverrideLevel(prev);
@@ -75,6 +92,10 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
       setOverrideSaving(false);
     }
   }, [detail.id, overrideLevel]);
+
+  // Show AI Brain model info when in full auto mode
+  const modelConfig = aiBrainConfig?.model_config as Record<string, unknown> | undefined;
+  const modelName = modelConfig?.primary_model as string | undefined;
 
   return (
     <TerminalPanel
@@ -159,6 +180,21 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
           })}
         </div>
       </div>
+
+      {/* ── AI Brain Model Info (when Full Auto) ── */}
+      {overrideLevel === "full" && modelName && (
+        <div className="mt-2 rounded-lg border border-border/40 bg-muted/10 px-3 py-2">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-1">
+            AI Brain
+          </div>
+          <div className="text-[11px] text-foreground font-medium">{modelName}</div>
+          {Array.isArray(aiBrainConfig?.data_sources) && (
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              Sources: {(aiBrainConfig.data_sources as string[]).join(", ")}
+            </div>
+          )}
+        </div>
+      )}
     </TerminalPanel>
   );
 }

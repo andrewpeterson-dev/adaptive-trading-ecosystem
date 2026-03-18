@@ -771,6 +771,8 @@ async def get_bot_detail(bot_id: str, request: Request):
         "optimizationHistory": [_optimization_run_to_dict(run) for run in optimization_runs],
         "allocatedCapital": bot.allocated_capital,
         "aiCapitalManagement": bool(bot.reasoning_model_config and bot.reasoning_model_config.get("ai_capital_management")),
+        "aiBrainConfig": bot.ai_brain_config,
+        "overrideLevel": current_version.override_level if current_version else "soft",
     }
 
 
