@@ -182,13 +182,21 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
 
   const strokeColor = isPositive ? "#10b981" : "#ef4444";
   const gradientId = "portfolioEquityGradient";
+  const isFlat = data.length >= 2 && Math.abs(totalChange) < 0.01;
 
   const yDomain = useMemo(() => {
     if (data.length === 0) return [0, 100];
     const values = data.map((d) => d.equity);
     const min = Math.min(...values);
     const max = Math.max(...values);
-    const padding = (max - min) * 0.08 || max * 0.02 || 100;
+    const range = max - min;
+    // For flat lines, show a tight range so the line is clearly visible at center
+    if (range < 1) {
+      const mid = (max + min) / 2;
+      const spread = mid * 0.005 || 500; // 0.5% of equity
+      return [Math.floor(mid - spread), Math.ceil(mid + spread)];
+    }
+    const padding = range * 0.08 || 100;
     return [Math.floor(min - padding), Math.ceil(max + padding)];
   }, [data]);
 
@@ -312,7 +320,7 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
           </div>
         )}
 
-        {data.length > 0 && (
+        {data.length > 0 && !isFlat && (
           <div className="absolute top-3 right-3 z-[5] flex items-center gap-3 text-[9px] font-mono text-muted-foreground/30">
             <span className="flex items-center gap-1">
               <span className="h-1 w-1 rounded-full bg-emerald-400/40 animate-pulse" />
@@ -321,13 +329,26 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
           </div>
         )}
 
+        {data.length > 0 && isFlat && (
+          <div className="absolute inset-x-0 bottom-12 z-[5] flex justify-center">
+            <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground/40">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1 w-1 rounded-full bg-emerald-400/50 animate-alive-pulse" />
+                Portfolio initialized
+              </span>
+              <span className="text-muted-foreground/25">&bull;</span>
+              <span>Equity updates with first trade</span>
+            </div>
+          </div>
+        )}
+
         {data.length > 0 && (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={strokeColor} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={strokeColor} stopOpacity={0} />
+                  <stop offset="5%" stopColor={strokeColor} stopOpacity={isFlat ? 0.15 : 0.25} />
+                  <stop offset="95%" stopColor={strokeColor} stopOpacity={isFlat ? 0.05 : 0} />
                 </linearGradient>
               </defs>
 
@@ -387,7 +408,7 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
                 type="monotone"
                 dataKey="equity"
                 stroke={strokeColor}
-                strokeWidth={2}
+                strokeWidth={isFlat ? 2.5 : 2}
                 fill={`url(#${gradientId})`}
                 dot={false}
                 isAnimationActive={false}
