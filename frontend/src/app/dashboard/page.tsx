@@ -18,15 +18,13 @@ import {
   Receipt,
   Zap,
   Target,
+  ChevronDown,
   Radio,
 } from "lucide-react";
-import "react-grid-layout/css/styles.css";
-import "react-resizable/css/styles.css";
 import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useTradingMode } from "@/hooks/useTradingMode";
-import { useDashboardStore } from "@/stores/dashboard-store";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SubNav } from "@/components/layout/SubNav";
 import {
@@ -44,41 +42,103 @@ import {
 } from "@/components/dashboard";
 import { PortfolioEquityChart } from "@/components/dashboard/PortfolioEquityChart";
 import { AmbientBackground } from "@/components/dashboard/AmbientBackground";
-import { DashboardGrid } from "@/components/dashboard/GridLayout";
-import type { Layouts, LayoutItem } from "@/components/dashboard/GridLayout";
 import { MarketMoodWidget } from "@/components/dashboard/MarketMoodWidget";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusChip } from "@/components/ui/status-chip";
 
 // ---------------------------------------------------------------------------
-// Default grid layout — chart is now ABOVE the grid as a hero element
+// Collapsible Section — scan-first building block
 // ---------------------------------------------------------------------------
 
-const DEFAULT_LAYOUTS: Layouts = {
-  lg: [
-    { i: "strategy",        x: 0, y: 0,  w: 3, h: 8,  minW: 2, minH: 5 },
-    { i: "ai-reasoning",    x: 0, y: 8,  w: 3, h: 8,  minW: 2, minH: 5 },
-    { i: "ai-scanner",      x: 0, y: 16, w: 3, h: 7,  minW: 2, minH: 4 },
-    { i: "equity-curve",    x: 3, y: 0,  w: 6, h: 8,  minW: 3, minH: 5 },
-    { i: "portfolio-risk",  x: 3, y: 8,  w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "risk-metrics",    x: 9, y: 0,  w: 3, h: 6,  minW: 2, minH: 4 },
-    { i: "sentiment",       x: 9, y: 6,  w: 3, h: 6,  minW: 2, minH: 4 },
-    { i: "open-positions",  x: 9, y: 12, w: 3, h: 7,  minW: 3, minH: 5 },
-    { i: "trade-log",       x: 0, y: 23, w: 12, h: 7, minW: 6, minH: 5 },
-  ],
-  md: [
-    { i: "strategy",        x: 0, y: 0,  w: 6, h: 7,  minW: 3, minH: 4 },
-    { i: "ai-reasoning",    x: 6, y: 0,  w: 6, h: 7,  minW: 3, minH: 4 },
-    { i: "ai-scanner",      x: 0, y: 7,  w: 6, h: 6,  minW: 3, minH: 4 },
-    { i: "risk-metrics",    x: 6, y: 7,  w: 6, h: 6,  minW: 3, minH: 4 },
-    { i: "equity-curve",    x: 0, y: 13, w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "sentiment",       x: 6, y: 13, w: 6, h: 6,  minW: 3, minH: 4 },
-    { i: "open-positions",  x: 0, y: 20, w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "portfolio-risk",  x: 6, y: 20, w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "trade-log",       x: 0, y: 27, w: 12, h: 7, minW: 6, minH: 5 },
-  ],
-};
+function Section({
+  title,
+  icon: Icon,
+  children,
+  defaultOpen = true,
+  badge,
+  className = "",
+}: {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  badge?: React.ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <section className={className}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-2 py-2 group"
+      >
+        <Icon className="h-3.5 w-3.5 text-muted-foreground/60" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/70">
+          {title}
+        </span>
+        {badge}
+        <span className="flex-1" />
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 text-muted-foreground/40 transition-transform duration-200",
+            !open && "-rotate-90"
+          )}
+        />
+      </button>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-in-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="pt-1 pb-2">{children}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab Bar — for consolidating related panels
+// ---------------------------------------------------------------------------
+
+function TabBar({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { key: string; label: string; icon?: React.ElementType }[];
+  active: string;
+  onChange: (key: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg border border-border/40 bg-muted/10 p-0.5 w-fit mb-3">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[10px] font-semibold transition-all duration-150",
+              active === tab.key
+                ? "bg-foreground text-background shadow-sm"
+                : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.04]"
+            )}
+          >
+            {Icon && <Icon className="h-3 w-3" />}
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Cerberus Insight Chip — ambient AI presence
@@ -87,7 +147,6 @@ const DEFAULT_LAYOUTS: Layouts = {
 function CerberusInsightChip() {
   return (
     <div className="flex items-center gap-3 ml-auto w-fit rounded-full border border-border/40 cerberus-chip px-4 py-2 mt-3">
-      {/* Signal strength bars — the memorable micro-detail */}
       <div className="signal-bars flex items-end gap-[2px]">
         <span className="block h-[6px] w-[2px] rounded-full bg-emerald-400/70" />
         <span className="block h-[9px] w-[2px] rounded-full bg-emerald-400/60" />
@@ -120,16 +179,9 @@ export default function DashboardPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const { mode } = useTradingMode();
 
-  // -- Layout state --
-  const { isLayoutLocked, toggleLayoutLock, layouts, updateLayouts } =
-    useDashboardStore();
-
-  // Use stored layouts if they have the right keys, otherwise use defaults
-  const activeLayouts = useMemo(() => {
-    const stored = layouts?.lg;
-    if (stored && stored.length >= 9) return layouts;
-    return DEFAULT_LAYOUTS;
-  }, [layouts]);
+  // -- Tab state for grouped sections --
+  const [aiTab, setAiTab] = useState("reasoning");
+  const [riskTab, setRiskTab] = useState("metrics");
 
   // -- Data fetching --
   const fetchAll = useCallback(async () => {
@@ -156,8 +208,7 @@ export default function DashboardPage() {
       }
 
       if (ordRes.status === "fulfilled") {
-        const list = ordRes.value.orders || [];
-        setOrders(list);
+        setOrders(ordRes.value.orders || []);
       }
 
       if (riskRes.status === "fulfilled") {
@@ -183,16 +234,6 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  // -- Layout change handler --
-  const handleLayoutChange = useCallback(
-    (_layout: LayoutItem[], allLayouts: Layouts) => {
-      if (!isLayoutLocked) {
-        updateLayouts(allLayouts);
-      }
-    },
-    [isLayoutLocked, updateLayouts]
-  );
-
   // -- Derived metrics --
   const totalPnl = useMemo(() => {
     return positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
@@ -217,13 +258,11 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="app-page">
-        <SubNav
-          items={[
-            { href: "/dashboard", label: "Overview", icon: LayoutGrid },
-            { href: "/portfolio", label: "Portfolio", icon: PieChart },
-            { href: "/risk", label: "Risk", icon: ShieldCheck },
-          ]}
-        />
+        <SubNav items={[
+          { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+          { href: "/portfolio", label: "Portfolio", icon: PieChart },
+          { href: "/risk", label: "Risk", icon: ShieldCheck },
+        ]} />
         <DashboardSkeleton />
       </div>
     );
@@ -232,25 +271,17 @@ export default function DashboardPage() {
   if (account?.not_configured) {
     return (
       <div className="app-page">
-        <SubNav
-          items={[
-            { href: "/dashboard", label: "Overview", icon: LayoutGrid },
-            { href: "/portfolio", label: "Portfolio", icon: PieChart },
-            { href: "/risk", label: "Risk", icon: ShieldCheck },
-          ]}
-        />
+        <SubNav items={[
+          { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+          { href: "/portfolio", label: "Portfolio", icon: PieChart },
+          { href: "/risk", label: "Risk", icon: ShieldCheck },
+        ]} />
         <EmptyState
           icon={<Unplug className="h-6 w-6 text-amber-400" />}
           title="No live trading configured"
-          description={
-            account.message ||
-            "Connect a live API key in Settings to trade with real money."
-          }
+          description={account.message || "Connect a live API key in Settings to trade with real money."}
           action={
-            <Link
-              href="/settings"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
+            <Link href="/settings" className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
               <Settings className="h-4 w-4" />
               Go to Settings
             </Link>
@@ -263,30 +294,22 @@ export default function DashboardPage() {
   if (error && !account) {
     return (
       <div className="app-page">
-        <SubNav
-          items={[
-            { href: "/dashboard", label: "Overview", icon: LayoutGrid },
-            { href: "/portfolio", label: "Portfolio", icon: PieChart },
-            { href: "/risk", label: "Risk", icon: ShieldCheck },
-          ]}
-        />
+        <SubNav items={[
+          { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+          { href: "/portfolio", label: "Portfolio", icon: PieChart },
+          { href: "/risk", label: "Risk", icon: ShieldCheck },
+        ]} />
         <EmptyState
           icon={<Unplug className="h-6 w-6 text-muted-foreground/60" />}
           title="Broker not responding"
           description="Could not load account data. Your API key may need to be re-entered."
           action={
             <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={fetchAll}
-                className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"
-              >
+              <button onClick={fetchAll} className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors">
                 <RefreshCw className="h-4 w-4" />
                 Retry
               </button>
-              <Link
-                href="/settings"
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
+              <Link href="/settings" className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
                 <Settings className="h-4 w-4" />
                 Go to Settings
               </Link>
@@ -297,27 +320,24 @@ export default function DashboardPage() {
     );
   }
 
+  // =========================================================================
+  // MAIN DASHBOARD — scan-first control surface
+  // =========================================================================
+
   return (
-    <div
-      className={cn("app-page relative", isLayoutLocked ? "layout-locked" : "layout-unlocked")}
-    >
-      {/* Ambient intelligence background */}
+    <div className="app-page relative">
       <AmbientBackground />
 
-      {/* SubNav */}
-      <SubNav
-        items={[
-          { href: "/dashboard", label: "Overview", icon: LayoutGrid },
-          { href: "/portfolio", label: "Portfolio", icon: PieChart },
-          { href: "/risk", label: "Risk", icon: ShieldCheck },
-        ]}
-      />
+      {/* ── ZONE 1: SYSTEM STATE ──────────────────────────────────── */}
+      <SubNav items={[
+        { href: "/dashboard", label: "Overview", icon: LayoutGrid },
+        { href: "/portfolio", label: "Portfolio", icon: PieChart },
+        { href: "/risk", label: "Risk", icon: ShieldCheck },
+      ]} />
 
-      {/* Page Header — with alive pulse on timestamp */}
       <PageHeader
         eyebrow="Overview"
         title="Trading Dashboard"
-        description="Real-time portfolio analytics, AI signals, and execution monitoring."
         badge={
           <StatusChip
             variant={mode === "live" ? "live" : "paper"}
@@ -329,38 +349,19 @@ export default function DashboardPage() {
           lastRefresh ? (
             <span className="app-pill font-mono tracking-normal flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-alive-pulse" />
-              Updated {lastRefresh.toLocaleTimeString()}
+              {lastRefresh.toLocaleTimeString()}
             </span>
           ) : undefined
         }
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleLayoutLock}
-              className={cn(
-                "app-button-secondary !px-3 !py-2",
-                !isLayoutLocked && "!border-primary/40 !bg-primary/5"
-              )}
-              title={isLayoutLocked ? "Unlock layout" : "Lock layout"}
-            >
-              {isLayoutLocked ? (
-                <Lock className="h-4 w-4" />
-              ) : (
-                <Unlock className="h-4 w-4 text-primary" />
-              )}
-              <span className="text-xs">
-                {isLayoutLocked ? "Layout Locked" : "Editing Layout"}
-              </span>
-            </button>
-            <button onClick={fetchAll} className="app-button-secondary">
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </button>
-          </div>
+          <button onClick={fetchAll} className="app-button-secondary">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
         }
       />
 
-      {/* Row 1: Key Metrics (outside grid — always full width) */}
+      {/* ── ZONE 2: METRICS + MARKET INTEL ─────────────────────────── */}
       <MetricsRow
         totalPnl={totalPnl}
         unrealizedPnl={unrealizedPnl}
@@ -375,7 +376,6 @@ export default function DashboardPage() {
         winRateUnavailable={!hasWinRate}
       />
 
-      {/* Market Intelligence Bar */}
       <MarketIntelligenceBar
         trend={{ direction: "bullish", label: "Bullish" }}
         volatility={{ vix: 16.4, level: "low" }}
@@ -384,99 +384,120 @@ export default function DashboardPage() {
         strategyStatus={{ active: positions.length > 0, name: "AI Momentum" }}
       />
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          PRIMARY CHART — Hero position, full width, dominant focal surface
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ── ZONE 3: PRIMARY CHART ──────────────────────────────────── */}
       <section className="dashboard-chart-hero">
         <DashboardPanel title="Portfolio Equity" icon={TrendingUp} noPadding>
-          <PortfolioEquityChart height={520} />
+          <PortfolioEquityChart height={440} />
         </DashboardPanel>
         <CerberusInsightChip />
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          SECONDARY PANELS — Grid layout for supporting analytics
-          ═══════════════════════════════════════════════════════════════════ */}
-      <DashboardGrid
-        layouts={activeLayouts}
-        isDraggable={!isLayoutLocked}
-        isResizable={!isLayoutLocked}
-        onLayoutChange={handleLayoutChange}
-      >
-          {/* Left Column — AI Intelligence */}
-          <div key="strategy">
-            <DashboardPanel title="Strategies" icon={Zap}>
-              <StrategyPanel strategies={[]} />
-            </DashboardPanel>
+      {/* ═══════════════════════════════════════════════════════════════
+          CONTROL SURFACE — grouped operational zones, scan-first
+          ═══════════════════════════════════════════════════════════════ */}
+
+      {/* ── ZONE 4: AI + STRATEGY (tabbed) | RISK + ANALYTICS (tabbed) ── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+        {/* LEFT: Strategy & AI Intelligence */}
+        <Section title="Strategy & Intelligence" icon={Brain} defaultOpen>
+          <TabBar
+            tabs={[
+              { key: "reasoning", label: "AI Reasoning", icon: Brain },
+              { key: "scanner", label: "Scanner", icon: Crosshair },
+              { key: "strategy", label: "Strategies", icon: Zap },
+            ]}
+            active={aiTab}
+            onChange={setAiTab}
+          />
+          <div className="app-panel overflow-hidden">
+            <div className="p-4">
+              {aiTab === "reasoning" && <AIReasoningPanel decision={null} />}
+              {aiTab === "scanner" && <AIScannerPanel totalWatching={0} signals={[]} />}
+              {aiTab === "strategy" && <StrategyPanel strategies={[]} />}
+            </div>
+          </div>
+        </Section>
+
+        {/* RIGHT: Risk & Market */}
+        <Section title="Risk & Market" icon={ShieldCheck} defaultOpen>
+          <TabBar
+            tabs={[
+              { key: "metrics", label: "Risk Metrics", icon: ShieldCheck },
+              { key: "sentiment", label: "Sentiment", icon: Activity },
+              { key: "exposure", label: "Exposure", icon: Target },
+            ]}
+            active={riskTab}
+            onChange={setRiskTab}
+          />
+          <div className="app-panel overflow-hidden">
+            <div className="p-4">
+              {riskTab === "metrics" && (
+                <RiskMetricsPanel
+                  winRate={winRate ?? undefined}
+                  maxDrawdown={risk?.current_drawdown_pct ?? 0}
+                  totalTrades={filledOrderCount}
+                />
+              )}
+              {riskTab === "sentiment" && <MarketMoodWidget />}
+              {riskTab === "exposure" && (
+                <PortfolioRiskDashPanel
+                  totalExposure={risk?.current_exposure_pct ?? 0}
+                />
+              )}
+            </div>
+          </div>
+        </Section>
+      </div>
+
+      {/* ── ZONE 5: EXECUTION SURFACE ──────────────────────────────── */}
+      <Section title="Execution" icon={Radio} defaultOpen>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="app-panel overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2.5">
+              <Target className="h-3.5 w-3.5 text-muted-foreground/60" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Open Positions
+              </span>
+              <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
+                {positions.length}
+              </span>
+            </div>
+            <OpenPositionsPanel positions={positions} />
           </div>
 
-          <div key="ai-reasoning">
-            <DashboardPanel title="AI Reasoning" icon={Brain}>
-              <AIReasoningPanel decision={null} />
-            </DashboardPanel>
+          <div className="app-panel overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border/40 px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-3.5 w-3.5 text-muted-foreground/60" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Trade Log
+                </span>
+                <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
+                  {orders.length}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={fetchAll}
+                className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+            </div>
+            <TradeLogPanel orders={orders} />
           </div>
+        </div>
+      </Section>
 
-          <div key="ai-scanner">
-            <DashboardPanel title="AI Scanner" icon={Crosshair}>
-              <AIScannerPanel totalWatching={0} signals={[]} />
-            </DashboardPanel>
+      {/* ── ZONE 6: SECONDARY ANALYTICS (collapsed by default) ───── */}
+      <Section title="Analytics" icon={TrendingUp} defaultOpen={false}>
+        <div className="app-panel overflow-hidden">
+          <div className="p-4">
+            <EquityCurvePanel data={equityCurve} />
           </div>
-
-          {/* Center Column — Secondary Analytics */}
-          <div key="equity-curve">
-            <DashboardPanel title="Equity Curve" icon={TrendingUp}>
-              <EquityCurvePanel data={equityCurve} />
-            </DashboardPanel>
-          </div>
-
-          <div key="portfolio-risk">
-            <DashboardPanel title="Portfolio Risk" icon={ShieldCheck}>
-              <PortfolioRiskDashPanel
-                totalExposure={risk?.current_exposure_pct ?? 0}
-              />
-            </DashboardPanel>
-          </div>
-
-          {/* Right Column — Metrics + Positions */}
-          <div key="risk-metrics">
-            <DashboardPanel title="Risk Metrics" icon={ShieldCheck}>
-              <RiskMetricsPanel
-                winRate={winRate ?? undefined}
-                maxDrawdown={risk?.current_drawdown_pct ?? 0}
-                totalTrades={filledOrderCount}
-              />
-            </DashboardPanel>
-          </div>
-
-          <div key="sentiment">
-            <DashboardPanel title="Market Sentiment" icon={Activity}>
-              <MarketMoodWidget />
-            </DashboardPanel>
-          </div>
-
-          <div key="open-positions">
-            <DashboardPanel
-              title="Open Positions"
-              icon={Target}
-              noPadding
-              onRefresh={fetchAll}
-            >
-              <OpenPositionsPanel positions={positions} />
-            </DashboardPanel>
-          </div>
-
-          {/* Full-Width Bottom — Trade Log */}
-          <div key="trade-log">
-            <DashboardPanel
-              title="Trade Log"
-              icon={Receipt}
-              noPadding
-              onRefresh={fetchAll}
-            >
-              <TradeLogPanel orders={orders} />
-            </DashboardPanel>
-          </div>
-      </DashboardGrid>
+        </div>
+      </Section>
     </div>
   );
 }
