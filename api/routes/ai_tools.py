@@ -1374,3 +1374,167 @@ async def get_ai_reasoning(bot_id: str, decision_id: str, request: Request):
             for r in reasoning_rows
         ],
     }
+
+
+# ── AI Strategy Edit ─────────────────────────────────────────────────────
+
+
+class AIStrategyEditRequest(BaseModel):
+    prompt: str = Field(..., description="Natural language instruction: 'fix the RSI condition' or 'make it more aggressive'")
+
+
+@router.post("/bots/{bot_id}/ai-edit")
+async def ai_edit_strategy(bot_id: str, body: AIStrategyEditRequest, request: Request):
+    """Use AI to edit/fix a bot's strategy config based on a natural language prompt.
+
+    The AI reads the current config, applies the requested changes, validates,
+    and creates a new version. If the edit produces validation errors, the AI
+    retries with the errors included in context.
+    """
+    user_id = request.state.user_id
+    settings = get_settings()
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot, CerberusBotVersion)
+            .join(CerberusBotVersion, CerberusBot.current_version_id == CerberusBotVersion.id)
+            .where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        row = result.one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        bot, current_version = row
+
+    current_config = current_version.config_json or {}
+    edit_prompt = body.prompt.strip()
+
+    # Build prompt for the AI with full current config context
+    import json
+    system_prompt = (
+        "You are a trading strategy editor. You will receive a bot's current strategy configuration "
+        "and a user instruction to modify it. Return ONLY the modified JSON config — no explanation, "
+        "no markdown, no code fences. The output must be valid JSON.\n\n"
+        "Rules:\n"
+        "- Only modify what the user asks for\n"
+        "- Keep all other fields unchanged\n"
+        "- Valid indicators: rsi, sma, ema, macd, atr, stochastic, vwap, volume, bollinger_bands, obv\n"
+        "- Valid operators: >, <, >=, <=, ==, crosses_above, crosses_below\n"
+        "- Valid timeframes: 1m, 5m, 15m, 1H, 4H, 1D, 1W\n"
+        "- Valid actions: BUY, SELL\n"
+        "- Conditions need: indicator, operator, value, params (with period)\n"
+        "- stop_loss_pct and take_profit_pct are percentages (e.g., 2.0 = 2%)\n"
+        "- position_size_pct is percentage of capital (e.g., 10.0 = 10%)\n"
+    )
+
+    user_prompt = (
+        f"Current strategy config:\n{json.dumps(current_config, indent=2)}\n\n"
+        f"User instruction: {edit_prompt}\n\n"
+        f"Return the modified JSON config:"
+    )
+
+    # Call LLM
+    from services.ai_core.model_router import ModelRouter
+    from services.ai_core.providers.base import ProviderMessage
+    model_router = ModelRouter()
+    routing = model_router.route(
+        mode="strategy",
+        message=edit_prompt,
+        has_tools=False,
+    )
+
+    try:
+        response = await routing.provider.complete(
+            messages=[
+                ProviderMessage(role="system", content=system_prompt),
+                ProviderMessage(role="user", content=user_prompt),
+            ],
+            model=routing.model,
+            temperature=0.3,
+        )
+        raw_output = response.content if hasattr(response, "content") else str(response)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI model error: {e}")
+
+    # Parse the AI output
+    from services.ai_strategy_service import extract_json
+    json_str = extract_json(raw_output)
+    if not json_str:
+        raise HTTPException(status_code=422, detail="AI returned no JSON. Try rephrasing your edit.")
+
+    try:
+        new_config = json.loads(json_str)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=422, detail="AI returned invalid JSON. Try rephrasing your edit.")
+
+    if not isinstance(new_config, dict):
+        raise HTTPException(status_code=422, detail="AI returned non-object JSON. Try rephrasing your edit.")
+
+    # Validate the new config
+    normalized = normalize_bot_config(new_config)
+    is_valid, val_errors, val_warnings = validate_strategy_config(normalized)
+
+    if not is_valid:
+        # Retry once with errors in context
+        retry_prompt = (
+            f"{user_prompt}\n\n"
+            f"YOUR PREVIOUS OUTPUT HAD VALIDATION ERRORS:\n"
+            f"{json.dumps(val_errors)}\n\n"
+            f"Fix these errors and return valid JSON:"
+        )
+        try:
+            response = await routing.provider.chat(
+                model=routing.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": retry_prompt},
+                ],
+                temperature=0.2,
+            )
+            raw_output = response.content if hasattr(response, "content") else str(response)
+            new_config = extract_json(raw_output)
+            normalized = normalize_bot_config(new_config)
+            is_valid, val_errors, val_warnings = validate_strategy_config(normalized)
+        except Exception:
+            pass
+
+        if not is_valid:
+            raise HTTPException(status_code=422, detail={
+                "message": "AI edit produced invalid config even after retry",
+                "validation_errors": val_errors,
+                "warnings": val_warnings,
+            })
+
+    # Create new version with the edited config
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot_id)
+        )
+        bot = result.scalar_one()
+
+        new_version = CerberusBotVersion(
+            id=str(uuid.uuid4()),
+            bot_id=bot_id,
+            version_number=(current_version.version_number or 0) + 1,
+            config_json=normalized,
+            diff_summary=f"AI edit: {edit_prompt[:200]}",
+            created_by="ai_edit",
+            backtest_required=False,
+            override_level=current_version.override_level,
+            universe_config=current_version.universe_config,
+        )
+        session.add(new_version)
+        bot.current_version_id = new_version.id
+
+        # If bot was in ERROR status, reset to DRAFT so it can be redeployed
+        if bot.status == BotStatus.ERROR:
+            bot.status = BotStatus.DRAFT
+
+    return {
+        "status": "edited",
+        "bot_id": bot_id,
+        "version_id": new_version.id,
+        "version_number": new_version.version_number,
+        "diff_summary": new_version.diff_summary,
+        "validation_warnings": val_warnings,
+        "config": normalized,
+    }

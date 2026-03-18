@@ -40,6 +40,8 @@ interface DeployConfigModalProps {
   onDeploy: (config: DeployConfig) => void;
   botName?: string;
   isDeploying?: boolean;
+  /** Strategy description/overview — used to auto-select relevant data sources */
+  strategyDescription?: string;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -94,12 +96,42 @@ const DATA_SOURCE_OPTIONS = [
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+/** Infer relevant data sources from strategy description keywords */
+function inferDataSources(description?: string): string[] {
+  if (!description) return ["technical", "sentiment", "fundamental", "macro", "portfolio"];
+  const d = description.toLowerCase();
+  const sources: string[] = [];
+
+  // Technical — indicators, price action, chart patterns
+  if (/rsi|macd|sma|ema|bollinger|atr|stochastic|vwap|volume|breakout|momentum|technical|scalp|swing|trend|crossover|support|resistance/i.test(d)) {
+    sources.push("technical");
+  }
+  // Sentiment — news, social, options flow
+  if (/news|sentiment|social|headline|options flow|media|earnings surprise|tweet|reddit|fear|greed/i.test(d)) {
+    sources.push("sentiment");
+  }
+  // Fundamental — earnings, revenue, P/E, financials
+  if (/earnings|revenue|p\/e|fundamental|dividend|growth|margin|balance sheet|income|cash flow|valuation/i.test(d)) {
+    sources.push("fundamental");
+  }
+  // Macro — VIX, Fed, sector rotation, market breadth
+  if (/vix|fed|fomc|macro|sector rotation|breadth|interest rate|inflation|gdp|unemployment|economic/i.test(d)) {
+    sources.push("macro");
+  }
+  // Portfolio — always include for risk management
+  sources.push("portfolio");
+
+  // If nothing matched (very generic description), default to all
+  return sources.length <= 1 ? ["technical", "sentiment", "fundamental", "macro", "portfolio"] : sources;
+}
+
 export function DeployConfigModal({
   open,
   onClose,
   onDeploy,
   botName,
   isDeploying = false,
+  strategyDescription,
 }: DeployConfigModalProps) {
   const [universeMode, setUniverseMode] = useState<UniverseMode>("fixed");
   const [symbolsText, setSymbolsText] = useState("");
@@ -127,12 +159,12 @@ export function DeployConfigModal({
       setCapitalInput("");
       setExtendedHours(false);
       setPrimaryModel("gpt-5.4");
-      setDataSources(["technical", "sentiment", "fundamental", "macro", "portfolio"]);
-      setTradingThesis("");
+      setDataSources(inferDataSources(strategyDescription));
+      setTradingThesis(strategyDescription || "");
       setShowAdvanced(false);
       setComparisonModels([]);
     }
-  }, [open]);
+  }, [open, strategyDescription]);
 
   const toggleSector = useCallback((sector: string) => {
     setSelectedSectors((prev) => {
@@ -213,7 +245,7 @@ export function DeployConfigModal({
       onMouseDown={(e) => e.stopPropagation()}
     >
       <div
-        className="app-panel mx-4 w-full max-w-lg p-5 sm:p-6"
+        className="app-panel mx-4 w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -433,6 +433,7 @@ export default function StrategiesPage() {
           onDeploy={(config) => void handleDeployConfirm(config)}
           botName={deployTarget?.name}
           isDeploying={deployingId !== null}
+          strategyDescription={deployTarget?.description}
         />
       </div>
     </TooltipProvider>

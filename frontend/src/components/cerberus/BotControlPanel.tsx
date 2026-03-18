@@ -420,6 +420,11 @@ export function BotControlPanel() {
         onDeploy={(config) => void handleDeployConfirm(config)}
         botName={deployTarget?.name}
         isDeploying={actioningId !== null}
+        strategyDescription={
+          (deployTarget?.config as any)?.overview ||
+          (deployTarget?.config as any)?.description ||
+          (deployTarget?.config as any)?.name
+        }
       />
     </div>
   );
