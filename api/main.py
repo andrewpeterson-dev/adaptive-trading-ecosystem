@@ -6,6 +6,9 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import structlog
+
+from logging_config import setup_logging
+setup_logging()
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
