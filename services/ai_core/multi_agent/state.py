@@ -44,6 +44,13 @@ class TradeAnalysisState(TypedDict, total=False):
     confidence: float    # 0.0 to 1.0
     reasoning: str
 
+    # ── AI Brain fields ──────────────────────────────────────────────
+    trading_thesis: str
+    model_override: str
+    skip_nodes: list[str]
+    macro_data: dict
+    portfolio_data: dict
+
     # ── Metadata (reducible via operator.add for parallel merges) ────
     node_trace: Annotated[list, operator.add]
     errors: Annotated[list, operator.add]
@@ -70,6 +77,12 @@ class TradeAnalysisResult:
     confidence: float = 0.0
     reasoning: str = ""
 
+    trading_thesis: str = ""
+    model_override: str = ""
+    skip_nodes: list = field(default_factory=list)
+    macro_data: dict = field(default_factory=dict)
+    portfolio_data: dict = field(default_factory=dict)
+
     node_trace: list = field(default_factory=list)
     errors: list = field(default_factory=list)
 
@@ -89,6 +102,11 @@ class TradeAnalysisResult:
             "recommendation": self.recommendation,
             "confidence": self.confidence,
             "reasoning": self.reasoning,
+            "trading_thesis": self.trading_thesis,
+            "model_override": self.model_override,
+            "skip_nodes": self.skip_nodes,
+            "macro_data": self.macro_data,
+            "portfolio_data": self.portfolio_data,
             "node_trace": self.node_trace,
             "errors": self.errors,
         }

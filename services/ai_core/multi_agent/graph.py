@@ -34,6 +34,19 @@ from services.ai_core.multi_agent.nodes import (
 logger = structlog.get_logger(__name__)
 
 
+def _make_skippable(node_fn, node_name: str):
+    """Wrap a node to return empty output if it's in skip_nodes."""
+    report_key = node_name.replace("_analyst", "") + "_report"
+
+    async def wrapper(state):
+        if node_name in state.get("skip_nodes", []):
+            return {report_key: "", "node_trace": [f"{node_name}: SKIPPED"]}
+        return await node_fn(state)
+
+    wrapper.__name__ = node_fn.__name__
+    return wrapper
+
+
 def build_trade_analysis_graph():
     """Construct and compile the multi-agent trade analysis graph.
 
@@ -44,9 +57,9 @@ def build_trade_analysis_graph():
     graph = StateGraph(TradeAnalysisState)
 
     # ── Register all analysis nodes ──────────────────────────────────
-    graph.add_node("technical_analyst", technical_analyst)
-    graph.add_node("fundamental_analyst", fundamental_analyst)
-    graph.add_node("sentiment_analyst", sentiment_analyst)
+    graph.add_node("technical_analyst", _make_skippable(technical_analyst, "technical_analyst"))
+    graph.add_node("fundamental_analyst", _make_skippable(fundamental_analyst, "fundamental_analyst"))
+    graph.add_node("sentiment_analyst", _make_skippable(sentiment_analyst, "sentiment_analyst"))
     graph.add_node("bullish_researcher", bullish_researcher)
     graph.add_node("bearish_researcher", bearish_researcher)
     graph.add_node("risk_assessor", risk_assessor)

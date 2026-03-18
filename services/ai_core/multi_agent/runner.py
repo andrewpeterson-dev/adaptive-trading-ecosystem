@@ -20,6 +20,11 @@ async def run_trade_analysis(
     action: str,
     size: float,
     user_id: int,
+    model_override: str = "",
+    skip_nodes: list[str] | None = None,
+    trading_thesis: str = "",
+    macro_data: dict | None = None,
+    portfolio_data: dict | None = None,
 ) -> TradeAnalysisResult:
     """Run the full multi-agent analysis pipeline.
 
@@ -72,6 +77,11 @@ async def run_trade_analysis(
         "recommendation": "hold",
         "confidence": 0.0,
         "reasoning": "",
+        "trading_thesis": trading_thesis,
+        "model_override": model_override,
+        "skip_nodes": skip_nodes or [],
+        "macro_data": macro_data or {},
+        "portfolio_data": portfolio_data or {},
         "node_trace": [],
         "errors": [],
     }
