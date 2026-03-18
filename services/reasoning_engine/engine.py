@@ -5,7 +5,7 @@ import json
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import structlog
 from sqlalchemy import select, and_
@@ -233,7 +233,7 @@ class ReasoningEngine:
             result = await session.execute(
                 select(MarketEvent).where(
                     and_(
-                        MarketEvent.detected_at >= now - __import__('datetime').timedelta(hours=4),
+                        MarketEvent.detected_at >= now - timedelta(hours=4),
                         (MarketEvent.expires_at.is_(None)) | (MarketEvent.expires_at > now),
                         (MarketEvent.user_id.is_(None)) | (MarketEvent.user_id == user_id),
                     )

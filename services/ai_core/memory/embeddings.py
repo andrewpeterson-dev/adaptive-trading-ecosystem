@@ -58,4 +58,6 @@ class EmbeddingService:
     async def embed_single(self, text: str) -> list[float]:
         """Generate an embedding for a single text string."""
         results = await self.embed([text])
+        if not results:
+            return []
         return results[0]

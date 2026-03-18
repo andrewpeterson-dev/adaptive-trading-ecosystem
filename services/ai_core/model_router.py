@@ -78,7 +78,7 @@ class ModelRouter:
                 model=self._settings.anthropic_fallback_model,
                 provider_name="anthropic",
                 intent=intent,
-                store=True,
+                store=not has_sensitive_data,
                 reason="OpenAI unavailable, using Anthropic fallback",
             )
 
