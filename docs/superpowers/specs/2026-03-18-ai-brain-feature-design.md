@@ -145,6 +145,12 @@ class AITradingEngine:
 ### Internal Flow
 
 1. Read `bot.ai_brain_config` → determine `data_sources`, `model_config`, `trading_thesis`, `constraints`
+1b. **Resolve universe:** Convert `universe` config to a concrete symbol set:
+   - `mode: "fixed"` → use `symbols` list directly
+   - `mode: "sector"` → query sector constituents from market data service
+   - `mode: "index"` → query index constituents (S&P 500 / Nasdaq 100)
+   - `mode: "ai"` → no pre-filter (AI picks freely, subject to `blacklist`)
+   - Cache resolved universe for the duration of this evaluation cycle
 2. Gather data (only requested sources):
    - `technical` → call indicators service (existing)
    - `sentiment` → call sentiment endpoint (flesh out stubbed node)
@@ -155,7 +161,8 @@ class AITradingEngine:
 4. Configure pipeline: skip nodes for absent data sources, set model per bot config
 5. Run pipeline: `technical_analyst → sentiment_analyst → fundamental_analyst → bull/bear researchers → risk_assessor → decision_synthesizer`
 6. Parse `decision_synthesizer` output into `AITradeDecision`
-7. Return decision
+7. **Validate decision symbol** against resolved universe (from step 1b). Reject if out-of-universe (return HOLD with reasoning: "Symbol not in configured universe").
+8. Return decision
 
 ### AITradeDecision
 
@@ -199,23 +206,18 @@ if bot.ai_brain_config:
         await self._record_ai_decision(bot, decision, is_shadow=False)
 
         # Only route actionable decisions to execution
+        # (Universe validation already done inside AITradingEngine — see Section 3, step 7)
         if decision.action in ("BUY", "SELL", "EXIT"):
-            # Validate symbol is in bot's universe
-            allowed = bot.ai_brain_config.get("universe", {}).get("symbols", [])
-            if allowed and decision.symbol not in allowed:
-                logger.warning(f"AI decided on {decision.symbol} outside universe, skipping")
-            else:
-                # Safety gate still applies
-                safety = await self.reasoning_engine.evaluate(decision, bot)
-                if safety.action != "PAUSE_BOT":
-                    await self._execute_trade(decision, safety_adjustments=safety)
+            safety = await self.reasoning_engine.evaluate(decision, bot)
+            if safety.action != "PAUSE_BOT":
+                await self._execute_trade(decision, safety_adjustments=safety)
 
         # Run shadow models for comparison (fire-and-forget, non-blocking)
-        shadow_tasks = [
-            asyncio.create_task(self._run_shadow_evaluation(bot, market_state, model))
-            for model in bot.ai_brain_config.get("comparison_models", [])
-        ]
-        # Shadow tasks run independently — don't await here
+        # Store task references in self._background_tasks to prevent GC mid-run
+        for model in bot.ai_brain_config.get("comparison_models", []):
+            task = asyncio.create_task(self._run_shadow_evaluation(bot, market_state, model))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
     elif mode == "ai_assisted":
         # Rules trigger first, AI enhances
@@ -334,6 +336,11 @@ class BotModelPerformance(Base):
     is_shadow = Column(Boolean, default=False)         # True = comparison run
     decided_at = Column(DateTime, nullable=False)
     resolved_at = Column(DateTime, nullable=True)      # When P&L calculated
+
+    __table_args__ = (
+        Index("ix_bmp_bot_model", "bot_id", "model_used"),
+        Index("ix_bmp_bot_resolved", "bot_id", "resolved_at"),
+    )
 ```
 
 ### New Table: ai_trade_reasoning
