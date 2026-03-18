@@ -34,6 +34,20 @@ class AdaptationAction(BaseModel):
     action: str  # "approve" or "reject"
 
 
+def _sanitize_raw_data(data: dict | None) -> dict:
+    """Replace NaN/Inf float values with None so JSON serialization doesn't crash."""
+    if not data:
+        return {}
+    import math
+    out = {}
+    for k, v in data.items():
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            out[k] = None
+        else:
+            out[k] = v
+    return out
+
+
 def _get_user_id(request: Request) -> int:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
@@ -85,7 +99,7 @@ async def get_market_events(
             "sectors": e.sectors or [],
             "headline": e.headline,
             "source": e.source,
-            "raw_data": e.raw_data or {},
+            "raw_data": _sanitize_raw_data(e.raw_data),
             "detected_at": e.detected_at.isoformat() if e.detected_at else None,
             "expires_at": e.expires_at.isoformat() if e.expires_at else None,
         }
