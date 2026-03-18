@@ -49,7 +49,7 @@ export function EarningsCalendar() {
               <Calendar className="h-4 w-4 text-amber-400/40" />
             </div>
             <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
-              Earnings calendar data requires a Finnhub API key. Add one in Settings &rarr; API Connections to see upcoming earnings for your watchlist symbols.
+              No upcoming earnings events found. Earnings data refreshes automatically when the context monitor runs.
             </p>
             <div className="space-y-2 opacity-30 pointer-events-none pt-1">
               {[

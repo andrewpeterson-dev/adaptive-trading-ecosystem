@@ -7,9 +7,16 @@ from config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
-async def fetch_earnings_events() -> list[dict]:
+async def fetch_earnings_events(api_key_override: str = "") -> list[dict]:
+    """Fetch upcoming earnings from Finnhub.
+
+    Uses *api_key_override* first (e.g. from a user's stored connection),
+    falls back to the server-level ``FINNHUB_API_KEY`` env var.
+    """
     settings = get_settings()
-    if not settings.finnhub_api_key:
+    api_key = api_key_override or settings.finnhub_api_key
+    if not api_key:
+        logger.debug("finnhub_no_api_key")
         return []
 
     try:
@@ -21,7 +28,7 @@ async def fetch_earnings_events() -> list[dict]:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 "https://finnhub.io/api/v1/calendar/earnings",
-                params={"from": from_date, "to": to_date, "token": settings.finnhub_api_key},
+                params={"from": from_date, "to": to_date, "token": api_key},
             )
             resp.raise_for_status()
             data = resp.json()
