@@ -257,12 +257,13 @@ class ReasoningEngine:
             model_name = model_config.get("model")
 
             # Determine model based on available provider and event severity
-            if not model_name:
-                has_high_impact = any(e.get("impact") == "HIGH" for e in events_dicts)
-                if settings.openai_api_key:
+            has_high_impact = any(e.get("impact") == "HIGH" for e in events_dicts)
+            if settings.openai_api_key:
+                if not model_name:
                     model_name = "gpt-5.4" if has_high_impact else "gpt-4.1"
-                else:
-                    model_name = settings.anthropic_fallback_model or "claude-sonnet-4-6"
+            else:
+                # No OpenAI key — always use Anthropic regardless of bot override
+                model_name = settings.anthropic_fallback_model or "claude-sonnet-4-6"
 
             # Get regime stats
             regime_stats = None
