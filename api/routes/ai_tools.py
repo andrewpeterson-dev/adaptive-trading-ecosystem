@@ -1482,18 +1482,20 @@ async def ai_edit_strategy(bot_id: str, body: AIStrategyEditRequest, request: Re
             f"Fix these errors and return valid JSON:"
         )
         try:
-            response = await routing.provider.chat(
-                model=routing.model,
+            response = await routing.provider.complete(
                 messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": retry_prompt},
+                    ProviderMessage(role="system", content=system_prompt),
+                    ProviderMessage(role="user", content=retry_prompt),
                 ],
+                model=routing.model,
                 temperature=0.2,
             )
             raw_output = response.content if hasattr(response, "content") else str(response)
-            new_config = extract_json(raw_output)
-            normalized = normalize_bot_config(new_config)
-            is_valid, val_errors, val_warnings = validate_strategy_config(normalized)
+            json_str = extract_json(raw_output)
+            if json_str:
+                new_config = json.loads(json_str)
+                normalized = normalize_bot_config(new_config)
+                is_valid, val_errors, val_warnings = validate_strategy_config(normalized)
         except Exception:
             pass
 
