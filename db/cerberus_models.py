@@ -259,6 +259,7 @@ class CerberusBot(Base):
     last_optimization_at = Column(DateTime, nullable=True)
     allocated_capital = Column(Float, nullable=True, default=None)
     reasoning_model_config = Column(JSON, default=dict)
+    ai_brain_config = Column(JSON, nullable=True)  # AI Brain focus profile
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -268,7 +269,7 @@ class CerberusBot(Base):
     __table_args__ = (
         Index("ix_cerberus_bot_user", "user_id"),
         CheckConstraint(
-            "status IN ('draft','running','paused','stopped','error')",
+            "status IN ('draft','running','paused','stopped','error','deleted')",
             name="ck_cerberus_bot_status",
         ),
     )
@@ -767,3 +768,42 @@ class TradeAnalysis(Base):
         Index("ix_trade_analysis_symbol", "symbol"),
         Index("ix_trade_analysis_created", "created_at"),
     )
+
+
+class BotModelPerformance(Base):
+    """Tracks every AI trade decision for model comparison leaderboard."""
+    __tablename__ = "bot_model_performance"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"), nullable=False)
+    cerberus_trade_id = Column(String(36), ForeignKey("cerberus_trades.id"), nullable=True)
+    model_used = Column(String(64), nullable=False)
+    symbol = Column(String(16), nullable=False)
+    action = Column(String(8), nullable=False)
+    confidence = Column(Float, nullable=True)
+    reasoning_summary = Column(Text, nullable=True)
+    entry_price = Column(Float, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    pnl = Column(Float, nullable=True)
+    is_shadow = Column(Boolean, default=False)
+    decided_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_bmp_bot_model", "bot_id", "model_used"),
+        Index("ix_bmp_bot_resolved", "bot_id", "resolved_at"),
+    )
+
+
+class AITradeReasoning(Base):
+    """Full reasoning chain per decision node — audit log for Tier C display."""
+    __tablename__ = "ai_trade_reasoning"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    performance_id = Column(String(36), ForeignKey("bot_model_performance.id"), nullable=False)
+    node_name = Column(String(64), nullable=False)
+    node_output = Column(JSON, nullable=True)
+    model_used = Column(String(64), nullable=True)
+    tokens_used = Column(Integer, nullable=True)
+    latency_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
