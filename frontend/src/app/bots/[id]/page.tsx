@@ -206,7 +206,7 @@ export default function BotDetailPage() {
               detail={detail}
               onDetailUpdate={(updates) => setDetail(prev => prev ? { ...prev, ...updates } : prev)}
             />
-            <StrategySettingsPanel config={config} strategyType={detail.strategyType} />
+            <StrategySettingsPanel config={config} strategyType={detail.strategyType} botId={detail.id} />
           </div>
 
           {/* Row 2: Chart + Sidebar (Positions, Risk, Logic) */}
