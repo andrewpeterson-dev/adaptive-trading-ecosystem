@@ -856,8 +856,8 @@ async def get_account(request: Request):
             if not portfolio:
                 portfolio = PaperPortfolio(
                     user_id=user_id,
-                    cash=1_000_000.0,
-                    initial_capital=1_000_000.0,
+                    cash=100_000.0,
+                    initial_capital=100_000.0,
                 )
                 session.add(portfolio)
                 await session.flush()
@@ -2092,7 +2092,7 @@ async def _build_paper_equity_curve(
         portfolio = result.scalar_one_or_none()
 
         if not portfolio:
-            return {"points": [], "initial_capital": 1_000_000.0}
+            return {"points": [], "initial_capital": 100_000.0}
 
         initial_capital = portfolio.initial_capital or 1_000_000.0
 

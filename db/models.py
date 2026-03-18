@@ -321,8 +321,8 @@ class PaperPortfolio(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    cash = Column(Float, nullable=False, default=1_000_000.0)
-    initial_capital = Column(Float, nullable=False, default=1_000_000.0)
+    cash = Column(Float, nullable=False, default=100_000.0)
+    initial_capital = Column(Float, nullable=False, default=100_000.0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")

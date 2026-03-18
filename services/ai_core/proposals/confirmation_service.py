@@ -317,7 +317,7 @@ class ConfirmationService:
             portfolio = result.scalar_one_or_none()
             if not portfolio:
                 portfolio = PaperPortfolio(
-                    user_id=user_id, cash=1_000_000.0, initial_capital=1_000_000.0
+                    user_id=user_id, cash=100_000.0, initial_capital=100_000.0
                 )
                 session.add(portfolio)
                 await session.flush()

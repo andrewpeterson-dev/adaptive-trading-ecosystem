@@ -28,7 +28,7 @@ from services.options_data import fetch_option_snapshot, parse_occ_contract_symb
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
-INITIAL_CAPITAL = 1_000_000.0
+INITIAL_CAPITAL = 100_000.0
 
 
 # ── Request / Response schemas ────────────────────────────────────────────
