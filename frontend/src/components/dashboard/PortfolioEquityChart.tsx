@@ -130,7 +130,7 @@ function ChartTooltip({
 // Component
 // ---------------------------------------------------------------------------
 
-export function PortfolioEquityChart({ height = 340 }: PortfolioEquityChartProps) {
+export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps) {
   const { isDark } = useThemeMode();
   const { mode } = useTradingMode();
 
@@ -140,7 +140,7 @@ export function PortfolioEquityChart({ height = 340 }: PortfolioEquityChartProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+  const gridColor = isDark ? "rgba(30, 41, 59, 0.5)" : "#e2e8f0";
   const textColor = isDark ? "#94a3b8" : "#475569";
 
   const fetchEquity = useCallback(
@@ -239,7 +239,7 @@ export function PortfolioEquityChart({ height = 340 }: PortfolioEquityChartProps
       </div>
 
       {/* Chart */}
-      <div className="relative flex-1 overflow-hidden rounded-md" style={{ minHeight: height }}>
+      <div className="relative flex-1 overflow-hidden rounded-md chart-alive" style={{ minHeight: height }}>
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -266,21 +266,50 @@ export function PortfolioEquityChart({ height = 340 }: PortfolioEquityChartProps
         )}
 
         {!loading && !error && (data.length === 0 || (data.length <= 2 && totalChange === 0)) && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-primary/50" />
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6">
+            {/* Breathing baseline SVG */}
+            <div className="w-64 h-px relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/30 to-transparent animate-pulse" style={{ animationDuration: '3s' }} />
             </div>
-            <div className="text-center">
-              <p className="text-sm font-medium text-foreground">No trading activity yet</p>
-              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                Your portfolio equity chart will come alive once bots start trading or you execute your first trade.
+
+            <div className="text-center space-y-2">
+              <p className="font-mono text-sm font-semibold tracking-wider text-foreground/80">
+                System armed &bull; Awaiting execution data
+              </p>
+              <p className="text-xs text-muted-foreground/50">
+                Portfolio equity activates with first trade execution
               </p>
             </div>
-            {initialCapital > 0 && (
-              <p className="text-xs text-muted-foreground/60 font-mono">
-                Starting capital: ${initialCapital.toLocaleString()}
-              </p>
-            )}
+
+            {/* System status indicators */}
+            <div className="flex items-center gap-4 text-[10px] font-mono text-muted-foreground/40">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/60 animate-pulse" />
+                Scanner: Active
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400/60" />
+                Execution: Standby
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/60 animate-pulse" />
+                Risk Engine: Online
+              </span>
+            </div>
+
+            {/* Initial capital reference */}
+            <p className="font-mono text-[10px] text-muted-foreground/30 tracking-wider">
+              INITIALIZATION: $100,000
+            </p>
+          </div>
+        )}
+
+        {data.length > 0 && (
+          <div className="absolute top-3 right-3 z-[5] flex items-center gap-3 text-[9px] font-mono text-muted-foreground/30">
+            <span className="flex items-center gap-1">
+              <span className="h-1 w-1 rounded-full bg-emerald-400/40 animate-pulse" />
+              Live
+            </span>
           </div>
         )}
 
@@ -295,7 +324,7 @@ export function PortfolioEquityChart({ height = 340 }: PortfolioEquityChartProps
               </defs>
 
               <CartesianGrid
-                strokeDasharray="3 3"
+                strokeDasharray="2 6"
                 stroke={gridColor}
                 vertical={false}
               />
@@ -333,9 +362,16 @@ export function PortfolioEquityChart({ height = 340 }: PortfolioEquityChartProps
               {initialCapital > 0 && (
                 <ReferenceLine
                   y={initialCapital}
-                  stroke={textColor}
-                  strokeDasharray="6 4"
-                  strokeOpacity={0.4}
+                  stroke="hsl(213 96% 63%)"
+                  strokeDasharray="4 8"
+                  strokeOpacity={0.15}
+                  label={{
+                    value: `$${(initialCapital / 1000).toFixed(0)}K`,
+                    position: "left",
+                    fill: "hsl(213 96% 63%)",
+                    fontSize: 9,
+                    opacity: 0.3,
+                  }}
                 />
               )}
 

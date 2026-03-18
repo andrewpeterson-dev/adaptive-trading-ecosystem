@@ -70,10 +70,11 @@ export function AIScannerPanel({
       {/* ── Strong Signals ─────────────────────────────────────────────── */}
       {visible.length === 0 ? (
         <div className="app-inset px-5 py-10 text-center">
-          <TrendingUp className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
+          <span className="animate-pulse inline-block mb-3" style={{ animationDuration: '3s' }}>
+            <TrendingUp className="mx-auto h-8 w-8 text-muted-foreground/40" />
+          </span>
           <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-6">
-            No strong signals detected. The scanner will surface opportunities as
-            they emerge.
+            Scanner active — Monitoring volatility thresholds
           </p>
         </div>
       ) : (

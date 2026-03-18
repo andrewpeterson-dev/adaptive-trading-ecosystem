@@ -168,8 +168,8 @@ export function TradeLogPanel({ orders }: TradeLogPanelProps) {
         <EmptyState
           className="py-10"
           icon={<Receipt className="h-4 w-4 text-muted-foreground" />}
-          title="No recent trades"
-          description="Executed orders will appear here as they are processed."
+          title="Execution engine ready"
+          description="Trade executions stream here in real time"
         />
       </div>
     );

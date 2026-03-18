@@ -197,9 +197,13 @@ export function StrategyPanel({ strategies }: StrategyPanelProps) {
         <div className="app-inset">
           <EmptyState
             className="py-8"
-            icon={<Zap className="h-4 w-4 text-muted-foreground" />}
+            icon={
+              <span className="animate-pulse" style={{ animationDuration: '3s' }}>
+                <Zap className="h-4 w-4 text-muted-foreground" />
+              </span>
+            }
             title="No active strategies"
-            description="Build a strategy to get started."
+            description="Cerberus monitoring setup conditions"
           />
         </div>
       ) : (

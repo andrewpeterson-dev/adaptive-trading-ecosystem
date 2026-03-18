@@ -777,6 +777,71 @@
   }
 }
 
+/* ── Dashboard premium enhancements ────────────────────────────────── */
+
+/* Chart hero container — the dominant visual surface */
+.dashboard-chart-hero {
+  position: relative;
+}
+
+.dashboard-chart-hero .app-panel {
+  border-color: hsl(var(--border) / 0.9);
+  box-shadow:
+    0 32px 80px -40px hsl(var(--shadow-color) / 0.9),
+    inset 0 1px 0 hsl(0 0% 100% / 0.06),
+    0 0 0 1px hsl(var(--primary) / 0.04);
+}
+
+/* Panel hover lift — subtle institutional feel */
+.app-panel-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.app-panel-hover:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 32px 70px -36px hsl(var(--shadow-color) / 0.92),
+    inset 0 1px 0 hsl(0 0% 100% / 0.06),
+    0 0 0 1px hsl(var(--primary) / 0.06);
+  border-color: hsl(var(--border) / 0.95);
+}
+
+/* Alive pulse for status indicators */
+@keyframes alive-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.animate-alive-pulse {
+  animation: alive-pulse 3s ease-in-out infinite;
+}
+
+/* Chart breathing line effect */
+.chart-alive .recharts-curve {
+  filter: drop-shadow(0 0 3px hsl(var(--primary) / 0.15));
+}
+
+/* Ambient background layer */
+.ambient-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-layer { display: none; }
+  .animate-alive-pulse { animation: none; opacity: 0.7; }
+  .chart-alive .recharts-curve { filter: none; }
+}
+
+/* Cerberus insight chip */
+.cerberus-chip {
+  background:
+    linear-gradient(180deg, hsl(var(--surface-2) / 0.85), hsl(var(--surface-1) / 0.85));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
 /* ── Mobile bottom tab bar ──────────────────────────────────────────── */
 @media (max-width: 1023px) {
   .mobile-bottom-tabs {

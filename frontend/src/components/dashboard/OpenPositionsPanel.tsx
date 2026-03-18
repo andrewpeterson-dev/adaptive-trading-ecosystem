@@ -165,8 +165,8 @@ export function OpenPositionsPanel({
         <EmptyState
           className="py-10"
           icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
-          title="No open positions"
-          description="When you enter a trade, your active positions will appear here."
+          title="Awaiting first execution"
+          description="Active positions and real-time P&L will appear here"
         />
       </div>
     );

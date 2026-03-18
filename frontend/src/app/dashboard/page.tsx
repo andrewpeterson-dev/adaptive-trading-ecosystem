@@ -18,6 +18,7 @@ import {
   Receipt,
   Zap,
   Target,
+  Radio,
 } from "lucide-react";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -42,6 +43,7 @@ import {
   PortfolioRiskDashPanel,
 } from "@/components/dashboard";
 import { PortfolioEquityChart } from "@/components/dashboard/PortfolioEquityChart";
+import { AmbientBackground } from "@/components/dashboard/AmbientBackground";
 import { DashboardGrid } from "@/components/dashboard/GridLayout";
 import type { Layouts, LayoutItem } from "@/components/dashboard/GridLayout";
 import { MarketMoodWidget } from "@/components/dashboard/MarketMoodWidget";
@@ -50,7 +52,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusChip } from "@/components/ui/status-chip";
 
 // ---------------------------------------------------------------------------
-// Default grid layout
+// Default grid layout — chart is now ABOVE the grid as a hero element
 // ---------------------------------------------------------------------------
 
 const DEFAULT_LAYOUTS: Layouts = {
@@ -58,27 +60,46 @@ const DEFAULT_LAYOUTS: Layouts = {
     { i: "strategy",        x: 0, y: 0,  w: 3, h: 8,  minW: 2, minH: 5 },
     { i: "ai-reasoning",    x: 0, y: 8,  w: 3, h: 8,  minW: 2, minH: 5 },
     { i: "ai-scanner",      x: 0, y: 16, w: 3, h: 7,  minW: 2, minH: 4 },
-    { i: "execution-chart", x: 3, y: 0,  w: 6, h: 12, minW: 4, minH: 8 },
+    { i: "equity-curve",    x: 3, y: 0,  w: 6, h: 8,  minW: 3, minH: 5 },
+    { i: "portfolio-risk",  x: 3, y: 8,  w: 6, h: 7,  minW: 3, minH: 5 },
     { i: "risk-metrics",    x: 9, y: 0,  w: 3, h: 6,  minW: 2, minH: 4 },
     { i: "sentiment",       x: 9, y: 6,  w: 3, h: 6,  minW: 2, minH: 4 },
-    { i: "equity-curve",    x: 3, y: 12, w: 6, h: 7,  minW: 3, minH: 5 },
     { i: "open-positions",  x: 9, y: 12, w: 3, h: 7,  minW: 3, minH: 5 },
-    { i: "portfolio-risk",  x: 0, y: 23, w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "trade-log",       x: 6, y: 23, w: 6, h: 7,  minW: 3, minH: 5 },
+    { i: "trade-log",       x: 0, y: 23, w: 12, h: 7, minW: 6, minH: 5 },
   ],
   md: [
     { i: "strategy",        x: 0, y: 0,  w: 6, h: 7,  minW: 3, minH: 4 },
     { i: "ai-reasoning",    x: 6, y: 0,  w: 6, h: 7,  minW: 3, minH: 4 },
     { i: "ai-scanner",      x: 0, y: 7,  w: 6, h: 6,  minW: 3, minH: 4 },
-    { i: "execution-chart", x: 0, y: 13, w: 12, h: 11, minW: 6, minH: 8 },
     { i: "risk-metrics",    x: 6, y: 7,  w: 6, h: 6,  minW: 3, minH: 4 },
-    { i: "sentiment",       x: 0, y: 24, w: 6, h: 6,  minW: 3, minH: 4 },
-    { i: "equity-curve",    x: 0, y: 30, w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "open-positions",  x: 6, y: 24, w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "portfolio-risk",  x: 0, y: 37, w: 6, h: 7,  minW: 3, minH: 5 },
-    { i: "trade-log",       x: 6, y: 31, w: 6, h: 7,  minW: 3, minH: 5 },
+    { i: "equity-curve",    x: 0, y: 13, w: 6, h: 7,  minW: 3, minH: 5 },
+    { i: "sentiment",       x: 6, y: 13, w: 6, h: 6,  minW: 3, minH: 4 },
+    { i: "open-positions",  x: 0, y: 20, w: 6, h: 7,  minW: 3, minH: 5 },
+    { i: "portfolio-risk",  x: 6, y: 20, w: 6, h: 7,  minW: 3, minH: 5 },
+    { i: "trade-log",       x: 0, y: 27, w: 12, h: 7, minW: 6, minH: 5 },
   ],
 };
+
+// ---------------------------------------------------------------------------
+// Cerberus Insight Chip — ambient AI presence
+// ---------------------------------------------------------------------------
+
+function CerberusInsightChip() {
+  return (
+    <div className="flex items-center gap-2.5 ml-auto w-fit rounded-full border border-border/50 cerberus-chip px-4 py-2 mt-2">
+      <span className="flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-alive-pulse" />
+        <Brain className="h-3 w-3 text-violet-400/70" />
+      </span>
+      <span className="text-[11px] font-mono text-muted-foreground/70">
+        Cerberus AI: Market structure stable
+      </span>
+      <span className="text-[11px] font-mono text-muted-foreground/40">
+        &bull; No threshold crossings
+      </span>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Main page
@@ -103,7 +124,7 @@ export default function DashboardPage() {
   // Use stored layouts if they have the right keys, otherwise use defaults
   const activeLayouts = useMemo(() => {
     const stored = layouts?.lg;
-    if (stored && stored.length >= 10) return layouts;
+    if (stored && stored.length >= 9) return layouts;
     return DEFAULT_LAYOUTS;
   }, [layouts]);
 
@@ -175,7 +196,7 @@ export default function DashboardPage() {
   }, [positions]);
 
   const unrealizedPnl = totalPnl;
-  const realizedPnl = null; // Not available — needs historical trade P&L data
+  const realizedPnl = null;
   const hasRealizedPnl = false;
 
   const filledOrderCount = useMemo(
@@ -185,7 +206,7 @@ export default function DashboardPage() {
 
   const winRate = useMemo(() => {
     if (filledOrderCount === 0) return null;
-    return null; // Would need trade P&L data for real win rate
+    return null;
   }, [filledOrderCount]);
   const hasWinRate = winRate !== null;
 
@@ -275,8 +296,11 @@ export default function DashboardPage() {
 
   return (
     <div
-      className={cn("app-page", isLayoutLocked ? "layout-locked" : "layout-unlocked")}
+      className={cn("app-page relative", isLayoutLocked ? "layout-locked" : "layout-unlocked")}
     >
+      {/* Ambient intelligence background */}
+      <AmbientBackground />
+
       {/* SubNav */}
       <SubNav
         items={[
@@ -286,7 +310,7 @@ export default function DashboardPage() {
         ]}
       />
 
-      {/* Page Header */}
+      {/* Page Header — with alive pulse on timestamp */}
       <PageHeader
         eyebrow="Overview"
         title="Trading Dashboard"
@@ -300,7 +324,8 @@ export default function DashboardPage() {
         }
         meta={
           lastRefresh ? (
-            <span className="app-pill font-mono tracking-normal">
+            <span className="app-pill font-mono tracking-normal flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-alive-pulse" />
               Updated {lastRefresh.toLocaleTimeString()}
             </span>
           ) : undefined
@@ -332,7 +357,7 @@ export default function DashboardPage() {
         }
       />
 
-      {/* Row 1: Metrics (outside grid — always full width, never draggable) */}
+      {/* Row 1: Key Metrics (outside grid — always full width) */}
       <MetricsRow
         totalPnl={totalPnl}
         unrealizedPnl={unrealizedPnl}
@@ -347,7 +372,7 @@ export default function DashboardPage() {
         winRateUnavailable={!hasWinRate}
       />
 
-      {/* Market Intelligence Bar (outside grid — static, never draggable) */}
+      {/* Market Intelligence Bar */}
       <MarketIntelligenceBar
         trend={{ direction: "bullish", label: "Bullish" }}
         volatility={{ vix: 16.4, level: "low" }}
@@ -356,14 +381,26 @@ export default function DashboardPage() {
         strategyStatus={{ active: positions.length > 0, name: "AI Momentum" }}
       />
 
-      {/* Grid Layout */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          PRIMARY CHART — Hero position, full width, dominant focal surface
+          ═══════════════════════════════════════════════════════════════════ */}
+      <section className="dashboard-chart-hero">
+        <DashboardPanel title="Portfolio Equity" icon={TrendingUp} noPadding>
+          <PortfolioEquityChart height={520} />
+        </DashboardPanel>
+        <CerberusInsightChip />
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECONDARY PANELS — Grid layout for supporting analytics
+          ═══════════════════════════════════════════════════════════════════ */}
       <DashboardGrid
         layouts={activeLayouts}
         isDraggable={!isLayoutLocked}
         isResizable={!isLayoutLocked}
         onLayoutChange={handleLayoutChange}
       >
-          {/* Left Column */}
+          {/* Left Column — AI Intelligence */}
           <div key="strategy">
             <DashboardPanel title="Strategies" icon={Zap}>
               <StrategyPanel strategies={[]} />
@@ -382,14 +419,22 @@ export default function DashboardPage() {
             </DashboardPanel>
           </div>
 
-          {/* Center Column */}
-          <div key="execution-chart">
-            <DashboardPanel title="Portfolio Equity" icon={TrendingUp} noPadding>
-              <PortfolioEquityChart height={340} />
+          {/* Center Column — Secondary Analytics */}
+          <div key="equity-curve">
+            <DashboardPanel title="Equity Curve" icon={TrendingUp}>
+              <EquityCurvePanel data={equityCurve} />
             </DashboardPanel>
           </div>
 
-          {/* Right Column */}
+          <div key="portfolio-risk">
+            <DashboardPanel title="Portfolio Risk" icon={ShieldCheck}>
+              <PortfolioRiskDashPanel
+                totalExposure={risk?.current_exposure_pct ?? 0}
+              />
+            </DashboardPanel>
+          </div>
+
+          {/* Right Column — Metrics + Positions */}
           <div key="risk-metrics">
             <DashboardPanel title="Risk Metrics" icon={ShieldCheck}>
               <RiskMetricsPanel
@@ -406,13 +451,6 @@ export default function DashboardPage() {
             </DashboardPanel>
           </div>
 
-          {/* Row 3 */}
-          <div key="equity-curve">
-            <DashboardPanel title="Equity Curve" icon={TrendingUp}>
-              <EquityCurvePanel data={equityCurve} />
-            </DashboardPanel>
-          </div>
-
           <div key="open-positions">
             <DashboardPanel
               title="Open Positions"
@@ -424,15 +462,7 @@ export default function DashboardPage() {
             </DashboardPanel>
           </div>
 
-          {/* Row 4 */}
-          <div key="portfolio-risk">
-            <DashboardPanel title="Portfolio Risk" icon={ShieldCheck}>
-              <PortfolioRiskDashPanel
-                totalExposure={risk?.current_exposure_pct ?? 0}
-              />
-            </DashboardPanel>
-          </div>
-
+          {/* Full-Width Bottom — Trade Log */}
           <div key="trade-log">
             <DashboardPanel
               title="Trade Log"

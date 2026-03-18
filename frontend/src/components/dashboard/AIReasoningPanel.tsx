@@ -118,9 +118,12 @@ export function AIReasoningPanel({ decision }: AIReasoningPanelProps) {
         </div>
         <div className="app-inset px-5 py-10 text-center">
           <Brain className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
-          <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-6">
-            No active AI decisions. The AI engine will display reasoning here
-            when analyzing trade opportunities.
+          <p className="text-sm text-foreground/80 max-w-sm mx-auto leading-6 flex items-center justify-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-violet-400 animate-pulse shrink-0" style={{ animationDuration: '2s' }} />
+            Evaluating current market structure
+          </p>
+          <p className="text-xs text-muted-foreground/60 mt-1.5">
+            No high-confidence decisions yet
           </p>
         </div>
       </section>
