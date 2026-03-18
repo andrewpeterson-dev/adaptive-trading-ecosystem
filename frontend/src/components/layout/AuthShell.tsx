@@ -1,9 +1,14 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogo } from "./BrandLogo";
 
-// Ticker symbols shown in the scrolling tape at the top
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA — ticker tape, system status, activity feed, Cerberus insights
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 const TICKER_ITEMS = [
   { symbol: "SPY", change: "+1.24%", positive: true },
   { symbol: "NVDA", change: "+3.41%", positive: true },
@@ -21,63 +26,365 @@ const TICKER_ITEMS = [
   { symbol: "VIX", change: "-4.20%", positive: false },
 ];
 
-// Chart lines rendered in the animated background
-const CHART_LINES = [
-  // [top%, duration(s), delay(s), color, opacity, strokeWidth, path-variant]
-  { top: 18, duration: 22, delay: 0, color: "#10b981", opacity: 0.055, height: 60, variant: 0 },
-  { top: 32, duration: 31, delay: -8, color: "#3b82f6", opacity: 0.065, height: 48, variant: 1 },
-  { top: 45, duration: 26, delay: -14, color: "#10b981", opacity: 0.04, height: 72, variant: 2 },
-  { top: 58, duration: 38, delay: -5, color: "#ef4444", opacity: 0.045, height: 44, variant: 3 },
-  { top: 68, duration: 20, delay: -19, color: "#3b82f6", opacity: 0.055, height: 56, variant: 0 },
-  { top: 78, duration: 34, delay: -3, color: "#10b981", opacity: 0.035, height: 40, variant: 1 },
-  { top: 25, duration: 44, delay: -22, color: "#3b82f6", opacity: 0.03, height: 64, variant: 2 },
-  { top: 85, duration: 28, delay: -11, color: "#ef4444", opacity: 0.04, height: 36, variant: 3 },
+const SYSTEM_STATUS = [
+  { label: "Broker Sync", value: "Active", ok: true },
+  { label: "Execution", value: "42ms", ok: true },
+  { label: "Data Feed", value: "Live", ok: true },
+  { label: "Security", value: "Verified", ok: true },
+  { label: "Strategies", value: "3 running", ok: true },
+  { label: "Last Update", value: "0.8s ago", ok: true },
 ];
 
-// SVG path variants that look like stock chart segments
-function getChartPath(variant: number, h: number): string {
-  switch (variant) {
-    case 0:
-      // Uptrend with pullback
-      return `M0,${h} L80,${h * 0.75} L160,${h * 0.82} L240,${h * 0.5} L320,${h * 0.6} L400,${h * 0.3} L480,${h * 0.42} L560,${h * 0.18} L640,${h * 0.28} L720,${h * 0.05} L800,${h * 0.15}`;
-    case 1:
-      // Volatile with spikes
-      return `M0,${h * 0.5} L60,${h * 0.3} L120,${h * 0.7} L180,${h * 0.2} L240,${h * 0.65} L300,${h * 0.15} L360,${h * 0.55} L420,${h * 0.35} L480,${h * 0.6} L540,${h * 0.25} L600,${h * 0.45} L660,${h * 0.1} L720,${h * 0.4} L800,${h * 0.2}`;
-    case 2:
-      // Gradual downtrend
-      return `M0,${h * 0.1} L100,${h * 0.2} L200,${h * 0.15} L300,${h * 0.4} L400,${h * 0.35} L500,${h * 0.55} L600,${h * 0.5} L700,${h * 0.7} L800,${h * 0.85}`;
-    case 3:
-      // Consolidation then breakout
-      return `M0,${h * 0.6} L80,${h * 0.55} L160,${h * 0.62} L240,${h * 0.58} L320,${h * 0.6} L400,${h * 0.4} L440,${h * 0.2} L520,${h * 0.25} L600,${h * 0.1} L700,${h * 0.15} L800,${h * 0.05}`;
-    default:
-      return `M0,${h * 0.5} L800,${h * 0.5}`;
-  }
+const ACTIVITY_FEED = [
+  { time: "09:31:04", event: "Momentum Alpha entered NVDA long — confidence 84%", type: "entry" as const },
+  { time: "09:30:58", event: "ReasoningEngine approved trade — drawdown within limits", type: "system" as const },
+  { time: "09:30:42", event: "Sentiment score for TSLA shifted bearish (-1.8)", type: "signal" as const },
+  { time: "09:30:31", event: "VIX regime change detected: trending → neutral", type: "signal" as const },
+  { time: "09:30:15", event: "Oversold Bounce triggered exit on DIA — +2.4% realized", type: "exit" as const },
+  { time: "09:29:47", event: "Kelly sizing recalculated — optimal position: 12.3%", type: "system" as const },
+  { time: "09:29:22", event: "MACD Crossover scanning 11 symbols on 1H timeframe", type: "system" as const },
+  { time: "09:28:55", event: "Sector cap check: Technology at 27% (limit: 30%)", type: "system" as const },
+];
+
+const CERBERUS_INSIGHTS = [
+  "Volatility compression detected across tech sector. Breakout probability increasing — monitoring for directional confirmation.",
+  "SPY holding above 50-day EMA with improving breadth. Risk-on regime favors momentum entries.",
+  "NVDA approaching prior resistance with rising volume. Position sizing adjusted for elevated conviction.",
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BACKGROUND — wave mesh, network nodes, scan line
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function BackgroundSystem() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animationId: number;
+    let width = 0;
+    let height = 0;
+
+    // Network nodes
+    const nodes: { x: number; y: number; vx: number; vy: number; r: number }[] = [];
+    const NODE_COUNT = 35;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas!.width = width * window.devicePixelRatio;
+      canvas!.height = height * window.devicePixelRatio;
+      ctx!.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+
+    function initNodes() {
+      nodes.length = 0;
+      for (let i = 0; i < NODE_COUNT; i++) {
+        nodes.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+          r: 1.2 + Math.random() * 1.2,
+        });
+      }
+    }
+
+    function draw(t: number) {
+      ctx!.clearRect(0, 0, width, height);
+
+      // Wave lines
+      for (let w = 0; w < 4; w++) {
+        ctx!.beginPath();
+        ctx!.strokeStyle =
+          w % 2 === 0
+            ? "rgba(59, 130, 246, 0.04)"
+            : "rgba(16, 185, 129, 0.03)";
+        ctx!.lineWidth = 1;
+        const yBase = height * (0.2 + w * 0.2);
+        const amp = 30 + w * 15;
+        const freq = 0.002 + w * 0.0005;
+        const speed = 0.0003 + w * 0.0001;
+        for (let x = 0; x <= width; x += 4) {
+          const y =
+            yBase +
+            Math.sin(x * freq + t * speed) * amp +
+            Math.sin(x * freq * 2.3 + t * speed * 1.7) * amp * 0.4;
+          if (x === 0) ctx!.moveTo(x, y);
+          else ctx!.lineTo(x, y);
+        }
+        ctx!.stroke();
+      }
+
+      // Network nodes + connections
+      for (const node of nodes) {
+        node.x += node.vx;
+        node.y += node.vy;
+        if (node.x < 0 || node.x > width) node.vx *= -1;
+        if (node.y < 0 || node.y > height) node.vy *= -1;
+      }
+
+      // Draw connections
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 180) {
+            const alpha = (1 - dist / 180) * 0.06;
+            ctx!.beginPath();
+            ctx!.strokeStyle = `rgba(59, 130, 246, ${alpha})`;
+            ctx!.lineWidth = 0.5;
+            ctx!.moveTo(nodes[i].x, nodes[i].y);
+            ctx!.lineTo(nodes[j].x, nodes[j].y);
+            ctx!.stroke();
+          }
+        }
+      }
+
+      // Draw nodes
+      for (const node of nodes) {
+        ctx!.beginPath();
+        ctx!.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+        ctx!.fillStyle = "rgba(59, 130, 246, 0.15)";
+        ctx!.fill();
+      }
+
+      // Horizontal scan line
+      const scanY = (t * 0.02) % height;
+      const grad = ctx!.createLinearGradient(0, scanY - 40, 0, scanY + 40);
+      grad.addColorStop(0, "rgba(59, 130, 246, 0)");
+      grad.addColorStop(0.5, "rgba(59, 130, 246, 0.03)");
+      grad.addColorStop(1, "rgba(59, 130, 246, 0)");
+      ctx!.fillStyle = grad;
+      ctx!.fillRect(0, scanY - 40, width, 80);
+
+      animationId = requestAnimationFrame(draw);
+    }
+
+    resize();
+    initNodes();
+    animationId = requestAnimationFrame(draw);
+    window.addEventListener("resize", () => {
+      resize();
+      initNodes();
+    });
+
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0"
+      style={{ width: "100%", height: "100%", zIndex: 0 }}
+    />
+  );
 }
 
-// Dot grid dot positions (pre-computed to avoid runtime layout thrash)
-const DOT_GRID = Array.from({ length: 12 * 8 }, (_, i) => ({
-  x: (i % 12) * 8.5,
-  y: Math.floor(i / 12) * 14,
-  delay: ((i % 7) * 0.4 + Math.floor(i / 7) * 0.3).toFixed(1),
-}));
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATUS INDICATOR — pulsing dot
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-const HIGHLIGHTS = [
-  {
-    title: "Real data only",
-    description:
-      "Portfolio, risk, and order views stay grounded in actual broker and model data.",
-  },
-  {
-    title: "Per-user broker security",
-    description:
-      "Credentials remain encrypted and isolated for each account across paper and live workflows.",
-  },
-  {
-    title: "One calm workspace",
-    description:
-      "Strategy design, execution, analytics, and Cerberus guidance live in the same interface.",
-  },
-];
+function StatusDot({ ok, delay = 0 }: { ok: boolean; delay?: number }) {
+  return (
+    <motion.span
+      className="relative flex h-2 w-2"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay }}
+    >
+      <span
+        className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
+        style={{
+          backgroundColor: ok ? "hsl(152 72% 45%)" : "hsl(0 78% 58%)",
+          animationDuration: "2.5s",
+        }}
+      />
+      <span
+        className="relative inline-flex h-2 w-2 rounded-full"
+        style={{
+          backgroundColor: ok ? "hsl(152 72% 45%)" : "hsl(0 78% 58%)",
+        }}
+      />
+    </motion.span>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYSTEM STATUS MODULE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function SystemStatusModule() {
+  return (
+    <motion.div
+      className="auth-module"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.3 }}
+    >
+      <div className="auth-module-header">
+        <span className="auth-module-label">System Status</span>
+        <StatusDot ok delay={0.5} />
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+        {SYSTEM_STATUS.map((item, i) => (
+          <motion.div
+            key={item.label}
+            className="flex items-center justify-between gap-2"
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: 0.4 + i * 0.06 }}
+          >
+            <span className="text-[11px] text-muted-foreground/70">{item.label}</span>
+            <span className="font-mono text-[11px] font-medium text-foreground/90">{item.value}</span>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTIVITY FEED MODULE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const EVENT_COLORS = {
+  entry: "hsl(152 72% 45%)",
+  exit: "hsl(213 96% 63%)",
+  signal: "hsl(39 92% 57%)",
+  system: "hsl(217 14% 55%)",
+};
+
+function ActivityFeedModule() {
+  const [visibleCount, setVisibleCount] = useState(4);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setVisibleCount((c) => (c >= ACTIVITY_FEED.length ? 4 : c + 1));
+    }, 3500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const visible = ACTIVITY_FEED.slice(0, visibleCount);
+
+  return (
+    <motion.div
+      className="auth-module"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.5 }}
+    >
+      <div className="auth-module-header">
+        <span className="auth-module-label">Activity Feed</span>
+        <span className="font-mono text-[10px] text-muted-foreground/50">LIVE</span>
+      </div>
+      <div className="space-y-0 max-h-[168px] overflow-hidden">
+        <AnimatePresence mode="popLayout">
+          {visible.map((item) => (
+            <motion.div
+              key={item.time + item.event}
+              className="flex items-start gap-2.5 py-1.5"
+              initial={{ opacity: 0, height: 0, y: -8 }}
+              animate={{ opacity: 1, height: "auto", y: 0 }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.35 }}
+              layout
+            >
+              <span
+                className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: EVENT_COLORS[item.type] }}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[11px] leading-[1.4] text-foreground/75">
+                  {item.event}
+                </p>
+              </div>
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground/40">
+                {item.time}
+              </span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CERBERUS AI MODULE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function CerberusModule() {
+  const [insightIdx, setInsightIdx] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setInsightIdx((i) => (i + 1) % CERBERUS_INSIGHTS.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <motion.div
+      className="auth-module auth-module-cerberus"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.7 }}
+    >
+      <div className="auth-module-header">
+        <div className="flex items-center gap-2">
+          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10 border border-primary/20">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(213 96% 63%)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a4 4 0 0 1 4 4c0 1.1-.6 2.2-1.2 3L12 12l-2.8-3C8.6 8.2 8 7.1 8 6a4 4 0 0 1 4-4Z" />
+              <path d="m12 12 5 3-2 6H9l-2-6 5-3Z" />
+            </svg>
+          </div>
+          <span className="auth-module-label">Cerberus AI</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground/50">Confidence</span>
+          <span className="font-mono text-[11px] font-semibold text-primary">78%</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="auth-regime-badge">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          Trending
+        </span>
+        <span className="auth-regime-badge">
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+          Risk-On
+        </span>
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={insightIdx}
+          className="text-[12px] leading-[1.6] text-foreground/65 italic"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.4 }}
+        >
+          &ldquo;{CERBERUS_INSIGHTS[insightIdx]}&rdquo;
+        </motion.p>
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAIN AUTH SHELL
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 interface AuthShellProps {
   title: string;
@@ -86,186 +393,170 @@ interface AuthShellProps {
   footer?: React.ReactNode;
 }
 
-export function AuthShell({
-  title,
-  description,
-  children,
-  footer,
-}: AuthShellProps) {
-  // Duplicate ticker items so the seamless loop works at any viewport width
+export function AuthShell({ title, description, children, footer }: AuthShellProps) {
   const tickerItems = [...TICKER_ITEMS, ...TICKER_ITEMS];
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
-      {/* ── Keyframe definitions injected as a style tag ─────────────────── */}
+      {/* ── Inline styles ─────────────────────────────────────────────────── */}
       <style>{`
         @keyframes auth-ticker-scroll {
           0%   { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
-        @keyframes auth-chart-drift {
-          0%   { transform: translateX(-100%); }
-          100% { transform: translateX(110vw); }
+        .auth-module {
+          padding: 14px 16px;
+          border-radius: 14px;
+          border: 1px solid hsl(var(--border) / 0.5);
+          background: linear-gradient(
+            180deg,
+            hsl(var(--surface-2) / 0.55),
+            hsl(var(--surface-1) / 0.55)
+          );
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          transition: border-color 250ms ease, box-shadow 250ms ease;
         }
-        @keyframes auth-logo-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
-          50%       { box-shadow: 0 0 28px 8px rgba(59,130,246,0.22), 0 0 56px 16px rgba(59,130,246,0.08); }
+        .auth-module:hover {
+          border-color: hsl(var(--border) / 0.8);
+          box-shadow: 0 0 24px -8px hsl(var(--primary) / 0.08);
         }
-        @keyframes auth-dot-pulse {
-          0%, 100% { opacity: 0.18; }
-          50%       { opacity: 0.06; }
+        .auth-module-cerberus {
+          border-color: hsl(var(--primary) / 0.15);
+          background: linear-gradient(
+            135deg,
+            hsl(var(--surface-2) / 0.6),
+            hsl(var(--primary) / 0.04) 80%,
+            hsl(var(--surface-1) / 0.55)
+          );
         }
-        @keyframes auth-fade-up {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
+        .auth-module-cerberus:hover {
+          border-color: hsl(var(--primary) / 0.3);
+          box-shadow: 0 0 32px -8px hsl(var(--primary) / 0.15);
         }
-        @keyframes auth-card-in {
-          from { opacity: 0; transform: translateY(16px) scale(0.985); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
+        .auth-module-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        .auth-module-label {
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.16em;
+          color: hsl(var(--muted-foreground));
+        }
+        .auth-regime-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 3px 10px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          color: hsl(var(--foreground) / 0.75);
+          background: hsl(var(--surface-3) / 0.7);
+          border: 1px solid hsl(var(--border) / 0.4);
+        }
+        .auth-form-card {
+          border-radius: 28px;
+          border: 1px solid hsl(var(--border) / 0.5);
+          background: linear-gradient(
+            180deg,
+            hsl(var(--surface-2) / 0.85),
+            hsl(var(--surface-3) / 0.85)
+          );
+          backdrop-filter: blur(32px);
+          -webkit-backdrop-filter: blur(32px);
+          box-shadow:
+            0 32px 80px -20px hsl(var(--shadow-color) / 0.6),
+            0 0 1px 0 hsl(0 0% 100% / 0.06) inset,
+            0 1px 0 0 hsl(0 0% 100% / 0.04) inset;
+          transition: border-color 300ms ease, box-shadow 300ms ease;
+        }
+        .auth-form-card:hover {
+          border-color: hsl(var(--border) / 0.7);
+          box-shadow:
+            0 40px 100px -20px hsl(var(--shadow-color) / 0.7),
+            0 0 1px 0 hsl(0 0% 100% / 0.08) inset,
+            0 1px 0 0 hsl(0 0% 100% / 0.05) inset,
+            0 0 40px -10px hsl(var(--primary) / 0.06);
         }
       `}</style>
 
-      {/* ── Animated stock chart background ──────────────────────────────── */}
+      {/* ── Background system ─────────────────────────────────────────────── */}
+      <BackgroundSystem />
+
+      {/* Radial glow accents */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 overflow-hidden"
-        style={{ zIndex: 0 }}
+        className="pointer-events-none fixed inset-0"
+        style={{ zIndex: 1 }}
       >
-        {/* Deep dark base gradient */}
         <div
-          className="absolute inset-0"
+          className="absolute"
           style={{
-            background:
-              "radial-gradient(ellipse 80% 60% at 15% 40%, rgba(59,130,246,0.06) 0%, transparent 60%), " +
-              "radial-gradient(ellipse 60% 50% at 85% 70%, rgba(16,185,129,0.04) 0%, transparent 55%)",
+            top: "10%",
+            left: "5%",
+            width: "600px",
+            height: "600px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 65%)",
+            filter: "blur(40px)",
           }}
         />
-
-        {/* Dot grid */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <svg
-            width="100%"
-            height="100%"
-            className="absolute inset-0"
-            style={{ opacity: 1 }}
-          >
-            {DOT_GRID.map((dot, i) => (
-              <circle
-                key={i}
-                cx={`${dot.x}%`}
-                cy={`${dot.y}%`}
-                r="1"
-                fill="rgba(148,163,184,0.18)"
-                style={{
-                  animation: `auth-dot-pulse ${2.8 + (i % 4) * 0.6}s ease-in-out infinite`,
-                  animationDelay: `${dot.delay}s`,
-                }}
-              />
-            ))}
-          </svg>
-        </div>
-
-        {/* Scrolling chart lines */}
-        {CHART_LINES.map((line, i) => {
-          const svgW = 800;
-          const path = getChartPath(line.variant, line.height);
-          return (
-            <div
-              key={i}
-              className="absolute"
-              style={{
-                top: `${line.top}%`,
-                left: 0,
-                width: "800px",
-                height: `${line.height}px`,
-                animation: `auth-chart-drift ${line.duration}s linear infinite`,
-                animationDelay: `${line.delay}s`,
-              }}
-            >
-              <svg
-                width={svgW}
-                height={line.height}
-                viewBox={`0 0 ${svgW} ${line.height}`}
-                fill="none"
-                preserveAspectRatio="none"
-              >
-                <path
-                  d={path}
-                  fill="none"
-                  stroke={line.color}
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity={line.opacity}
-                />
-              </svg>
-            </div>
-          );
-        })}
+        <div
+          className="absolute"
+          style={{
+            bottom: "5%",
+            right: "10%",
+            width: "500px",
+            height: "500px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(16,185,129,0.04) 0%, transparent 60%)",
+            filter: "blur(40px)",
+          }}
+        />
       </div>
 
       {/* ── Ticker tape ──────────────────────────────────────────────────── */}
       <div
         aria-hidden="true"
-        className="relative w-full overflow-hidden border-b"
+        className="relative w-full overflow-hidden"
         style={{
           zIndex: 10,
-          height: "30px",
-          borderColor: "hsl(var(--border) / 0.4)",
-          background:
-            "linear-gradient(90deg, hsl(var(--surface-1) / 0.88), hsl(var(--surface-2) / 0.88))",
-          backdropFilter: "blur(12px)",
+          height: "32px",
+          borderBottom: "1px solid hsl(var(--border) / 0.3)",
+          background: "hsl(var(--surface-1) / 0.7)",
+          backdropFilter: "blur(16px)",
         }}
       >
-        {/* Left fade mask */}
         <div
-          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16"
-          style={{
-            background:
-              "linear-gradient(90deg, hsl(var(--background)) 0%, transparent 100%)",
-          }}
+          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20"
+          style={{ background: "linear-gradient(90deg, hsl(var(--background)), transparent)" }}
         />
-        {/* Right fade mask */}
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16"
-          style={{
-            background:
-              "linear-gradient(270deg, hsl(var(--background)) 0%, transparent 100%)",
-          }}
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20"
+          style={{ background: "linear-gradient(270deg, hsl(var(--background)), transparent)" }}
         />
-
         <div
           className="flex h-full items-center whitespace-nowrap"
-          style={{
-            animation: "auth-ticker-scroll 38s linear infinite",
-            width: "max-content",
-          }}
+          style={{ animation: "auth-ticker-scroll 42s linear infinite", width: "max-content" }}
         >
           {tickerItems.map((item, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1.5 px-5 text-[11px] font-medium tracking-wide"
+              className="inline-flex items-center gap-1.5 px-5 text-[11px] tracking-wide"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
-              <span className="font-semibold text-muted-foreground">
-                {item.symbol}
-              </span>
-              <span
-                style={{
-                  color: item.positive
-                    ? "hsl(var(--positive))"
-                    : "hsl(var(--negative))",
-                }}
-              >
+              <span className="font-semibold text-muted-foreground/60">{item.symbol}</span>
+              <span style={{ color: item.positive ? "hsl(var(--positive))" : "hsl(var(--negative))", fontWeight: 500 }}>
                 {item.change}
               </span>
               {i < tickerItems.length - 1 && (
-                <span
-                  className="ml-3 text-muted-foreground/25"
-                  style={{ fontSize: "10px" }}
-                >
-                  •
-                </span>
+                <span className="ml-3 text-muted-foreground/20" style={{ fontSize: "8px" }}>&#9679;</span>
               )}
             </span>
           ))}
@@ -273,135 +564,146 @@ export function AuthShell({
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────────── */}
-      <div
-        className="relative flex flex-1 items-center justify-center px-4 py-10 sm:px-6 lg:px-8"
-        style={{ zIndex: 10 }}
-      >
-        <div className="grid w-full max-w-6xl gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+      <div className="relative flex flex-1 items-center justify-center px-4 py-8 sm:px-6 lg:px-8" style={{ zIndex: 10 }}>
+        <div className="grid w-full max-w-[1200px] gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
 
-          {/* ── Left column: branding + highlights ─────────────────────── */}
-          <section
-            className="hidden space-y-8 lg:block"
-            style={{ animation: "auth-fade-up 0.55s ease-out both" }}
-          >
-            <Link href="/" className="inline-flex items-center gap-3 group">
-              {/* Logo with glow pulse */}
-              <div
-                className="flex items-center justify-center rounded-2xl"
-                style={{
-                  width: 72,
-                  height: 72,
-                  background:
-                    "linear-gradient(135deg, hsl(var(--surface-2) / 0.9), hsl(var(--surface-3) / 0.9))",
-                  border: "1px solid hsl(var(--border) / 0.5)",
-                  animation: "auth-logo-pulse 3.6s ease-in-out infinite",
-                }}
-              >
-                <BrandLogo size={64} className="h-16 w-16" />
-              </div>
-              <div>
-                <p className="text-base font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors duration-200">
-                  Adaptive Trading
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Strategy intelligence with execution discipline
-                </p>
-              </div>
-            </Link>
+          {/* ── Left: branding + live system modules ─────────────────────── */}
+          <section className="hidden space-y-6 lg:block">
 
-            <div className="space-y-5">
-              <p className="app-kicker">Trading Workspace</p>
-              <h1 className="max-w-xl text-5xl font-semibold tracking-tight text-foreground">
-                A calmer, sharper control room for systematic trading.
-              </h1>
-              <p className="max-w-xl text-base leading-8 text-muted-foreground">
-                Build strategies, manage risk, and transition from paper to live
-                execution inside a product that feels precise instead of noisy.
-              </p>
-            </div>
-
-            <div className="grid gap-4">
-              {HIGHLIGHTS.map((item, i) => (
+            {/* Logo + brand */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+            >
+              <Link href="/" className="inline-flex items-center gap-4 group">
                 <div
-                  key={item.title}
-                  className="app-panel p-5 transition-all duration-200 hover:border-primary/20"
+                  className="relative flex items-center justify-center rounded-2xl"
                   style={{
-                    animation: `auth-fade-up 0.55s ease-out both`,
-                    animationDelay: `${0.1 + i * 0.08}s`,
+                    width: 72,
+                    height: 72,
+                    background: "linear-gradient(135deg, hsl(var(--surface-2) / 0.9), hsl(var(--surface-3) / 0.9))",
+                    border: "1px solid hsl(var(--border) / 0.5)",
                   }}
                 >
-                  <div className="flex items-start gap-3">
-                    {/* Accent dot */}
-                    <div
-                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ background: "hsl(var(--primary))" }}
-                    />
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {item.title}
-                      </p>
-                      <p className="mt-1 text-sm leading-7 text-muted-foreground">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* ── Right column: form card ─────────────────────────────────── */}
-          <section
-            className="app-panel overflow-hidden p-1"
-            style={{ animation: "auth-card-in 0.5s ease-out both", animationDelay: "0.05s" }}
-          >
-            <div className="app-card rounded-[28px] p-6 sm:p-8">
-              <div className="mb-8 space-y-4">
-                {/* Mobile logo */}
-                <div className="inline-flex items-center gap-3 lg:hidden">
+                  {/* Glow ring */}
                   <div
-                    className="flex items-center justify-center rounded-xl"
+                    className="absolute inset-0 rounded-2xl animate-pulse"
                     style={{
-                      width: 52,
-                      height: 52,
-                      background:
-                        "linear-gradient(135deg, hsl(var(--surface-2) / 0.9), hsl(var(--surface-3) / 0.9))",
-                      border: "1px solid hsl(var(--border) / 0.5)",
-                      animation: "auth-logo-pulse 3.6s ease-in-out infinite",
+                      boxShadow: "0 0 20px 4px rgba(59,130,246,0.12), 0 0 48px 12px rgba(59,130,246,0.04)",
+                      animationDuration: "3s",
                     }}
-                  >
-                    <BrandLogo size={40} className="h-10 w-10" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      Adaptive Trading
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Strategy intelligence workspace
-                    </p>
-                  </div>
+                  />
+                  <BrandLogo size={56} className="h-14 w-14 relative" />
                 </div>
-
-                <div className="space-y-2">
-                  <p className="app-kicker">Account Access</p>
-                  <h2 className="text-3xl font-semibold tracking-tight text-foreground">
-                    {title}
-                  </h2>
-                  <p className="text-sm leading-7 text-muted-foreground">
-                    {description}
+                <div>
+                  <p className="text-lg font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors duration-200">
+                    Adaptive Trading
+                  </p>
+                  <p className="text-sm text-muted-foreground/70">
+                    AI-powered systematic execution
                   </p>
                 </div>
-              </div>
+              </Link>
+            </motion.div>
 
-              {children}
+            {/* Hero text */}
+            <motion.div
+              className="space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <h1 className="max-w-lg text-[2.6rem] font-semibold leading-[1.1] tracking-tight text-foreground">
+                Your trading{" "}
+                <span className="bg-gradient-to-r from-blue-400 via-blue-500 to-cyan-400 bg-clip-text text-transparent">
+                  intelligence
+                </span>{" "}
+                is already running.
+              </h1>
+              <p className="max-w-md text-[15px] leading-[1.7] text-muted-foreground/80">
+                Strategies executing. Risk monitoring. Market context updating.
+                Sign in to take the controls.
+              </p>
+            </motion.div>
 
-              {footer && (
-                <div className="mt-6 border-t border-border/60 pt-5 text-sm text-muted-foreground">
-                  {footer}
-                </div>
-              )}
+            {/* Live system modules */}
+            <div className="space-y-3">
+              <SystemStatusModule />
+              <ActivityFeedModule />
+              <CerberusModule />
             </div>
           </section>
+
+          {/* ── Right: login form card ────────────────────────────────────── */}
+          <motion.section
+            className="w-full"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
+          >
+            <div className="auth-form-card p-1.5">
+              <div className="rounded-[24px] p-6 sm:p-8" style={{
+                background: "linear-gradient(180deg, hsl(var(--surface-2) / 0.5), hsl(var(--surface-3) / 0.5))",
+              }}>
+                <div className="mb-8 space-y-4">
+                  {/* Mobile logo */}
+                  <div className="inline-flex items-center gap-3 lg:hidden">
+                    <div
+                      className="flex items-center justify-center rounded-xl"
+                      style={{
+                        width: 52,
+                        height: 52,
+                        background: "linear-gradient(135deg, hsl(var(--surface-2) / 0.9), hsl(var(--surface-3) / 0.9))",
+                        border: "1px solid hsl(var(--border) / 0.5)",
+                      }}
+                    >
+                      <BrandLogo size={40} className="h-10 w-10" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Adaptive Trading</p>
+                      <p className="text-xs text-muted-foreground">AI-powered trading workspace</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="app-kicker">Command Access</p>
+                    <h2 className="text-3xl font-semibold tracking-tight text-foreground">{title}</h2>
+                    <p className="text-sm leading-7 text-muted-foreground">{description}</p>
+                  </div>
+                </div>
+
+                {children}
+
+                {footer && (
+                  <div className="mt-6 border-t pt-5 text-sm text-muted-foreground" style={{ borderColor: "hsl(var(--border) / 0.4)" }}>
+                    {footer}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Trust indicators below the card */}
+            <motion.div
+              className="mt-4 flex items-center justify-center gap-6 text-[10px] text-muted-foreground/40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+            >
+              <span className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                AES-256 Encrypted
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+                SOC 2 Ready
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                99.9% Uptime
+              </span>
+            </motion.div>
+          </motion.section>
         </div>
       </div>
     </div>
