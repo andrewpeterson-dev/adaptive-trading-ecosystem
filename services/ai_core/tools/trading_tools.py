@@ -418,6 +418,164 @@ async def _run_deep_trade_analysis(
     return result.to_dict()
 
 
+async def _fix_bot_with_ai(
+    user_id: int,
+    bot_id: str,
+    instruction: str = "",
+) -> dict:
+    """Use AI to fix or edit a bot's strategy based on natural language.
+
+    Reads current config, sends it to the LLM with the instruction,
+    validates the result, creates a new version. If bot was in ERROR
+    status, resets to DRAFT.
+    """
+    import json
+    from db.database import get_session
+    from db.cerberus_models import CerberusBot, CerberusBotVersion, BotStatus
+    from sqlalchemy import select, func
+
+    if not instruction.strip():
+        return {"error": "Please describe what you want to fix or change."}
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot, CerberusBotVersion)
+            .join(CerberusBotVersion, CerberusBot.current_version_id == CerberusBotVersion.id)
+            .where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        row = result.one_or_none()
+        if not row:
+            return {"error": "Bot not found or not owned by user", "bot_id": bot_id}
+        bot, current_version = row
+
+    current_config = current_version.config_json or {}
+
+    system_prompt = (
+        "You are a trading strategy editor. You will receive a bot's current strategy configuration "
+        "and a user instruction to modify it. Return ONLY the modified JSON config — no explanation, "
+        "no markdown, no code fences. The output must be valid JSON.\n\n"
+        "Rules:\n"
+        "- Only modify what the user asks for\n"
+        "- Keep all other fields unchanged\n"
+        "- Valid indicators: rsi, sma, ema, macd, atr, stochastic, vwap, volume, bollinger_bands, obv\n"
+        "- Valid operators: >, <, >=, <=, ==, crosses_above, crosses_below\n"
+        "- Valid timeframes: 1m, 5m, 15m, 1H, 4H, 1D, 1W\n"
+        "- Valid actions: BUY, SELL\n"
+        "- Conditions need: indicator, operator, value, params (with period)\n"
+        "- stop_loss_pct and take_profit_pct are percentages (e.g., 2.0 = 2%)\n"
+    )
+
+    user_prompt = (
+        f"Current strategy config:\n{json.dumps(current_config, indent=2)}\n\n"
+        f"User instruction: {instruction}\n\n"
+        f"Return the modified JSON config:"
+    )
+
+    from services.ai_core.model_router import ModelRouter
+    from services.ai_core.providers.base import ProviderMessage
+    model_router = ModelRouter()
+    routing = model_router.route(mode="strategy", message=instruction, has_tools=False)
+
+    try:
+        response = await routing.provider.complete(
+            messages=[
+                ProviderMessage(role="system", content=system_prompt),
+                ProviderMessage(role="user", content=user_prompt),
+            ],
+            model=routing.model,
+            temperature=0.3,
+        )
+        raw_output = response.content if hasattr(response, "content") else str(response)
+    except Exception as e:
+        return {"error": f"AI model error: {e}"}
+
+    from services.ai_strategy_service import extract_json
+    json_str = extract_json(raw_output)
+    if not json_str:
+        return {"error": "AI returned no valid JSON. Try rephrasing your request."}
+
+    try:
+        new_config = json.loads(json_str)
+    except Exception:
+        return {"error": "AI returned invalid JSON. Try rephrasing your request."}
+
+    normalized = normalize_bot_config(new_config)
+    is_valid, val_errors, val_warnings = validate_strategy_config(normalized)
+
+    if not is_valid:
+        # Retry once with errors
+        retry_prompt = (
+            f"{user_prompt}\n\n"
+            f"YOUR PREVIOUS OUTPUT HAD VALIDATION ERRORS:\n{json.dumps(val_errors)}\n"
+            f"Fix these errors and return valid JSON:"
+        )
+        try:
+            response = await routing.provider.complete(
+                messages=[
+                    ProviderMessage(role="system", content=system_prompt),
+                    ProviderMessage(role="user", content=retry_prompt),
+                ],
+                model=routing.model,
+                temperature=0.2,
+            )
+            raw_output = response.content if hasattr(response, "content") else str(response)
+            json_str = extract_json(raw_output)
+            if json_str:
+                new_config = json.loads(json_str)
+                normalized = normalize_bot_config(new_config)
+                is_valid, val_errors, val_warnings = validate_strategy_config(normalized)
+        except Exception:
+            pass
+
+        if not is_valid:
+            return {
+                "error": "AI edit still has validation errors after retry",
+                "validation_errors": val_errors,
+                "config": normalized,
+            }
+
+    # Create new version
+    async with get_session() as session:
+        result = await session.execute(select(CerberusBot).where(CerberusBot.id == bot_id))
+        bot = result.scalar_one()
+
+        ver_result = await session.execute(
+            select(func.max(CerberusBotVersion.version_number)).where(
+                CerberusBotVersion.bot_id == bot_id
+            )
+        )
+        max_ver = ver_result.scalar() or 0
+
+        version_id = str(uuid.uuid4())
+        version = CerberusBotVersion(
+            id=version_id,
+            bot_id=bot_id,
+            version_number=max_ver + 1,
+            config_json=normalized,
+            diff_summary=f"AI fix: {instruction[:200]}",
+            created_by="cerberus_ai_fix",
+            backtest_required=False,
+            override_level=current_version.override_level,
+            universe_config=current_version.universe_config,
+        )
+        session.add(version)
+        bot.current_version_id = version_id
+
+        was_error = bot.status == BotStatus.ERROR
+        if was_error:
+            bot.status = BotStatus.DRAFT
+
+    return {
+        "status": "fixed" if was_error else "edited",
+        "bot_id": bot_id,
+        "version_number": max_ver + 1,
+        "diff_summary": f"AI fix: {instruction[:200]}",
+        "was_error_status": was_error,
+        "validation_warnings": val_warnings,
+        "message": f"Strategy updated. {'Bot reset from ERROR to DRAFT — you can redeploy it.' if was_error else 'New version created.'}",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
@@ -610,4 +768,37 @@ def register():
         },
         output_schema={"type": "object"},
         handler=_run_deep_trade_analysis,
+    ))
+
+    registry.register(ToolDefinition(
+        name="fixBotWithAI",
+        version="1.0",
+        description=(
+            "Use AI to fix or edit a bot's strategy configuration using natural language. "
+            "Reads the current config, applies AI-driven changes based on the instruction, "
+            "validates the result, and creates a new version. If the bot was in ERROR status, "
+            "it resets to DRAFT so it can be redeployed. Use this when a user asks to fix "
+            "a broken bot, adjust strategy parameters, change indicators, or tweak conditions. "
+            "Examples: 'fix the RSI condition', 'make it more aggressive', 'add a MACD filter', "
+            "'change timeframe to 4H', 'reduce position size to 5%'."
+        ),
+        category=ToolCategory.TRADING,
+        side_effect=ToolSideEffect.WRITE,
+        timeout_ms=30000,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "bot_id": {
+                    "type": "string",
+                    "description": "Bot ID to fix/edit",
+                },
+                "instruction": {
+                    "type": "string",
+                    "description": "Natural language instruction describing what to fix or change",
+                },
+            },
+            "required": ["bot_id", "instruction"],
+        },
+        output_schema={"type": "object"},
+        handler=_fix_bot_with_ai,
     ))
