@@ -19,11 +19,19 @@ export interface UniverseConfig {
 
 export type OverrideLevel = "advisory" | "soft" | "full";
 
+export interface AIBrainConfig {
+  primaryModel: string;
+  dataSources: string[];
+  tradingThesis?: string;
+  comparisonModels?: string[];
+}
+
 export interface DeployConfig {
   universeConfig: UniverseConfig;
   overrideLevel: OverrideLevel;
   allocatedCapital: number | null;
   extendedHours: boolean;
+  aiBrainConfig?: AIBrainConfig;
 }
 
 interface DeployConfigModalProps {
@@ -65,8 +73,23 @@ const OVERRIDE_OPTIONS: { value: OverrideLevel; label: string; description: stri
   {
     value: "full",
     label: "Full Autonomy",
-    description: "AI can delay, reduce, cancel, or exit positions",
+    description: "AI analyzes markets and makes all trading decisions autonomously",
   },
+];
+
+const AI_MODELS = [
+  { value: "gpt-5.4", label: "GPT-5.4 (Primary)" },
+  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { value: "gpt-4.1", label: "GPT-4.1 (Fast)" },
+  { value: "deepseek-r1", label: "DeepSeek R1" },
+];
+
+const DATA_SOURCE_OPTIONS = [
+  { value: "technical", label: "Technical", desc: "RSI, MACD, BBands, support/resistance" },
+  { value: "sentiment", label: "Sentiment", desc: "News, social media, options flow" },
+  { value: "fundamental", label: "Fundamental", desc: "Earnings, P/E, revenue" },
+  { value: "macro", label: "Macro", desc: "VIX, Fed calendar, market breadth" },
+  { value: "portfolio", label: "Portfolio", desc: "Current positions, exposure, P&L" },
 ];
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -86,6 +109,11 @@ export function DeployConfigModal({
   const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>("soft");
   const [capitalInput, setCapitalInput] = useState("");
   const [extendedHours, setExtendedHours] = useState(false);
+  const [primaryModel, setPrimaryModel] = useState("gpt-5.4");
+  const [dataSources, setDataSources] = useState<string[]>(["technical", "sentiment", "fundamental", "macro", "portfolio"]);
+  const [tradingThesis, setTradingThesis] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [comparisonModels, setComparisonModels] = useState<string[]>([]);
 
   // Reset all form state when modal opens to prevent stale config from previous deploy
   useEffect(() => {
@@ -98,6 +126,11 @@ export function DeployConfigModal({
       setOverrideLevel("soft");
       setCapitalInput("");
       setExtendedHours(false);
+      setPrimaryModel("gpt-5.4");
+      setDataSources(["technical", "sentiment", "fundamental", "macro", "portfolio"]);
+      setTradingThesis("");
+      setShowAdvanced(false);
+      setComparisonModels([]);
     }
   }, [open]);
 
@@ -153,7 +186,19 @@ export function DeployConfigModal({
 
     const parsedCapital = capitalInput.trim() ? parseFloat(capitalInput.replace(/[,$]/g, "")) : null;
     const allocatedCapital = parsedCapital && !isNaN(parsedCapital) && parsedCapital > 0 ? parsedCapital : null;
-    onDeploy({ universeConfig, overrideLevel, allocatedCapital, extendedHours });
+
+    const config: DeployConfig = { universeConfig, overrideLevel, allocatedCapital, extendedHours };
+
+    if (overrideLevel === "full") {
+      config.aiBrainConfig = {
+        primaryModel,
+        dataSources,
+        tradingThesis: tradingThesis.trim() || undefined,
+        comparisonModels: comparisonModels.length > 0 ? comparisonModels : undefined,
+      };
+    }
+
+    onDeploy(config);
   };
 
   if (!open) return null;
@@ -371,6 +416,109 @@ export function DeployConfigModal({
                 </button>
               ))}
             </div>
+
+            {overrideLevel === "full" && (
+              <div className="space-y-4 mt-4 p-4 rounded-lg bg-zinc-800/50 border border-zinc-700">
+                <h4 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                  <Cpu className="w-4 h-4" /> AI Brain Configuration
+                </h4>
+
+                {/* Model Selection */}
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">AI Model</label>
+                  <select
+                    value={primaryModel}
+                    onChange={(e) => setPrimaryModel(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                  >
+                    {AI_MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Data Sources */}
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-2">Data Sources</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DATA_SOURCE_OPTIONS.map((src) => (
+                      <label
+                        key={src.value}
+                        className={`flex items-start gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                          dataSources.includes(src.value)
+                            ? "border-blue-500 bg-blue-500/10"
+                            : "border-zinc-700 bg-zinc-900 hover:border-zinc-600"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={dataSources.includes(src.value)}
+                          onChange={(e) => {
+                            setDataSources(
+                              e.target.checked
+                                ? [...dataSources, src.value]
+                                : dataSources.filter((s) => s !== src.value)
+                            );
+                          }}
+                          className="mt-0.5 accent-blue-500"
+                        />
+                        <div>
+                          <span className="text-sm text-white">{src.label}</span>
+                          <p className="text-xs text-zinc-500">{src.desc}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Trading Thesis */}
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Trading Thesis</label>
+                  <textarea
+                    value={tradingThesis}
+                    onChange={(e) => setTradingThesis(e.target.value)}
+                    placeholder="e.g., Trade large-cap tech stocks based on earnings surprises and options flow..."
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white h-20 resize-none focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Advanced Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  {showAdvanced ? "Hide" : "Show"} Advanced Options
+                </button>
+
+                {showAdvanced && (
+                  <div className="space-y-3 pt-2 border-t border-zinc-700">
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1">Comparison Models (shadow paper runs)</label>
+                      <div className="space-y-1">
+                        {AI_MODELS.filter((m) => m.value !== primaryModel).map((m) => (
+                          <label key={m.value} className="flex items-center gap-2 text-sm text-zinc-300">
+                            <input
+                              type="checkbox"
+                              checked={comparisonModels.includes(m.value)}
+                              onChange={(e) => {
+                                setComparisonModels(
+                                  e.target.checked
+                                    ? [...comparisonModels, m.value]
+                                    : comparisonModels.filter((v) => v !== m.value)
+                                );
+                              }}
+                              className="accent-blue-500"
+                            />
+                            {m.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* ── Extended Hours ────────────────────────────────────────── */}
