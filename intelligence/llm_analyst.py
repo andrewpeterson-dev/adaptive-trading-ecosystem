@@ -308,27 +308,25 @@ Rules:
         if self._ollama_client is not None and self.settings.ollama_enabled:
             try:
                 import asyncio
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        available = pool.submit(
-                            asyncio.run, self._ollama_client.is_available()
-                        ).result()
-                else:
-                    available = asyncio.run(self._ollama_client.is_available())
+
+                def _run_async(coro):
+                    """Run an async coroutine from sync context, handling both
+                    running-loop and no-loop scenarios."""
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+                    if loop and loop.is_running():
+                        return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=30)
+                    else:
+                        return asyncio.run(coro)
+
+                available = _run_async(self._ollama_client.is_available())
 
                 if available:
-                    if loop.is_running():
-                        with concurrent.futures.ThreadPoolExecutor() as pool:
-                            raw_response = pool.submit(
-                                asyncio.run,
-                                self._ollama_client.generate(prompt=prompt),
-                            ).result()
-                    else:
-                        raw_response = asyncio.run(
-                            self._ollama_client.generate(prompt=prompt)
-                        )
+                    raw_response = _run_async(
+                        self._ollama_client.generate(prompt=prompt)
+                    )
 
                     model_name = f"ollama/{self.settings.ollama_model}"
                     analysis = self._parse_response(

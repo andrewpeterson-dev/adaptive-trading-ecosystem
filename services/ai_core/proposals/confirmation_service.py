@@ -322,6 +322,15 @@ class ConfirmationService:
                 session.add(portfolio)
                 await session.flush()
 
+            # Look up existing position (shared by BUY and SELL paths)
+            pos_result = await session.execute(
+                select(PaperPosition).where(
+                    PaperPosition.portfolio_id == portfolio.id,
+                    PaperPosition.symbol == symbol,
+                )
+            )
+            position = pos_result.scalar_one_or_none()
+
             if side == "BUY":
                 cost = current_price * quantity
                 if cost > portfolio.cash:
@@ -330,19 +339,42 @@ class ConfirmationService:
                     )
                 portfolio.cash -= cost
 
-                pos_result = await session.execute(
-                    select(PaperPosition).where(
-                        PaperPosition.portfolio_id == portfolio.id,
-                        PaperPosition.symbol == symbol,
-                    )
-                )
-                position = pos_result.scalar_one_or_none()
+                # Cover an existing short position
+                if position and position.quantity < 0:
+                    held_short = abs(position.quantity)
+                    if held_short < quantity:
+                        raise ValueError(
+                            f"Insufficient short position: want to cover {quantity}, short {held_short}"
+                        )
+                    pnl = (position.avg_entry_price - current_price) * quantity
+                    position.quantity += quantity
+                    if abs(position.quantity) <= 0.0001:
+                        await session.delete(position)
+                    else:
+                        position.current_price = current_price
 
-                if position:
+                    trade = PaperTrade(
+                        portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
+                        direction=TradeDirection.LONG, quantity=quantity,
+                        entry_price=position.avg_entry_price, exit_price=current_price,
+                        pnl=pnl, status=PaperTradeStatus.CLOSED,
+                        exit_time=datetime.utcnow(),
+                    )
+                    session.add(trade)
+                # Add to existing long position
+                elif position and position.quantity > 0:
                     total_cost = (position.avg_entry_price * position.quantity) + cost
                     position.quantity += quantity
                     position.avg_entry_price = total_cost / position.quantity
                     position.current_price = current_price
+
+                    trade = PaperTrade(
+                        portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
+                        direction=TradeDirection.LONG, quantity=quantity,
+                        entry_price=current_price, status=PaperTradeStatus.OPEN,
+                    )
+                    session.add(trade)
+                # Open new long position
                 else:
                     position = PaperPosition(
                         portfolio_id=portfolio.id, user_id=user_id,
@@ -351,39 +383,59 @@ class ConfirmationService:
                     )
                     session.add(position)
 
-                trade = PaperTrade(
-                    portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
-                    direction=TradeDirection.LONG, quantity=quantity,
-                    entry_price=current_price, status=PaperTradeStatus.OPEN,
-                )
-                session.add(trade)
-            else:
-                pos_result = await session.execute(
-                    select(PaperPosition).where(
-                        PaperPosition.portfolio_id == portfolio.id,
-                        PaperPosition.symbol == symbol,
+                    trade = PaperTrade(
+                        portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
+                        direction=TradeDirection.LONG, quantity=quantity,
+                        entry_price=current_price, status=PaperTradeStatus.OPEN,
                     )
-                )
-                position = pos_result.scalar_one_or_none()
-                if not position or position.quantity < quantity:
-                    held = position.quantity if position else 0
-                    raise ValueError(f"Insufficient shares: want {quantity}, hold {held}")
+                    session.add(trade)
+            else:
+                # Close an existing long position
+                if position and position.quantity > 0:
+                    if position.quantity < quantity:
+                        raise ValueError(
+                            f"Insufficient shares: want {quantity}, hold {position.quantity}"
+                        )
+                    proceeds = current_price * quantity
+                    pnl = proceeds - (position.avg_entry_price * quantity)
+                    portfolio.cash += proceeds
+                    position.quantity -= quantity
+                    if abs(position.quantity) <= 0.0001:
+                        await session.delete(position)
 
-                proceeds = current_price * quantity
-                pnl = proceeds - (position.avg_entry_price * quantity)
-                portfolio.cash += proceeds
-                position.quantity -= quantity
-                if abs(position.quantity) <= 0.0001:
-                    await session.delete(position)
+                    trade = PaperTrade(
+                        portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
+                        direction=TradeDirection.SHORT, quantity=quantity,
+                        entry_price=position.avg_entry_price, exit_price=current_price,
+                        pnl=pnl, status=PaperTradeStatus.CLOSED,
+                        exit_time=datetime.utcnow(),
+                    )
+                    session.add(trade)
+                # Open new short or add to existing short
+                else:
+                    proceeds = current_price * quantity
+                    portfolio.cash += proceeds
 
-                trade = PaperTrade(
-                    portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
-                    direction=TradeDirection.SHORT, quantity=quantity,
-                    entry_price=position.avg_entry_price, exit_price=current_price,
-                    pnl=pnl, status=PaperTradeStatus.CLOSED,
-                    exit_time=datetime.utcnow(),
-                )
-                session.add(trade)
+                    if position and position.quantity < 0:
+                        total_credit = (position.avg_entry_price * abs(position.quantity)) + proceeds
+                        new_short_qty = abs(position.quantity) + quantity
+                        position.quantity = -new_short_qty
+                        position.avg_entry_price = total_credit / new_short_qty
+                        position.current_price = current_price
+                    else:
+                        position = PaperPosition(
+                            portfolio_id=portfolio.id, user_id=user_id,
+                            symbol=symbol, quantity=-quantity,
+                            avg_entry_price=current_price, current_price=current_price,
+                        )
+                        session.add(position)
+
+                    trade = PaperTrade(
+                        portfolio_id=portfolio.id, user_id=user_id, symbol=symbol,
+                        direction=TradeDirection.SHORT, quantity=quantity,
+                        entry_price=current_price, status=PaperTradeStatus.OPEN,
+                    )
+                    session.add(trade)
 
         logger.info(
             "paper_order_executed", user_id=user_id,
