@@ -36,6 +36,8 @@ from services.activity_bus import BotActivityEvent, activity_bus
 from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
 from services.bot_engine.ai_evaluator import ai_evaluate_entries
+from services.ai_brain import AITradingEngine
+from services.ai_brain.types import AITradeDecision
 from services.reasoning_engine import ReasoningEngine
 from services.reasoning_engine.safety import (
     calculate_kelly_position_size,
@@ -60,6 +62,8 @@ class BotRunner:
         # Track last evaluation time per bot to avoid duplicate signals
         self._last_eval: dict[str, datetime] = {}
         self._reasoning_engine = ReasoningEngine()
+        self._ai_engine = AITradingEngine()
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def start(self) -> None:
         """Start the bot runner loop."""
@@ -208,6 +212,98 @@ class BotRunner:
             return
 
         risk_context = await self._build_risk_context(bot)
+
+        # ── AI Brain routing ──────────────────────────────────────────────
+        if bot.ai_brain_config:
+            brain_config = bot.ai_brain_config
+            exec_mode = brain_config.get("execution_mode", "manual")
+
+            if exec_mode in ("ai_driven", "ai_assisted"):
+                # In ai_assisted mode, only proceed if rules triggered
+                if exec_mode == "ai_assisted" and conditions:
+                    from services.bot_engine.evaluator import evaluate_conditions as _eval_cond
+                    # Fetch bars for first symbol to check conditions
+                    if symbols:
+                        _bars = await self._fetch_bars(symbols[0], timeframe)
+                        if _bars and len(_bars) >= 50:
+                            _ind_vals = compute_indicators(_bars, [
+                                {"indicator": c["indicator"], "params": c.get("params", {})}
+                                for c in conditions if isinstance(c, dict) and c.get("indicator")
+                            ])
+                            if not _eval_cond(_ind_vals, conditions):
+                                self._last_eval[bot.id] = datetime.utcnow()
+                                return
+
+                # Build market state for AITradingEngine
+                market_state = {
+                    "symbols": symbols,
+                    "user_id": bot.user_id,
+                    "macro": risk_context,
+                    "portfolio": risk_context,
+                }
+
+                decision = await self._ai_engine.evaluate(bot, market_state)
+
+                # Record every AI decision unconditionally
+                await self._record_ai_decision(bot, decision, is_shadow=False)
+
+                # Execute actionable decisions
+                if decision.action in ("BUY", "SELL", "EXIT") and decision.symbol:
+                    trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
+                    current_price = 0.0
+                    try:
+                        _price_bars = await self._fetch_bars(decision.symbol, timeframe)
+                        if _price_bars:
+                            current_price = float(_price_bars[-1].get("close", 0) or 0)
+                    except Exception:
+                        pass
+
+                    try:
+                        re_decision = await self._reasoning_engine.evaluate(
+                            bot=bot, symbol=decision.symbol, signal=decision.action,
+                            strategy_config=config, vix=risk_context.get("vix"),
+                            portfolio_exposure=self._calculate_symbol_exposure(
+                                risk_context, decision.symbol, current_price,
+                            ),
+                            daily_pnl_pct=float(risk_context.get("daily_pnl_pct") or 0.0),
+                            trading_mode=trading_mode,
+                        )
+
+                        if re_decision.decision == "PAUSE_BOT":
+                            await self._pause_bot(bot.id, re_decision.reasoning)
+                            self._publish_activity(
+                                "bot_paused", bot, decision.symbol,
+                                f"{bot.name} paused — {re_decision.reasoning}",
+                                {"decision": re_decision.decision, "reasoning": re_decision.reasoning},
+                            )
+                        elif re_decision.decision not in ("EXIT_POSITION", "DELAY_TRADE"):
+                            adjusted_size = position_size_pct * re_decision.size_adjustment * decision.confidence
+                            executed = await self._execute_trade(
+                                bot, decision.symbol, decision.action, adjusted_size,
+                                current_price,
+                                reasons=[f"AI Brain: {decision.reasoning_summary} (conf: {decision.confidence:.0%})"],
+                                extended_hours=extended_hours,
+                            )
+                            if executed:
+                                self._publish_activity(
+                                    "trade_executed", bot, decision.symbol,
+                                    f"{bot.name} AI Brain {decision.action} {decision.symbol} @ ${current_price:.2f} (conf: {decision.confidence:.0%})",
+                                    {"action": decision.action, "confidence": decision.confidence,
+                                     "model": decision.model_used, "reasoning": decision.reasoning_summary},
+                                )
+                    except Exception as e:
+                        logger.error("ai_brain_reasoning_error", bot_id=bot.id, error=str(e))
+
+                # Fire shadow model comparisons (non-blocking)
+                for shadow_model in brain_config.get("comparison_models", []):
+                    task = asyncio.create_task(
+                        self._run_shadow_evaluation(bot, market_state, shadow_model)
+                    )
+                    self._background_tasks.add(task)
+                    task.add_done_callback(self._background_tasks.discard)
+
+                self._last_eval[bot.id] = datetime.utcnow()
+                return
 
         # Manual strategies use rigid condition evaluation (the conditions
         # the user configured).  AI evaluation is only for ai_generated or
@@ -1704,6 +1800,49 @@ class BotRunner:
         if position_size_pct <= 1:
             return min(position_size_pct, 0.25)
         return min(position_size_pct / 100.0, 0.25)
+
+    async def _run_shadow_evaluation(
+        self, bot, market_state: dict, model: str,
+    ) -> None:
+        """Run shadow model evaluation — fire-and-forget, errors logged not raised."""
+        try:
+            decision = await self._ai_engine.evaluate(bot, market_state, model_override=model)
+            await self._record_ai_decision(bot, decision, is_shadow=True)
+        except Exception as e:
+            logger.error("shadow_eval_error", bot_id=bot.id, model=model, error=str(e))
+
+    async def _record_ai_decision(
+        self, bot, decision: AITradeDecision, is_shadow: bool = False,
+    ) -> None:
+        """Persist AI decision to bot_model_performance + ai_trade_reasoning."""
+        try:
+            from db.cerberus_models import BotModelPerformance, AITradeReasoning
+            async with get_session() as session:
+                perf = BotModelPerformance(
+                    bot_id=bot.id,
+                    model_used=decision.model_used or "unknown",
+                    symbol=decision.symbol or "",
+                    action=decision.action,
+                    confidence=decision.confidence,
+                    reasoning_summary=decision.reasoning_summary,
+                    entry_price=0,  # Will be enriched from market data
+                    is_shadow=is_shadow,
+                    decided_at=datetime.utcnow(),
+                )
+                session.add(perf)
+                await session.flush()
+
+                # Store per-node reasoning for Tier C
+                for node_name, output in (decision.reasoning_full or {}).items():
+                    reasoning = AITradeReasoning(
+                        performance_id=perf.id,
+                        node_name=node_name,
+                        node_output={"report": output} if isinstance(output, str) else output,
+                        model_used=decision.model_used or "unknown",
+                    )
+                    session.add(reasoning)
+        except Exception as e:
+            logger.error("record_ai_decision_error", bot_id=bot.id, error=str(e))
 
     @staticmethod
     def _publish_activity(
