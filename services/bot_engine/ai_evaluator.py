@@ -280,7 +280,7 @@ async def ai_evaluate_entries(
             ],
             model=model,
             temperature=0.4,
-            max_tokens=800,
+            max_tokens=2000,
             store=False,
         )
 

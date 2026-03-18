@@ -49,13 +49,12 @@ _subscriptions: dict[int, set[str]] = {}
 async def _get_ws_user_id(websocket: WebSocket, token: str) -> Optional[int]:
     """Authenticate via short-lived websocket ticket or auth header."""
     candidate = token.strip()
-    allowed_scopes = {"websocket"}
+    allowed_scopes = {"access", "websocket"}
 
     if not candidate:
         auth_header = websocket.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             candidate = auth_header[7:].strip()
-            allowed_scopes = {"access", "websocket"}
 
     if not candidate:
         return None

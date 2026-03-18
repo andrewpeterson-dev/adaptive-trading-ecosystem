@@ -367,7 +367,7 @@ class BotRunner:
         if strategy_type in ("ai_generated", "custom"):
             settings = get_settings()
             if settings.openai_api_key or settings.anthropic_api_key:
-                await self._ai_evaluate_bot(bot, config, symbols, action, position_size_pct, risk_context)
+                await self._ai_evaluate_bot(bot, config, symbols, action, position_size_pct, risk_context, agg_scale=agg_scale)
                 return
         if True:  # rigid condition path for manual strategies
             trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
@@ -394,6 +394,7 @@ class BotRunner:
         action: str,
         position_size_pct: float,
         risk_context: dict,
+        agg_scale: dict | None = None,
     ) -> None:
         """Use AI evaluation to decide entries for all symbols at once."""
         conditions = config.get("conditions", [])
@@ -561,6 +562,8 @@ class BotRunner:
         )
 
         # Step 3: Process AI signals — execute entries with high confidence
+        if agg_scale is None:
+            agg_scale = _AGGRESSIVENESS_SCALES[2]
         for signal in signals:
             confidence_floor = agg_scale["confidence_floor"]
             if signal.action != "enter" or signal.confidence < confidence_floor:
