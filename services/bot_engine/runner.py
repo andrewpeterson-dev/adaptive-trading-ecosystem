@@ -253,6 +253,7 @@ class BotRunner:
 
         # Check if market is open (extended_hours bots get 4AM-8PM ET window)
         if not self._is_market_open(extended_hours=extended_hours):
+            logger.debug("bot_skipped_market_closed", bot_id=str(bot.id), bot_name=bot.name, extended_hours=extended_hours)
             return
 
         # Rate limit: don't evaluate same bot more than once per timeframe interval
@@ -280,8 +281,9 @@ class BotRunner:
                                 for c in conditions if isinstance(c, dict) and c.get("indicator")
                             ])
                             _ind_vals["CLOSE"] = float(_bars[-1].get("close", 0) or 0)
-                            _passed, _ = evaluate_conditions(conditions, _ind_vals)
+                            _passed, _reasons = evaluate_conditions(conditions, _ind_vals)
                             if not _passed:
+                                logger.info("ai_assisted_conditions_not_met", bot_id=str(bot.id), bot_name=bot.name, symbol=symbols[0], reasons=_reasons)
                                 self._last_eval[bot.id] = datetime.utcnow()
                                 return
 
@@ -1302,6 +1304,12 @@ class BotRunner:
         extended_hours: bool = False,
     ) -> CerberusTrade | None:
         """Execute a trade via the user's active broker (Webull or Alpaca)."""
+        logger.info(
+            "trade_pipeline_start",
+            bot_id=str(bot.id), bot_name=bot.name, symbol=symbol,
+            action=action, size_pct=position_size_pct, price=current_price,
+            reasons=reasons,
+        )
         user_id = bot.user_id
 
         # ── Resolve trading mode ONCE for both kill-switch and order routing ──
@@ -1465,7 +1473,16 @@ class BotRunner:
                 used_broker = "alpaca"
 
             order_id = order.get("id") or order.get("order_id") or order.get("client_order_id")
-            fill_price = float(order.get("filled_avg_price") or current_price)
+            fill_price = float(
+                order.get("filled_avg_price")
+                or order.get("average_price")
+                or order.get("price")
+                or current_price
+                or 0
+            )
+            if fill_price <= 0:
+                logger.warning("bot_trade_no_fill_price", bot_id=str(bot.id), symbol=symbol, order_keys=list(order.keys()))
+                fill_price = current_price
             broker_tag = f"webull_{order.get('mode', trading_mode)}" if used_broker == "webull" else f"alpaca_{trading_mode}"
 
             logger.info(
