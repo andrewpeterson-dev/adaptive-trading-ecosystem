@@ -245,9 +245,6 @@ class BotRunner:
 
                 decision = await self._ai_engine.evaluate(bot, market_state)
 
-                # Record every AI decision unconditionally
-                await self._record_ai_decision(bot, decision, is_shadow=False)
-
                 # Execute actionable decisions
                 if decision.action in ("BUY", "SELL", "EXIT") and decision.symbol:
                     trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
@@ -258,6 +255,9 @@ class BotRunner:
                             current_price = float(_price_bars[-1].get("close", 0) or 0)
                     except Exception:
                         pass
+
+                    # Record with actual entry price now that we have market data
+                    await self._record_ai_decision(bot, decision, is_shadow=False, entry_price=current_price)
 
                     try:
                         re_decision = await self._reasoning_engine.evaluate(
@@ -294,6 +294,10 @@ class BotRunner:
                                 )
                     except Exception as e:
                         logger.error("ai_brain_reasoning_error", bot_id=bot.id, error=str(e))
+
+                else:
+                    # HOLD decisions — record without entry price
+                    await self._record_ai_decision(bot, decision, is_shadow=False)
 
                 # Fire shadow model comparisons (non-blocking)
                 for shadow_model in brain_config.get("comparison_models", []):
@@ -785,7 +789,8 @@ class BotRunner:
                 )
                 if ai_capital_enabled and decision.ai_confidence > 0:
                     # Scale position: high confidence → up to 1.5x, low → down to 0.5x
-                    confidence_multiplier = 0.5 + decision.ai_confidence
+                    clamped_confidence = min(max(decision.ai_confidence, 0.0), 1.0)
+                    confidence_multiplier = 0.5 + clamped_confidence
                     adjusted_size = adjusted_size * confidence_multiplier
                     logger.info(
                         "ai_capital_adjustment",
@@ -1814,6 +1819,7 @@ class BotRunner:
 
     async def _record_ai_decision(
         self, bot, decision: AITradeDecision, is_shadow: bool = False,
+        entry_price: float = 0.0,
     ) -> None:
         """Persist AI decision to bot_model_performance + ai_trade_reasoning."""
         try:
@@ -1826,7 +1832,7 @@ class BotRunner:
                     action=decision.action,
                     confidence=decision.confidence,
                     reasoning_summary=decision.reasoning_summary,
-                    entry_price=0,  # Will be enriched from market data
+                    entry_price=entry_price,
                     is_shadow=is_shadow,
                     decided_at=datetime.utcnow(),
                 )

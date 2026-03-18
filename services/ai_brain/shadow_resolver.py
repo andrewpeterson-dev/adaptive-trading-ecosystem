@@ -69,6 +69,7 @@ async def _resolve_shadows() -> None:
                 perf.exit_price = current_price
                 perf.pnl = round(pnl, 4)
                 perf.resolved_at = datetime.utcnow()
+                await session.flush()
 
                 logger.info(
                     "shadow_resolved",
