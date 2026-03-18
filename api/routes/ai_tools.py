@@ -774,6 +774,7 @@ async def get_bot_detail(bot_id: str, request: Request):
         "aiCapitalManagement": bool(bot.reasoning_model_config and bot.reasoning_model_config.get("ai_capital_management")),
         "aiBrainConfig": bot.ai_brain_config,
         "overrideLevel": current_version.override_level if current_version else "soft",
+        "aggressiveness": config.get("aggressiveness", 2),
     }
 
 
@@ -943,6 +944,46 @@ async def update_override_level(bot_id: str, request: Request, body: UpdateOverr
 
     logger.info("bot_override_level_updated", bot_id=bot_id, user_id=user_id, level=body.override_level)
     return {"bot_id": bot_id, "override_level": body.override_level}
+
+
+class UpdateAggressivenessRequest(BaseModel):
+    aggressiveness: int = Field(..., ge=1, le=4, description="1=conservative, 2=moderate, 3=aggressive, 4=very aggressive")
+
+
+@router.patch("/bots/{bot_id}/aggressiveness")
+async def update_aggressiveness(bot_id: str, request: Request, body: UpdateAggressivenessRequest):
+    """Update the aggressiveness level for a running bot. Takes effect next evaluation cycle."""
+    user_id = request.state.user_id
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        if not bot.current_version_id:
+            raise HTTPException(status_code=400, detail="Bot has no version")
+
+        version_result = await session.execute(
+            select(CerberusBotVersion).where(
+                CerberusBotVersion.id == bot.current_version_id,
+                CerberusBotVersion.bot_id == bot.id,
+            )
+        )
+        version = version_result.scalar_one_or_none()
+        if not version:
+            raise HTTPException(status_code=400, detail="Bot version not found")
+
+        config = version.config_json if isinstance(version.config_json, dict) else {}
+        config["aggressiveness"] = body.aggressiveness
+        version.config_json = config
+        # Flag the JSON column as modified for SQLAlchemy
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(version, "config_json")
+
+    logger.info("bot_aggressiveness_updated", bot_id=bot_id, user_id=user_id, level=body.aggressiveness)
+    return {"bot_id": bot_id, "aggressiveness": body.aggressiveness}
 
 
 @router.post("/confirm-trade")

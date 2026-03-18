@@ -13,6 +13,13 @@ interface CapitalPanelProps {
 
 type OverrideLevel = "advisory" | "soft" | "full";
 
+const AGGRESSIVENESS_LEVELS = [
+  { value: 1, label: "Conservative", color: "bg-green-400", desc: "Strict conditions, smaller positions" },
+  { value: 2, label: "Moderate", color: "bg-blue-400", desc: "Balanced risk/reward" },
+  { value: 3, label: "Aggressive", color: "bg-amber-400", desc: "Relaxed conditions, larger positions" },
+  { value: 4, label: "Very Aggressive", color: "bg-red-400", desc: "Loose triggers, maximum sizing" },
+];
+
 const OVERRIDE_OPTIONS: { value: OverrideLevel; label: string; icon: typeof Shield; color: string; desc: string }[] = [
   { value: "advisory", label: "Advisory", icon: Shield, color: "text-sky-400", desc: "AI logs only" },
   { value: "soft", label: "Guided", icon: Brain, color: "text-violet-400", desc: "Can delay or reduce size" },
@@ -39,9 +46,18 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
   const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>(serverOverride);
   const [overrideSaving, setOverrideSaving] = useState(false);
 
+  // Aggressiveness
+  const serverAggressiveness = detail.aggressiveness ?? 2;
+  const [aggressiveness, setAggressiveness] = useState(serverAggressiveness);
+  const [aggSaving, setAggSaving] = useState(false);
+
   useEffect(() => {
     setOverrideLevel(serverOverride);
   }, [serverOverride]);
+
+  useEffect(() => {
+    setAggressiveness(serverAggressiveness);
+  }, [serverAggressiveness]);
 
   const handleEdit = () => { setInput(detail.allocatedCapital ? String(detail.allocatedCapital) : ""); setIsEditing(true); };
   const handleSave = async () => {
@@ -66,6 +82,23 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
       console.error("AI capital management toggle failed:", err);
     }
   };
+
+  const handleAggressivenessChange = useCallback(async (level: number) => {
+    setAggSaving(true);
+    const prev = aggressiveness;
+    setAggressiveness(level);
+    try {
+      await apiFetch(`/api/ai/tools/bots/${detail.id}/aggressiveness`, {
+        method: "PATCH",
+        body: JSON.stringify({ aggressiveness: level }),
+      });
+    } catch (err) {
+      console.error("Aggressiveness update failed:", err);
+      setAggressiveness(prev);
+    } finally {
+      setAggSaving(false);
+    }
+  }, [detail.id, aggressiveness]);
 
   const handleOverrideChange = useCallback(async (level: OverrideLevel) => {
     setOverrideSaving(true);
@@ -175,6 +208,37 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
                 {selected && (
                   <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${opt.color.replace("text-", "bg-")}`} />
                 )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Aggressiveness ── */}
+      <div className="mt-3">
+        <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-1.5">
+          Aggressiveness
+        </div>
+        <div className="flex gap-1">
+          {AGGRESSIVENESS_LEVELS.map((level) => {
+            const selected = aggressiveness === level.value;
+            return (
+              <button
+                key={level.value}
+                type="button"
+                onClick={() => handleAggressivenessChange(level.value)}
+                disabled={aggSaving}
+                title={`${level.label}: ${level.desc}`}
+                className={`flex-1 flex flex-col items-center gap-1 rounded-lg px-1 py-1.5 transition-all ${
+                  selected
+                    ? "bg-foreground/[0.06] border border-border/60"
+                    : "border border-transparent hover:bg-muted/20"
+                } disabled:opacity-50`}
+              >
+                <div className={`h-2 w-2 rounded-full ${selected ? level.color : "bg-muted-foreground/30"}`} />
+                <div className={`text-[8px] font-medium leading-tight text-center ${selected ? "text-foreground" : "text-muted-foreground/60"}`}>
+                  {level.label}
+                </div>
               </button>
             );
           })}
