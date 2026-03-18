@@ -266,7 +266,7 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
           </div>
         )}
 
-        {!loading && !error && (data.length === 0 || (data.length <= 2 && totalChange === 0)) && (
+        {!loading && !error && data.length === 0 && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center">
             {/* Horizontal scan line — the signature alive element */}
             <div className="absolute inset-x-0 top-1/2 h-px overflow-hidden">
