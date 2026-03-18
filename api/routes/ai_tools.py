@@ -385,6 +385,7 @@ def _version_to_dict(version: CerberusBotVersion) -> dict[str, Any]:
         "createdBy": version.created_by,
         "backtestRequired": version.backtest_required,
         "backtestId": version.backtest_id,
+        "overrideLevel": version.override_level or "soft",
         "createdAt": version.created_at.isoformat() if version.created_at else None,
     }
 
@@ -899,6 +900,40 @@ async def update_ai_capital_management(bot_id: str, request: Request):
 
     logger.info("bot_ai_capital_toggled", bot_id=bot_id, user_id=user_id, enabled=enabled)
     return {"bot_id": bot_id, "ai_capital_management": enabled}
+
+
+class UpdateOverrideLevelRequest(BaseModel):
+    override_level: str = Field(..., pattern=r"^(advisory|soft|full)$")
+
+
+@router.patch("/bots/{bot_id}/override-level")
+async def update_override_level(bot_id: str, request: Request, body: UpdateOverrideLevelRequest):
+    """Update the AI override level for a bot without changing its status."""
+    user_id = request.state.user_id
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        if not bot.current_version_id:
+            raise HTTPException(status_code=400, detail="Bot has no version")
+
+        version_result = await session.execute(
+            select(CerberusBotVersion).where(
+                CerberusBotVersion.id == bot.current_version_id,
+                CerberusBotVersion.bot_id == bot.id,
+            )
+        )
+        version = version_result.scalar_one_or_none()
+        if not version:
+            raise HTTPException(status_code=400, detail="Bot version not found")
+        version.override_level = body.override_level
+
+    logger.info("bot_override_level_updated", bot_id=bot_id, user_id=user_id, level=body.override_level)
+    return {"bot_id": bot_id, "override_level": body.override_level}
 
 
 @router.post("/confirm-trade")

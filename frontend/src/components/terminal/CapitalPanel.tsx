@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DollarSign, Pencil, Check, X, Sparkles, Shield, Brain, Zap } from "lucide-react";
 import { TerminalPanel } from "./TerminalPanel";
 import { updateBotCapital, updateAiCapitalManagement } from "@/lib/cerberus-api";
@@ -24,11 +24,16 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
   const [input, setInput] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Derive override level from the current version
+  // Derive override level from the current version (syncs on refresh/re-fetch)
   const versionData = detail.currentVersion as Record<string, unknown> | null;
-  const currentOverride = (versionData?.overrideLevel as OverrideLevel | undefined) ?? "soft";
-  const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>(currentOverride);
+  const serverOverride = (versionData?.overrideLevel as OverrideLevel | undefined) ?? "soft";
+  const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>(serverOverride);
   const [overrideSaving, setOverrideSaving] = useState(false);
+
+  // Re-sync when the detail prop updates (e.g. after page refresh or 30s polling)
+  useEffect(() => {
+    setOverrideLevel(serverOverride);
+  }, [serverOverride]);
 
   const handleEdit = () => { setInput(detail.allocatedCapital ? String(detail.allocatedCapital) : ""); setIsEditing(true); };
   const handleSave = async () => {
@@ -59,8 +64,8 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     const prev = overrideLevel;
     setOverrideLevel(level);
     try {
-      await apiFetch(`/api/ai/tools/bots/${detail.id}/deploy`, {
-        method: "POST",
+      await apiFetch(`/api/ai/tools/bots/${detail.id}/override-level`, {
+        method: "PATCH",
         body: JSON.stringify({ override_level: level }),
       });
     } catch (err) {
