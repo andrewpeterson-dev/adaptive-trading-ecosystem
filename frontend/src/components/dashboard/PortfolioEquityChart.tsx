@@ -194,42 +194,43 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
 
   return (
     <div className="flex h-full flex-col gap-2">
-      {/* Header row: equity value + period selector */}
-      <div className="flex items-center justify-between px-3 pt-1">
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-mono font-semibold text-muted-foreground">
-            Portfolio Equity
-          </span>
-          {data.length > 0 && !loading && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono font-bold text-foreground">
+      {/* Header — equity value as the hero number */}
+      <div className="flex items-end justify-between px-4 pt-3 pb-1">
+        <div className="flex items-baseline gap-4">
+          {data.length > 0 && !loading ? (
+            <>
+              <span className="text-3xl font-mono font-bold tracking-tight text-foreground">
                 {formatDollar(currentEquity)}
               </span>
               <span
                 className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-mono font-bold",
+                  "rounded-md px-2 py-0.5 text-xs font-mono font-bold tracking-wide",
                   isPositive
-                    ? "bg-emerald-500/10 text-emerald-500"
-                    : "bg-red-500/10 text-red-500",
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : "bg-red-500/10 text-red-400",
                 )}
               >
                 {totalChange >= 0 ? "+" : ""}
                 {totalChangePct.toFixed(2)}%
               </span>
-            </div>
+            </>
+          ) : (
+            <span className="text-sm font-mono font-semibold tracking-wide text-muted-foreground/60">
+              Portfolio Equity
+            </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 rounded-lg border border-border/40 bg-muted/10 p-0.5">
           {PERIODS.map((p) => (
             <button
               key={p}
               type="button"
               onClick={() => setPeriod(p)}
               className={cn(
-                "rounded-full px-2.5 py-1 text-[10px] font-mono font-semibold transition-colors",
+                "rounded-md px-2.5 py-1.5 text-[10px] font-mono font-semibold transition-all duration-200",
                 period === p
-                  ? "bg-foreground text-background"
-                  : "bg-black/[0.03] text-muted-foreground hover:text-foreground dark:bg-white/[0.03]",
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.04]",
               )}
             >
               {p}
@@ -266,41 +267,48 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
         )}
 
         {!loading && !error && (data.length === 0 || (data.length <= 2 && totalChange === 0)) && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6">
-            {/* Breathing baseline SVG */}
-            <div className="w-64 h-px relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/30 to-transparent animate-pulse" style={{ animationDuration: '3s' }} />
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center">
+            {/* Horizontal scan line — the signature alive element */}
+            <div className="absolute inset-x-0 top-1/2 h-px overflow-hidden">
+              <div
+                className="absolute h-px w-[15%] animate-scan-line"
+                style={{ background: "linear-gradient(90deg, transparent, hsl(213 96% 63% / 0.4), transparent)" }}
+              />
             </div>
 
-            <div className="text-center space-y-2">
-              <p className="font-mono text-sm font-semibold tracking-wider text-foreground/80">
-                System armed &bull; Awaiting execution data
+            {/* Static baseline at 50% */}
+            <div className="absolute inset-x-8 top-1/2 h-px bg-border/20" />
+
+            <div className="relative z-10 flex flex-col items-center gap-5">
+              <div className="text-center space-y-1.5">
+                <p className="font-mono text-[13px] font-semibold tracking-[0.15em] text-foreground/70 uppercase">
+                  System Armed
+                </p>
+                <p className="text-[11px] text-muted-foreground/40">
+                  Equity curve activates on first execution
+                </p>
+              </div>
+
+              {/* System status row */}
+              <div className="flex items-center gap-5 text-[9px] font-mono tracking-wider text-muted-foreground/35">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1 w-1 rounded-full bg-emerald-400/50 animate-alive-pulse" />
+                  SCANNER
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1 w-1 rounded-full bg-amber-400/40" />
+                  EXECUTION
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1 w-1 rounded-full bg-emerald-400/50 animate-alive-pulse" />
+                  RISK ENGINE
+                </span>
+              </div>
+
+              <p className="font-mono text-[9px] text-muted-foreground/20 tracking-[0.2em]">
+                $100,000 INITIALIZED
               </p>
-              <p className="text-xs text-muted-foreground/50">
-                Portfolio equity activates with first trade execution
-              </p>
             </div>
-
-            {/* System status indicators */}
-            <div className="flex items-center gap-4 text-[10px] font-mono text-muted-foreground/40">
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/60 animate-pulse" />
-                Scanner: Active
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400/60" />
-                Execution: Standby
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/60 animate-pulse" />
-                Risk Engine: Online
-              </span>
-            </div>
-
-            {/* Initial capital reference */}
-            <p className="font-mono text-[10px] text-muted-foreground/30 tracking-wider">
-              INITIALIZATION: $100,000
-            </p>
           </div>
         )}
 

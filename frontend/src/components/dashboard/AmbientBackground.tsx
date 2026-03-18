@@ -94,6 +94,16 @@ export function AmbientBackground() {
       if (!canvas || !ctx) return;
       const { width, height } = canvas;
 
+      // Subtle depth vignette
+      const vignette = ctx.createRadialGradient(
+        width * 0.5, height * 0.35, height * 0.15,
+        width * 0.5, height * 0.5, height * 0.85
+      );
+      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vignette.addColorStop(1, "rgba(0, 0, 0, 0.12)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, width, height);
+
       for (const wave of waves) {
         ctx.beginPath();
         ctx.strokeStyle = wave.color;
@@ -102,8 +112,11 @@ export function AmbientBackground() {
 
         const baseY = height * wave.yOffset;
 
+        // Compound sine for organic irregularity
         for (let x = 0; x <= width; x += 2) {
-          const y = baseY + Math.sin(x * wave.frequency + wave.phase) * wave.amplitude;
+          const primary = Math.sin(x * wave.frequency + wave.phase) * wave.amplitude;
+          const secondary = Math.sin(x * wave.frequency * 2.3 + wave.phase * 1.7) * (wave.amplitude * 0.12);
+          const y = baseY + primary + secondary;
           if (x === 0) {
             ctx.moveTo(x, y);
           } else {

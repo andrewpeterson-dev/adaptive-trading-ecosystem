@@ -86,16 +86,19 @@ const DEFAULT_LAYOUTS: Layouts = {
 
 function CerberusInsightChip() {
   return (
-    <div className="flex items-center gap-2.5 ml-auto w-fit rounded-full border border-border/50 cerberus-chip px-4 py-2 mt-2">
-      <span className="flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-alive-pulse" />
-        <Brain className="h-3 w-3 text-violet-400/70" />
+    <div className="flex items-center gap-3 ml-auto w-fit rounded-full border border-border/40 cerberus-chip px-4 py-2 mt-3">
+      {/* Signal strength bars — the memorable micro-detail */}
+      <div className="signal-bars flex items-end gap-[2px]">
+        <span className="block h-[6px] w-[2px] rounded-full bg-emerald-400/70" />
+        <span className="block h-[9px] w-[2px] rounded-full bg-emerald-400/60" />
+        <span className="block h-[12px] w-[2px] rounded-full bg-emerald-400/40" />
+      </div>
+      <span className="text-[11px] font-mono text-muted-foreground/60 tracking-wide">
+        Cerberus AI
       </span>
-      <span className="text-[11px] font-mono text-muted-foreground/70">
-        Cerberus AI: Market structure stable
-      </span>
-      <span className="text-[11px] font-mono text-muted-foreground/40">
-        &bull; No threshold crossings
+      <span className="h-3 w-px bg-border/30" />
+      <span className="text-[10px] font-mono text-muted-foreground/40">
+        Market structure stable &bull; Regime: Normal
       </span>
     </div>
   );
