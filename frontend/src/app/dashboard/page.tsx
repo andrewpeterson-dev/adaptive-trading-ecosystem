@@ -67,19 +67,19 @@ function Zone({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 py-1.5 group"
+        className="flex w-full items-center gap-2.5 rounded-lg border border-border/40 bg-muted/8 px-3.5 py-2.5 transition-colors hover:bg-muted/15 hover:border-border/60 group"
       >
-        <Icon className="h-3 w-3 text-muted-foreground/50" />
-        <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/60">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground/60" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
           {title}
         </span>
         {count != null && (
-          <span className="text-[9px] font-mono text-muted-foreground/40">{count}</span>
+          <span className="rounded-full bg-muted/40 px-1.5 py-px text-[9px] font-mono text-muted-foreground/50">{count}</span>
         )}
-        <span className="flex-1 border-b border-border/20 ml-2" />
+        <span className="flex-1" />
         <ChevronDown
           className={cn(
-            "h-3 w-3 text-muted-foreground/30 transition-transform duration-200",
+            "h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-200",
             !open && "-rotate-90"
           )}
         />
