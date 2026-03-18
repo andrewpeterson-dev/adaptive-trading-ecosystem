@@ -256,9 +256,6 @@ class BotRunner:
                     except Exception:
                         pass
 
-                    # Record with actual entry price now that we have market data
-                    await self._record_ai_decision(bot, decision, is_shadow=False, entry_price=current_price)
-
                     try:
                         re_decision = await self._reasoning_engine.evaluate(
                             bot=bot, symbol=decision.symbol, signal=decision.action,
@@ -286,6 +283,8 @@ class BotRunner:
                                 extended_hours=extended_hours,
                             )
                             if executed:
+                                # Only record after trade actually executes (not blocked by ReasoningEngine)
+                                await self._record_ai_decision(bot, decision, is_shadow=False, entry_price=current_price)
                                 self._publish_activity(
                                     "trade_executed", bot, decision.symbol,
                                     f"{bot.name} AI Brain {decision.action} {decision.symbol} @ ${current_price:.2f} (conf: {decision.confidence:.0%})",

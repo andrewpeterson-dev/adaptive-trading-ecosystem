@@ -101,12 +101,13 @@ async def _get_current_price(symbol: str) -> float | None:
     try:
         import yfinance as yf
         from concurrent.futures import ThreadPoolExecutor
-        import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as pool:
             ticker = await loop.run_in_executor(pool, lambda: yf.Ticker(symbol))
             info = await loop.run_in_executor(pool, lambda: ticker.info)
-            return float(info.get("regularMarketPrice", 0) or 0)
+            # Check both price keys — some symbols only have one
+            price = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0)
+            return price if price > 0 else None
     except Exception:
         return None
