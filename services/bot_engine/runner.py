@@ -221,7 +221,6 @@ class BotRunner:
             if exec_mode in ("ai_driven", "ai_assisted"):
                 # In ai_assisted mode, only proceed if rules triggered
                 if exec_mode == "ai_assisted" and conditions:
-                    from services.bot_engine.evaluator import evaluate_conditions as _eval_cond
                     # Fetch bars for first symbol to check conditions
                     if symbols:
                         _bars = await self._fetch_bars(symbols[0], timeframe)
@@ -230,7 +229,9 @@ class BotRunner:
                                 {"indicator": c["indicator"], "params": c.get("params", {})}
                                 for c in conditions if isinstance(c, dict) and c.get("indicator")
                             ])
-                            if not _eval_cond(_ind_vals, conditions):
+                            _ind_vals["CLOSE"] = float(_bars[-1].get("close", 0) or 0)
+                            _passed, _ = evaluate_conditions(conditions, _ind_vals)
+                            if not _passed:
                                 self._last_eval[bot.id] = datetime.utcnow()
                                 return
 
