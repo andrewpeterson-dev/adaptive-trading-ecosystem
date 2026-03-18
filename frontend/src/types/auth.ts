@@ -19,6 +19,7 @@ export interface RegisterRequest {
 
 export interface LoginResponse {
   user: User;
+  access_token?: string;
 }
 
 export interface RegisterResponse {

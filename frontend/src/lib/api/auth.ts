@@ -12,11 +12,16 @@ export async function login(
   email: string,
   password: string
 ): Promise<LoginResponse> {
-  return apiFetch<LoginResponse>("/api/auth/login", {
+  const response = await apiFetch<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
     timeoutMs: 12_000,
   });
+  // Store token in localStorage so Bearer auth works for mutations (bypasses CSRF)
+  if (response.access_token && typeof window !== "undefined") {
+    window.localStorage.setItem("access_token", response.access_token);
+  }
+  return response;
 }
 
 export async function register(
@@ -80,6 +85,7 @@ export async function logout(): Promise<void> {
   if (typeof window !== "undefined") {
     try {
       window.localStorage.removeItem("auth_token");
+      window.localStorage.removeItem("access_token");
     } catch {
       // ignore storage access errors
     }

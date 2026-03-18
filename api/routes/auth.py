@@ -272,7 +272,9 @@ async def _create_password_reset_token(db, user_id: int) -> str:
 
 def _issue_auth_response(user: User, *, status_code: int = 200, content: dict | None = None) -> JSONResponse:
     token = _create_token(user)
-    response = JSONResponse(status_code=status_code, content=content or {"user": _user_dict(user)})
+    body = content or {"user": _user_dict(user)}
+    body["access_token"] = token  # Include token in body for localStorage fallback
+    response = JSONResponse(status_code=status_code, content=body)
     set_auth_cookies(response, token=token, csrf_token=issue_csrf_token())
     return response
 

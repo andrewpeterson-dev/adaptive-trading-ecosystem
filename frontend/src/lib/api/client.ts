@@ -135,6 +135,14 @@ async function _apiFetchInner<T>(
     headers.set("Content-Type", "application/json");
   }
 
+  // Send Bearer token from localStorage if available (bypasses CSRF requirement)
+  if (!headers.has("Authorization") && typeof window !== "undefined") {
+    const storedToken = window.localStorage.getItem("access_token");
+    if (storedToken) {
+      headers.set("Authorization", `Bearer ${storedToken}`);
+    }
+  }
+
   if (!SAFE_METHODS.has(method) && !headers.has("X-CSRF-Token")) {
     const csrfToken = getCookie("csrf_token");
     if (csrfToken) {
