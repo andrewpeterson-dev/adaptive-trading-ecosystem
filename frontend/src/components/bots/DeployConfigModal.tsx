@@ -233,7 +233,10 @@ export function DeployConfigModal({
     onDeploy(config);
   };
 
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!open || !mounted) return null;
 
   return createPortal(
     <div
@@ -241,8 +244,7 @@ export function DeployConfigModal({
       role="dialog"
       aria-modal="true"
       aria-label={`Deploy configuration for ${botName || "bot"}`}
-      onClick={(e) => { e.stopPropagation(); onClose(); }}
-      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         className="app-panel mx-4 w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6"
@@ -450,18 +452,18 @@ export function DeployConfigModal({
             </div>
 
             {overrideLevel === "full" && (
-              <div className="space-y-4 mt-4 p-4 rounded-lg bg-zinc-800/50 border border-zinc-700">
-                <h4 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+              <div className="space-y-4 mt-4 p-4 rounded-lg border border-border/60 bg-muted/15">
+                <h4 className="app-label flex items-center gap-2">
                   <Cpu className="w-4 h-4" /> AI Brain Configuration
                 </h4>
 
                 {/* Model Selection */}
                 <div>
-                  <label className="text-xs text-zinc-400 block mb-1">AI Model</label>
+                  <label className="app-label mb-1.5 block">AI Model</label>
                   <select
                     value={primaryModel}
                     onChange={(e) => setPrimaryModel(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    className="app-select"
                   >
                     {AI_MODELS.map((m) => (
                       <option key={m.value} value={m.value}>{m.label}</option>
@@ -471,15 +473,15 @@ export function DeployConfigModal({
 
                 {/* Data Sources */}
                 <div>
-                  <label className="text-xs text-zinc-400 block mb-2">Data Sources</label>
+                  <label className="app-label mb-1.5 block">Data Sources</label>
                   <div className="grid grid-cols-2 gap-2">
                     {DATA_SOURCE_OPTIONS.map((src) => (
                       <label
                         key={src.value}
                         className={`flex items-start gap-2 p-2 rounded border cursor-pointer transition-colors ${
                           dataSources.includes(src.value)
-                            ? "border-blue-500 bg-blue-500/10"
-                            : "border-zinc-700 bg-zinc-900 hover:border-zinc-600"
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-muted/30 hover:border-muted-foreground/40"
                         }`}
                       >
                         <input
@@ -492,11 +494,11 @@ export function DeployConfigModal({
                                 : dataSources.filter((s) => s !== src.value)
                             );
                           }}
-                          className="mt-0.5 accent-blue-500"
+                          className="mt-0.5 accent-[hsl(var(--primary))]"
                         />
                         <div>
-                          <span className="text-sm text-white">{src.label}</span>
-                          <p className="text-xs text-zinc-500">{src.desc}</p>
+                          <span className="text-sm text-foreground">{src.label}</span>
+                          <p className="text-xs text-muted-foreground">{src.desc}</p>
                         </div>
                       </label>
                     ))}
@@ -505,12 +507,12 @@ export function DeployConfigModal({
 
                 {/* Trading Thesis */}
                 <div>
-                  <label className="text-xs text-zinc-400 block mb-1">Trading Thesis</label>
+                  <label className="app-label mb-1.5 block">Trading Thesis</label>
                   <textarea
                     value={tradingThesis}
                     onChange={(e) => setTradingThesis(e.target.value)}
                     placeholder="e.g., Trade large-cap tech stocks based on earnings surprises and options flow..."
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white h-20 resize-none focus:border-blue-500 focus:outline-none"
+                    className="app-textarea h-20 resize-none"
                   />
                 </div>
 
@@ -518,18 +520,18 @@ export function DeployConfigModal({
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-xs text-primary hover:text-primary/80 transition-colors"
                 >
                   {showAdvanced ? "Hide" : "Show"} Advanced Options
                 </button>
 
                 {showAdvanced && (
-                  <div className="space-y-3 pt-2 border-t border-zinc-700">
+                  <div className="space-y-3 pt-2 border-t border-border/60">
                     <div>
-                      <label className="text-xs text-zinc-400 block mb-1">Comparison Models (shadow paper runs)</label>
+                      <label className="app-label mb-1.5 block">Comparison Models (shadow paper runs)</label>
                       <div className="space-y-1">
                         {AI_MODELS.filter((m) => m.value !== primaryModel).map((m) => (
-                          <label key={m.value} className="flex items-center gap-2 text-sm text-zinc-300">
+                          <label key={m.value} className="flex items-center gap-2 text-sm text-muted-foreground">
                             <input
                               type="checkbox"
                               checked={comparisonModels.includes(m.value)}
@@ -540,7 +542,7 @@ export function DeployConfigModal({
                                     : comparisonModels.filter((v) => v !== m.value)
                                 );
                               }}
-                              className="accent-blue-500"
+                              className="accent-[hsl(var(--primary))]"
                             />
                             {m.label}
                           </label>

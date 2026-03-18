@@ -12,7 +12,7 @@ interface NodeReasoning {
 }
 
 interface AIReasoningPanelProps {
-  action: string;
+  action: "BUY" | "SELL" | "HOLD" | "EXIT" | string;
   symbol: string;
   confidence: number;
   reasoningSummary: string;
@@ -102,8 +102,8 @@ export function AIReasoningPanel({
 
           {expanded && (
             <div className="border-t border-zinc-700 divide-y divide-zinc-700/50">
-              {nodes.map((node) => (
-                <div key={node.name} className="p-3 space-y-1">
+              {nodes.map((node, i) => (
+                <div key={`${node.name}-${i}`} className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-zinc-300 capitalize">
                       {node.name.replace(/_/g, " ")}

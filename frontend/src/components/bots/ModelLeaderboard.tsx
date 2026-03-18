@@ -25,7 +25,10 @@ export function ModelLeaderboard({ botId, token }: ModelLeaderboardProps) {
     fetch(`/api/bots/${botId}/model-comparison`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setModels(data.models || []);
         setLoading(false);
@@ -43,12 +46,22 @@ export function ModelLeaderboard({ botId, token }: ModelLeaderboardProps) {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model_config: { primary_model: model } }),
     });
-    window.location.reload();
+    // Re-fetch leaderboard instead of hard reload
+    setLoading(true);
+    fetch(`/api/bots/${botId}/model-comparison`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        return r.json();
+      })
+      .then((data) => { setModels(data.models || []); setLoading(false); })
+      .catch(() => setLoading(false));
   };
 
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-700 flex items-center gap-2">
+    <div className="rounded-lg border border-border bg-muted/15 overflow-hidden">
+      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <Trophy className="w-4 h-4 text-yellow-400" />
         <h3 className="text-sm font-medium text-zinc-200">Model Comparison</h3>
       </div>

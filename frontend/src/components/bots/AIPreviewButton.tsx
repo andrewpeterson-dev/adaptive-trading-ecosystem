@@ -56,6 +56,7 @@ export function AIPreviewButton({ botId, token }: AIPreviewButtonProps) {
           confidence={result.confidence}
           reasoningSummary={result.reasoning_summary}
           dataContributions={result.data_contributions}
+          nodes={result.reasoning_full ? Object.entries(result.reasoning_full).map(([name, output]) => ({ name, output })) : undefined}
           modelUsed={result.model_used}
         />
       )}
