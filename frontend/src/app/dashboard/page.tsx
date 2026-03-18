@@ -9,8 +9,6 @@ import {
   LayoutGrid,
   PieChart,
   ShieldCheck,
-  Lock,
-  Unlock,
   Brain,
   Activity,
   Crosshair,
@@ -25,10 +23,8 @@ import type { Account, Position, Order, RiskSummary } from "@/types/trading";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useTradingMode } from "@/hooks/useTradingMode";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { SubNav } from "@/components/layout/SubNav";
 import {
-  DashboardPanel,
   MetricsRow,
   MarketIntelligenceBar,
   AIReasoningPanel,
@@ -48,54 +44,54 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusChip } from "@/components/ui/status-chip";
 
 // ---------------------------------------------------------------------------
-// Collapsible Section — scan-first building block
+// Collapsible Zone — compact control-surface building block
 // ---------------------------------------------------------------------------
 
-function Section({
+function Zone({
   title,
   icon: Icon,
   children,
   defaultOpen = true,
-  badge,
-  className = "",
+  count,
 }: {
   title: string;
   icon: React.ElementType;
   children: React.ReactNode;
   defaultOpen?: boolean;
-  badge?: React.ReactNode;
-  className?: string;
+  count?: number;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className={className}>
+    <section>
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 py-2 group"
+        className="flex w-full items-center gap-2 py-1.5 group"
       >
-        <Icon className="h-3.5 w-3.5 text-muted-foreground/60" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/70">
+        <Icon className="h-3 w-3 text-muted-foreground/50" />
+        <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/60">
           {title}
         </span>
-        {badge}
-        <span className="flex-1" />
+        {count != null && (
+          <span className="text-[9px] font-mono text-muted-foreground/40">{count}</span>
+        )}
+        <span className="flex-1 border-b border-border/20 ml-2" />
         <ChevronDown
           className={cn(
-            "h-3 w-3 text-muted-foreground/40 transition-transform duration-200",
+            "h-3 w-3 text-muted-foreground/30 transition-transform duration-200",
             !open && "-rotate-90"
           )}
         />
       </button>
       <div
         className={cn(
-          "grid transition-[grid-template-rows] duration-300 ease-in-out",
+          "grid transition-[grid-template-rows] duration-250 ease-out",
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         )}
       >
         <div className="overflow-hidden">
-          <div className="pt-1 pb-2">{children}</div>
+          <div className="pt-2">{children}</div>
         </div>
       </div>
     </section>
@@ -103,72 +99,96 @@ function Section({
 }
 
 // ---------------------------------------------------------------------------
-// Tab Bar — for consolidating related panels
+// Compact Tab Selector
 // ---------------------------------------------------------------------------
 
-function TabBar({
-  tabs,
+function Tabs({
+  items,
   active,
   onChange,
 }: {
-  tabs: { key: string; label: string; icon?: React.ElementType }[];
+  items: { key: string; label: string }[];
   active: string;
   onChange: (key: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-border/40 bg-muted/10 p-0.5 w-fit mb-3">
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        return (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => onChange(tab.key)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[10px] font-semibold transition-all duration-150",
-              active === tab.key
-                ? "bg-foreground text-background shadow-sm"
-                : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.04]"
-            )}
-          >
-            {Icon && <Icon className="h-3 w-3" />}
-            {tab.label}
-          </button>
-        );
-      })}
+    <div className="flex items-center gap-px mb-2">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onChange(item.key)}
+          className={cn(
+            "px-3 py-1 text-[10px] font-semibold transition-all duration-150 first:rounded-l-md last:rounded-r-md",
+            active === item.key
+              ? "bg-foreground/10 text-foreground"
+              : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-foreground/[0.03]"
+          )}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Cerberus Insight Chip — ambient AI presence
+// Cerberus Chip
 // ---------------------------------------------------------------------------
 
-function CerberusInsightChip() {
+function CerberusChip() {
   return (
-    <div className="flex items-center gap-3 ml-auto w-fit rounded-full border border-border/40 cerberus-chip px-4 py-2 mt-3">
+    <div className="flex items-center gap-3 ml-auto w-fit rounded-full border border-border/30 cerberus-chip px-3.5 py-1.5 mt-2">
       <div className="signal-bars flex items-end gap-[2px]">
-        <span className="block h-[6px] w-[2px] rounded-full bg-emerald-400/70" />
-        <span className="block h-[9px] w-[2px] rounded-full bg-emerald-400/60" />
-        <span className="block h-[12px] w-[2px] rounded-full bg-emerald-400/40" />
+        <span className="block h-[5px] w-[2px] rounded-full bg-emerald-400/70" />
+        <span className="block h-[8px] w-[2px] rounded-full bg-emerald-400/50" />
+        <span className="block h-[11px] w-[2px] rounded-full bg-emerald-400/35" />
       </div>
-      <span className="text-[11px] font-mono text-muted-foreground/60 tracking-wide">
-        Cerberus AI
-      </span>
-      <span className="h-3 w-px bg-border/30" />
-      <span className="text-[10px] font-mono text-muted-foreground/40">
-        Market structure stable &bull; Regime: Normal
+      <span className="text-[10px] font-mono text-muted-foreground/50">
+        Cerberus &bull; Structure stable &bull; Regime: Normal
       </span>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Main page
+// Mini Panel Header — for inline panel titles without DashboardPanel wrapper
+// ---------------------------------------------------------------------------
+
+function PanelHeader({
+  icon: Icon,
+  title,
+  count,
+  action,
+}: {
+  icon: React.ElementType;
+  title: string;
+  count?: number;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3 w-3 text-muted-foreground/50" />
+        <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+          {title}
+        </span>
+        {count != null && (
+          <span className="rounded-full bg-muted/40 px-1.5 py-px text-[8px] font-mono text-muted-foreground/50">
+            {count}
+          </span>
+        )}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
-  // -- Data state --
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -179,11 +199,9 @@ export default function DashboardPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const { mode } = useTradingMode();
 
-  // -- Tab state for grouped sections --
   const [aiTab, setAiTab] = useState("reasoning");
   const [riskTab, setRiskTab] = useState("metrics");
 
-  // -- Data fetching --
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -196,36 +214,16 @@ export default function DashboardPage() {
         apiFetch<any>(`/api/dashboard/equity-curve${q}`),
       ]);
 
-      if (accRes.status === "fulfilled") {
-        setAccount(accRes.value);
-        setError(false);
-      } else {
-        setError(true);
-      }
-
-      if (posRes.status === "fulfilled") {
-        setPositions(posRes.value.positions || []);
-      }
-
-      if (ordRes.status === "fulfilled") {
-        setOrders(ordRes.value.orders || []);
-      }
-
-      if (riskRes.status === "fulfilled") {
-        setRisk(riskRes.value);
-      }
-
+      if (accRes.status === "fulfilled") { setAccount(accRes.value); setError(false); } else { setError(true); }
+      if (posRes.status === "fulfilled") setPositions(posRes.value.positions || []);
+      if (ordRes.status === "fulfilled") setOrders(ordRes.value.orders || []);
+      if (riskRes.status === "fulfilled") setRisk(riskRes.value);
       if (eqRes.status === "fulfilled") {
         const eqData = eqRes.value;
         setEquityCurve(eqData.equity_curve || eqData || []);
       }
-
       setLastRefresh(new Date());
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
+    } catch { setError(true); } finally { setLoading(false); }
   }, [mode]);
 
   useEffect(() => {
@@ -234,27 +232,11 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  // -- Derived metrics --
-  const totalPnl = useMemo(() => {
-    return positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
-  }, [positions]);
+  const totalPnl = useMemo(() => positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0), [positions]);
+  const filledOrderCount = useMemo(() => orders.filter((o) => o.status === "filled").length, [orders]);
+  const winRate = useMemo(() => filledOrderCount === 0 ? null : null, [filledOrderCount]);
 
-  const unrealizedPnl = totalPnl;
-  const realizedPnl = null;
-  const hasRealizedPnl = false;
-
-  const filledOrderCount = useMemo(
-    () => orders.filter((o) => o.status === "filled").length,
-    [orders]
-  );
-
-  const winRate = useMemo(() => {
-    if (filledOrderCount === 0) return null;
-    return null;
-  }, [filledOrderCount]);
-  const hasWinRate = winRate !== null;
-
-  // -- Early return states --
+  // -- Early returns --
   if (loading) {
     return (
       <div className="app-page">
@@ -271,22 +253,8 @@ export default function DashboardPage() {
   if (account?.not_configured) {
     return (
       <div className="app-page">
-        <SubNav items={[
-          { href: "/dashboard", label: "Overview", icon: LayoutGrid },
-          { href: "/portfolio", label: "Portfolio", icon: PieChart },
-          { href: "/risk", label: "Risk", icon: ShieldCheck },
-        ]} />
-        <EmptyState
-          icon={<Unplug className="h-6 w-6 text-amber-400" />}
-          title="No live trading configured"
-          description={account.message || "Connect a live API key in Settings to trade with real money."}
-          action={
-            <Link href="/settings" className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-              <Settings className="h-4 w-4" />
-              Go to Settings
-            </Link>
-          }
-        />
+        <SubNav items={[{ href: "/dashboard", label: "Overview", icon: LayoutGrid }, { href: "/portfolio", label: "Portfolio", icon: PieChart }, { href: "/risk", label: "Risk", icon: ShieldCheck }]} />
+        <EmptyState icon={<Unplug className="h-6 w-6 text-amber-400" />} title="No live trading configured" description={account.message || "Connect a live API key in Settings."} action={<Link href="/settings" className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"><Settings className="h-4 w-4" />Settings</Link>} />
       </div>
     );
   }
@@ -294,28 +262,8 @@ export default function DashboardPage() {
   if (error && !account) {
     return (
       <div className="app-page">
-        <SubNav items={[
-          { href: "/dashboard", label: "Overview", icon: LayoutGrid },
-          { href: "/portfolio", label: "Portfolio", icon: PieChart },
-          { href: "/risk", label: "Risk", icon: ShieldCheck },
-        ]} />
-        <EmptyState
-          icon={<Unplug className="h-6 w-6 text-muted-foreground/60" />}
-          title="Broker not responding"
-          description="Could not load account data. Your API key may need to be re-entered."
-          action={
-            <div className="flex items-center justify-center gap-3">
-              <button onClick={fetchAll} className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors">
-                <RefreshCw className="h-4 w-4" />
-                Retry
-              </button>
-              <Link href="/settings" className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-                <Settings className="h-4 w-4" />
-                Go to Settings
-              </Link>
-            </div>
-          }
-        />
+        <SubNav items={[{ href: "/dashboard", label: "Overview", icon: LayoutGrid }, { href: "/portfolio", label: "Portfolio", icon: PieChart }, { href: "/risk", label: "Risk", icon: ShieldCheck }]} />
+        <EmptyState icon={<Unplug className="h-6 w-6 text-muted-foreground/60" />} title="Broker not responding" description="Could not load account data." action={<button onClick={fetchAll} className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 transition-colors"><RefreshCw className="h-4 w-4" />Retry</button>} />
       </div>
     );
   }
@@ -325,55 +273,50 @@ export default function DashboardPage() {
   // =========================================================================
 
   return (
-    <div className="app-page relative">
+    <div className="space-y-3 pb-8 relative">
       <AmbientBackground />
 
-      {/* ── ZONE 1: SYSTEM STATE ──────────────────────────────────── */}
+      {/* ── SYSTEM STATE ──────────────────────────────────────────── */}
       <SubNav items={[
         { href: "/dashboard", label: "Overview", icon: LayoutGrid },
         { href: "/portfolio", label: "Portfolio", icon: PieChart },
         { href: "/risk", label: "Risk", icon: ShieldCheck },
       ]} />
 
-      <PageHeader
-        eyebrow="Overview"
-        title="Trading Dashboard"
-        badge={
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold tracking-tight">Dashboard</h1>
           <StatusChip
             variant={mode === "live" ? "live" : "paper"}
-            label={mode === "live" ? "LIVE MODE" : "PAPER MODE"}
+            label={mode === "live" ? "LIVE" : "PAPER"}
             pulse
           />
-        }
-        meta={
-          lastRefresh ? (
-            <span className="app-pill font-mono tracking-normal flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-alive-pulse" />
+          {lastRefresh && (
+            <span className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground/50">
+              <span className="h-1 w-1 rounded-full bg-emerald-400 animate-alive-pulse" />
               {lastRefresh.toLocaleTimeString()}
             </span>
-          ) : undefined
-        }
-        actions={
-          <button onClick={fetchAll} className="app-button-secondary">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
-        }
-      />
+          )}
+        </div>
+        <button onClick={fetchAll} className="app-button-secondary !py-1.5 !px-3 !text-xs">
+          <RefreshCw className="h-3 w-3" />
+          Refresh
+        </button>
+      </div>
 
-      {/* ── ZONE 2: METRICS + MARKET INTEL ─────────────────────────── */}
+      {/* ── METRICS ───────────────────────────────────────────────── */}
       <MetricsRow
         totalPnl={totalPnl}
-        unrealizedPnl={unrealizedPnl}
-        realizedPnl={realizedPnl ?? 0}
+        unrealizedPnl={totalPnl}
+        realizedPnl={0}
         expectancy={0}
         winRate={winRate ?? 0}
         maxDrawdown={risk?.current_drawdown_pct ?? 0}
         exposure={risk?.current_exposure_pct ?? 0}
         tradesToday={risk?.trades_this_hour ?? 0}
         tradeHistory={[]}
-        realizedPnlUnavailable={!hasRealizedPnl}
-        winRateUnavailable={!hasWinRate}
+        realizedPnlUnavailable
+        winRateUnavailable={!winRate}
       />
 
       <MarketIntelligenceBar
@@ -384,54 +327,57 @@ export default function DashboardPage() {
         strategyStatus={{ active: positions.length > 0, name: "AI Momentum" }}
       />
 
-      {/* ── ZONE 3: PRIMARY CHART ──────────────────────────────────── */}
+      {/* ── PRIMARY CHART ─────────────────────────────────────────── */}
       <section className="dashboard-chart-hero">
-        <DashboardPanel title="Portfolio Equity" icon={TrendingUp} noPadding>
-          <PortfolioEquityChart height={440} />
-        </DashboardPanel>
-        <CerberusInsightChip />
+        <div className="app-panel overflow-hidden">
+          <PortfolioEquityChart height={400} />
+        </div>
+        <CerberusChip />
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          CONTROL SURFACE — grouped operational zones, scan-first
-          ═══════════════════════════════════════════════════════════════ */}
+      {/* ═══════════════════════════════════════════════════════════
+          CONTROL SURFACE — grouped operational zones
+          ═══════════════════════════════════════════════════════════ */}
 
-      {/* ── ZONE 4: AI + STRATEGY (tabbed) | RISK + ANALYTICS (tabbed) ── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-
-        {/* LEFT: Strategy & AI Intelligence */}
-        <Section title="Strategy & Intelligence" icon={Brain} defaultOpen>
-          <TabBar
-            tabs={[
-              { key: "reasoning", label: "AI Reasoning", icon: Brain },
-              { key: "scanner", label: "Scanner", icon: Crosshair },
-              { key: "strategy", label: "Strategies", icon: Zap },
-            ]}
-            active={aiTab}
-            onChange={setAiTab}
-          />
+      {/* ── INTELLIGENCE + RISK — 2-column tabbed ─────────────────── */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {/* Strategy & AI */}
+        <Zone title="Intelligence" icon={Brain}>
           <div className="app-panel overflow-hidden">
-            <div className="p-4">
+            <div className="px-3 pt-3 pb-0">
+              <Tabs
+                items={[
+                  { key: "reasoning", label: "AI Reasoning" },
+                  { key: "scanner", label: "Scanner" },
+                  { key: "strategy", label: "Strategies" },
+                ]}
+                active={aiTab}
+                onChange={setAiTab}
+              />
+            </div>
+            <div className="p-3">
               {aiTab === "reasoning" && <AIReasoningPanel decision={null} />}
               {aiTab === "scanner" && <AIScannerPanel totalWatching={0} signals={[]} />}
               {aiTab === "strategy" && <StrategyPanel strategies={[]} />}
             </div>
           </div>
-        </Section>
+        </Zone>
 
-        {/* RIGHT: Risk & Market */}
-        <Section title="Risk & Market" icon={ShieldCheck} defaultOpen>
-          <TabBar
-            tabs={[
-              { key: "metrics", label: "Risk Metrics", icon: ShieldCheck },
-              { key: "sentiment", label: "Sentiment", icon: Activity },
-              { key: "exposure", label: "Exposure", icon: Target },
-            ]}
-            active={riskTab}
-            onChange={setRiskTab}
-          />
+        {/* Risk & Market */}
+        <Zone title="Risk & Market" icon={ShieldCheck}>
           <div className="app-panel overflow-hidden">
-            <div className="p-4">
+            <div className="px-3 pt-3 pb-0">
+              <Tabs
+                items={[
+                  { key: "metrics", label: "Risk" },
+                  { key: "sentiment", label: "Sentiment" },
+                  { key: "exposure", label: "Exposure" },
+                ]}
+                active={riskTab}
+                onChange={setRiskTab}
+              />
+            </div>
+            <div className="p-3">
               {riskTab === "metrics" && (
                 <RiskMetricsPanel
                   winRate={winRate ?? undefined}
@@ -441,63 +387,42 @@ export default function DashboardPage() {
               )}
               {riskTab === "sentiment" && <MarketMoodWidget />}
               {riskTab === "exposure" && (
-                <PortfolioRiskDashPanel
-                  totalExposure={risk?.current_exposure_pct ?? 0}
-                />
+                <PortfolioRiskDashPanel totalExposure={risk?.current_exposure_pct ?? 0} />
               )}
             </div>
           </div>
-        </Section>
+        </Zone>
       </div>
 
-      {/* ── ZONE 5: EXECUTION SURFACE ──────────────────────────────── */}
-      <Section title="Execution" icon={Radio} defaultOpen>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+      {/* ── EXECUTION — positions + trade log side by side ─────────── */}
+      <Zone title="Execution" icon={Radio} count={positions.length + orders.length}>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div className="app-panel overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2.5">
-              <Target className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Open Positions
-              </span>
-              <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
-                {positions.length}
-              </span>
-            </div>
+            <PanelHeader icon={Target} title="Positions" count={positions.length} />
             <OpenPositionsPanel positions={positions} />
           </div>
-
           <div className="app-panel overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border/40 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <Receipt className="h-3.5 w-3.5 text-muted-foreground/60" />
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Trade Log
-                </span>
-                <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">
-                  {orders.length}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={fetchAll}
-                className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-              >
-                <RefreshCw className="h-3 w-3" />
-              </button>
-            </div>
+            <PanelHeader
+              icon={Receipt}
+              title="Trade Log"
+              count={orders.length}
+              action={
+                <button type="button" onClick={fetchAll} className="text-muted-foreground/30 hover:text-muted-foreground transition-colors">
+                  <RefreshCw className="h-2.5 w-2.5" />
+                </button>
+              }
+            />
             <TradeLogPanel orders={orders} />
           </div>
         </div>
-      </Section>
+      </Zone>
 
-      {/* ── ZONE 6: SECONDARY ANALYTICS (collapsed by default) ───── */}
-      <Section title="Analytics" icon={TrendingUp} defaultOpen={false}>
-        <div className="app-panel overflow-hidden">
-          <div className="p-4">
-            <EquityCurvePanel data={equityCurve} />
-          </div>
+      {/* ── ANALYTICS — collapsed by default ──────────────────────── */}
+      <Zone title="Analytics" icon={TrendingUp} defaultOpen={false}>
+        <div className="app-panel overflow-hidden p-3">
+          <EquityCurvePanel data={equityCurve} />
         </div>
-      </Section>
+      </Zone>
     </div>
   );
 }
