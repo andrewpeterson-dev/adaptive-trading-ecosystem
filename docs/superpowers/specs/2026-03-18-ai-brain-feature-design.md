@@ -74,6 +74,12 @@ New JSON field on `CerberusBot`:
         "auto_route": false
     },
     "comparison_models": ["claude-sonnet-4-6", "deepseek-r1"],
+    "universe": {
+        "mode": "fixed",
+        "symbols": ["NVDA", "AAPL", "MSFT", "GOOGL"],
+        "sectors": [],
+        "blacklist": []
+    },
     "constraints": {
         "max_trades_per_day": 5,
         "max_position_pct": 10,
@@ -91,10 +97,21 @@ Each bot declares which data sources the AI sees. Available sources:
 | `technical` | Price, volume, RSI, MACD, BBands, support/resistance | `technical_analyst` |
 | `sentiment` | News sentiment, social media, options flow | `sentiment_analyst` |
 | `fundamental` | Earnings, P/E, revenue, dividends | `fundamental_analyst` |
-| `macro` | VIX, Fed calendar, market breadth, sector rotation | Injected into pipeline state |
-| `portfolio` | Current positions, sector exposure, recent P&L, drawdown | Injected into pipeline state |
+| `macro` | VIX, Fed calendar, market breadth, sector rotation | Injected into pipeline state (no dedicated node — data added to shared state dict before pipeline runs) |
+| `portfolio` | Current positions, sector exposure, recent P&L, drawdown | Injected into pipeline state (no dedicated node — data added to shared state dict before pipeline runs) |
 
 A "News Trader" bot might only have `["sentiment", "macro"]`. A "Technical Scalper" might only have `["technical", "portfolio"]`. The AI only sees data from selected sources — nodes for unselected sources are skipped entirely.
+
+### Universe (Symbol Scoping)
+
+Every ai_brain_config includes a `universe` field that constrains which symbols the AI can trade. This mirrors the existing `universe_config` on `CerberusBotVersion`:
+
+- `mode: "fixed"` — explicit symbol list (e.g., `["NVDA", "AAPL"]`)
+- `mode: "sector"` — symbols from specified sectors
+- `mode: "index"` — S&P 500 / Nasdaq 100 constituents
+- `mode: "ai"` — AI scans for opportunities (still limited by `blacklist`)
+
+AITradingEngine validates every decision's symbol against the resolved universe. Decisions for out-of-universe symbols are rejected.
 
 ### Configuration Sources
 
@@ -147,7 +164,7 @@ class AITradingEngine:
 class AITradeDecision:
     action: str              # "BUY", "SELL", "HOLD", "EXIT"
     symbol: str
-    quantity: int
+    quantity: float          # Float to support fractional shares
     confidence: float        # 0.0 - 1.0
     reasoning_summary: str   # 2-3 sentences (Tier B display)
     reasoning_full: dict     # Node-by-node breakdown (Tier C expandable)
@@ -178,28 +195,39 @@ if bot.ai_brain_config:
         # AI makes the full decision
         decision = await self.ai_engine.evaluate(bot, market_state)
 
-        # Safety gate still applies
-        safety = await self.reasoning_engine.evaluate(decision, bot)
-        if safety.action != "PAUSE_BOT":
-            await self._execute_trade(decision, safety_adjustments=safety)
-
-        # Record primary decision
+        # Record every AI decision unconditionally (for leaderboard accuracy)
         await self._record_ai_decision(bot, decision, is_shadow=False)
 
-        # Run shadow models for comparison (non-blocking)
-        for shadow_model in bot.ai_brain_config.get("comparison_models", []):
-            shadow = await self.ai_engine.evaluate(bot, market_state, model_override=shadow_model)
-            await self._record_ai_decision(bot, shadow, is_shadow=True)
+        # Only route actionable decisions to execution
+        if decision.action in ("BUY", "SELL", "EXIT"):
+            # Validate symbol is in bot's universe
+            allowed = bot.ai_brain_config.get("universe", {}).get("symbols", [])
+            if allowed and decision.symbol not in allowed:
+                logger.warning(f"AI decided on {decision.symbol} outside universe, skipping")
+            else:
+                # Safety gate still applies
+                safety = await self.reasoning_engine.evaluate(decision, bot)
+                if safety.action != "PAUSE_BOT":
+                    await self._execute_trade(decision, safety_adjustments=safety)
+
+        # Run shadow models for comparison (fire-and-forget, non-blocking)
+        shadow_tasks = [
+            asyncio.create_task(self._run_shadow_evaluation(bot, market_state, model))
+            for model in bot.ai_brain_config.get("comparison_models", [])
+        ]
+        # Shadow tasks run independently — don't await here
 
     elif mode == "ai_assisted":
         # Rules trigger first, AI enhances
         signal = await self._evaluate_conditions(bot, market_state)
         if signal:
             decision = await self.ai_engine.evaluate(bot, market_state)
-            # AI can override weak signals or adjust sizing
-            safety = await self.reasoning_engine.evaluate(decision, bot)
-            if safety.action != "PAUSE_BOT":
-                await self._execute_trade(decision, safety_adjustments=safety)
+            # Record decision regardless of outcome (HOLD counts for leaderboard)
+            await self._record_ai_decision(bot, decision, is_shadow=False)
+            if decision.action in ("BUY", "SELL", "EXIT"):
+                safety = await self.reasoning_engine.evaluate(decision, bot)
+                if safety.action != "PAUSE_BOT":
+                    await self._execute_trade(decision, safety_adjustments=safety)
 else:
     # Existing manual path — unchanged
     await self._evaluate_conditions_and_execute(bot, market_state)
@@ -207,9 +235,10 @@ else:
 
 ### Shadow Model Execution
 
-- Shadow models run **after** the primary decision to avoid slowing the main path
+- Shadow models run as `asyncio.create_task()` (fire-and-forget) — they do not block the main evaluation loop
 - Shadow decisions are recorded with `is_shadow=True` — they never execute trades
 - All shadow runs use the same market data snapshot as the primary (fair comparison)
+- If a shadow task fails (model timeout, etc.), the error is logged but does not affect the primary bot
 
 ---
 
@@ -259,7 +288,7 @@ Currently outputs a report. Must output a structured decision:
 {
     "action": "BUY",
     "symbol": "NVDA",
-    "quantity": 50,
+    "quantity": 50.0,
     "confidence": 0.82,
     "reasoning_summary": "Strong earnings beat + bullish options flow + technical breakout above resistance",
     "data_contributions": {
@@ -291,16 +320,17 @@ Tracks every AI decision (primary and shadow) for the comparison leaderboard:
 class BotModelPerformance(Base):
     __tablename__ = "bot_model_performance"
 
-    id = Column(String, primary_key=True)           # UUID
-    bot_id = Column(String, ForeignKey("cerberus_bots.id"))
+    id = Column(String(36), primary_key=True, default=_uuid)
+    bot_id = Column(String(36), ForeignKey("cerberus_bots.id"))
+    cerberus_trade_id = Column(String(36), ForeignKey("cerberus_trades.id"), nullable=True)  # Links to actual trade (primary only)
     model_used = Column(String, nullable=False)      # "gpt-5.4", "claude-sonnet-4-6"
     symbol = Column(String, nullable=False)
     action = Column(String, nullable=False)           # BUY, SELL, HOLD, EXIT
     confidence = Column(Float)
     reasoning_summary = Column(Text)
     entry_price = Column(Float)                       # Price at decision time
-    exit_price = Column(Float, nullable=True)          # Filled when position closes
-    pnl = Column(Float, nullable=True)                 # Filled when position closes
+    exit_price = Column(Float, nullable=True)          # Filled when position closes or mark-to-market resolves
+    pnl = Column(Float, nullable=True)                 # Filled when resolved
     is_shadow = Column(Boolean, default=False)         # True = comparison run
     decided_at = Column(DateTime, nullable=False)
     resolved_at = Column(DateTime, nullable=True)      # When P&L calculated
@@ -314,8 +344,8 @@ Full reasoning chain for audit — the Tier C expandable data:
 class AITradeReasoning(Base):
     __tablename__ = "ai_trade_reasoning"
 
-    id = Column(String, primary_key=True)
-    performance_id = Column(String, ForeignKey("bot_model_performance.id"))
+    id = Column(String(36), primary_key=True, default=_uuid)
+    performance_id = Column(String(36), ForeignKey("bot_model_performance.id"))
     node_name = Column(String, nullable=False)         # "technical_analyst", etc.
     node_output = Column(JSON)                          # Full analysis from node
     model_used = Column(String)                         # Which model ran this node
@@ -327,6 +357,17 @@ class AITradeReasoning(Base):
 ### Why Two Tables
 
 `bot_model_performance` stays lean for dashboard queries and leaderboard aggregation (frequent reads). `ai_trade_reasoning` is the heavy audit log — queried only when someone expands a specific decision's full reasoning.
+
+### P&L Attribution
+
+**Primary decisions (is_shadow=False):** When a trade executes, the resulting `CerberusTrade.id` is written to `cerberus_trade_id`. When the trade closes, `exit_price` and `pnl` are copied from the CerberusTrade record.
+
+**Shadow decisions (is_shadow=True):** Shadow models never execute trades, so P&L uses mark-to-market. A background task runs every 5 minutes:
+1. For open shadow BUY/SELL decisions without `resolved_at`, fetch current price
+2. Apply a time-based exit rule: resolve after the bot's configured timeframe (e.g., 60min for a 1H bot) or when the primary model's corresponding position closes — whichever comes first
+3. Calculate `pnl = (exit_price - entry_price) * quantity * direction` and set `resolved_at`
+
+This ensures the leaderboard has comparable P&L data across primary and shadow models.
 
 ---
 
@@ -427,15 +468,48 @@ All existing safety gates apply regardless of execution mode:
 | Graduated drawdown | Pause bot | All modes |
 | Sector concentration caps | Reject trade | All modes |
 | Position size caps (25% max) | Enforce | All modes |
-| Paper mode for new AI models | Required until proven | AI-driven only |
+| Paper mode for new AI models | Required: min 50 decisions in `bot_model_performance` before live deploy allowed | AI-driven only |
 | Full reasoning audit log | Every decision logged | AI-driven + AI-assisted |
 
 ### AI-Specific Safety
 
-- **Token budget:** Max tokens per evaluation cycle to prevent runaway LLM costs
+- **Token budget:** Max 50,000 tokens per evaluation cycle per bot. If exceeded mid-pipeline, truncate context and proceed with available data. If the model call itself exceeds budget, skip the cycle and log a warning. Configurable via `config/settings.py`.
 - **Fail-closed:** If AI model is unreachable, skip cycle entirely (bots never trade blind)
-- **Rate limit:** Max evaluations per minute per bot to prevent tight-loop abuse
+- **Rate limit:** The 60s evaluation loop naturally limits to 1 eval/min/bot. The `/ai-preview` endpoint is rate-limited to 10 calls/min/user to prevent abuse.
 - **Sentiment required in live mode:** Existing rule — if sentiment data unavailable in live mode, delay trade
+- **Paper mode enforcement:** API layer rejects `POST /bots/{id}/deploy` with `execution_mode=ai_driven` in live mode if the selected model has fewer than 50 resolved decisions in `bot_model_performance` for this bot. Returns 400 with message directing user to paper mode.
+- **Universe enforcement:** AITradingEngine validates every decision's symbol against `ai_brain_config.universe.symbols` (if set). Decisions for symbols outside the universe are rejected before reaching ReasoningEngine.
+- **Ensemble fields in Phase 1:** `ensemble_mode` and `ensemble_models` fields are accepted and stored in `ai_brain_config` but silently ignored. If `ensemble_mode=true`, the engine uses only `primary_model` and logs a notice. Full ensemble support ships in Phase 2.
+
+### Model Promotion Safety
+
+When a user clicks "Use This Model" on the leaderboard to promote a shadow model to primary:
+- Promotion takes effect at the start of the **next** evaluation cycle (not mid-cycle)
+- The switch is recorded in `CerberusAuditLog` with old and new model
+- If the bot is in live mode, a confirmation modal is shown: "Changing AI model on a live bot. This takes effect next cycle. Continue?"
+- The promoted model must meet the same 50-decision paper threshold if switching to a model with insufficient history
+
+### Confidence Calibration Metric
+
+`confidence_calibration` in the leaderboard is computed as:
+
+```
+calibration = 1 - mean(abs(confidence - outcome))
+```
+
+Where `outcome = 1.0` if `pnl > 0`, `outcome = 0.0` otherwise. Computed over all resolved decisions for that model+bot pair. A score of 1.0 means the model's confidence perfectly predicts win/loss probability. Only computed when a model has >= 20 resolved decisions; otherwise returns `null`.
+
+### AI Preview Endpoint
+
+`POST /bots/{id}/ai-preview` uses **live market data** (not cached). The response includes a disclaimer: `"note": "Preview uses live data. Actual bot decisions may differ due to timing."` Rate-limited to 10 calls/min/user.
+
+### Multi-Bot Collision
+
+If two ai_driven bots target the same symbol, both may decide to BUY simultaneously. This is handled by existing sector concentration caps in ReasoningEngine — the second trade will be rejected if it would exceed the cap. Portfolio data source reflects **confirmed positions only** (not in-flight AI decisions from sibling bots). This is an acceptable simplification for Phase 1; Phase 2 can add an in-flight position lock if needed.
+
+### Backtesting AI-Driven Bots
+
+AI-driven bots **cannot be backtested** in Phase 1 because the multi-agent pipeline makes live API calls. The `backtest_required` flag is set to `false` for ai_driven bots. Paper mode serves as the validation mechanism instead. Phase 2 may add historical replay support with cached data.
 
 ---
 
@@ -456,6 +530,10 @@ All existing safety gates apply regardless of execution mode:
 - [ ] ModelLeaderboard component
 - [ ] AIPreviewButton component
 - [ ] Bot activity feed: AI decision display with model tags
+- [ ] Shadow P&L resolution background task (mark-to-market for shadow decisions)
+- [ ] Paper mode enforcement gate (50-decision minimum before live deploy)
+- [ ] Universe validation in AITradingEngine
+- [ ] Alembic migration: fix BotStatus check constraint to include 'deleted'
 
 ### Phase 2 (Future)
 
