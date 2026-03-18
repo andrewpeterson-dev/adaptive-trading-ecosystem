@@ -77,8 +77,19 @@ export function ActiveEvents() {
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-6 text-center text-sm text-rose-300">
-            Market events unavailable. {error}
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
+              <Zap className="h-4 w-4 text-amber-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Market events are temporarily unavailable. They refresh automatically during trading hours.
+            </p>
+            <button
+              onClick={() => refresh()}
+              className="mt-1 rounded-full border border-border/40 bg-muted/10 px-3.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground"
+            >
+              Retry
+            </button>
           </div>
         ) : events.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-2">

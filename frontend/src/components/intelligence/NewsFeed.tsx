@@ -47,8 +47,13 @@ export function NewsFeed() {
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
-            News feed unavailable. {error}
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-blue-400/5 border border-dashed border-blue-400/20 mx-auto">
+              <Newspaper className="h-4 w-4 text-blue-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              News feed is temporarily unavailable. Headlines stream automatically during market hours.
+            </p>
           </div>
         ) : news.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-2">

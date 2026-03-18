@@ -106,7 +106,11 @@ export function CorrelationHeatmap() {
         </div>
 
         {error && (
-          <div className="text-xs text-red-300 mb-3">{error}</div>
+          <div className="rounded-xl border border-dashed border-border/60 bg-muted/5 px-4 py-4 mb-3 text-center">
+            <p className="text-xs text-muted-foreground">
+              Correlation data temporarily unavailable. Adjust tickers or lookback and try again.
+            </p>
+          </div>
         )}
 
         {loading && !data && (

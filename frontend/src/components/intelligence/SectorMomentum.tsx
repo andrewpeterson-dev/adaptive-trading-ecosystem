@@ -51,8 +51,19 @@ export function SectorMomentum() {
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
-            Sector momentum unavailable. {error}
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-violet-400/5 border border-dashed border-violet-400/20 mx-auto">
+              <BarChart3 className="h-4 w-4 text-violet-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Sector momentum data is temporarily unavailable. This updates automatically during market hours.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-1 rounded-full border border-border/40 bg-muted/10 px-3.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground"
+            >
+              Retry
+            </button>
           </div>
         ) : sectors.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">

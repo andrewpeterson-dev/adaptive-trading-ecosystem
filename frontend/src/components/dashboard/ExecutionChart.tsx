@@ -447,7 +447,7 @@ export function ExecutionChart({
               Chart data unavailable
             </span>
             <span className="max-w-sm text-center text-xs text-muted-foreground">
-              {error}
+              {error?.includes("Internal Server") ? "The server is temporarily unavailable. Try again shortly." : error}
             </span>
             <button
               type="button"

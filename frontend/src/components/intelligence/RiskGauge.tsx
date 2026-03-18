@@ -49,8 +49,13 @@ export function RiskGauge() {
             </div>
           </div>
         ) : error ? (
-          <div className="w-full rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
-            Risk score unavailable. {error}
+          <div className="w-full rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-sky-400/5 border border-dashed border-sky-400/20 mx-auto">
+              <ShieldAlert className="h-4 w-4 text-sky-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Risk scoring is temporarily unavailable. It refreshes automatically during market hours.
+            </p>
           </div>
         ) : (
           <>

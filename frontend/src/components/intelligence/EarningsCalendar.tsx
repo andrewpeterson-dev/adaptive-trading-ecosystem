@@ -40,8 +40,13 @@ export function EarningsCalendar() {
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-8 text-center text-sm text-rose-300">
-            Earnings calendar unavailable. {error}
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
+              <Calendar className="h-4 w-4 text-amber-400/40" />
+            </div>
+            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+              Earnings calendar is temporarily unavailable. Data refreshes automatically when the context monitor runs.
+            </p>
           </div>
         ) : events.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/5 px-4 py-6 text-center space-y-3">
