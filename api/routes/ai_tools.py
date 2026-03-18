@@ -111,6 +111,7 @@ class DeployBotRequest(BaseModel):
     allocated_capital: Optional[float] = Field(default=None, ge=0, description="Capital allocated to this bot in dollars")
     extended_hours: Optional[bool] = Field(default=None, description="Enable pre-market and after-hours trading")
     ai_brain_config: Optional[dict[str, Any]] = Field(default=None, description="AI Brain configuration for the bot")
+    aggressiveness: Optional[int] = Field(default=None, ge=1, le=4, description="Aggressiveness level: 1=conservative, 2=moderate, 3=aggressive, 4=very aggressive")
 
 
 class DeployFromStrategyRequest(BaseModel):
@@ -837,6 +838,9 @@ async def deploy_bot(bot_id: str, request: Request, body: Optional[DeployBotRequ
             bot.allocated_capital = body.allocated_capital
         if body.ai_brain_config is not None:
             bot.ai_brain_config = body.ai_brain_config
+        if body.aggressiveness is not None:
+            config["aggressiveness"] = body.aggressiveness
+            version.config_json = config
         bot.learning_enabled = bool((config.get("learning") or {}).get("enabled", False))
         bot.status = BotStatus.RUNNING
 

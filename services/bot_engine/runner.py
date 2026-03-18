@@ -52,6 +52,54 @@ _MARKET_TIMEZONE = ZoneInfo("America/New_York")
 _bar_cache: dict[str, tuple[float, list[dict]]] = {}
 _BAR_CACHE_TTL = 60  # seconds
 
+# Aggressiveness scaling factors
+# Level 1=conservative, 2=moderate(default), 3=aggressive, 4=very aggressive
+_AGGRESSIVENESS_SCALES = {
+    1: {"threshold_relaxation": 0.8, "size_multiplier": 0.5, "confidence_floor": 70},
+    2: {"threshold_relaxation": 1.0, "size_multiplier": 1.0, "confidence_floor": 60},
+    3: {"threshold_relaxation": 1.3, "size_multiplier": 1.5, "confidence_floor": 45},
+    4: {"threshold_relaxation": 1.6, "size_multiplier": 2.0, "confidence_floor": 30},
+}
+
+
+def _apply_aggressiveness(conditions: list[dict], level: int) -> list[dict]:
+    """Scale condition thresholds based on aggressiveness level.
+
+    Higher aggressiveness relaxes thresholds (e.g. RSI<35 becomes RSI<45).
+    Does NOT mutate the original conditions — returns a new list.
+    """
+    if level == 2 or level not in _AGGRESSIVENESS_SCALES:
+        return conditions  # default, no change
+
+    scale = _AGGRESSIVENESS_SCALES[level]["threshold_relaxation"]
+    relaxed = []
+    for cond in conditions:
+        c = dict(cond)  # shallow copy
+        indicator = (c.get("indicator") or "").upper()
+        op = c.get("operator", "")
+        val = c.get("value")
+
+        if val is None or not isinstance(val, (int, float)):
+            relaxed.append(c)
+            continue
+
+        # For "less than" conditions (RSI < 35), increase threshold = more triggers
+        # For "greater than" conditions (RSI > 55), decrease threshold = more triggers
+        if indicator in ("RSI", "STOCHASTIC"):
+            if op in ("<", "<="):
+                c["value"] = min(val * scale, 80)  # RSI<35 → RSI<45 at aggressive
+            elif op in (">", ">="):
+                c["value"] = max(val / scale, 20)  # RSI>55 → RSI>42 at aggressive
+        elif indicator in ("MACD",):
+            # MACD thresholds: relax toward 0
+            if op in (">", ">=") and val > 0:
+                c["value"] = val / scale
+            elif op in ("<", "<=") and val < 0:
+                c["value"] = val / scale
+
+        relaxed.append(c)
+    return relaxed
+
 
 class BotRunner:
     """Background service that evaluates and executes running trading bots."""
@@ -171,10 +219,12 @@ class BotRunner:
 
         config = normalize_bot_config(version.config_json or {})
         symbols = config.get("symbols", [])
-        conditions = config.get("conditions", [])
+        aggressiveness = int(config.get("aggressiveness", 2))
+        conditions = _apply_aggressiveness(config.get("conditions", []), aggressiveness)
         action = config.get("action", "BUY")
         timeframe = config.get("timeframe", "1D")
-        position_size_pct = config.get("position_size_pct", 5.0)
+        agg_scale = _AGGRESSIVENESS_SCALES.get(aggressiveness, _AGGRESSIVENESS_SCALES[2])
+        position_size_pct = config.get("position_size_pct", 5.0) * agg_scale["size_multiplier"]
         strategy_type = config.get("strategy_type", "manual")
         extended_hours = bool(config.get("extended_hours", False))
 
@@ -510,7 +560,8 @@ class BotRunner:
 
         # Step 3: Process AI signals — execute entries with high confidence
         for signal in signals:
-            if signal.action != "enter" or signal.confidence < 60:
+            confidence_floor = agg_scale["confidence_floor"]
+            if signal.action != "enter" or signal.confidence < confidence_floor:
                 logger.debug(
                     "ai_eval_hold",
                     bot_id=bot.id, symbol=signal.symbol,

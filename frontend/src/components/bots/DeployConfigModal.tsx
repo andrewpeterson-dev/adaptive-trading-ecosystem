@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Rocket, Globe, Cpu, ShieldCheck, DollarSign, Clock } from "lucide-react";
+import { X, Rocket, Globe, Cpu, ShieldCheck, DollarSign, Clock, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -31,6 +31,7 @@ export interface DeployConfig {
   overrideLevel: OverrideLevel;
   allocatedCapital: number | null;
   extendedHours: boolean;
+  aggressiveness?: number;
   aiBrainConfig?: AIBrainConfig;
 }
 
@@ -84,6 +85,13 @@ const AI_MODELS = [
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
   { value: "gpt-4.1", label: "GPT-4.1 (Fast)" },
   { value: "deepseek-r1", label: "DeepSeek R1" },
+];
+
+const AGGRESSIVENESS_LEVELS = [
+  { value: 1, label: "Conservative", desc: "Strict conditions, smaller positions, fewer trades" },
+  { value: 2, label: "Moderate", desc: "Balanced risk/reward, standard sizing" },
+  { value: 3, label: "Aggressive", desc: "Relaxed conditions, larger positions, more trades" },
+  { value: 4, label: "Very Aggressive", desc: "Loose triggers, maximum sizing, high frequency" },
 ];
 
 const DATA_SOURCE_OPTIONS = [
@@ -146,6 +154,7 @@ export function DeployConfigModal({
   const [tradingThesis, setTradingThesis] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [comparisonModels, setComparisonModels] = useState<string[]>([]);
+  const [aggressiveness, setAggressiveness] = useState(2);
 
   // Reset all form state when modal opens to prevent stale config from previous deploy
   useEffect(() => {
@@ -163,6 +172,7 @@ export function DeployConfigModal({
       setTradingThesis(strategyDescription || "");
       setShowAdvanced(false);
       setComparisonModels([]);
+      setAggressiveness(2);
     }
   }, [open, strategyDescription]);
 
@@ -219,7 +229,7 @@ export function DeployConfigModal({
     const parsedCapital = capitalInput.trim() ? parseFloat(capitalInput.replace(/[,$]/g, "")) : null;
     const allocatedCapital = parsedCapital && !isNaN(parsedCapital) && parsedCapital > 0 ? parsedCapital : null;
 
-    const config: DeployConfig = { universeConfig, overrideLevel, allocatedCapital, extendedHours };
+    const config: DeployConfig = { universeConfig, overrideLevel, allocatedCapital, extendedHours, aggressiveness };
 
     if (overrideLevel === "full") {
       config.aiBrainConfig = {
@@ -553,6 +563,45 @@ export function DeployConfigModal({
                 )}
               </div>
             )}
+          </section>
+
+          {/* ── Aggressiveness ─────────────────────────────────────── */}
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-400" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Aggressiveness
+              </p>
+            </div>
+            <div className="space-y-1">
+              {AGGRESSIVENESS_LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  onClick={() => setAggressiveness(level.value)}
+                  className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-all ${
+                    aggressiveness === level.value
+                      ? "bg-foreground/[0.06] border border-border/60"
+                      : "border border-transparent hover:bg-muted/20"
+                  }`}
+                >
+                  <div className={`flex h-2 w-2 shrink-0 rounded-full ${
+                    level.value === 1 ? "bg-green-400" :
+                    level.value === 2 ? "bg-blue-400" :
+                    level.value === 3 ? "bg-amber-400" :
+                    "bg-red-400"
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-[11px] font-semibold ${aggressiveness === level.value ? "text-foreground" : "text-muted-foreground"}`}>
+                      {level.label}
+                    </div>
+                    <div className="text-[9px] text-muted-foreground/70 leading-tight">
+                      {level.desc}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </section>
 
           {/* ── Extended Hours ────────────────────────────────────────── */}
