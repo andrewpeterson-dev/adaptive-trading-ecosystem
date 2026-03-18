@@ -160,6 +160,11 @@ async def _start_runtime_services_after_db_ready(
     _spawn_background_task(background_tasks, coro=learning_engine.start(), name="strategy_learning_engine")
     _spawn_background_task(background_tasks, coro=context_monitor.start(), name="context_monitor")
     _spawn_background_task(background_tasks, coro=universe_scanner.start(), name="universe_scanner")
+
+    # AI Brain: shadow model P&L resolver (marks shadow decisions to market every 5min)
+    from services.ai_brain.shadow_resolver import shadow_resolver_loop
+    _spawn_background_task(background_tasks, coro=shadow_resolver_loop(), name="shadow_pnl_resolver")
+
     logger.info("runtime_services_started_after_db_ready")
 
 
