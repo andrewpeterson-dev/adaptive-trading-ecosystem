@@ -2094,7 +2094,7 @@ async def _build_paper_equity_curve(
         if not portfolio:
             return {"points": [], "initial_capital": 100_000.0}
 
-        initial_capital = portfolio.initial_capital or 1_000_000.0
+        initial_capital = portfolio.initial_capital or 100_000.0
 
         # Fetch ALL trades ordered chronologically (we need the full history
         # to reconstruct equity, then filter points by cutoff for display)
