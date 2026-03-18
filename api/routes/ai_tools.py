@@ -110,6 +110,7 @@ class DeployBotRequest(BaseModel):
     override_level: Optional[str] = Field(default=None, pattern=r"^(advisory|soft|full)$")
     allocated_capital: Optional[float] = Field(default=None, ge=0, description="Capital allocated to this bot in dollars")
     extended_hours: Optional[bool] = Field(default=None, description="Enable pre-market and after-hours trading")
+    ai_brain_config: Optional[dict[str, Any]] = Field(default=None, description="AI Brain configuration for the bot")
 
 
 class DeployFromStrategyRequest(BaseModel):
@@ -832,6 +833,8 @@ async def deploy_bot(bot_id: str, request: Request, body: Optional[DeployBotRequ
             version.override_level = body.override_level
         if body.allocated_capital is not None:
             bot.allocated_capital = body.allocated_capital
+        if body.ai_brain_config is not None:
+            bot.ai_brain_config = body.ai_brain_config
         bot.learning_enabled = bool((config.get("learning") or {}).get("enabled", False))
         bot.status = BotStatus.RUNNING
 
@@ -1200,3 +1203,174 @@ async def get_ai_signals(
     signals = signals[:limit]
 
     return {"signals": signals}
+
+
+# ---------------------------------------------------------------------------
+# AI Brain endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/bots/{bot_id}/ai-config")
+async def update_ai_config(bot_id: str, request: Request):
+    """Update a bot's AI Brain configuration."""
+    user_id = request.state.user_id
+    body = await request.json()
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(
+                CerberusBot.id == bot_id,
+                CerberusBot.user_id == user_id,
+            )
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+
+        # Merge partial updates into existing config
+        existing = bot.ai_brain_config or {}
+        existing.update(body)
+        bot.ai_brain_config = existing
+    return {"status": "updated", "bot_id": bot_id}
+
+
+@router.post("/bots/{bot_id}/ai-preview")
+async def ai_preview(bot_id: str, request: Request):
+    """Run AITradingEngine without executing — preview what AI would do."""
+    user_id = request.state.user_id
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(
+                CerberusBot.id == bot_id,
+                CerberusBot.user_id == user_id,
+            )
+        )
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        if not bot.ai_brain_config:
+            raise HTTPException(status_code=400, detail="Bot has no AI Brain configuration")
+
+    from services.ai_brain import AITradingEngine
+    engine = AITradingEngine()
+    config = bot.ai_brain_config
+    symbols = config.get("universe", {}).get("symbols", [])
+    decision = await engine.evaluate(bot, {"symbols": symbols, "user_id": user_id})
+    return {
+        "decision": decision.to_dict(),
+        "note": "Preview uses live data. Actual bot decisions may differ due to timing.",
+    }
+
+
+@router.get("/bots/{bot_id}/model-comparison")
+async def model_comparison(bot_id: str, request: Request):
+    """Get model comparison leaderboard for a bot."""
+    user_id = request.state.user_id
+    from db.cerberus_models import BotModelPerformance
+
+    async with get_session() as session:
+        # Verify ownership
+        bot_result = await session.execute(
+            select(CerberusBot).where(
+                CerberusBot.id == bot_id,
+                CerberusBot.user_id == user_id,
+            )
+        )
+        bot = bot_result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+
+        primary_model = (bot.ai_brain_config or {}).get("model_config", {}).get("primary_model", "")
+
+        # Aggregate per model
+        agg_result = await session.execute(
+            select(
+                BotModelPerformance.model_used,
+                func.count().label("total_decisions"),
+                func.avg(BotModelPerformance.confidence).label("avg_confidence"),
+                func.sum(BotModelPerformance.pnl).label("total_pnl"),
+            )
+            .where(BotModelPerformance.bot_id == bot_id)
+            .group_by(BotModelPerformance.model_used)
+        )
+        rows = agg_result.all()
+
+        models = []
+        for row in rows:
+            # Count wins (resolved with positive P&L)
+            win_result = await session.execute(
+                select(func.count()).select_from(BotModelPerformance).where(
+                    BotModelPerformance.bot_id == bot_id,
+                    BotModelPerformance.model_used == row.model_used,
+                    BotModelPerformance.resolved_at.isnot(None),
+                    BotModelPerformance.pnl > 0,
+                )
+            )
+            wins = win_result.scalar() or 0
+
+            total_resolved_result = await session.execute(
+                select(func.count()).select_from(BotModelPerformance).where(
+                    BotModelPerformance.bot_id == bot_id,
+                    BotModelPerformance.model_used == row.model_used,
+                    BotModelPerformance.resolved_at.isnot(None),
+                )
+            )
+            total_resolved = total_resolved_result.scalar() or 0
+
+            models.append({
+                "model": row.model_used,
+                "is_primary": row.model_used == primary_model,
+                "total_decisions": row.total_decisions,
+                "win_rate": round(wins / total_resolved, 2) if total_resolved > 0 else None,
+                "avg_confidence": round(float(row.avg_confidence or 0), 2),
+                "total_pnl": round(float(row.total_pnl or 0), 2),
+            })
+
+    return {"bot_id": bot_id, "models": models}
+
+
+@router.get("/bots/{bot_id}/ai-reasoning/{decision_id}")
+async def get_ai_reasoning(bot_id: str, decision_id: str, request: Request):
+    """Get full Tier C reasoning for a specific AI decision."""
+    user_id = request.state.user_id
+    from db.cerberus_models import BotModelPerformance, AITradeReasoning
+
+    async with get_session() as session:
+        # Verify ownership via bot join
+        perf_result = await session.execute(
+            select(BotModelPerformance)
+            .join(CerberusBot, CerberusBot.id == BotModelPerformance.bot_id)
+            .where(
+                BotModelPerformance.id == decision_id,
+                BotModelPerformance.bot_id == bot_id,
+                CerberusBot.user_id == user_id,
+            )
+        )
+        perf = perf_result.scalar_one_or_none()
+        if not perf:
+            raise HTTPException(status_code=404, detail="Decision not found")
+
+        reasoning_result = await session.execute(
+            select(AITradeReasoning)
+            .where(AITradeReasoning.performance_id == decision_id)
+            .order_by(AITradeReasoning.created_at)
+        )
+        reasoning_rows = reasoning_result.scalars().all()
+
+    return {
+        "decision_id": decision_id,
+        "model_used": perf.model_used,
+        "action": perf.action,
+        "symbol": perf.symbol,
+        "confidence": perf.confidence,
+        "reasoning_summary": perf.reasoning_summary,
+        "nodes": [
+            {
+                "name": r.node_name,
+                "output": r.node_output,
+                "model": r.model_used,
+                "tokens": r.tokens_used,
+                "latency_ms": r.latency_ms,
+            }
+            for r in reasoning_rows
+        ],
+    }
