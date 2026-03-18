@@ -16,9 +16,11 @@ interface EquityCurveChartProps {
   data: { date: string; value: number }[];
   initialCapital?: number;
   height?: number;
+  /** When true, skip the outer border/padding wrapper (for embedding inside another panel). */
+  compact?: boolean;
 }
 
-export function EquityCurveChart({ data, initialCapital, height = 300 }: EquityCurveChartProps) {
+export function EquityCurveChart({ data, initialCapital, height = 300, compact = false }: EquityCurveChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="rounded-lg border border-border/50 bg-card p-6 flex items-center justify-center text-muted-foreground text-sm" style={{ height }}>
@@ -38,26 +40,28 @@ export function EquityCurveChart({ data, initialCapital, height = 300 }: EquityC
   const totalReturn = startValue > 0 ? ((finalValue - startValue) / startValue) * 100 : 0;
   const isPositive = totalReturn >= 0;
 
-  return (
-    <div className="rounded-lg border border-border/50 bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Equity Curve
+  const chartContent = (
+    <>
+      {!compact && (
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Equity Curve
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-mono font-medium">{formatCurrency(finalValue)}</span>
+            <span
+              className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded ${
+                isPositive
+                  ? "text-emerald-400 bg-emerald-400/10"
+                  : "text-red-400 bg-red-400/10"
+              }`}
+            >
+              {isPositive ? "+" : ""}
+              {totalReturn.toFixed(1)}%
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-mono font-medium">{formatCurrency(finalValue)}</span>
-          <span
-            className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded ${
-              isPositive
-                ? "text-emerald-400 bg-emerald-400/10"
-                : "text-red-400 bg-red-400/10"
-            }`}
-          >
-            {isPositive ? "+" : ""}
-            {totalReturn.toFixed(1)}%
-          </span>
-        </div>
-      </div>
+      )}
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={data}>
           <defs>
@@ -104,6 +108,16 @@ export function EquityCurveChart({ data, initialCapital, height = 300 }: EquityC
           />
         </AreaChart>
       </ResponsiveContainer>
+    </>
+  );
+
+  if (compact) {
+    return <div className="p-2">{chartContent}</div>;
+  }
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-card p-4">
+      {chartContent}
     </div>
   );
 }

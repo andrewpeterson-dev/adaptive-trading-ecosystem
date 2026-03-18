@@ -28,7 +28,9 @@ export function BotTradeChart({
 
   return (
     <div className="relative">
-      <TradeMarkerOverlay trade={overlayTrade} hovered={hoveredTrade != null} />
+      {overlayTrade && (
+        <TradeMarkerOverlay trade={overlayTrade} hovered={hoveredTrade != null} />
+      )}
       <TradingChart
         symbol={symbol}
         height={420}
