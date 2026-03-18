@@ -71,8 +71,8 @@ class ModelRouter:
 
         intent = self._classify_intent(mode, message, has_tools, has_documents, explicit_research, tool_count)
 
-        # Fallback to Anthropic if OpenAI is down
-        if openai_failed:
+        # Route to Anthropic when OpenAI key is missing or OpenAI explicitly failed
+        if openai_failed or not self._settings.openai_api_key:
             return RoutingDecision(
                 provider=self._anthropic,
                 model=self._settings.anthropic_fallback_model,

@@ -149,20 +149,32 @@ class FinGPTProvider(BaseProvider):
 
     async def _analyze_with_gpt_fallback(self, text: str) -> Dict[str, Any]:
         logger.info("fingpt_gpt_fallback", text_preview=text[:80])
-        client = self._get_openai_client()
-        messages = [
-            {"role": "system", "content": _FINANCE_SENTIMENT_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Analyze the financial sentiment of this text:\n\n{text[:3000]}"},
-        ]
+
+        # Route through model router to use Anthropic when no OpenAI key
         try:
-            response = await client.responses.create(model=self._openai_fallback_model, input=messages, temperature=0.1, max_output_tokens=256, store=False)
-            content = ""
-            for item in response.output:
-                if item.type == "message":
-                    for block in item.content:
-                        if hasattr(block, "text"):
-                            content += block.text
-            return _parse_gpt_sentiment_response(content)
+            from services.ai_core.model_router import ModelRouter
+            from services.ai_core.providers.base import ProviderMessage as PM
+
+            settings = get_settings()
+            router = ModelRouter()
+            openai_failed = not settings.openai_api_key
+            routing = router.route(
+                mode="simple",
+                message="sentiment analysis",
+                has_tools=False,
+                openai_failed=openai_failed,
+            )
+            messages = [
+                PM(role="system", content=_FINANCE_SENTIMENT_SYSTEM_PROMPT),
+                PM(role="user", content=f"Analyze the financial sentiment of this text:\n\n{text[:3000]}"),
+            ]
+            response = await routing.provider.complete(
+                messages=messages,
+                model=routing.model,
+                temperature=0.1,
+                max_tokens=256,
+            )
+            return _parse_gpt_sentiment_response(response.content)
         except Exception as exc:
             logger.error("fingpt_gpt_fallback_failed", error=str(exc))
             return {"sentiment": "neutral", "score": 0.0, "confidence": 0.0}

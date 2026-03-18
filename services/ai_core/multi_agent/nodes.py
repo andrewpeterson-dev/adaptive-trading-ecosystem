@@ -23,20 +23,31 @@ logger = structlog.get_logger(__name__)
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """Call the primary LLM for multi-agent analysis nodes."""
-    from services.ai_core.providers.openai_provider import OpenAIProvider
+    """Call the primary LLM for multi-agent analysis nodes.
+
+    Routes through the model router so it automatically falls back to
+    Anthropic when no OpenAI key is configured.
+    """
     from services.ai_core.providers.base import ProviderMessage
+    from services.ai_core.model_router import ModelRouter
     from config.settings import get_settings
 
     settings = get_settings()
-    provider = OpenAIProvider()
+    router = ModelRouter()
+    openai_failed = not settings.openai_api_key
+    routing = router.route(
+        mode="strategy",
+        message=user_prompt[:200],
+        has_tools=False,
+        openai_failed=openai_failed,
+    )
     messages = [
         ProviderMessage(role="system", content=system_prompt),
         ProviderMessage(role="user", content=user_prompt),
     ]
-    response = await provider.complete(
+    response = await routing.provider.complete(
         messages=messages,
-        model=settings.openai_primary_model,
+        model=routing.model,
         temperature=0.3,
         max_tokens=2048,
     )

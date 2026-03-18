@@ -321,6 +321,8 @@ class ChatController:
 
         # Stream response
         full_content = ""
+        used_model = routing.model
+        used_provider = routing.provider_name
         try:
             async for chunk in routing.provider.stream(
                 messages=provider_messages,
@@ -337,11 +339,46 @@ class ChatController:
                 if chunk.finish_reason:
                     break
         except Exception as e:
-            logger.exception("stream_error", error=str(e))
-            # Sanitize error message — never expose raw internals to the client
-            safe_msg = "An error occurred while generating a response. Please try again."
-            yield {"type": "error", "data": {"message": safe_msg}}
-            return
+            logger.error(
+                "stream_primary_failed",
+                provider=routing.provider_name,
+                error=str(e),
+            )
+            # Fallback to Anthropic if the primary provider was not already Anthropic
+            if routing.provider_name != "anthropic":
+                try:
+                    fallback = self._router.route(
+                        mode=mode, message=message, openai_failed=True,
+                    )
+                    used_model = fallback.model
+                    used_provider = fallback.provider_name
+                    full_content = ""
+                    async for chunk in fallback.provider.stream(
+                        messages=provider_messages,
+                        model=fallback.model,
+                        tools=provider_tools if provider_tools else None,
+                    ):
+                        if chunk.delta_text:
+                            full_content += chunk.delta_text
+                            yield {
+                                "type": "assistant.delta",
+                                "data": {"text": chunk.delta_text},
+                            }
+                        if chunk.finish_reason:
+                            break
+                except Exception as fallback_exc:
+                    logger.error(
+                        "stream_all_providers_failed",
+                        primary_error=str(e),
+                        fallback_error=str(fallback_exc),
+                    )
+                    safe_msg = "An error occurred while generating a response. Please try again."
+                    yield {"type": "error", "data": {"message": safe_msg}}
+                    return
+            else:
+                safe_msg = "An error occurred while generating a response. Please try again."
+                yield {"type": "error", "data": {"message": safe_msg}}
+                return
 
         # Sanitize and store
         full_content = self._safety.validate_output(full_content)
@@ -356,8 +393,8 @@ class ChatController:
             user_id,
             "assistant",
             full_content,
-            model_name=routing.model,
-            provider_name=routing.provider_name,
+            model_name=used_model,
+            provider_name=used_provider,
             citations_json=citations,
         )
 

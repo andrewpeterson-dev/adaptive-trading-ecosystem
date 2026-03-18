@@ -79,25 +79,37 @@ class ThreadSummarizer:
         return summary
 
     async def _call_llm(self, conversation_text: str) -> str:
-        """Call the LLM to generate a summary of the conversation."""
+        """Call the LLM to generate a summary of the conversation.
+
+        Routes through the model router to automatically fall back to
+        Anthropic when no OpenAI key is configured.
+        """
         from config.settings import get_settings
+        from services.ai_core.model_router import ModelRouter
+        from services.ai_core.providers.base import ProviderMessage
 
         settings = get_settings()
 
         try:
-            import openai
-
-            client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
-            response = await client.chat.completions.create(
-                model=settings.openai_low_latency_model,
-                messages=[
-                    {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
-                    {"role": "user", "content": conversation_text},
-                ],
+            router = ModelRouter()
+            openai_failed = not settings.openai_api_key
+            routing = router.route(
+                mode="simple",
+                message="summarize conversation",
+                has_tools=False,
+                openai_failed=openai_failed,
+            )
+            messages = [
+                ProviderMessage(role="system", content=_SUMMARY_SYSTEM_PROMPT),
+                ProviderMessage(role="user", content=conversation_text),
+            ]
+            response = await routing.provider.complete(
+                messages=messages,
+                model=routing.model,
                 temperature=0.2,
                 max_tokens=500,
             )
-            return response.choices[0].message.content or ""
+            return response.content or ""
 
         except Exception:
             logger.exception("summarization_llm_error")

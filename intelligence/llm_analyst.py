@@ -89,6 +89,18 @@ class LLMAnalyst:
 
         provider = self.settings.llm_provider.lower()
 
+        # Fall back to Anthropic if OpenAI is selected but key is missing
+        if provider == "openai" and not self.settings.openai_api_key:
+            if self.settings.anthropic_api_key:
+                logger.warning("llm_analyst_openai_fallback_to_anthropic",
+                               reason="OPENAI_API_KEY not set, using Anthropic")
+                provider = "anthropic"
+            else:
+                raise ValueError(
+                    "Neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is set. "
+                    "Add at least one to your .env file."
+                )
+
         if provider == "anthropic":
             if not self.settings.anthropic_api_key:
                 raise ValueError(
@@ -99,10 +111,6 @@ class LLMAnalyst:
                 api_key=self.settings.anthropic_api_key
             )
         elif provider == "openai":
-            if not self.settings.openai_api_key:
-                raise ValueError(
-                    "OPENAI_API_KEY not set. Add it to your .env file."
-                )
             import openai
             self._client = openai.OpenAI(
                 api_key=self.settings.openai_api_key

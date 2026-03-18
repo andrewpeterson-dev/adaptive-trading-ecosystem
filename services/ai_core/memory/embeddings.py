@@ -11,7 +11,11 @@ logger = structlog.get_logger(__name__)
 
 
 class EmbeddingService:
-    """Wraps the OpenAI embeddings API (text-embedding-3-large)."""
+    """Wraps the OpenAI embeddings API (text-embedding-3-large).
+
+    Gracefully returns empty results when no OpenAI API key is configured,
+    since embeddings require OpenAI (Anthropic doesn't offer an embeddings API).
+    """
 
     def __init__(self, model: Optional[str] = None):
         settings = get_settings()
@@ -22,8 +26,13 @@ class EmbeddingService:
         """Generate embeddings for a list of texts.
 
         Returns a list of float vectors, one per input text.
+        Returns empty list if no OpenAI API key is configured.
         """
         if not texts:
+            return []
+
+        if not self._api_key:
+            logger.warning("embeddings_skipped_no_openai_key", text_count=len(texts))
             return []
 
         try:
@@ -44,7 +53,7 @@ class EmbeddingService:
 
         except Exception:
             logger.exception("embedding_error", text_count=len(texts))
-            raise
+            return []
 
     async def embed_single(self, text: str) -> list[float]:
         """Generate an embedding for a single text string."""
