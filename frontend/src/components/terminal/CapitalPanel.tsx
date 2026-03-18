@@ -1,9 +1,9 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
-import { DollarSign, Pencil, Check, X, Sparkles, Shield, Brain, Zap } from "lucide-react";
+import { DollarSign, Pencil, Check, X, Sparkles, Shield, Brain, Zap, AlertCircle } from "lucide-react";
 import { TerminalPanel } from "./TerminalPanel";
 import { updateBotCapital, updateAiCapitalManagement } from "@/lib/cerberus-api";
-import { apiFetch } from "@/lib/api/client";
+import { apiFetch, ApiError } from "@/lib/api/client";
 import type { BotDetail } from "@/lib/cerberus-api";
 
 interface CapitalPanelProps {
@@ -45,6 +45,7 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
 
   const [overrideLevel, setOverrideLevel] = useState<OverrideLevel>(serverOverride);
   const [overrideSaving, setOverrideSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Aggressiveness
   const serverAggressiveness = detail.aggressiveness ?? 2;
@@ -95,6 +96,7 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     } catch (err) {
       console.error("Aggressiveness update failed:", err);
       setAggressiveness(prev);
+      setError(err instanceof ApiError && err.status === 401 ? "Session expired — please log in again" : "Save failed");
     } finally {
       setAggSaving(false);
     }
@@ -102,15 +104,14 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
 
   const handleOverrideChange = useCallback(async (level: OverrideLevel) => {
     setOverrideSaving(true);
+    setError(null);
     const prev = overrideLevel;
     setOverrideLevel(level);
     try {
-      // Update override level
       await apiFetch(`/api/ai/tools/bots/${detail.id}/override-level`, {
         method: "PATCH",
         body: JSON.stringify({ override_level: level }),
       });
-      // If switching to/from full, also update ai_brain_config execution_mode
       if (level === "full" || prev === "full") {
         const newMode = level === "full" ? "ai_driven" : level === "soft" ? "ai_assisted" : "manual";
         await apiFetch(`/api/ai/tools/bots/${detail.id}/ai-config`, {
@@ -121,6 +122,7 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     } catch (err) {
       console.error("Override level update failed:", err);
       setOverrideLevel(prev);
+      setError(err instanceof ApiError && err.status === 401 ? "Session expired — please log in again" : "Save failed");
     } finally {
       setOverrideSaving(false);
     }
@@ -257,6 +259,17 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
               Sources: {(aiBrainConfig.data_sources as string[]).join(", ")}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Error display ── */}
+      {error && (
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-red-400/30 bg-red-400/8 px-3 py-2 text-[11px] text-red-400">
+          <AlertCircle className="h-3 w-3 shrink-0" />
+          {error}
+          <button type="button" onClick={() => setError(null)} className="ml-auto text-red-400/60 hover:text-red-400">
+            <X className="h-3 w-3" />
+          </button>
         </div>
       )}
     </TerminalPanel>
