@@ -149,6 +149,18 @@ async def chat(request: Request, body: ChatRequest):
     except LookupError as exc:
         logger.warning("chat_thread_not_found", user_id=user_id, thread_id=body.threadId)
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.error(
+            "chat_turn_failed",
+            user_id=user_id,
+            mode=body.mode,
+            error=str(exc),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat processing failed: {str(exc)[:200]}",
+        )
 
     return {
         "threadId": result.thread_id,
