@@ -132,9 +132,18 @@ class BotRunner:
 
     async def _loop(self) -> None:
         """Main loop — check running bots every 60 seconds."""
+        snapshot_counter = 0
         while self._running:
             try:
                 await self._check_bots()
+                # Take a portfolio snapshot every ~5 minutes during market hours
+                snapshot_counter += 1
+                if snapshot_counter >= 5 and self._is_market_open():
+                    snapshot_counter = 0
+                    try:
+                        await self._take_portfolio_snapshot(user_id=2)
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.exception("bot_runner_error", error=str(e))
             await asyncio.sleep(60)
@@ -1159,6 +1168,17 @@ class BotRunner:
                 db_trade.payload_json = payload
                 await session.flush()
 
+            # Sync exit to paper portfolio
+            if is_paper:
+                try:
+                    await self._sync_paper_portfolio(
+                        bot.user_id, symbol, exit_side,
+                        int(open_trade.quantity or 0), current_price,
+                    )
+                    await self._take_portfolio_snapshot(bot.user_id)
+                except Exception as sync_err:
+                    logger.error("paper_exit_sync_failed", symbol=symbol, error=str(sync_err))
+
             closed_count += 1
 
             # Record result for per-bot circuit breaker
@@ -1628,6 +1648,17 @@ class BotRunner:
                 select(PaperPosition).where(PaperPosition.portfolio_id == portfolio.id)
             )
             positions = pos_result.scalars().all()
+
+            # Update current prices from market data for accurate snapshots
+            for p in positions:
+                try:
+                    bars = await self._fetch_bars(p.symbol, "1D")
+                    if bars and len(bars) > 0:
+                        live_price = float(bars[-1].get("close", 0) or 0)
+                        if live_price > 0:
+                            p.current_price = live_price
+                except Exception:
+                    pass  # Keep stale price rather than crash
 
             positions_value = sum(
                 (p.current_price or p.avg_entry_price or 0) * abs(p.quantity)
