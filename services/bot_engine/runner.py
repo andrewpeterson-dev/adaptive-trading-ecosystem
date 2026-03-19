@@ -757,6 +757,22 @@ class BotRunner:
         # Evaluate conditions
         all_passed, reasons = evaluate_conditions(conditions, indicator_values)
 
+        # Pipeline trace: log every evaluation result for visibility
+        logger.info(
+            "pipeline_condition_eval",
+            bot_id=str(bot.id),
+            bot_name=bot.name,
+            symbol=symbol,
+            passed=all_passed,
+            aggressiveness=aggressiveness,
+            reasons=reasons[:3] if reasons else [],
+            indicator_snapshot={
+                k: round(v, 4) if isinstance(v, float) else v
+                for k, v in list(indicator_values.items())[:6]
+                if not isinstance(v, dict)
+            },
+        )
+
         if not all_passed:
             logger.debug(
                 "bot_conditions_not_met",
@@ -1525,13 +1541,118 @@ class BotRunner:
                 session.add(trade)
                 await session.flush()
                 await session.refresh(trade)
-                return trade
+
+            # Sync to paper portfolio so dashboard reflects the position
+            if is_paper:
+                try:
+                    await self._sync_paper_portfolio(user_id, symbol, side, quantity, fill_price)
+                    await self._take_portfolio_snapshot(user_id)
+                except Exception as sync_err:
+                    logger.error("paper_portfolio_sync_failed", user_id=user_id, symbol=symbol, error=str(sync_err))
+
+            return trade
 
         except Exception as e:
             logger.error(
                 "bot_trade_failed", bot_id=bot.id, symbol=symbol, error=str(e)
             )
         return None
+
+    async def _sync_paper_portfolio(
+        self, user_id: int, symbol: str, side: str, quantity: float, price: float
+    ) -> None:
+        """Sync a bot trade to the paper portfolio so the dashboard reflects it."""
+        from db.models import PaperPortfolio, PaperPosition
+        async with get_session() as session:
+            result = await session.execute(
+                select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+            )
+            portfolio = result.scalar_one_or_none()
+            if not portfolio:
+                portfolio = PaperPortfolio(
+                    user_id=user_id, cash=100_000.0, initial_capital=100_000.0
+                )
+                session.add(portfolio)
+                await session.flush()
+
+            pos_result = await session.execute(
+                select(PaperPosition).where(
+                    PaperPosition.portfolio_id == portfolio.id,
+                    PaperPosition.symbol == symbol,
+                )
+            )
+            position = pos_result.scalar_one_or_none()
+
+            if side.upper() == "BUY":
+                cost = price * quantity
+                portfolio.cash = max(0, portfolio.cash - cost)
+                if position and position.quantity > 0:
+                    total_cost = (position.avg_entry_price * position.quantity) + cost
+                    position.quantity += quantity
+                    position.avg_entry_price = total_cost / position.quantity
+                    position.current_price = price
+                else:
+                    position = PaperPosition(
+                        portfolio_id=portfolio.id, user_id=user_id,
+                        symbol=symbol, quantity=quantity,
+                        avg_entry_price=price, current_price=price,
+                    )
+                    session.add(position)
+            else:  # SELL
+                if position and position.quantity > 0:
+                    sell_qty = min(quantity, position.quantity)
+                    proceeds = price * sell_qty
+                    portfolio.cash += proceeds
+                    position.quantity -= sell_qty
+                    if position.quantity <= 0.0001:
+                        await session.delete(position)
+
+        logger.info(
+            "paper_portfolio_synced",
+            user_id=user_id, symbol=symbol, side=side,
+            quantity=quantity, price=price,
+        )
+
+    async def _take_portfolio_snapshot(self, user_id: int) -> None:
+        """Record a portfolio equity snapshot for the equity curve chart."""
+        from db.models import PaperPortfolio, PaperPosition, PortfolioSnapshot
+        async with get_session() as session:
+            result = await session.execute(
+                select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+            )
+            portfolio = result.scalar_one_or_none()
+            if not portfolio:
+                return
+
+            pos_result = await session.execute(
+                select(PaperPosition).where(PaperPosition.portfolio_id == portfolio.id)
+            )
+            positions = pos_result.scalars().all()
+
+            positions_value = sum(
+                (p.current_price or p.avg_entry_price or 0) * abs(p.quantity)
+                for p in positions
+            )
+            total_equity = portfolio.cash + positions_value
+            unrealized_pnl = sum(
+                ((p.current_price or p.avg_entry_price) - p.avg_entry_price) * p.quantity
+                for p in positions
+            )
+
+            snapshot = PortfolioSnapshot(
+                timestamp=datetime.utcnow(),
+                total_equity=total_equity,
+                cash=portfolio.cash,
+                positions_value=positions_value,
+                unrealized_pnl=unrealized_pnl,
+                realized_pnl=0,
+                num_open_positions=len(positions),
+                exposure_pct=(positions_value / total_equity * 100) if total_equity > 0 else 0,
+                drawdown_pct=0,
+                mode="paper",
+                user_id=user_id,
+            )
+            session.add(snapshot)
 
     def _get_alpaca_client(self, paper: bool = True):
         """Get Alpaca trading client for the given mode.

@@ -1587,3 +1587,277 @@ async def ai_edit_strategy(bot_id: str, body: AIStrategyEditRequest, request: Re
         "validation_warnings": val_warnings,
         "config": normalized,
     }
+
+
+# ── Pipeline Diagnostics ─────────────────────────────────────────────────
+
+
+@router.get("/pipeline/diagnostic")
+async def pipeline_diagnostic(request: Request):
+    """Full pipeline health diagnostic — shows why bots are/aren't trading."""
+    user_id = request.state.user_id
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    is_weekday = now_et.weekday() < 5
+    is_market_hours = is_weekday and (
+        (now_et.hour == 9 and now_et.minute >= 30) or (10 <= now_et.hour < 16)
+    )
+    is_extended = is_weekday and (4 <= now_et.hour < 20)
+
+    async with get_session() as session:
+        # Running bots
+        bot_result = await session.execute(
+            select(CerberusBot, CerberusBotVersion)
+            .join(CerberusBotVersion, CerberusBot.current_version_id == CerberusBotVersion.id)
+            .where(CerberusBot.user_id == user_id, CerberusBot.status == BotStatus.RUNNING)
+        )
+        bots = bot_result.all()
+
+        # Recent trades
+        trade_result = await session.execute(
+            select(CerberusTrade)
+            .where(CerberusTrade.user_id == user_id)
+            .order_by(CerberusTrade.created_at.desc())
+            .limit(10)
+        )
+        trades = trade_result.scalars().all()
+
+        # Recent decisions
+        decision_result = await session.execute(
+            select(TradeDecision)
+            .where(TradeDecision.user_id == user_id)
+            .order_by(TradeDecision.created_at.desc())
+            .limit(10)
+        )
+        decisions = decision_result.scalars().all()
+
+        # AI Brain decisions
+        from db.cerberus_models import BotModelPerformance
+        ai_result = await session.execute(
+            select(BotModelPerformance)
+            .join(CerberusBot, CerberusBot.id == BotModelPerformance.bot_id)
+            .where(CerberusBot.user_id == user_id)
+            .order_by(BotModelPerformance.decided_at.desc())
+            .limit(10)
+        )
+        ai_decisions = ai_result.scalars().all()
+
+    bot_diagnostics = []
+    for bot, version in bots:
+        config = normalize_bot_config(version.config_json or {})
+        conditions = config.get("conditions", [])
+        aggressiveness = config.get("aggressiveness", 2)
+        timeframe = config.get("timeframe", "1D")
+        has_ai_brain = bool(bot.ai_brain_config)
+
+        issues = []
+        if not config.get("symbols"):
+            issues.append("NO_SYMBOLS")
+        if not conditions and config.get("strategy_type") == "manual":
+            issues.append("NO_CONDITIONS")
+        if timeframe == "1D":
+            issues.append("DAILY_TIMEFRAME — evaluates once per day")
+        if aggressiveness <= 2:
+            issues.append(f"MODERATE_AGGRESSIVENESS ({aggressiveness}) — conditions may be too strict")
+
+        bot_diagnostics.append({
+            "id": bot.id,
+            "name": bot.name,
+            "strategy_type": config.get("strategy_type", "manual"),
+            "timeframe": timeframe,
+            "symbols": config.get("symbols", [])[:5],
+            "conditions_count": len(conditions),
+            "aggressiveness": aggressiveness,
+            "has_ai_brain": has_ai_brain,
+            "override_level": version.override_level,
+            "issues": issues,
+        })
+
+    return {
+        "timestamp": now_et.isoformat(),
+        "market": {
+            "open": is_market_hours,
+            "extended_hours": is_extended,
+            "day": now_et.strftime("%A"),
+            "time_et": now_et.strftime("%H:%M:%S"),
+        },
+        "bots": {
+            "running": len(bots),
+            "details": bot_diagnostics,
+        },
+        "trades": {
+            "total": len(trades),
+            "recent": [
+                {
+                    "symbol": t.symbol,
+                    "side": t.side,
+                    "entry_price": t.entry_price,
+                    "pnl": t.net_pnl,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                }
+                for t in trades[:5]
+            ],
+        },
+        "reasoning_decisions": {
+            "total": len(decisions),
+            "recent": [
+                {
+                    "symbol": d.symbol,
+                    "decision": d.decision,
+                    "reasoning": (d.reasoning or "")[:100],
+                    "model_used": d.model_used,
+                    "created_at": d.created_at.isoformat() if d.created_at else None,
+                }
+                for d in decisions[:5]
+            ],
+        },
+        "ai_brain_decisions": {
+            "total": len(ai_decisions),
+            "recent": [
+                {
+                    "symbol": a.symbol,
+                    "action": a.action,
+                    "model": a.model_used,
+                    "confidence": a.confidence,
+                    "decided_at": a.decided_at.isoformat() if a.decided_at else None,
+                }
+                for a in ai_decisions[:5]
+            ],
+        },
+        "diagnosis": _diagnose_pipeline(bot_diagnostics, trades, decisions, is_market_hours),
+    }
+
+
+@router.post("/pipeline/test-signal")
+async def test_signal(request: Request):
+    """Force-evaluate a running bot RIGHT NOW, bypassing rate limits.
+
+    Returns what the bot would do if evaluated this instant.
+    Does NOT execute a trade — just shows what would happen.
+    """
+    user_id = request.state.user_id
+    body = await request.json()
+    bot_id = body.get("bot_id")
+
+    if not bot_id:
+        raise HTTPException(status_code=400, detail="bot_id required")
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot, CerberusBotVersion)
+            .join(CerberusBotVersion, CerberusBot.current_version_id == CerberusBotVersion.id)
+            .where(CerberusBot.id == bot_id, CerberusBot.user_id == user_id)
+        )
+        row = result.one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        bot, version = row
+
+    config = normalize_bot_config(version.config_json or {})
+    symbols = config.get("symbols", [])[:3]  # limit to 3 for speed
+    conditions = config.get("conditions", [])
+    aggressiveness = config.get("aggressiveness", 2)
+
+    from services.bot_engine.indicators import compute_indicators
+    from services.bot_engine.evaluator import evaluate_conditions
+    from services.bot_engine.runner import _apply_aggressiveness, _AGGRESSIVENESS_SCALES
+
+    agg_conditions = _apply_aggressiveness(conditions, aggressiveness)
+    agg_scale = _AGGRESSIVENESS_SCALES.get(aggressiveness, _AGGRESSIVENESS_SCALES[2])
+
+    results = []
+    for symbol in symbols:
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="3mo", interval="1d")
+            if len(hist) < 50:
+                results.append({"symbol": symbol, "error": f"Only {len(hist)} bars"})
+                continue
+
+            bars = [
+                {"open": r["Open"], "high": r["High"], "low": r["Low"],
+                 "close": r["Close"], "volume": r["Volume"]}
+                for _, r in hist.iterrows()
+            ]
+
+            indicators_needed = [
+                {"indicator": c["indicator"], "params": c.get("params", {})}
+                for c in conditions if isinstance(c, dict) and c.get("indicator")
+            ]
+            indicator_values = compute_indicators(bars, indicators_needed)
+            indicator_values["CLOSE"] = float(bars[-1]["close"])
+
+            passed, reasons = evaluate_conditions(agg_conditions, indicator_values)
+
+            results.append({
+                "symbol": symbol,
+                "price": round(float(bars[-1]["close"]), 2),
+                "conditions_passed": passed,
+                "reasons": reasons[:5],
+                "indicators": {
+                    k: round(v, 4) if isinstance(v, float) else str(v)[:50]
+                    for k, v in list(indicator_values.items())[:8]
+                    if not isinstance(v, dict)
+                },
+            })
+        except Exception as e:
+            results.append({"symbol": symbol, "error": str(e)})
+
+    return {
+        "bot_id": bot_id,
+        "bot_name": bot.name,
+        "aggressiveness": aggressiveness,
+        "aggressiveness_label": {1: "Conservative", 2: "Moderate", 3: "Aggressive", 4: "Very Aggressive"}.get(aggressiveness, "Unknown"),
+        "conditions_original": [
+            f"{c.get('indicator')} {c.get('operator')} {c.get('value')}"
+            for c in conditions
+        ],
+        "conditions_scaled": [
+            f"{c.get('indicator')} {c.get('operator')} {c.get('value')}"
+            for c in agg_conditions
+        ],
+        "size_multiplier": agg_scale["size_multiplier"],
+        "confidence_floor": agg_scale["confidence_floor"],
+        "results": results,
+    }
+
+
+def _diagnose_pipeline(bots, trades, decisions, market_open):
+    """Auto-diagnose common pipeline issues."""
+    issues = []
+
+    if not market_open:
+        issues.append("MARKET_CLOSED — bots only evaluate during market hours")
+
+    if not bots:
+        issues.append("NO_RUNNING_BOTS — deploy and start a bot first")
+
+    if bots and not decisions:
+        issues.append("NO_DECISIONS — BotRunner may not be evaluating (check server logs)")
+
+    if decisions and not trades:
+        blocked = [d for d in decisions if hasattr(d, "decision") and d.get("decision") != "EXECUTE"]
+        if blocked:
+            issues.append("ALL_BLOCKED — ReasoningEngine is blocking all trades (check conditions/aggressiveness)")
+        else:
+            issues.append("DECISIONS_BUT_NO_TRADES — execution layer may be failing silently")
+
+    all_daily = all(b.get("timeframe") == "1D" for b in bots)
+    if all_daily:
+        issues.append("ALL_DAILY — all bots use 1D timeframe, evaluate only once per day")
+
+    all_low_agg = all(b.get("aggressiveness", 2) <= 2 for b in bots)
+    if all_low_agg and bots:
+        issues.append("LOW_AGGRESSIVENESS — all bots at moderate or conservative, conditions may be too strict for current market")
+
+    no_ai_brain = all(not b.get("has_ai_brain") for b in bots)
+    if no_ai_brain and bots:
+        issues.append("NO_AI_BRAIN — no bots using AI Brain mode, all rule-based")
+
+    if not issues:
+        issues.append("PIPELINE_HEALTHY — no obvious issues detected")
+
+    return issues
