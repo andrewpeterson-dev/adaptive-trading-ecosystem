@@ -41,7 +41,10 @@ export function usePolling<T>({
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     doFetch();
     timerRef.current = setInterval(doFetch, interval);
     return () => {
