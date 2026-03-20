@@ -7,16 +7,16 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: [
+          "var(--font-sans)",
           "\"Avenir Next\"",
-          "\"Segoe UI Variable Display\"",
           "\"SF Pro Display\"",
-          "Inter",
           "ui-sans-serif",
+          "system-ui",
           "sans-serif",
         ],
         mono: [
+          "var(--font-mono)",
           "\"Berkeley Mono\"",
-          "\"JetBrains Mono\"",
           "\"SF Mono\"",
           "\"IBM Plex Mono\"",
           "SFMono-Regular",

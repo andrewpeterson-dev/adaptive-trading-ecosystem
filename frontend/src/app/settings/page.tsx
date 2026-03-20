@@ -75,7 +75,7 @@ function ProfileSection() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20 lg:pb-0">
       <div className="app-panel p-5 space-y-5">
         <div className="space-y-2">
           <label className="app-label">Email</label>

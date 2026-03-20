@@ -194,10 +194,18 @@ class ChatController:
             else:
                 raise
 
-        # 10. Process tool calls
-        if response.tool_calls:
+        # 10. Process tool calls in a loop — feed results back until the
+        # model produces a text response (max 5 rounds to prevent runaway).
+        MAX_TOOL_ROUNDS = 5
+        for _round in range(MAX_TOOL_ROUNDS):
+            if not response.tool_calls:
+                break
+
+            # Execute each tool call
+            tool_result_messages: list[ProviderMessage] = []
             for tc in response.tool_calls:
                 tool_name = tc["function"]["name"]
+                tool_call_id = tc.get("id", "")
                 try:
                     tool_input = (
                         json.loads(tc["function"]["arguments"])
@@ -219,7 +227,6 @@ class ChatController:
                     "output": tool_result,
                 })
 
-                # Log tool call
                 await self._store_tool_call(
                     thread_id=thread_id,
                     user_id=user_id,
@@ -229,6 +236,32 @@ class ChatController:
                     latency_ms=tool_result.get("latency_ms", 0),
                     provider_request_id=response.provider_request_id,
                 )
+
+                tool_result_messages.append(ProviderMessage(
+                    role="tool",
+                    content=json.dumps(tool_result, default=str),
+                    tool_call_id=tool_call_id,
+                ))
+
+            # Append assistant message (with tool calls) + tool results,
+            # then call the model again so it can produce a text answer.
+            provider_messages.append(ProviderMessage(
+                role="assistant",
+                content=response.content or "",
+                tool_calls=response.tool_calls,
+            ))
+            provider_messages.extend(tool_result_messages)
+
+            try:
+                response = await routing.provider.complete(
+                    messages=provider_messages,
+                    model=routing.model,
+                    tools=provider_tools if provider_tools else None,
+                    store=routing.store,
+                )
+            except Exception as e:
+                logger.error("tool_followup_failed", error=str(e))
+                break
 
         # 11. Sanitize output
         content = self._safety.validate_output(response.content)

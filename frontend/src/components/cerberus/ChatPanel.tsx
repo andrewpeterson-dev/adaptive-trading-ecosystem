@@ -70,10 +70,12 @@ export function ChatPanel() {
       }
     } catch (error) {
       console.error('Chat error:', error);
+      const detail =
+        error instanceof Error ? error.message : 'Unknown error';
       addMessage({
         id: `error-${Date.now()}`,
         role: 'assistant',
-        contentMd: 'Sorry, there was an error processing your request. Please try again.',
+        contentMd: `Something went wrong: ${detail}`,
         structuredJson: null,
         modelName: null,
         citations: [],

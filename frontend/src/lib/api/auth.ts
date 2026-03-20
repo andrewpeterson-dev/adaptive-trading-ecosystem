@@ -20,6 +20,8 @@ export async function login(
   // Store token in localStorage so Bearer auth works for mutations (bypasses CSRF)
   if (response.access_token && typeof window !== "undefined") {
     window.localStorage.setItem("access_token", response.access_token);
+    // Remove legacy key so apiFetch always finds the canonical one first
+    window.localStorage.removeItem("token");
   }
   return response;
 }
@@ -86,6 +88,7 @@ export async function logout(): Promise<void> {
     try {
       window.localStorage.removeItem("auth_token");
       window.localStorage.removeItem("access_token");
+      window.localStorage.removeItem("token");
     } catch {
       // ignore storage access errors
     }

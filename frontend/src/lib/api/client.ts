@@ -137,7 +137,7 @@ async function _apiFetchInner<T>(
 
   // Send Bearer token from localStorage if available (bypasses CSRF requirement)
   if (!headers.has("Authorization") && typeof window !== "undefined") {
-    const storedToken = window.localStorage.getItem("access_token");
+    const storedToken = window.localStorage.getItem("access_token") || window.localStorage.getItem("token");
     if (storedToken) {
       headers.set("Authorization", `Bearer ${storedToken}`);
     }

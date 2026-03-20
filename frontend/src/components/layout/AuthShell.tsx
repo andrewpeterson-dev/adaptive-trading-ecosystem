@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogo } from "./BrandLogo";
@@ -51,143 +51,6 @@ const CERBERUS_INSIGHTS = [
   "SPY holding above 50-day EMA with improving breadth. Risk-on regime favors momentum entries.",
   "NVDA approaching prior resistance with rising volume. Position sizing adjusted for elevated conviction.",
 ];
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   BACKGROUND — wave mesh, network nodes, scan line
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-function BackgroundSystem() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let animationId: number;
-    let width = 0;
-    let height = 0;
-
-    // Network nodes
-    const nodes: { x: number; y: number; vx: number; vy: number; r: number }[] = [];
-    const NODE_COUNT = 35;
-
-    function resize() {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas!.width = width * window.devicePixelRatio;
-      canvas!.height = height * window.devicePixelRatio;
-      ctx!.scale(window.devicePixelRatio, window.devicePixelRatio);
-    }
-
-    function initNodes() {
-      nodes.length = 0;
-      for (let i = 0; i < NODE_COUNT; i++) {
-        nodes.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: (Math.random() - 0.5) * 0.3,
-          vy: (Math.random() - 0.5) * 0.3,
-          r: 1.2 + Math.random() * 1.2,
-        });
-      }
-    }
-
-    function draw(t: number) {
-      ctx!.clearRect(0, 0, width, height);
-
-      // Wave lines
-      for (let w = 0; w < 4; w++) {
-        ctx!.beginPath();
-        ctx!.strokeStyle =
-          w % 2 === 0
-            ? "rgba(59, 130, 246, 0.04)"
-            : "rgba(16, 185, 129, 0.03)";
-        ctx!.lineWidth = 1;
-        const yBase = height * (0.2 + w * 0.2);
-        const amp = 30 + w * 15;
-        const freq = 0.002 + w * 0.0005;
-        const speed = 0.0003 + w * 0.0001;
-        for (let x = 0; x <= width; x += 4) {
-          const y =
-            yBase +
-            Math.sin(x * freq + t * speed) * amp +
-            Math.sin(x * freq * 2.3 + t * speed * 1.7) * amp * 0.4;
-          if (x === 0) ctx!.moveTo(x, y);
-          else ctx!.lineTo(x, y);
-        }
-        ctx!.stroke();
-      }
-
-      // Network nodes + connections
-      for (const node of nodes) {
-        node.x += node.vx;
-        node.y += node.vy;
-        if (node.x < 0 || node.x > width) node.vx *= -1;
-        if (node.y < 0 || node.y > height) node.vy *= -1;
-      }
-
-      // Draw connections
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[i].x - nodes[j].x;
-          const dy = nodes[i].y - nodes[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 180) {
-            const alpha = (1 - dist / 180) * 0.06;
-            ctx!.beginPath();
-            ctx!.strokeStyle = `rgba(59, 130, 246, ${alpha})`;
-            ctx!.lineWidth = 0.5;
-            ctx!.moveTo(nodes[i].x, nodes[i].y);
-            ctx!.lineTo(nodes[j].x, nodes[j].y);
-            ctx!.stroke();
-          }
-        }
-      }
-
-      // Draw nodes
-      for (const node of nodes) {
-        ctx!.beginPath();
-        ctx!.arc(node.x, node.y, node.r, 0, Math.PI * 2);
-        ctx!.fillStyle = "rgba(59, 130, 246, 0.15)";
-        ctx!.fill();
-      }
-
-      // Horizontal scan line
-      const scanY = (t * 0.02) % height;
-      const grad = ctx!.createLinearGradient(0, scanY - 40, 0, scanY + 40);
-      grad.addColorStop(0, "rgba(59, 130, 246, 0)");
-      grad.addColorStop(0.5, "rgba(59, 130, 246, 0.03)");
-      grad.addColorStop(1, "rgba(59, 130, 246, 0)");
-      ctx!.fillStyle = grad;
-      ctx!.fillRect(0, scanY - 40, width, 80);
-
-      animationId = requestAnimationFrame(draw);
-    }
-
-    resize();
-    initNodes();
-    animationId = requestAnimationFrame(draw);
-    window.addEventListener("resize", () => {
-      resize();
-      initNodes();
-    });
-
-    return () => {
-      cancelAnimationFrame(animationId);
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-0"
-      style={{ width: "100%", height: "100%", zIndex: 0 }}
-    />
-  );
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    STATUS INDICATOR — pulsing dot
@@ -486,40 +349,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         }
       `}</style>
 
-      {/* ── Background system ─────────────────────────────────────────────── */}
-      <BackgroundSystem />
-
-      {/* Radial glow accents */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0"
-        style={{ zIndex: 1 }}
-      >
-        <div
-          className="absolute"
-          style={{
-            top: "10%",
-            left: "5%",
-            width: "600px",
-            height: "600px",
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 65%)",
-            filter: "blur(40px)",
-          }}
-        />
-        <div
-          className="absolute"
-          style={{
-            bottom: "5%",
-            right: "10%",
-            width: "500px",
-            height: "500px",
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(16,185,129,0.04) 0%, transparent 60%)",
-            filter: "blur(40px)",
-          }}
-        />
-      </div>
+      {/* Background: handled by AmbientIntelligenceLayer in AppShell */}
 
       {/* ── Ticker tape ──────────────────────────────────────────────────── */}
       <div
@@ -685,7 +515,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
 
             {/* Trust indicators below the card */}
             <motion.div
-              className="mt-4 flex items-center justify-center gap-6 text-[10px] text-muted-foreground/40"
+              className="mt-4 flex items-center justify-center gap-6 text-[10px] text-muted-foreground/60"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}

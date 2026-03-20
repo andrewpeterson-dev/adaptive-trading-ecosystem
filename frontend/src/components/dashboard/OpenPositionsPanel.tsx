@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 interface OpenPositionsPanelProps {
   positions: Position[];
   onSelectPosition?: (symbol: string) => void;
+  hideHeader?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,13 +156,16 @@ function PositionRow({
 export function OpenPositionsPanel({
   positions,
   onSelectPosition,
+  hideHeader,
 }: OpenPositionsPanelProps) {
   if (positions.length === 0) {
     return (
-      <div className="app-table-shell">
-        <div className="app-section-header">
-          <h3 className="text-sm font-semibold text-foreground">Open Positions</h3>
-        </div>
+      <div className={hideHeader ? "" : "app-table-shell"}>
+        {!hideHeader && (
+          <div className="app-section-header">
+            <h3 className="text-sm font-semibold text-foreground">Open Positions</h3>
+          </div>
+        )}
         <EmptyState
           className="py-10"
           icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
@@ -173,15 +177,17 @@ export function OpenPositionsPanel({
   }
 
   return (
-    <div className="app-table-shell">
-      <div className="app-section-header">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">Open Positions</h3>
-          <span className="rounded-full bg-muted/50 px-2 py-1 text-[10px] font-mono text-muted-foreground">
-            {positions.length}
-          </span>
+    <div className={hideHeader ? "" : "app-table-shell"}>
+      {!hideHeader && (
+        <div className="app-section-header">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">Open Positions</h3>
+            <span className="rounded-full bg-muted/50 px-2 py-1 text-[10px] font-mono text-muted-foreground">
+              {positions.length}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="app-table app-table-compact">

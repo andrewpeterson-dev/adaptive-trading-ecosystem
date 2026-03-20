@@ -186,7 +186,7 @@ export function AIWidget() {
                   onClick={() => {
                     if (!isDragging) openCerberus();
                   }}
-                  className="animate-scale-in fixed bottom-20 right-4 z-50 flex h-14 w-14 touch-none cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30 transition-transform hover:scale-110 active:scale-95 sm:bottom-6 sm:right-6 lg:bottom-6"
+                  className="animate-scale-in fixed bottom-24 right-4 z-50 flex h-14 w-14 touch-none cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30 transition-transform hover:scale-110 active:scale-95 sm:bottom-6 sm:right-6 lg:bottom-6"
                   style={{ x: position.x, y: position.y }}
                 >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

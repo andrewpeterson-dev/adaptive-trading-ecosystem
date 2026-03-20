@@ -33,7 +33,11 @@ class OpenAIProvider(BaseProvider):
     def _get_client(self):
         if self._client is None:
             import openai
-            self._client = openai.AsyncOpenAI(api_key=self._api_key)
+            import httpx
+            self._client = openai.AsyncOpenAI(
+                api_key=self._api_key,
+                timeout=httpx.Timeout(120.0, connect=10.0),
+            )
         return self._client
 
     def _format_messages(self, messages: list[ProviderMessage]) -> list[dict]:

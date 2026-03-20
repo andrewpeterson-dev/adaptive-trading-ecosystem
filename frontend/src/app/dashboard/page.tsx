@@ -37,7 +37,6 @@ import {
   PortfolioRiskDashPanel,
 } from "@/components/dashboard";
 import { PortfolioEquityChart } from "@/components/dashboard/PortfolioEquityChart";
-import { AmbientBackground } from "@/components/dashboard/AmbientBackground";
 import { MarketMoodWidget } from "@/components/dashboard/MarketMoodWidget";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -194,7 +193,7 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [risk, setRisk] = useState<RiskSummary | null>(null);
   const [equityCurve, setEquityCurve] = useState<{ date: string; equity: number; drawdown: number }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const { mode } = useTradingMode();
@@ -203,7 +202,6 @@ export default function DashboardPage() {
   const [riskTab, setRiskTab] = useState("metrics");
 
   const fetchAll = useCallback(async () => {
-    setLoading(true);
     try {
       const q = `?mode=${mode}`;
       const [accRes, posRes, ordRes, riskRes, eqRes] = await Promise.allSettled([
@@ -223,7 +221,7 @@ export default function DashboardPage() {
         setEquityCurve(eqData.equity_curve || eqData || []);
       }
       setLastRefresh(new Date());
-    } catch { setError(true); } finally { setLoading(false); }
+    } catch { setError(true); } finally { setInitialLoading(false); }
   }, [mode]);
 
   useEffect(() => {
@@ -237,7 +235,7 @@ export default function DashboardPage() {
   const winRate = useMemo(() => filledOrderCount === 0 ? null : null, [filledOrderCount]);
 
   // -- Early returns --
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="app-page">
         <SubNav items={[
@@ -274,7 +272,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-3 pb-8 relative">
-      <AmbientBackground />
 
       {/* ── SYSTEM STATE ──────────────────────────────────────────── */}
       <SubNav items={[
@@ -399,7 +396,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div className="app-panel overflow-hidden">
             <PanelHeader icon={Target} title="Positions" count={positions.length} />
-            <OpenPositionsPanel positions={positions} />
+            <OpenPositionsPanel positions={positions} hideHeader />
           </div>
           <div className="app-panel overflow-hidden">
             <PanelHeader
@@ -412,7 +409,7 @@ export default function DashboardPage() {
                 </button>
               }
             />
-            <TradeLogPanel orders={orders} />
+            <TradeLogPanel orders={orders} hideHeader />
           </div>
         </div>
       </Zone>

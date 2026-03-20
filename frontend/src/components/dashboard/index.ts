@@ -26,5 +26,3 @@ export { PortfolioEquityChart } from "./PortfolioEquityChart";
 export { EquityCurvePanel } from "./EquityCurvePanel";
 
 export { PortfolioRiskDashPanel } from "./PortfolioRiskDashPanel";
-
-export { AmbientBackground } from "./AmbientBackground";

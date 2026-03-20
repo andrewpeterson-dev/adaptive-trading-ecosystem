@@ -32,23 +32,69 @@ class AnthropicProvider(BaseProvider):
     def _get_client(self):
         if self._client is None:
             import anthropic
-            self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
+            import httpx
+            self._client = anthropic.AsyncAnthropic(
+                api_key=self._api_key,
+                timeout=httpx.Timeout(120.0, connect=10.0),
+            )
         return self._client
 
     def _format_messages(self, messages: list[ProviderMessage]) -> tuple[str | None, list[dict]]:
-        """Split system message from conversation messages."""
+        """Split system message and convert to Anthropic message format.
+
+        Handles tool-use round-trips:
+        - Assistant messages with tool_calls → content blocks with tool_use items
+        - Tool-result messages → grouped into a single user message
+        """
         system_prompt = None
-        formatted = []
+        formatted: list[dict] = []
+        pending_tool_results: list[dict] = []
+
+        def _flush_tool_results():
+            if pending_tool_results:
+                formatted.append({"role": "user", "content": list(pending_tool_results)})
+                pending_tool_results.clear()
+
         for msg in messages:
             if msg.role == "system":
                 system_prompt = msg.content
                 continue
-            d: dict = {"role": msg.role}
+
             if msg.role == "tool" and msg.tool_call_id:
-                d["content"] = [{"type": "tool_result", "tool_use_id": msg.tool_call_id, "content": msg.content}]
+                pending_tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": msg.tool_call_id,
+                    "content": msg.content,
+                })
+                continue
+
+            # Flush any pending tool results before a non-tool message
+            _flush_tool_results()
+
+            if msg.role == "assistant" and msg.tool_calls:
+                # Build content blocks: text (if any) + tool_use blocks
+                content_blocks: list[dict] = []
+                if msg.content:
+                    content_blocks.append({"type": "text", "text": msg.content})
+                for tc in msg.tool_calls:
+                    tc_input = tc["function"].get("arguments", "{}")
+                    if isinstance(tc_input, str):
+                        import json as _json
+                        try:
+                            tc_input = _json.loads(tc_input)
+                        except (ValueError, TypeError):
+                            tc_input = {}
+                    content_blocks.append({
+                        "type": "tool_use",
+                        "id": tc.get("id", ""),
+                        "name": tc["function"]["name"],
+                        "input": tc_input,
+                    })
+                formatted.append({"role": "assistant", "content": content_blocks})
             else:
-                d["content"] = msg.content
-            formatted.append(d)
+                formatted.append({"role": msg.role, "content": msg.content})
+
+        _flush_tool_results()
         return system_prompt, formatted
 
     def _format_tools(self, tools: list[ProviderToolDef] | None) -> list[dict] | None:

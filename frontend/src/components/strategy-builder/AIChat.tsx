@@ -96,11 +96,12 @@ export default function AIChat() {
         useBuilderStore.getState().setField("strategyType", "ai_generated");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to get response");
+      const detail = err instanceof Error ? err.message : "Failed to get response";
+      setError(detail);
       const errMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
+        content: `Something went wrong: ${detail}`,
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errMsg]);
@@ -222,19 +223,19 @@ export default function AIChat() {
       </div>
 
       {/* ---- Input area ---- */}
-      <div className="border-t border-slate-700 p-3">
-        <div className="flex items-end gap-2">
+      <div className="border-t border-slate-700/60 p-4 bg-slate-900/40">
+        <div className="relative">
           <textarea
-            className="app-input w-full resize-none"
-            rows={2}
-            placeholder="Describe your trading strategy..."
+            className="w-full resize-none rounded-xl border border-slate-600/50 bg-slate-800/60 px-4 py-3 pr-12 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 focus:outline-none transition-colors"
+            rows={4}
+            placeholder="Describe your trading strategy — e.g. &quot;Momentum strategy on AAPL using RSI and MACD with tight stops&quot;"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
           />
           <button
-            className="app-button-primary shrink-0 p-2"
+            className="absolute right-3 bottom-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 p-2 text-white transition-colors"
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
             aria-label="Send message"
@@ -242,6 +243,9 @@ export default function AIChat() {
             <Send className="w-4 h-4" />
           </button>
         </div>
+        <p className="text-[10px] text-slate-500 mt-1.5 pl-1">
+          Enter to send &middot; Shift+Enter for new line
+        </p>
       </div>
     </div>
   );

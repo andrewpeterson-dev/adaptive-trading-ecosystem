@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TradingStatusBar } from "@/components/layout/TradingStatusBar";
 import { cn } from "@/lib/utils";
+import { AmbientIntelligenceLayer } from "@/components/ambient/AmbientIntelligenceLayer";
 
 const AIWidget = dynamic(
   () => import("@/components/cerberus/AIWidget").then((m) => m.AIWidget),
@@ -54,11 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-x-0 top-[-18rem] h-[42rem] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.22),transparent_50%)] dark:bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_45%)]" />
-        <div className="absolute inset-y-0 right-[-10rem] w-[34rem] bg-[radial-gradient(circle_at_center,rgba(125,211,252,0.18),transparent_58%)] dark:bg-[radial-gradient(circle_at_center,rgba(103,232,249,0.1),transparent_56%)]" />
-        <div className="absolute inset-y-0 left-[-12rem] w-[36rem] bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_58%)] dark:bg-[radial-gradient(circle_at_center,rgba(30,41,59,0.32),transparent_55%)]" />
-      </div>
+      <AmbientIntelligenceLayer />
 
       {!isAuthRoute && (
         <>
@@ -69,6 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <main
         className={cn(
+          "relative z-[1]",
           isAuthRoute
             ? "min-h-screen"
             : cn(
@@ -84,7 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )
         )}
       >
-        <div className={cn(!isAuthRoute && "mx-auto max-w-[1440px]")}>
+        <div className={cn(!isAuthRoute && "mx-auto max-w-[1440px] page-enter")} key={pathname}>
           {children}
         </div>
       </main>
