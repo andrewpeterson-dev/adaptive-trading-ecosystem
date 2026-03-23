@@ -316,3 +316,60 @@ export async function searchDocuments(query: string, documentIds?: string[], top
     body: JSON.stringify({ query, documentIds, topK }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// AI Brain — model selection, auto-routing, comparison, decisions
+// ---------------------------------------------------------------------------
+
+export async function updateBotModel(botId: string, model: string): Promise<void> {
+  await apiFetch(`/api/ai/tools/bots/${botId}/ai-config`, {
+    method: 'PATCH',
+    body: JSON.stringify({ model_config: { primary_model: model } }),
+  });
+}
+
+export async function toggleAutoRoute(botId: string, enabled: boolean): Promise<void> {
+  await apiFetch(`/api/ai/tools/bots/${botId}/auto-route`, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export interface ModelComparisonData {
+  bot_id: string;
+  auto_route_enabled: boolean;
+  models: {
+    model: string;
+    is_primary: boolean;
+    trades_count: number;
+    win_rate: number;
+    avg_return: number;
+    sharpe_ratio: number;
+    max_drawdown: number;
+    total_pnl: number;
+    avg_confidence: number;
+  }[];
+}
+
+export async function getModelComparison(botId: string): Promise<ModelComparisonData> {
+  return apiFetch(`/api/ai/tools/bots/${botId}/model-comparison`);
+}
+
+export interface AIDecisionItem {
+  id: string;
+  model_used: string;
+  symbol: string;
+  action: string;
+  confidence: number;
+  reasoning_summary: string;
+  entry_price: number | null;
+  pnl: number | null;
+  is_shadow: boolean;
+  decided_at: string | null;
+  resolved_at: string | null;
+}
+
+export async function getRecentDecisions(botId: string, limit?: number): Promise<{ decisions: AIDecisionItem[] }> {
+  const params = limit ? `?limit=${limit}` : '';
+  return apiFetch(`/api/ai/tools/bots/${botId}/recent-decisions${params}`);
+}
