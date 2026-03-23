@@ -187,6 +187,22 @@ function PanelHeader({
 // Main Page
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Market intelligence types
+// ---------------------------------------------------------------------------
+
+interface MarketMoodData {
+  market_mood: "bullish" | "bearish" | "neutral";
+  score: number;
+  confidence: number;
+}
+
+interface BotSummaryData {
+  id: string;
+  name: string;
+  status: string;
+}
+
 export default function DashboardPage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -196,6 +212,8 @@ export default function DashboardPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [marketMood, setMarketMood] = useState<MarketMoodData | null>(null);
+  const [bots, setBots] = useState<BotSummaryData[]>([]);
   const { mode } = useTradingMode();
 
   const [aiTab, setAiTab] = useState("reasoning");
@@ -204,12 +222,14 @@ export default function DashboardPage() {
   const fetchAll = useCallback(async () => {
     try {
       const q = `?mode=${mode}`;
-      const [accRes, posRes, ordRes, riskRes, eqRes] = await Promise.allSettled([
+      const [accRes, posRes, ordRes, riskRes, eqRes, moodRes, botsRes] = await Promise.allSettled([
         apiFetch<Account>(`/api/trading/account${q}`),
         apiFetch<{ positions: Position[] }>(`/api/trading/positions${q}`),
         apiFetch<{ orders: Order[] }>(`/api/trading/orders${q}`),
         apiFetch<RiskSummary>(`/api/trading/risk-summary${q}`),
         apiFetch<any>(`/api/dashboard/equity-curve${q}`),
+        apiFetch<MarketMoodData>(`/api/sentiment/market-mood/overview`),
+        apiFetch<BotSummaryData[]>(`/api/ai/tools/bots`),
       ]);
 
       if (accRes.status === "fulfilled") { setAccount(accRes.value); setError(false); } else { setError(true); }
@@ -220,6 +240,8 @@ export default function DashboardPage() {
         const eqData = eqRes.value;
         setEquityCurve(eqData.equity_curve || eqData || []);
       }
+      if (moodRes.status === "fulfilled") setMarketMood(moodRes.value);
+      if (botsRes.status === "fulfilled") setBots(botsRes.value || []);
       setLastRefresh(new Date());
     } catch { setError(true); } finally { setInitialLoading(false); }
   }, [mode]);
@@ -230,9 +252,49 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchAll]);
 
-  const totalPnl = useMemo(() => positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0), [positions]);
+  const initialCapital = account?.initial_capital ?? 100_000;
+
+  const totalPnl = useMemo(() => {
+    if (account) {
+      return (account.equity || 0) - initialCapital;
+    }
+    return positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
+  }, [account, positions, initialCapital]);
+
+  const unrealizedPnl = useMemo(
+    () => account?.unrealized_pnl ?? positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0),
+    [account, positions],
+  );
+
+  const realizedPnl = useMemo(
+    () => account?.realized_pnl ?? (totalPnl - unrealizedPnl),
+    [account, totalPnl, unrealizedPnl],
+  );
+
   const filledOrderCount = useMemo(() => orders.filter((o) => o.status === "filled").length, [orders]);
-  const winRate = useMemo(() => filledOrderCount === 0 ? null : null, [filledOrderCount]);
+
+  const winRate = useMemo(() => {
+    const filled = orders.filter((o) => o.status === "filled" && o.filled_price != null);
+    if (filled.length === 0) return null;
+    // Count buy orders that later had profitable sells (simplified: use P&L from positions)
+    const profitable = positions.filter((p) => (p.unrealized_pnl ?? 0) > 0).length;
+    const total = positions.length;
+    return total > 0 ? (profitable / total) * 100 : null;
+  }, [orders, positions]);
+
+  // Derive market intelligence from live data
+  const activeBots = useMemo(() => bots.filter((b) => b.status === "running"), [bots]);
+  const marketIntel = useMemo(() => {
+    const mood = marketMood?.market_mood ?? "neutral";
+    const score = marketMood?.score ?? 0;
+    const direction = mood === "bullish" ? "bullish" as const
+      : mood === "bearish" ? "bearish" as const
+      : "sideways" as const;
+    const sentiment = score > 0.1 ? "risk-on" as const
+      : score < -0.1 ? "risk-off" as const
+      : "neutral" as const;
+    return { direction, sentiment, label: mood.charAt(0).toUpperCase() + mood.slice(1) };
+  }, [marketMood]);
 
   // -- Early returns --
   if (initialLoading) {
@@ -304,24 +366,27 @@ export default function DashboardPage() {
       {/* ── METRICS ───────────────────────────────────────────────── */}
       <MetricsRow
         totalPnl={totalPnl}
-        unrealizedPnl={totalPnl}
-        realizedPnl={0}
-        expectancy={0}
+        unrealizedPnl={unrealizedPnl}
+        realizedPnl={realizedPnl}
+        expectancy={filledOrderCount > 0 ? totalPnl / filledOrderCount : 0}
         winRate={winRate ?? 0}
         maxDrawdown={risk?.current_drawdown_pct ?? 0}
-        exposure={risk?.current_exposure_pct ?? 0}
-        tradesToday={risk?.trades_this_hour ?? 0}
+        exposure={account ? (account.portfolio_value || 0) / (account.equity || 1) : 0}
+        tradesToday={risk?.trades_this_hour ?? activeBots.length}
         tradeHistory={[]}
-        realizedPnlUnavailable
-        winRateUnavailable={!winRate}
+        realizedPnlUnavailable={!account?.realized_pnl && account?.realized_pnl !== 0}
+        winRateUnavailable={winRate === null}
       />
 
       <MarketIntelligenceBar
-        trend={{ direction: "bullish", label: "Bullish" }}
-        volatility={{ vix: 16.4, level: "low" }}
-        sentiment="risk-on"
-        bestSector="Technology"
-        strategyStatus={{ active: positions.length > 0, name: "AI Momentum" }}
+        trend={{ direction: marketIntel.direction, label: marketIntel.label }}
+        volatility={undefined}
+        sentiment={marketIntel.sentiment}
+        bestSector={undefined}
+        strategyStatus={{
+          active: activeBots.length > 0,
+          name: activeBots.length > 0 ? `${activeBots.length} bots active` : undefined,
+        }}
       />
 
       {/* ── PRIMARY CHART ─────────────────────────────────────────── */}

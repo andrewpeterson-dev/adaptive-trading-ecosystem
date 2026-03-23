@@ -3,6 +3,9 @@ export interface Account {
   cash: number;
   buying_power: number;
   portfolio_value: number;
+  initial_capital?: number;
+  unrealized_pnl?: number;
+  realized_pnl?: number;
   currency?: string;
   status?: string;
   broker?: string;

@@ -35,9 +35,9 @@ async def get_equity_curve(request: Request):
         points = [
             {
                 "date": s.timestamp.strftime("%Y-%m-%d"),
-                "value": round(s.total_equity, 2),
+                "equity": round(s.total_equity, 2),
                 "cash": round(s.cash, 2),
-                "drawdown_pct": round(s.drawdown_pct, 4),
+                "drawdown": round(s.drawdown_pct, 4),
             }
             for s in snapshots
         ]

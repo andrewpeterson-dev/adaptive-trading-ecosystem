@@ -872,11 +872,23 @@ async def get_account(request: Request):
                 for p in positions
             )
 
+            unrealized_pnl = sum(
+                ((p.current_price or p.avg_entry_price) - p.avg_entry_price)
+                * p.quantity * _position_multiplier(p.symbol)
+                for p in positions
+            )
+            initial_cap = portfolio.initial_capital or 100_000.0
+            total_equity = portfolio.cash + positions_value
+            realized_pnl = total_equity - initial_cap - unrealized_pnl
+
             return {
-                "equity": portfolio.cash + positions_value,
+                "equity": total_equity,
                 "cash": portfolio.cash,
                 "buying_power": portfolio.cash,
                 "portfolio_value": positions_value,
+                "initial_capital": initial_cap,
+                "unrealized_pnl": round(unrealized_pnl, 2),
+                "realized_pnl": round(realized_pnl, 2),
                 "broker": "paper",
                 "mode": mode.value.upper(),
             }
