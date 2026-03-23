@@ -37,7 +37,8 @@ from services.bot_engine.indicators import compute_indicators
 from services.bot_engine.evaluator import evaluate_conditions
 from services.bot_engine.ai_evaluator import ai_evaluate_entries
 from services.ai_brain import AITradingEngine
-from services.ai_brain.types import AITradeDecision
+from services.ai_brain.types import AITradeDecision, AIBrainConfig
+from services.ai_brain.auto_router import select_best_model
 from services.reasoning_engine import ReasoningEngine
 from services.reasoning_engine.safety import (
     calculate_kelly_position_size,
@@ -296,6 +297,21 @@ class BotRunner:
                                 self._last_eval[bot.id] = datetime.utcnow()
                                 return
 
+                # Auto-route: pick best model if enabled
+                model_override = None
+                if bot.auto_route_enabled:
+                    brain_cfg = AIBrainConfig.from_json(bot.ai_brain_config)
+                    model_override = await select_best_model(
+                        bot.id, default_model=brain_cfg.primary_model,
+                    )
+                    if model_override != brain_cfg.primary_model:
+                        logger.info(
+                            "auto_router_override",
+                            bot_id=bot.id,
+                            default=brain_cfg.primary_model,
+                            selected=model_override,
+                        )
+
                 # Build market state for AITradingEngine
                 market_state = {
                     "symbols": symbols,
@@ -304,7 +320,9 @@ class BotRunner:
                     "portfolio": risk_context,
                 }
 
-                decision = await self._ai_engine.evaluate(bot, market_state)
+                decision = await self._ai_engine.evaluate(
+                    bot, market_state, model_override=model_override,
+                )
 
                 # Execute actionable decisions
                 if decision.action in ("BUY", "SELL", "EXIT") and decision.symbol:
