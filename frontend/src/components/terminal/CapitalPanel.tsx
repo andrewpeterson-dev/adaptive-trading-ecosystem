@@ -93,6 +93,7 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
         method: "PATCH",
         body: JSON.stringify({ aggressiveness: level }),
       });
+      onDetailUpdate?.({ aggressiveness: level } as Partial<BotDetail>);
     } catch (err) {
       console.error("Aggressiveness update failed:", err);
       setAggressiveness(prev);
@@ -100,7 +101,7 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     } finally {
       setAggSaving(false);
     }
-  }, [detail.id, aggressiveness]);
+  }, [detail.id, aggressiveness, onDetailUpdate]);
 
   const handleOverrideChange = useCallback(async (level: OverrideLevel) => {
     setOverrideSaving(true);
@@ -118,6 +119,11 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
           method: "PATCH",
           body: JSON.stringify({ execution_mode: newMode }),
         });
+        // Update parent state so the derived serverOverride stays consistent
+        const updatedBrainConfig = { ...(detail.aiBrainConfig || {}), execution_mode: newMode };
+        onDetailUpdate?.({ overrideLevel: level, aiBrainConfig: updatedBrainConfig } as Partial<BotDetail>);
+      } else {
+        onDetailUpdate?.({ overrideLevel: level } as Partial<BotDetail>);
       }
     } catch (err) {
       console.error("Override level update failed:", err);
@@ -126,7 +132,7 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     } finally {
       setOverrideSaving(false);
     }
-  }, [detail.id, overrideLevel]);
+  }, [detail.id, detail.aiBrainConfig, overrideLevel, onDetailUpdate]);
 
   // Show AI Brain model info when in full auto mode
   const modelConfig = aiBrainConfig?.model_config as Record<string, unknown> | undefined;
