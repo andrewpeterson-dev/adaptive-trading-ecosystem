@@ -107,6 +107,7 @@ export interface BotTrade {
 export interface BotDetail extends BotSummary {
   sourcePrompt?: string | null;
   aiBrainConfig?: Record<string, unknown> | null;
+  autoRouteEnabled?: boolean;
   overrideLevel?: string;
   aggressiveness?: number;
   equityCurve: Array<{ date: string; value: number }>;

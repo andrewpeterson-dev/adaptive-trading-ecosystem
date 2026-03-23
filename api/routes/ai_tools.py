@@ -773,6 +773,7 @@ async def get_bot_detail(bot_id: str, request: Request):
         "allocatedCapital": bot.allocated_capital,
         "aiCapitalManagement": bool(bot.reasoning_model_config and bot.reasoning_model_config.get("ai_capital_management")),
         "aiBrainConfig": bot.ai_brain_config,
+        "autoRouteEnabled": bool(bot.auto_route_enabled or False),
         "overrideLevel": current_version.override_level if current_version else "soft",
         "aggressiveness": config.get("aggressiveness", 2),
     }
@@ -1274,9 +1275,11 @@ async def update_ai_config(bot_id: str, request: Request):
             raise HTTPException(status_code=404, detail="Bot not found")
 
         # Merge partial updates into existing config
-        existing = bot.ai_brain_config or {}
+        existing = dict(bot.ai_brain_config or {})
         existing.update(body)
         bot.ai_brain_config = existing
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(bot, "ai_brain_config")
     return {"status": "updated", "bot_id": bot_id}
 
 

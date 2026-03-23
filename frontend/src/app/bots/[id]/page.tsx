@@ -34,6 +34,9 @@ import { ChartPanel } from "@/components/terminal/ChartPanel";
 import { MarketContextPanel } from "@/components/terminal/MarketContextPanel";
 import { MarketScannerPanel } from "@/components/terminal/MarketScannerPanel";
 import { TradeInspectorModal } from "@/components/terminal/TradeInspectorModal";
+import { ModelLeaderboard } from "@/components/bots/ModelLeaderboard";
+import { BotModelSettings } from "@/components/bots/BotModelSettings";
+import { LiveDecisionFeed } from "@/components/bots/LiveDecisionFeed";
 
 export default function BotDetailPage() {
   const params = useParams<{ id: string }>();
@@ -252,6 +255,29 @@ export default function BotDetailPage() {
               conditions={(Array.isArray(config.conditions) ? config.conditions : []) as Array<Record<string, unknown>>}
             />
           </div>
+
+          {/* Row 3.5: AI Brain — Model Settings + Leaderboard + Decision Feed */}
+          {detail.aiBrainConfig && (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr]">
+              <BotModelSettings
+                botId={botId}
+                currentModel={
+                  ((detail.aiBrainConfig as Record<string, unknown>)?.model_config as Record<string, unknown>)?.primary_model as string ?? "gpt-5.4"
+                }
+                autoRouteEnabled={detail.autoRouteEnabled ?? false}
+                onUpdate={() => {
+                  getBotDetail(botId).then(setDetail).catch(() => {});
+                }}
+              />
+              <div className="space-y-4">
+                <ModelLeaderboard
+                  botId={botId}
+                  onUpdate={() => getBotDetail(botId).then(setDetail).catch(() => {})}
+                />
+                <LiveDecisionFeed botId={botId} />
+              </div>
+            </div>
+          )}
 
           {/* Row 4: Trade Log + AI Decision */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
