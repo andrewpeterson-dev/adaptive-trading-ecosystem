@@ -1310,12 +1310,11 @@ async def ai_preview(bot_id: str, request: Request):
 
 @router.get("/bots/{bot_id}/model-comparison")
 async def model_comparison(bot_id: str, request: Request):
-    """Get model comparison leaderboard for a bot."""
+    """Get model comparison leaderboard with full metrics for a bot."""
     user_id = request.state.user_id
-    from db.cerberus_models import BotModelPerformance
+    from db.cerberus_models import CerberusBot
 
     async with get_session() as session:
-        # Verify ownership
         bot_result = await session.execute(
             select(CerberusBot).where(
                 CerberusBot.id == bot_id,
@@ -1325,54 +1324,106 @@ async def model_comparison(bot_id: str, request: Request):
         bot = bot_result.scalar_one_or_none()
         if not bot:
             raise HTTPException(status_code=404, detail="Bot not found")
-
+        # Capture values inside session to avoid DetachedInstanceError
         primary_model = (bot.ai_brain_config or {}).get("model_config", {}).get("primary_model", "")
+        auto_route_enabled = bool(bot.auto_route_enabled)
 
-        # Aggregate per model
-        agg_result = await session.execute(
-            select(
-                BotModelPerformance.model_used,
-                func.count().label("total_decisions"),
-                func.avg(BotModelPerformance.confidence).label("avg_confidence"),
-                func.sum(BotModelPerformance.pnl).label("total_pnl"),
+    from services.ai_brain.performance_tracker import get_bot_model_metrics
+    metrics_by_model = await get_bot_model_metrics(bot_id)
+
+    models = []
+    for model_name, metrics in metrics_by_model.items():
+        models.append({
+            "model": model_name,
+            "is_primary": model_name == primary_model,
+            "trades_count": metrics["trades_count"],
+            "win_rate": metrics["win_rate"],
+            "avg_return": metrics["avg_return"],
+            "sharpe_ratio": metrics["sharpe_ratio"],
+            "max_drawdown": metrics["max_drawdown"],
+            "total_pnl": metrics["total_pnl"],
+            "avg_confidence": metrics["avg_confidence"],
+        })
+
+    # Sort by composite score descending
+    from services.ai_brain.auto_router import score_model
+    models.sort(key=lambda m: score_model(m), reverse=True)
+
+    return {
+        "bot_id": bot_id,
+        "auto_route_enabled": auto_route_enabled,
+        "models": models,
+    }
+
+
+@router.patch("/bots/{bot_id}/auto-route")
+async def toggle_auto_route(bot_id: str, request: Request):
+    """Enable or disable auto-routing for a bot."""
+    user_id = request.state.user_id
+    body = await request.json()
+    enabled = bool(body.get("enabled", False))
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CerberusBot).where(
+                CerberusBot.id == bot_id,
+                CerberusBot.user_id == user_id,
             )
-            .where(BotModelPerformance.bot_id == bot_id)
-            .group_by(BotModelPerformance.model_used)
         )
-        rows = agg_result.all()
+        bot = result.scalar_one_or_none()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        bot.auto_route_enabled = enabled
 
-        models = []
-        for row in rows:
-            # Count wins (resolved with positive P&L)
-            win_result = await session.execute(
-                select(func.count()).select_from(BotModelPerformance).where(
-                    BotModelPerformance.bot_id == bot_id,
-                    BotModelPerformance.model_used == row.model_used,
-                    BotModelPerformance.resolved_at.isnot(None),
-                    BotModelPerformance.pnl > 0,
-                )
+    return {"bot_id": bot_id, "auto_route_enabled": enabled}
+
+
+@router.get("/bots/{bot_id}/recent-decisions")
+async def recent_decisions(bot_id: str, request: Request, limit: int = 20):
+    """Get recent AI decisions for the live decision feed."""
+    user_id = request.state.user_id
+    from db.cerberus_models import BotModelPerformance
+
+    async with get_session() as session:
+        bot_result = await session.execute(
+            select(CerberusBot).where(
+                CerberusBot.id == bot_id,
+                CerberusBot.user_id == user_id,
             )
-            wins = win_result.scalar() or 0
+        )
+        if not bot_result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Bot not found")
 
-            total_resolved_result = await session.execute(
-                select(func.count()).select_from(BotModelPerformance).where(
-                    BotModelPerformance.bot_id == bot_id,
-                    BotModelPerformance.model_used == row.model_used,
-                    BotModelPerformance.resolved_at.isnot(None),
-                )
-            )
-            total_resolved = total_resolved_result.scalar() or 0
+        result = await session.execute(
+            select(BotModelPerformance)
+            .where(BotModelPerformance.bot_id == bot_id)
+            .order_by(BotModelPerformance.decided_at.desc())
+            .limit(min(limit, 50))
+        )
+        decisions = result.scalars().all()
 
-            models.append({
-                "model": row.model_used,
-                "is_primary": row.model_used == primary_model,
-                "total_decisions": row.total_decisions,
-                "win_rate": round(wins / total_resolved, 2) if total_resolved > 0 else None,
-                "avg_confidence": round(float(row.avg_confidence or 0), 2),
-                "total_pnl": round(float(row.total_pnl or 0), 2),
-            })
+        # Build response inside session to avoid DetachedInstanceError
+        decision_list = [
+            {
+                "id": d.id,
+                "model_used": d.model_used,
+                "symbol": d.symbol,
+                "action": d.action,
+                "confidence": d.confidence,
+                "reasoning_summary": d.reasoning_summary,
+                "entry_price": d.entry_price,
+                "pnl": d.pnl,
+                "is_shadow": d.is_shadow,
+                "decided_at": d.decided_at.isoformat() if d.decided_at else None,
+                "resolved_at": d.resolved_at.isoformat() if d.resolved_at else None,
+            }
+            for d in decisions
+        ]
 
-    return {"bot_id": bot_id, "models": models}
+    return {
+        "bot_id": bot_id,
+        "decisions": decision_list,
+    }
 
 
 @router.get("/bots/{bot_id}/ai-reasoning/{decision_id}")
