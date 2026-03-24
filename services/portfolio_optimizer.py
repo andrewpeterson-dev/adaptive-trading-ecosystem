@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -339,7 +339,6 @@ async def optimize_black_litterman(
         constraints: Weight constraints.
     """
     from pypfopt import BlackLittermanModel, EfficientFrontier
-    from pypfopt import risk_models, expected_returns
 
     constraints = constraints or OptimizationConstraints()
     prices = await fetch_price_data(tickers, lookback_days)

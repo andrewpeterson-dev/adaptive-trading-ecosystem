@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from db.database import get_session
-from db.models import UserRiskLimits, TradingModeEnum
+from db.models import UserRiskLimits
 from services.reasoning_engine.safety import (
     evaluate_drawdown_level,
     get_category_scores,

@@ -11,7 +11,7 @@ Provides endpoints for:
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Request

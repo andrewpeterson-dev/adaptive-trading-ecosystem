@@ -19,7 +19,6 @@ from services.backtesting.vectorbt_engine import (
     build_entry_signals,
     build_exit_signals,
     freq_from_timeframe,
-    safe_float,
 )
 
 logger = structlog.get_logger(__name__)

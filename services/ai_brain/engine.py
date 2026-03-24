@@ -7,7 +7,6 @@ pipeline with the bot's selected model, returns a structured decision.
 from __future__ import annotations
 
 import time
-from datetime import datetime
 from typing import Optional
 
 import structlog

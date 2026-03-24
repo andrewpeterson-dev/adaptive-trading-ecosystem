@@ -791,7 +791,7 @@ class BotRunner:
             bot_name=bot.name,
             symbol=symbol,
             passed=all_passed,
-            aggressiveness=aggressiveness,
+            aggressiveness=config.get("aggressiveness", 2),
             reasons=reasons[:3] if reasons else [],
             indicator_snapshot={
                 k: round(v, 4) if isinstance(v, float) else v

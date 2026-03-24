@@ -1,7 +1,6 @@
 """Sentiment analysis API endpoints."""
 from __future__ import annotations
 
-from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Request

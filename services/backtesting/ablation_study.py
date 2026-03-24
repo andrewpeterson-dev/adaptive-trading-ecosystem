@@ -7,7 +7,6 @@ the probability that the observed performance is due to luck.
 """
 from __future__ import annotations
 
-import math
 from typing import Any, Dict, List, Optional
 
 import numpy as np

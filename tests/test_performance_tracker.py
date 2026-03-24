@@ -1,5 +1,4 @@
 # tests/test_performance_tracker.py
-import pytest
 from services.ai_brain.performance_tracker import compute_model_metrics
 
 def test_compute_model_metrics_basic():

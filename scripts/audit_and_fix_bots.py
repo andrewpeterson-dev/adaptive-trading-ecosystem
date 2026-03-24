@@ -25,7 +25,6 @@ sys.path.insert(0, PROJECT_ROOT)
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from db.database import Base
 from db.models import (
     User,
     UserRiskLimits,
@@ -37,7 +36,6 @@ from db.cerberus_models import (
     CerberusBot,
     CerberusBotVersion,
     CerberusTrade,
-    BotStatus,
 )
 
 
@@ -120,13 +118,6 @@ def main():
         for sts in session.query(StrategyTypeScore).all():
             existing_scores.setdefault(sts.user_id, []).append(sts.strategy_type)
 
-    # Pre-fetch all bot versions for orphan check
-    all_version_ids = set()
-    if "cerberus_bot_versions" in existing_tables:
-        all_version_ids = set(
-            v.id for v in session.query(CerberusBotVersion.id).all()
-        )
-
     # ─── Per-user checks ─────────────────────────────────────────────────
     print("─── USER-LEVEL CHECKS ───")
     for uid in sorted(bot_user_ids):
@@ -136,7 +127,7 @@ def main():
 
         if not user:
             print(f"    WARNING: user_id={uid} does not exist in users table!")
-            print(f"    Bots with this user_id will fail all new system checks.")
+            print("    Bots with this user_id will fail all new system checks.")
             continue
 
         # (a) UserRiskLimits — need rows for PAPER and LIVE modes
@@ -175,7 +166,7 @@ def main():
             session.add(ts)
             existing_sessions[uid] = ts
             trading_sessions_created += 1
-            print(f"    CREATED UserTradingSession (active_mode=paper)")
+            print("    CREATED UserTradingSession (active_mode=paper)")
         else:
             ts = existing_sessions[uid]
             print(f"    OK UserTradingSession (active_mode={ts.active_mode.value if hasattr(ts.active_mode, 'value') else ts.active_mode})")
@@ -192,7 +183,7 @@ def main():
         if scores:
             print(f"    OK StrategyTypeScore: {len(scores)} type(s) scored: {', '.join(scores)}")
         else:
-            print(f"    INFO StrategyTypeScore: No scores yet (created automatically after trades close)")
+            print("    INFO StrategyTypeScore: No scores yet (created automatically after trades close)")
 
     # ─── Per-bot checks ──────────────────────────────────────────────────
     print(f"\n{'─'*70}")
@@ -219,7 +210,7 @@ def main():
             )
 
         if bot.current_version_id and not version:
-            print(f"    WARNING: current_version_id points to non-existent version!")
+            print("    WARNING: current_version_id points to non-existent version!")
             orphaned_versions += 1
             # Try to find the latest version for this bot
             latest = (
@@ -233,7 +224,7 @@ def main():
                 bot.current_version_id = latest.id
                 version = latest
             else:
-                print(f"    WARNING: No versions exist for this bot at all!")
+                print("    WARNING: No versions exist for this bot at all!")
 
         if version:
             config = version.config_json or {}
@@ -247,7 +238,7 @@ def main():
                 config["strategy_type"] = "manual"
                 version.config_json = config
                 configs_fixed += 1
-                print(f"    FIX: Added strategy_type='manual' to config")
+                print("    FIX: Added strategy_type='manual' to config")
             else:
                 print(f"    OK strategy_type='{config['strategy_type']}'")
 
@@ -256,7 +247,7 @@ def main():
             print(f"    Config keys: {config_keys}")
         elif not bot.current_version_id:
             # Bot has no version at all — create a minimal one
-            print(f"    INFO: No version assigned. Creating initial version with defaults.")
+            print("    INFO: No version assigned. Creating initial version with defaults.")
             from db.cerberus_models import _uuid
             new_version = CerberusBotVersion(
                 id=_uuid(),
@@ -269,38 +260,38 @@ def main():
             session.add(new_version)
             bot.current_version_id = new_version.id
             configs_fixed += 1
-            print(f"    FIX: Created version v1 with strategy_type='manual'")
+            print("    FIX: Created version v1 with strategy_type='manual'")
 
         # Sentiment integration note
-        print(f"    INFO: Sentiment integration is fail-closed (bot will not trade without sentiment data)")
+        print("    INFO: Sentiment integration is fail-closed (bot will not trade without sentiment data)")
 
     # ─── Summary ─────────────────────────────────────────────────────────
     print(f"\n{'='*70}")
-    print(f"  AUDIT SUMMARY")
+    print("  AUDIT SUMMARY")
     print(f"{'='*70}")
     print(f"\n  Bots audited:               {len(bots)}")
     print(f"  Bot status breakdown:        {status_counts}")
     print(f"  Unique users with bots:      {len(bot_user_ids)}")
-    print(f"")
-    print(f"  FIXES APPLIED:")
+    print("")
+    print("  FIXES APPLIED:")
     print(f"    UserRiskLimits created:    {risk_limits_created}")
     print(f"    UserTradingSessions created: {trading_sessions_created}")
     print(f"    Bot configs fixed:         {configs_fixed}")
     print(f"    Orphaned version refs:     {orphaned_versions}")
-    print(f"")
-    print(f"  COMPATIBILITY STATUS:")
-    print(f"    Kill switch:               All bot users now have UserRiskLimits rows")
-    print(f"    Live/paper mode:           All bot users now have UserTradingSession rows")
-    print(f"    Graduated drawdown:        Thresholds set (-2/-4/-7/-10%) on all new rows")
-    print(f"    Quarter-Kelly sizing:      Users with <20 trades use 1% default (no fix needed)")
-    print(f"    Sector concentration:      Limit set to 30% on all new rows")
-    print(f"    Category/strategy scoring: StrategyTypeScore rows auto-created after trades close")
-    print(f"    Sentiment integration:     Fail-closed by design (no DB fix needed)")
-    print(f"    ReasoningEngine:           All bot configs now have strategy_type field")
+    print("")
+    print("  COMPATIBILITY STATUS:")
+    print("    Kill switch:               All bot users now have UserRiskLimits rows")
+    print("    Live/paper mode:           All bot users now have UserTradingSession rows")
+    print("    Graduated drawdown:        Thresholds set (-2/-4/-7/-10%) on all new rows")
+    print("    Quarter-Kelly sizing:      Users with <20 trades use 1% default (no fix needed)")
+    print("    Sector concentration:      Limit set to 30% on all new rows")
+    print("    Category/strategy scoring: StrategyTypeScore rows auto-created after trades close")
+    print("    Sentiment integration:     Fail-closed by design (no DB fix needed)")
+    print("    ReasoningEngine:           All bot configs now have strategy_type field")
 
     # Commit all changes
     session.commit()
-    print(f"\n  All changes committed to database.")
+    print("\n  All changes committed to database.")
     print(f"{'='*70}\n")
 
     session.close()

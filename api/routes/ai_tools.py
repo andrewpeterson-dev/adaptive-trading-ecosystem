@@ -575,14 +575,7 @@ async def list_bots(request: Request):
         bot_ids = [b.id for b in bots]
         decisions_map: dict[str, TradeDecision] = {}
         if bot_ids:
-            # Fetch most recent TradeDecision per bot using a correlated subquery
-            from sqlalchemy import and_
-            latest_sub = (
-                select(func.max(TradeDecision.created_at))
-                .where(TradeDecision.bot_id == CerberusBot.id)
-                .correlate(CerberusBot)
-                .scalar_subquery()
-            )
+            # Fetch most recent TradeDecision per bot
             td_result = await session.execute(
                 select(TradeDecision)
                 .where(
@@ -1495,7 +1488,6 @@ async def ai_edit_strategy(bot_id: str, body: AIStrategyEditRequest, request: Re
     retries with the errors included in context.
     """
     user_id = request.state.user_id
-    settings = get_settings()
 
     async with get_session() as session:
         result = await session.execute(

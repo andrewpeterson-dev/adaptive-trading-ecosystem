@@ -26,6 +26,7 @@ from db.models import (
     PaperPortfolio,
     PaperPosition,
     PaperTrade,
+    PaperTradeStatus,
     SystemEventType,
     Trade,
     TradeDirection,
