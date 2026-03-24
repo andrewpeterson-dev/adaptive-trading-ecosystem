@@ -12,25 +12,36 @@ interface ModelLeaderboardProps {
 export function ModelLeaderboard({ botId, onUpdate }: ModelLeaderboardProps) {
   const [data, setData] = useState<ModelComparisonData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [promoting, setPromoting] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
+    setError(null);
     getModelComparison(botId)
       .then(setData)
-      .catch((err) => { console.error("[model-leaderboard]", err); setLoading(false); })
+      .catch(() => setError("Failed to load model data"))
       .finally(() => setLoading(false));
   };
 
   useEffect(load, [botId]);
 
   const handlePromote = async (model: string) => {
-    if (!confirm(`Switch primary model to ${model}?`)) return;
-    await updateBotModel(botId, model);
-    load();
-    onUpdate?.();
+    setPromoting(model);
+    setError(null);
+    try {
+      await updateBotModel(botId, model);
+      load();
+      onUpdate?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : `Failed to switch to ${model}`);
+    } finally {
+      setPromoting(null);
+    }
   };
 
   if (loading) return <div className="text-sm text-zinc-500 p-4">Loading model data...</div>;
+  if (error && !data) return <div className="text-sm text-amber-400 p-4">{error}</div>;
   if (!data || data.models.length === 0) return <div className="text-sm text-zinc-500 p-4">No model comparison data yet.</div>;
 
   const bestIdx = 0; // Already sorted by score from the API
@@ -46,6 +57,9 @@ export function ModelLeaderboard({ botId, onUpdate }: ModelLeaderboardProps) {
           </span>
         )}
       </div>
+      {error && data && (
+        <div className="px-4 py-2 text-xs text-amber-400 border-b border-border">{error}</div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -104,9 +118,11 @@ export function ModelLeaderboard({ botId, onUpdate }: ModelLeaderboardProps) {
                   {!m.is_primary && (
                     <button
                       onClick={() => handlePromote(m.model)}
-                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                      disabled={promoting !== null}
+                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 disabled:opacity-40"
                     >
-                      <ArrowUpRight className="w-3 h-3" /> Use
+                      <ArrowUpRight className="w-3 h-3" />
+                      {promoting === m.model ? "..." : "Use"}
                     </button>
                   )}
                 </td>
