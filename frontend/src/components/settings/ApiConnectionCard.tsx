@@ -83,6 +83,7 @@ export function ApiConnectionCard({
   const [testError, setTestError] = useState("");
   const [removing, setRemoving] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const apiType = connection.api_type.toUpperCase();
   const isActiveBroker = settings.active_equity_broker_id === connection.id;
@@ -125,26 +126,29 @@ export function ApiConnectionCard({
   };
 
   const handleSetActiveBroker = async () => {
+    setActionError(null);
     try {
       await onSetActiveBroker(connection.id);
-    } catch {
-      // parent callback surfaces the failure
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to set active broker");
     }
   };
 
   const handleSetActiveCrypto = async () => {
+    setActionError(null);
     try {
       await onSetActiveCrypto(connection.id);
-    } catch {
-      // parent callback surfaces the failure
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to set active crypto");
     }
   };
 
   const handleSetPrimaryData = async () => {
+    setActionError(null);
     try {
       await onSetPrimaryData(connection.id);
-    } catch {
-      // parent callback surfaces the failure
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to set primary data source");
     }
   };
 
@@ -188,6 +192,12 @@ export function ApiConnectionCard({
           <p className="inline-flex items-center gap-1.5 text-xs text-red-300">
             <XCircle className="h-3 w-3" />
             {testError}
+          </p>
+        )}
+        {actionError && (
+          <p className="inline-flex items-center gap-1.5 text-xs text-red-300">
+            <XCircle className="h-3 w-3" />
+            {actionError}
           </p>
         )}
 

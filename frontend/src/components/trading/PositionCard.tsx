@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { Position } from "@/types/trading";
 
@@ -12,6 +12,7 @@ interface PositionCardProps {
 
 export function PositionCard({ position, onClose }: PositionCardProps) {
   const [closing, setClosing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isProfit = (position.unrealized_pnl ?? 0) >= 0;
   const pnlColor = isProfit ? "text-emerald-400" : "text-red-400";
@@ -33,8 +34,8 @@ export function PositionCard({ position, onClose }: PositionCardProps) {
         }),
       });
       onClose();
-    } catch {
-      // silent fail — refresh will show updated state
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to close position");
     } finally {
       setClosing(false);
     }
@@ -101,6 +102,13 @@ export function PositionCard({ position, onClose }: PositionCardProps) {
           </span>
         </div>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-1.5 text-xs text-red-400 mt-2">
+          <AlertCircle className="h-3 w-3 shrink-0" />
+          {error}
+        </div>
+      )}
     </div>
   );
 }
