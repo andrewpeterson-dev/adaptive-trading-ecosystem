@@ -72,14 +72,14 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
       })),
     })),
     risk_management: {
-      stop_loss_pct: stopLoss,
-      take_profit_pct: takeProfit,
-      position_size_pct: positionSize,
-      trailing_stop: trailingStopEnabled ? trailingStop : null,
+      stop_loss_pct: stopLoss / 100,
+      take_profit_pct: takeProfit / 100,
+      position_size_pct: positionSize / 100,
+      trailing_stop: trailingStopEnabled ? trailingStop / 100 : null,
     },
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     setSaving(true);
     try {
       const s = useBuilderStore.getState();
@@ -111,10 +111,11 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
       });
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus(null), 3000);
+      return true;
     } catch (err) {
       setSaveStatus("error");
       console.error("Save failed:", err);
-      throw err;
+      return false;
     } finally {
       setSaving(false);
     }
@@ -123,7 +124,8 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
   const handleDeploy = async () => {
     setDeploying(true);
     try {
-      await handleSave();
+      const saved = await handleSave();
+      if (!saved) { setDeploying(false); return; }
       const s = useBuilderStore.getState();
       const config = {
         name: s.name,
