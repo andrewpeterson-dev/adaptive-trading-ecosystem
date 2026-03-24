@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo } from "react";
-import { Loader2, RefreshCw, Unplug } from "lucide-react";
+import Link from "next/link";
+import { Loader2, RefreshCw, Settings, Unplug } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
@@ -64,9 +65,16 @@ export default function TradePage() {
         <div>
           <h2 className="text-base font-semibold">No broker connected</h2>
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-            Connect a broker to start trading. Account data, positions, and trade history will appear here.
+            Connect Alpaca or Webull to start trading. Account data, positions, and trade history will appear here.
           </p>
         </div>
+        <Link
+          href="/settings/api-connections"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <Settings className="h-4 w-4" />
+          Connect Broker
+        </Link>
       </div>
     );
   }

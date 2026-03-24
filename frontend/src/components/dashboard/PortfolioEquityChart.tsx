@@ -276,46 +276,18 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
 
         {!loading && !error && data.length === 0 && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center">
-            {/* Horizontal scan line — the signature alive element */}
-            <div className="absolute inset-x-0 top-1/2 h-px overflow-hidden">
-              <div
-                className="absolute h-px w-[15%] animate-scan-line"
-                style={{ background: "linear-gradient(90deg, transparent, hsl(213 96% 63% / 0.4), transparent)" }}
-              />
-            </div>
-
             {/* Static baseline at 50% */}
             <div className="absolute inset-x-8 top-1/2 h-px bg-border/20" />
 
-            <div className="relative z-10 flex flex-col items-center gap-5">
+            <div className="relative z-10 flex flex-col items-center gap-3">
               <div className="text-center space-y-1.5">
-                <p className="font-mono text-[13px] font-semibold tracking-[0.15em] text-foreground/70 uppercase">
-                  System Armed
+                <p className="font-mono text-[13px] font-semibold tracking-[0.1em] text-foreground/50 uppercase">
+                  Awaiting First Trade
                 </p>
                 <p className="text-[11px] text-muted-foreground/40">
-                  Equity curve activates on first execution
+                  Equity curve will appear after your first execution
                 </p>
               </div>
-
-              {/* System status row */}
-              <div className="flex items-center gap-5 text-[9px] font-mono tracking-wider text-muted-foreground/35">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1 w-1 rounded-full bg-emerald-400/50 animate-alive-pulse" />
-                  SCANNER
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1 w-1 rounded-full bg-amber-400/40" />
-                  EXECUTION
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1 w-1 rounded-full bg-emerald-400/50 animate-alive-pulse" />
-                  RISK ENGINE
-                </span>
-              </div>
-
-              <p className="font-mono text-[9px] text-muted-foreground/20 tracking-[0.2em]">
-                $100,000 INITIALIZED
-              </p>
             </div>
           </div>
         )}
