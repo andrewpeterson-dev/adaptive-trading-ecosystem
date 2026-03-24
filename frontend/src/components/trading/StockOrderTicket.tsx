@@ -168,7 +168,7 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
         body: JSON.stringify({
           symbol,
           direction: direction === "buy" ? "long" : "short",
-          quantity: inputMode === "shares" ? resolvedQuantity : 0,
+          quantity: inputMode === "shares" ? Math.max(1, resolvedQuantity) : 0,
           dollar_amount: inputMode === "dollars" ? numericDollarAmount : null,
           strength: 1.0,
           model_name: "manual",

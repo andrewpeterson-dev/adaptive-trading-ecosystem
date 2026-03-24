@@ -168,23 +168,25 @@ export function RiskLimitsConfig() {
     }
   };
 
+  const [killSwitchSaving, setKillSwitchSaving] = useState(false);
   const toggleKillSwitch = async () => {
     const newValue = !data.kill_switch_active;
-    setData((prev) => ({ ...prev, kill_switch_active: newValue }));
+    setKillSwitchSaving(true);
     try {
       await apiFetch("/api/risk/advanced-limits", {
         method: "PUT",
         body: JSON.stringify({ kill_switch_active: newValue }),
         cacheTtlMs: 0,
       });
+      setData((prev) => ({ ...prev, kill_switch_active: newValue }));
       toast(
-        newValue ? "Kill switch activated — all trading halted" : "Kill switch deactivated — trading resumed",
+        newValue ? "Kill switch activated \u2014 all trading halted" : "Kill switch deactivated \u2014 trading resumed",
         newValue ? "warning" : "success"
       );
     } catch (e: unknown) {
-      // Revert on failure
-      setData((prev) => ({ ...prev, kill_switch_active: !newValue }));
       toast(e instanceof Error ? e.message : "Failed to update kill switch", "error");
+    } finally {
+      setKillSwitchSaving(false);
     }
   };
 
@@ -379,11 +381,13 @@ export function RiskLimitsConfig() {
                 aria-checked={data.kill_switch_active}
                 aria-label={data.kill_switch_active ? "Disable kill switch" : "Enable kill switch"}
                 onClick={toggleKillSwitch}
+                disabled={killSwitchSaving}
                 className={[
                   "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent",
                   "transition-colors duration-200 ease-in-out",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   "active:scale-95",
+                  killSwitchSaving ? "opacity-50 cursor-wait" : "",
                   data.kill_switch_active ? "bg-red-500" : "bg-emerald-500",
                 ].join(" ")}
               >
