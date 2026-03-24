@@ -6,9 +6,11 @@ import { getBotUniverse, type UniverseCandidateItem } from "@/lib/reasoning-api"
 
 export function UniverseTab({ botId }: { botId: string }) {
   const [candidates, setCandidates] = useState<UniverseCandidateItem[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    getBotUniverse(botId).then(setCandidates).catch(() => {});
+    setLoadError(false);
+    getBotUniverse(botId).then(setCandidates).catch(() => setLoadError(true));
   }, [botId]);
 
   return (
@@ -21,7 +23,7 @@ export function UniverseTab({ botId }: { botId: string }) {
       <div className="mt-4">
         {candidates.length === 0 ? (
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
-            No universe candidates — bot may be using fixed symbols
+            {loadError ? "Failed to load universe data" : "No universe candidates \u2014 bot may be using fixed symbols"}
           </div>
         ) : (
           <div className="space-y-2">

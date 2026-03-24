@@ -62,15 +62,24 @@ export function LearningTab({ botId }: { botId: string }) {
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [regimeStats, setRegimeStats] = useState<RegimeStat[]>([]);
   const [adaptations, setAdaptations] = useState<Adaptation[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    getBotJournal(botId).then(setJournal).catch(() => {});
-    getBotRegimeStats(botId).then(setRegimeStats).catch(() => {});
-    getBotAdaptations(botId).then(setAdaptations).catch(() => {});
+    setLoadError(false);
+    Promise.all([
+      getBotJournal(botId).then(setJournal),
+      getBotRegimeStats(botId).then(setRegimeStats),
+      getBotAdaptations(botId).then(setAdaptations),
+    ]).catch(() => setLoadError(true));
   }, [botId]);
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-xs text-amber-400">
+          Some learning data failed to load. Showing what&apos;s available.
+        </div>
+      )}
       {/* Regime Stats */}
       <div className="app-panel p-5 sm:p-6">
         <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">

@@ -13,10 +13,13 @@ const ACTION_COLORS: Record<string, string> = {
 
 export function LiveDecisionFeed({ botId }: { botId: string }) {
   const [decisions, setDecisions] = useState<AIDecisionItem[]>([]);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     const load = () => {
-      getRecentDecisions(botId, 15).then((r) => setDecisions(r.decisions)).catch(() => {});
+      getRecentDecisions(botId, 15)
+        .then((r) => { setDecisions(r.decisions); setStale(false); })
+        .catch(() => setStale(true));
     };
     load();
     const interval = setInterval(load, 30_000);
@@ -28,6 +31,7 @@ export function LiveDecisionFeed({ botId }: { botId: string }) {
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <Activity className="w-4 h-4 text-sky-400" />
         <h3 className="text-sm font-medium text-zinc-200">AI Decision Feed</h3>
+        {stale && <span className="text-[9px] text-amber-400 font-medium">STALE</span>}
         <span className="ml-auto text-[10px] text-muted-foreground">{decisions.length} recent</span>
       </div>
       <div className="max-h-[400px] overflow-y-auto divide-y divide-border/30">

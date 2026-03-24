@@ -34,15 +34,22 @@ function ConfidenceBar({ value }: { value: number }) {
 
 export function AIReasoningTab({ botId }: { botId: string }) {
   const [decisions, setDecisions] = useState<TradeDecisionItem[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    getBotDecisions(botId).then(setDecisions).catch(() => {});
+    setLoadError(false);
+    getBotDecisions(botId).then(setDecisions).catch(() => setLoadError(true));
   }, [botId]);
 
   const latest = decisions[0];
 
   return (
     <div className="space-y-6">
+      {loadError && decisions.length === 0 && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-xs text-amber-400">
+          Failed to load AI reasoning data.
+        </div>
+      )}
       {latest && (
         <div className="app-panel p-5 sm:p-6">
           <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">

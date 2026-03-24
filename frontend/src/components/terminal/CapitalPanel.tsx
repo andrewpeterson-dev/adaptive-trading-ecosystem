@@ -63,6 +63,7 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
   const handleEdit = () => { setInput(detail.allocatedCapital ? String(detail.allocatedCapital) : ""); setIsEditing(true); };
   const handleSave = async () => {
     setSaving(true);
+    setError(null);
     try {
       const parsed = input.trim() ? parseFloat(input.replace(/[,$]/g, "")) : null;
       const value = parsed && !isNaN(parsed) && parsed > 0 ? parsed : null;
@@ -70,17 +71,18 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
       onDetailUpdate?.({ allocatedCapital: value });
       setIsEditing(false);
     } catch (err) {
-      console.error("Capital update failed:", err);
+      setError(err instanceof Error ? err.message : "Failed to save capital");
     } finally { setSaving(false); }
   };
 
   const handleToggleAi = async () => {
     const v = !detail.aiCapitalManagement;
+    setError(null);
     try {
       await updateAiCapitalManagement(detail.id, v);
       onDetailUpdate?.({ aiCapitalManagement: v });
     } catch (err) {
-      console.error("AI capital management toggle failed:", err);
+      setError(err instanceof Error ? err.message : "Failed to toggle AI capital");
     }
   };
 
