@@ -103,7 +103,7 @@ export function MarketIntelligenceBar({
           valueColor={trendConfig.color}
         />
       ) : (
-        <Segment title="Market Trend" value="--" dimmed />
+        <Segment title="Market Trend" value={"\u2014"} dimmed />
       )}
 
       {/* Volatility */}
@@ -114,7 +114,7 @@ export function MarketIntelligenceBar({
           valueColor={volColor}
         />
       ) : (
-        <Segment title="Volatility" value="--" dimmed />
+        <Segment title="Volatility" value={"\u2014"} dimmed />
       )}
 
       {/* Sentiment */}
@@ -125,7 +125,7 @@ export function MarketIntelligenceBar({
           valueColor={sentimentConfig.color}
         />
       ) : (
-        <Segment title="Sentiment" value="--" dimmed />
+        <Segment title="Sentiment" value={"\u2014"} dimmed />
       )}
 
       {/* Best Sector */}
@@ -141,7 +141,7 @@ export function MarketIntelligenceBar({
           valueColor="text-foreground"
         />
       ) : (
-        <Segment title="Best Sector" value="--" dimmed />
+        <Segment title="Best Sector" value={"\u2014"} dimmed />
       )}
 
       {/* Strategy Status */}
@@ -161,7 +161,7 @@ export function MarketIntelligenceBar({
           valueColor={strategyStatus.active ? "text-emerald-400" : "text-muted-foreground"}
         />
       ) : (
-        <Segment title="Strategy" value="--" dimmed />
+        <Segment title="Strategy" value={"\u2014"} dimmed />
       )}
     </div>
   );

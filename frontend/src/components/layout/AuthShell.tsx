@@ -394,7 +394,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────────── */}
-      <div className="relative flex flex-1 items-center justify-center px-4 py-8 sm:px-6 lg:px-8" style={{ zIndex: 10 }}>
+      <div className="relative flex flex-1 items-center justify-center px-4 py-4 sm:py-8 sm:px-6 lg:px-8" style={{ zIndex: 10 }}>
         <div className="grid w-full max-w-[1200px] gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
 
           {/* ── Left: branding + live system modules ─────────────────────── */}

@@ -114,7 +114,7 @@ export function MetricsRow({
     return "text-emerald-400";
   })();
 
-  const realizedLabel = realizedPnlUnavailable ? "Realized: --" : `Realized: ${formatCurrency(realizedPnl)}`;
+  const realizedLabel = realizedPnlUnavailable ? "Realized: \u2014" : `Realized: ${formatCurrency(realizedPnl)}`;
 
   const cards: MetricCardConfig[] = [
     {
@@ -122,7 +122,7 @@ export function MetricsRow({
       icon: pnlPositive ? TrendingUp : TrendingDown,
       value: formatCurrency(totalPnl, true),
       valueColor: pnlPositive ? "text-emerald-400" : "text-red-400",
-      subtitle: `Unrealized: ${formatCurrency(unrealizedPnl)} / ${realizedLabel}`,
+      subtitle: `Unrealized: ${formatCurrency(unrealizedPnl)} \u00B7 ${realizedLabel}`,
       subtitleColor: "text-muted-foreground",
     },
     {
@@ -134,7 +134,7 @@ export function MetricsRow({
     {
       label: "Win Rate",
       icon: Trophy,
-      value: winRateUnavailable ? "--" : `${winRate.toFixed(1)}%`,
+      value: winRateUnavailable ? "\u2014" : `${winRate.toFixed(1)}%`,
       valueColor: winRateUnavailable ? "text-muted-foreground/50" : winRate >= 50 ? "text-emerald-400" : "text-red-400",
     },
     {
