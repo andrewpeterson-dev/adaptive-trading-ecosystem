@@ -222,11 +222,18 @@ async def lifespan(app: FastAPI):
     logger.info("trading_ecosystem_stopped")
 
 
+import os as _os
+
+_is_production = bool(_os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RENDER"))
+
 app = FastAPI(
     title="Adaptive Trading Ecosystem",
     description="Multi-model adaptive AI trading platform",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
 
 app.add_middleware(TradingModeMiddleware)
