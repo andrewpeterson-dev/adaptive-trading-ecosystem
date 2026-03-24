@@ -49,7 +49,7 @@ function ProfileSection() {
           setEmail(data.email || "");
         }
       })
-      .catch(() => {});
+      .catch((err) => console.error("[settings] profile load failed:", err));
   }, []);
 
   const handleSave = async () => {

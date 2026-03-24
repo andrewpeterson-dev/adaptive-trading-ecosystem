@@ -17,7 +17,7 @@ export function ModelLeaderboard({ botId, onUpdate }: ModelLeaderboardProps) {
     setLoading(true);
     getModelComparison(botId)
       .then(setData)
-      .catch(() => {})
+      .catch((err) => { console.error("[model-leaderboard]", err); setLoading(false); })
       .finally(() => setLoading(false));
   };
 

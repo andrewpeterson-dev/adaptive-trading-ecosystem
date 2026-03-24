@@ -266,13 +266,13 @@ export default function BotDetailPage() {
                 }
                 autoRouteEnabled={detail.autoRouteEnabled ?? false}
                 onUpdate={() => {
-                  getBotDetail(botId).then(setDetail).catch(() => {});
+                  getBotDetail(botId).then(setDetail).catch((err) => console.error("[bot-detail] update failed:", err));
                 }}
               />
               <div className="space-y-4">
                 <ModelLeaderboard
                   botId={botId}
-                  onUpdate={() => getBotDetail(botId).then(setDetail).catch(() => {})}
+                  onUpdate={() => getBotDetail(botId).then(setDetail).catch((err) => console.error("[bot-detail] update failed:", err))}
                 />
                 <LiveDecisionFeed botId={botId} />
               </div>
