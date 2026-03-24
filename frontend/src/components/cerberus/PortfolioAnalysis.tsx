@@ -78,7 +78,17 @@ export function PortfolioAnalysis() {
         });
       }
     } catch (error) {
-      console.error('Portfolio analysis error:', error);
+      const detail = error instanceof Error ? error.message : 'Analysis request failed';
+      addMessage({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        contentMd: `Portfolio analysis failed: ${detail}`,
+        structuredJson: null,
+        modelName: null,
+        citations: [],
+        toolCalls: [],
+        createdAt: new Date().toISOString(),
+      });
     } finally {
       setIsLoading(false);
     }

@@ -31,6 +31,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
   const [deploying, setDeploying] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "error" | null>(null);
   const [deployStatus, setDeployStatus] = useState<"deployed" | "error" | null>(null);
+  const [deployError, setDeployError] = useState<string | null>(null);
 
   const {
     name, description, action, timeframe, symbols,
@@ -153,10 +154,11 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
         pageContext,
       });
       setDeployStatus("deployed");
+      setDeployError(null);
       setTimeout(() => setDeployStatus(null), 5000);
     } catch (err) {
       setDeployStatus("error");
-      console.error("Deploy failed:", err);
+      setDeployError(err instanceof Error ? err.message : "Deployment failed");
     } finally {
       setDeploying(false);
     }
@@ -329,7 +331,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
         )}
         {deployStatus === "error" && (
           <div className="flex items-center gap-2 app-card p-3 border-l-2 border-red-500/60 text-xs text-red-400">
-            <XCircle className="w-3.5 h-3.5" /> Deployment failed. Check console.
+            <XCircle className="w-3.5 h-3.5" /> {deployError || "Deployment failed"}
           </div>
         )}
       </div>
