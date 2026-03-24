@@ -49,10 +49,19 @@ function ProfileSection() {
           setEmail(data.email || "");
         }
       })
-      .catch((err) => console.error("[settings] profile load failed:", err));
+      .catch(() => toast("Failed to load profile", "error"));
   }, []);
 
   const handleSave = async () => {
+    // Validate password fields: if either is filled, both must be
+    if ((currentPassword || newPassword) && !(currentPassword && newPassword)) {
+      toast("Both current and new password are required to change password", "error");
+      return;
+    }
+    if (newPassword && newPassword.length < 6) {
+      toast("New password must be at least 6 characters", "error");
+      return;
+    }
     setSaving(true);
     try {
       const body: Record<string, string> = { display_name: displayName };
@@ -64,11 +73,11 @@ function ProfileSection() {
         method: "PUT",
         body: JSON.stringify(body),
       });
-      toast("Profile saved", "success");
+      toast(currentPassword ? "Profile and password updated" : "Profile saved", "success");
       setCurrentPassword("");
       setNewPassword("");
-    } catch {
-      toast("Failed to update profile", "error");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to update profile", "error");
     } finally {
       setSaving(false);
     }
