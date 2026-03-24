@@ -1186,6 +1186,25 @@ class BotRunner:
                 db_trade.payload_json = payload
                 await session.flush()
 
+                # Update AI Brain performance record with exit data for model comparison
+                try:
+                    from db.cerberus_models import BotModelPerformance
+                    perf_result = await session.execute(
+                        select(BotModelPerformance).where(
+                            BotModelPerformance.bot_id == bot.id,
+                            BotModelPerformance.symbol == symbol,
+                            BotModelPerformance.is_shadow.is_(False),
+                            BotModelPerformance.exit_price.is_(None),
+                        ).order_by(BotModelPerformance.decided_at.desc()).limit(1)
+                    )
+                    perf_record = perf_result.scalar_one_or_none()
+                    if perf_record:
+                        perf_record.exit_price = current_price
+                        perf_record.pnl = pnl
+                        perf_record.resolved_at = datetime.utcnow()
+                except Exception:
+                    pass  # Don't block exit flow for performance tracking
+
             # Sync exit to paper portfolio
             if is_paper:
                 try:
