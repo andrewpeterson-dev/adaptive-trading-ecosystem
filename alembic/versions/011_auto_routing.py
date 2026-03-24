@@ -15,7 +15,7 @@ import sqlalchemy as sa
 def upgrade():
     op.add_column(
         "cerberus_bots",
-        sa.Column("auto_route_enabled", sa.Boolean, server_default=sa.text("0"), nullable=False),
+        sa.Column("auto_route_enabled", sa.Boolean, server_default=sa.text("false"), nullable=False),
     )
 
 
