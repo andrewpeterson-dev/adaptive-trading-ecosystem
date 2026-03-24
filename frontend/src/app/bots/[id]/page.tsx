@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Brain, GraduationCap, Globe, LineChart } from "lucide-react";
+import { ArrowLeft, Brain, GraduationCap, Globe, LineChart, Cpu, Zap } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { AIReasoningTab } from "@/components/bots/reasoning/AIReasoningTab";
@@ -37,6 +37,59 @@ import { TradeInspectorModal } from "@/components/terminal/TradeInspectorModal";
 import { ModelLeaderboard } from "@/components/bots/ModelLeaderboard";
 import { BotModelSettings } from "@/components/bots/BotModelSettings";
 import { LiveDecisionFeed } from "@/components/bots/LiveDecisionFeed";
+import { apiFetch } from "@/lib/api/client";
+
+function EnableAIBrainCTA({ botId, onEnabled }: { botId: string; onEnabled: () => void }) {
+  const [enabling, setEnabling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleEnable = async () => {
+    setEnabling(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/ai/tools/bots/${botId}/ai-config`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          execution_mode: "ai_assisted",
+          model_config: { primary_model: "gpt-5.4" },
+          data_sources: ["technical", "sentiment"],
+        }),
+      });
+      onEnabled();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to enable AI Brain");
+    } finally {
+      setEnabling(false);
+    }
+  };
+
+  return (
+    <div className="app-panel p-5 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="shrink-0 rounded-xl bg-violet-500/10 p-2.5">
+          <Cpu className="h-5 w-5 text-violet-400" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">AI Brain</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Let AI analyze markets and assist with trading decisions for this bot
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {error && <span className="text-[11px] text-red-400">{error}</span>}
+        <button
+          onClick={handleEnable}
+          disabled={enabling}
+          className="flex items-center gap-1.5 rounded-xl bg-violet-500/15 border border-violet-500/25 px-4 py-2 text-xs font-semibold text-violet-400 hover:bg-violet-500/25 transition-colors disabled:opacity-50"
+        >
+          <Zap className="h-3.5 w-3.5" />
+          {enabling ? "Enabling..." : "Enable"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function BotDetailPage() {
   const params = useParams<{ id: string }>();
@@ -257,7 +310,7 @@ export default function BotDetailPage() {
           </div>
 
           {/* Row 3.5: AI Brain — Model Settings + Leaderboard + Decision Feed */}
-          {detail.aiBrainConfig && (
+          {detail.aiBrainConfig ? (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr]">
               <BotModelSettings
                 botId={botId}
@@ -266,17 +319,19 @@ export default function BotDetailPage() {
                 }
                 autoRouteEnabled={detail.autoRouteEnabled ?? false}
                 onUpdate={() => {
-                  getBotDetail(botId).then(setDetail).catch((err) => console.error("[bot-detail] update failed:", err));
+                  getBotDetail(botId).then(setDetail).catch(() => {});
                 }}
               />
               <div className="space-y-4">
                 <ModelLeaderboard
                   botId={botId}
-                  onUpdate={() => getBotDetail(botId).then(setDetail).catch((err) => console.error("[bot-detail] update failed:", err))}
+                  onUpdate={() => getBotDetail(botId).then(setDetail).catch(() => {})}
                 />
                 <LiveDecisionFeed botId={botId} />
               </div>
             </div>
+          ) : (
+            <EnableAIBrainCTA botId={botId} onEnabled={() => getBotDetail(botId).then(setDetail).catch(() => {})} />
           )}
 
           {/* Row 4: Trade Log + AI Decision */}
