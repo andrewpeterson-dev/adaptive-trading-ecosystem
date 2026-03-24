@@ -50,8 +50,16 @@ export default function TradePage() {
 
   if (loading && !account) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <div className="app-page space-y-4">
+        <div className="h-10 w-64 animate-pulse rounded-lg bg-muted/20" />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
+          <div className="h-[420px] animate-pulse rounded-2xl bg-muted/20" />
+          <div className="space-y-3">
+            <div className="h-32 animate-pulse rounded-2xl bg-muted/20" />
+            <div className="h-32 animate-pulse rounded-2xl bg-muted/20" />
+            <div className="h-48 animate-pulse rounded-2xl bg-muted/20" />
+          </div>
+        </div>
       </div>
     );
   }

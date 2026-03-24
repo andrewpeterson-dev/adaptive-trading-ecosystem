@@ -96,8 +96,12 @@ export default function PortfolioPage() {
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <div className="space-y-4">
+          <div className="h-[300px] animate-pulse rounded-2xl bg-muted/20" />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="h-48 animate-pulse rounded-2xl bg-muted/20" />
+            <div className="h-48 animate-pulse rounded-2xl bg-muted/20" />
+          </div>
         </div>
       );
     }

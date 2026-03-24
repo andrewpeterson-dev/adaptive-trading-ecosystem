@@ -671,8 +671,8 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
           }),
         });
         setDiagnostics(data);
-      } catch {
-        // network error — silently ignore
+      } catch (err) {
+        console.error("[strategy-builder] diagnostics fetch failed:", err);
       } finally {
         setDiagLoading(false);
       }
@@ -705,8 +705,8 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
               }),
             });
             previews[c.indicator] = data;
-          } catch {
-            // ignore
+          } catch (err) {
+            console.error("[strategy-builder] indicator preview failed:", err);
           }
         })
       );
@@ -727,8 +727,8 @@ export function StrategyBuilder({ initialStrategy, mode = "create" }: StrategyBu
         body: JSON.stringify({ strategy_logic: logic }),
       });
       setExplanation(data);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("[strategy-builder] explainer failed:", err);
     } finally {
       setExplainLoading(false);
     }
