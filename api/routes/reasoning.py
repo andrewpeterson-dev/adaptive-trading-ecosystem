@@ -60,6 +60,47 @@ async def _require_owned_bot(request: Request, bot_id: str) -> CerberusBot:
     return bot
 
 
+# ── Latest Decision (cross-bot) ─────────────────────────────────────────────
+
+
+@router.get("/latest")
+async def get_latest_decision(request: Request):
+    """Get the most recent trade decision across all of the user's bots."""
+    user_id = _get_user_id(request)
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(TradeDecision)
+            .join(CerberusBot, CerberusBot.id == TradeDecision.bot_id)
+            .where(CerberusBot.user_id == user_id)
+            .order_by(desc(TradeDecision.created_at))
+            .limit(1)
+        )
+        decision = result.scalar_one_or_none()
+
+    if not decision:
+        return None
+
+    return {
+        "signal": {
+            "name": f"{decision.strategy_signal} {decision.symbol}",
+            "detail": decision.reasoning or "",
+        },
+        "checks": [
+            {
+                "label": "Risk Level",
+                "status": "pass" if decision.context_risk_level in ("LOW", "MEDIUM") else "warn" if decision.context_risk_level == "HIGH" else "fail",
+            },
+            {
+                "label": "Confidence",
+                "status": "pass" if (decision.ai_confidence or 0) >= 0.6 else "warn" if (decision.ai_confidence or 0) >= 0.4 else "fail",
+            },
+        ],
+        "confidence": round((decision.ai_confidence or 0) * 100),
+        "timestamp": decision.created_at.isoformat() if decision.created_at else None,
+    }
+
+
 # ── Market Events ────────────────────────────────────────────────────────────
 
 
