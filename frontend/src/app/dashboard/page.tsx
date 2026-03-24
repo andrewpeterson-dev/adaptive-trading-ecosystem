@@ -214,6 +214,9 @@ export default function DashboardPage() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [marketMood, setMarketMood] = useState<MarketMoodData | null>(null);
   const [bots, setBots] = useState<BotSummaryData[]>([]);
+  const [strategies, setStrategies] = useState<{ id: string; name: string; status: "active" | "paused" | "backtesting"; mode: "paper" | "live"; winRate?: number; trades?: number; pnl?: number }[]>([]);
+  const [latestDecision, setLatestDecision] = useState<any>(null);
+  const [tradeHistory, setTradeHistory] = useState<number[]>([]);
   const { mode } = useTradingMode();
 
   const [aiTab, setAiTab] = useState("reasoning");
@@ -222,7 +225,7 @@ export default function DashboardPage() {
   const fetchAll = useCallback(async () => {
     try {
       const q = `?mode=${mode}`;
-      const [accRes, posRes, ordRes, riskRes, eqRes, moodRes, botsRes] = await Promise.allSettled([
+      const [accRes, posRes, ordRes, riskRes, eqRes, moodRes, botsRes, stratRes, decisionRes] = await Promise.allSettled([
         apiFetch<Account>(`/api/trading/account${q}`),
         apiFetch<{ positions: Position[] }>(`/api/trading/positions${q}`),
         apiFetch<{ orders: Order[] }>(`/api/trading/orders${q}`),
@@ -230,18 +233,41 @@ export default function DashboardPage() {
         apiFetch<any>(`/api/dashboard/equity-curve${q}`),
         apiFetch<MarketMoodData>(`/api/sentiment/market-mood/overview`),
         apiFetch<BotSummaryData[]>(`/api/ai/tools/bots`),
+        apiFetch<any[]>(`/api/strategies`),
+        apiFetch<any>(`/api/reasoning/latest`),
       ]);
 
       if (accRes.status === "fulfilled") { setAccount(accRes.value); setError(false); } else { setError(true); }
       if (posRes.status === "fulfilled") setPositions(posRes.value.positions || []);
-      if (ordRes.status === "fulfilled") setOrders(ordRes.value.orders || []);
+      if (ordRes.status === "fulfilled") {
+        const allOrders = ordRes.value.orders || [];
+        setOrders(allOrders);
+        // Build trade sparkline from recent filled orders (last 24 values)
+        const filled = allOrders.filter((o: Order) => o.status === "filled" && o.filled_price != null);
+        setTradeHistory(filled.slice(-24).map((o: Order) => o.filled_price ?? 0));
+      }
       if (riskRes.status === "fulfilled") setRisk(riskRes.value);
       if (eqRes.status === "fulfilled") {
         const eqData = eqRes.value;
-        setEquityCurve(eqData.equity_curve || eqData || []);
+        setEquityCurve(Array.isArray(eqData?.equity_curve) ? eqData.equity_curve : Array.isArray(eqData) ? eqData : []);
       }
       if (moodRes.status === "fulfilled") setMarketMood(moodRes.value);
       if (botsRes.status === "fulfilled") setBots(botsRes.value || []);
+      if (stratRes.status === "fulfilled") {
+        const raw = Array.isArray(stratRes.value) ? stratRes.value : [];
+        setStrategies(raw.map((s: any) => ({
+          id: String(s.id),
+          name: s.name || "Unnamed",
+          status: (s.is_active === false ? "paused" : "active") as "active" | "paused",
+          mode: mode as "paper" | "live",
+          winRate: s.win_rate,
+          trades: s.num_trades,
+          pnl: s.total_pnl,
+        })));
+      }
+      if (decisionRes.status === "fulfilled" && decisionRes.value) {
+        setLatestDecision(decisionRes.value);
+      }
       setLastRefresh(new Date());
     } catch { setError(true); } finally { setInitialLoading(false); }
   }, [mode]);
@@ -373,7 +399,7 @@ export default function DashboardPage() {
         maxDrawdown={risk?.current_drawdown_pct ?? 0}
         exposure={account ? (account.portfolio_value || 0) / (account.equity || 1) : 0}
         tradesToday={risk?.trades_this_hour ?? activeBots.length}
-        tradeHistory={[]}
+        tradeHistory={tradeHistory}
         realizedPnlUnavailable={!account?.realized_pnl && account?.realized_pnl !== 0}
         winRateUnavailable={winRate === null}
       />
@@ -418,9 +444,9 @@ export default function DashboardPage() {
               />
             </div>
             <div className="p-3">
-              {aiTab === "reasoning" && <AIReasoningPanel decision={null} />}
-              {aiTab === "scanner" && <AIScannerPanel totalWatching={0} signals={[]} />}
-              {aiTab === "strategy" && <StrategyPanel strategies={[]} />}
+              {aiTab === "reasoning" && <AIReasoningPanel decision={latestDecision} />}
+              {aiTab === "scanner" && <AIScannerPanel totalWatching={positions.length} signals={[]} />}
+              {aiTab === "strategy" && <StrategyPanel strategies={strategies} />}
             </div>
           </div>
         </Zone>
