@@ -261,7 +261,7 @@ class CerberusBot(Base):
     allocated_capital = Column(Float, nullable=True, default=None)
     reasoning_model_config = Column(JSON, default=dict)
     ai_brain_config = Column(JSON, nullable=True)  # AI Brain focus profile
-    auto_route_enabled = Column(Boolean, default=False, server_default=text("0"))
+    auto_route_enabled = Column(Boolean, default=False, server_default=text("false"))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
