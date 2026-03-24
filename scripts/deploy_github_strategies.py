@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deploy GitHub-sourced strategies as paper trading strategies for Andrew (user_id=2).
+Deploy GitHub-sourced strategies as paper trading strategies for the default user.
 
 1. Seeds any new system templates (including the 5 GitHub strategies)
 2. Creates StrategyTemplate + StrategyInstance (paper mode) for each GitHub strategy
@@ -22,7 +22,8 @@ from db.models import StrategyTemplate, StrategyInstance, TradingModeEnum
 from services.strategy_validator import validate_strategy_config
 from services.diagnostics import StrategyDiagnostics
 
-ANDREW_USER_ID = 2
+import os
+DEFAULT_USER_ID = int(os.environ.get("DEPLOY_USER_ID", "2"))
 
 # The 5 GitHub-sourced strategies to deploy as paper trading strategies
 GITHUB_STRATEGIES = [
@@ -248,14 +249,14 @@ async def deploy_github_strategies():
 
     # Step 3: Deploy as paper trading strategies
     print("\n" + "=" * 60)
-    print("Step 3: Deploying strategies for paper trading (user_id=2)...")
+    print(f"Step 3: Deploying strategies for paper trading (user_id={DEFAULT_USER_ID})...")
     print("=" * 60)
 
     async with get_session() as session:
         # Check existing strategies for this user
         result = await session.execute(
             select(StrategyTemplate).where(
-                StrategyTemplate.user_id == ANDREW_USER_ID,
+                StrategyTemplate.user_id == DEFAULT_USER_ID,
                 StrategyTemplate.name.in_([s["name"] for s in GITHUB_STRATEGIES]),
             )
         )
@@ -287,7 +288,7 @@ async def deploy_github_strategies():
 
             # Create StrategyTemplate
             template = StrategyTemplate(
-                user_id=ANDREW_USER_ID,
+                user_id=DEFAULT_USER_ID,
                 name=strat["name"],
                 description=strat["description"],
                 strategy_type=strat.get("strategy_type", "custom"),
@@ -314,7 +315,7 @@ async def deploy_github_strategies():
             # Create StrategyInstance (paper mode)
             instance = StrategyInstance(
                 template_id=template.id,
-                user_id=ANDREW_USER_ID,
+                user_id=DEFAULT_USER_ID,
                 mode=TradingModeEnum.PAPER,
                 is_active=True,
                 position_size_pct=strat.get("position_size_pct", 0.05),

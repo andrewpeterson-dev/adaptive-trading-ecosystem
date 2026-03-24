@@ -856,8 +856,8 @@ app.include_router(ledger_routes.router, prefix="/api/v2", tags=["ledger"])
 TOKEN=$(python3 -c "
 import jwt, os
 from datetime import datetime, timedelta
-secret = open('.env').read() if False else 'a5Vzn8cPb-L8aZQkfNvnIyIeVz1Air5YbJo4QMZzOMYIMIkXhE2VKDIb45KKetd2'
-print(jwt.encode({'user_id':2,'email':'apetersongroup@gmail.com','exp':datetime.utcnow()+timedelta(days=365)}, secret, algorithm='HS256'))
+secret = open('.env').read() if False else 'your-jwt-secret-here'
+print(jwt.encode({'user_id':2,'email':'test@example.com','exp':datetime.utcnow()+timedelta(days=365)}, secret, algorithm='HS256'))
 ")
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v2/ledger/combined | python3 -m json.tool
 ```
@@ -1354,8 +1354,8 @@ Expected: all pass
 TOKEN=$(python3 -c "
 import jwt
 from datetime import datetime, timedelta
-secret = 'a5Vzn8cPb-L8aZQkfNvnIyIeVz1Air5YbJo4QMZzOMYIMIkXhE2VKDIb45KKetd2'
-print(jwt.encode({'user_id':2,'email':'apetersongroup@gmail.com','exp':datetime.utcnow()+timedelta(days=365)}, secret, algorithm='HS256'))
+secret = 'your-jwt-secret-here'
+print(jwt.encode({'user_id':2,'email':'test@example.com','exp':datetime.utcnow()+timedelta(days=365)}, secret, algorithm='HS256'))
 ")
 
 # Combined ledger

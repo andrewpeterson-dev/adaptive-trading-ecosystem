@@ -507,6 +507,7 @@ class StrategyTemplate(Base):
     action = Column(String(16), nullable=False, default="BUY")
     stop_loss_pct = Column(Float, default=0.02)
     take_profit_pct = Column(Float, default=0.05)
+    position_size_pct = Column(Float, default=0.1)
     timeframe = Column(String(16), default="1D")
     diagnostics = Column(JSON, nullable=True)
     symbols = Column(JSON, nullable=True)

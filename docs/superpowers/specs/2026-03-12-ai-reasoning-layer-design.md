@@ -341,7 +341,7 @@ Every safety intervention is logged in the trade journal with reasoning. Bots le
 - Max 25 active bots per user
 - Full Context Monitor + Universe Scanner + Learning system
 
-### Admin (user_id=2, Andrew's account)
+### Admin (platform owner)
 - Cerberus Pro features, always free
 - No rate caps, no bot limits
 

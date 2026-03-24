@@ -142,7 +142,7 @@ class BotRunner:
                 if snapshot_counter >= 5 and self._is_market_open():
                     snapshot_counter = 0
                     try:
-                        await self._take_portfolio_snapshot(user_id=2)
+                        await self._snapshot_all_active_users()
                     except Exception:
                         pass
             except Exception as e:
@@ -1650,6 +1650,21 @@ class BotRunner:
             user_id=user_id, symbol=symbol, side=side,
             quantity=quantity, price=price,
         )
+
+    async def _snapshot_all_active_users(self) -> None:
+        """Snapshot portfolios for every user that has at least one running bot."""
+        async with get_session() as session:
+            result = await session.execute(
+                select(CerberusBot.user_id)
+                .where(CerberusBot.status == BotStatus.RUNNING)
+                .distinct()
+            )
+            user_ids = [row[0] for row in result.all()]
+        for uid in user_ids:
+            try:
+                await self._take_portfolio_snapshot(uid)
+            except Exception:
+                logger.warning("snapshot_failed", user_id=uid)
 
     async def _take_portfolio_snapshot(self, user_id: int) -> None:
         """Record a portfolio equity snapshot for the equity curve chart."""

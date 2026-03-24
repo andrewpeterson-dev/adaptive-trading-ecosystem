@@ -471,12 +471,44 @@ async def list_templates(
                 "name": t.name,
                 "description": t.description or "",
                 "strategy_type": t.strategy_type or "manual",
+                "timeframe": t.timeframe or "1D",
+                "action": t.action or "BUY",
+                "symbols": t.symbols or ["SPY"],
+                "conditions": t.conditions or [],
+                "condition_groups": t.condition_groups or [],
+                "stop_loss_pct": t.stop_loss_pct or 0.02,
+                "take_profit_pct": t.take_profit_pct or 0.05,
+                "position_size_pct": getattr(t, "position_size_pct", 0.05) or 0.05,
+                "trailing_stop_pct": t.trailing_stop_pct,
                 "config_json": t.ai_context or {},
                 "is_system": t.is_system,
             }
             for t in templates
         ]
     }
+
+
+class GenerateRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=5000)
+
+
+@router.post("/generate")
+async def generate_strategy(body: GenerateRequest, request: Request):
+    """Generate a strategy from natural language using AI."""
+    from services.ai_strategy_service import AIStrategyService
+
+    user_id = request.state.user_id
+    service = AIStrategyService()
+
+    try:
+        result = await service.generate(body.prompt)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        logger.error("strategy_generation_failed", user_id=user_id, error=str(exc))
+        raise HTTPException(status_code=500, detail=f"Strategy generation failed: {str(exc)[:200]}")
+
+    return result
 
 
 @router.get("/{instance_id}")

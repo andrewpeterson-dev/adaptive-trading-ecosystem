@@ -9,7 +9,7 @@
 ## Critical Rules
 - **DO NOT create or run Streamlit dashboards** — Streamlit was removed. The `dashboard/` directory no longer exists.
 - **DO NOT recreate `dashboard/` or any Streamlit files.**
-- **Webull is per-user** — credentials are encrypted in `broker_credentials` table. Only users with stored credentials can access broker data. Andrew's account (user_id=2) is the only one with Webull access.
+- **Webull is per-user** — credentials are encrypted in `broker_credentials` table. Only users with stored credentials can access broker data. The primary account has Webull access configured.
 - **Two trading paths exist:**
   - **Bot Runner (autonomous):** User creates and starts a bot (via Cerberus chat `createBot` tool or UI). `BotRunner` (`services/bot_engine/runner.py`) evaluates running bots every 60s and executes trades automatically — no per-trade confirmation. `ReasoningEngine` acts as a risk filter. Kill switch: `UserRiskLimits.kill_switch_active` halts all bot trading for a user.
   - **Cerberus Chat (one-off proposals):** AI drafts a trade proposal, user confirms with SHA-256 token. `user_confirmed=True` safety gate applies here only.

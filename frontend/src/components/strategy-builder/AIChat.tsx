@@ -1,50 +1,44 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { sendChatMessage } from "@/lib/cerberus-api";
-import { parseStrategySpec } from "@/lib/strategy-spec";
+import { apiFetch } from "@/lib/api/client";
 import { useBuilderStore } from "@/stores/builder-store";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send } from "lucide-react";
-import type { PageContext } from "@/types/cerberus";
+import { Send, Sparkles, Zap, TrendingUp, BarChart3, Shield, RefreshCw } from "lucide-react";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
+// Chat message type
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  strategyName?: string;
   createdAt: string;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+// Suggestion chips
+const SUGGESTIONS = [
+  { label: "RSI mean reversion on SPY", icon: TrendingUp },
+  { label: "Momentum breakout with volume confirmation", icon: Zap },
+  { label: "Conservative EMA crossover strategy", icon: BarChart3 },
+  { label: "High-frequency scalping on QQQ", icon: Sparkles },
+  { label: "Volatility expansion breakout", icon: Shield },
+];
 
 export default function AIChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on new messages or loading state change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages, isGenerating]);
 
-  // ---------------------------------------------------------------------------
-  // Send handler
-  // ---------------------------------------------------------------------------
-
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || isLoading) return;
+  const handleGenerate = async (prompt?: string) => {
+    const text = (prompt || input).trim();
+    if (!text || isGenerating) return;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -54,100 +48,115 @@ export default function AIChat() {
     };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setIsLoading(true);
+    setIsGenerating(true);
     setError(null);
 
-    const pageContext: PageContext = {
-      currentPage: "strategy-builder",
-      route: "/strategy-builder",
-      visibleComponents: ["AIChat", "StrategyPreview"],
-      focusedComponent: "AIChat",
-      selectedSymbol: null,
-      selectedAccountId: null,
-      selectedBotId: null,
-      componentState: {},
-    };
-
     try {
-      const response = await sendChatMessage({
-        threadId: activeThreadId || undefined,
-        mode: "strategy",
-        message: text,
-        pageContext,
+      const result = await apiFetch<{
+        strategy_spec: Record<string, unknown>;
+        builder_draft: Record<string, unknown>;
+        compiled_strategy: Record<string, unknown>;
+        validation_warnings?: string[];
+      }>("/api/strategies/generate", {
+        method: "POST",
+        body: JSON.stringify({ prompt: text }),
       });
 
-      if (!activeThreadId && response.threadId) {
-        setActiveThreadId(response.threadId);
+      // Load the generated strategy into the builder store
+      const spec = result.strategy_spec as any;
+      if (spec) {
+        // Use loadFromSpec which expects the StrategySpec format
+        const { parseStrategySpec } = await import("@/lib/strategy-spec");
+        const parsed = parseStrategySpec(JSON.stringify(spec));
+        if (parsed.ok) {
+          useBuilderStore.getState().loadFromSpec(parsed.spec);
+          useBuilderStore.getState().setField("strategyType", "ai_generated");
+          useBuilderStore.getState().setField("sourcePrompt", text);
+        }
       }
 
-      const markdown: string = response.message?.markdown || "";
+      // Build assistant response
+      const strategyName = spec?.name || "Generated Strategy";
+      const overview = spec?.overview || spec?.description || "";
+      const assumptions = (spec?.assumptions as string[]) || [];
+      const warnings = result.validation_warnings || [];
+
+      let responseContent = `**${strategyName}**\n\n${overview}`;
+
+      if (assumptions.length > 0) {
+        responseContent += `\n\n**Assumptions:**\n${assumptions.map((a: string) => `- ${a}`).join("\n")}`;
+      }
+
+      if (warnings.length > 0) {
+        responseContent += `\n\n**Warnings:**\n${warnings.map((w: string) => `- ${w}`).join("\n")}`;
+      }
+
+      responseContent += `\n\n*Strategy loaded into the builder. Review the preview panel on the right, then save or deploy.*`;
+
       const assistantMsg: ChatMessage = {
-        id: response.turnId || crypto.randomUUID(),
+        id: crypto.randomUUID(),
         role: "assistant",
-        content: markdown,
+        content: responseContent,
+        strategyName,
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
-
-      // Try to extract strategy JSON from the response
-      const parsed = parseStrategySpec(markdown);
-      if (parsed.ok) {
-        useBuilderStore.getState().loadFromSpec(parsed.spec);
-        useBuilderStore.getState().setField("strategyType", "ai_generated");
-      }
     } catch (err) {
-      const detail = err instanceof Error ? err.message : "Failed to get response";
+      const detail = err instanceof Error ? err.message : "Generation failed";
       setError(detail);
       const errMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: `Something went wrong: ${detail}`,
+        content: `Generation failed: ${detail}\n\nTry rephrasing your strategy description or being more specific about the indicators and timeframe you want.`,
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errMsg]);
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   };
-
-  // ---------------------------------------------------------------------------
-  // Key handler
-  // ---------------------------------------------------------------------------
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleGenerate();
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-
   return (
     <div className="flex flex-col h-full">
-      {/* ---- Messages area ---- */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center space-y-3 px-6">
-              <div className="w-12 h-12 mx-auto rounded-xl bg-primary/10 flex items-center justify-center">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
-                  <path d="M10 21h4" />
-                </svg>
+            <div className="text-center space-y-6 px-6 max-w-lg">
+              {/* Hero icon */}
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/20 flex items-center justify-center">
+                <Sparkles className="w-8 h-8 text-blue-400" />
               </div>
+
               <div>
-                <p className="text-sm font-semibold text-foreground">Cerberus Strategy Builder</p>
-                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto leading-relaxed">
-                  Describe your trading idea — I&apos;ll build entry/exit conditions, risk controls, and deploy it as a bot.
+                <h2 className="text-xl font-bold text-foreground">AI Strategy Builder</h2>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  Describe your trading idea in plain English. The AI will generate entry/exit conditions, risk controls, and a complete strategy you can review and deploy.
                 </p>
               </div>
-              <div className="flex flex-wrap justify-center gap-2 pt-2">
-                <span className="text-[10px] px-2.5 py-1 rounded-full bg-muted/50 text-muted-foreground">&quot;Momentum strategy&quot;</span>
-                <span className="text-[10px] px-2.5 py-1 rounded-full bg-muted/50 text-muted-foreground">&quot;RSI mean reversion&quot;</span>
-                <span className="text-[10px] px-2.5 py-1 rounded-full bg-muted/50 text-muted-foreground">&quot;Breakout with volume&quot;</span>
+
+              {/* Suggestion chips */}
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Try one of these</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s.label}
+                      onClick={() => handleGenerate(s.label)}
+                      className="group flex items-center gap-2 rounded-xl border border-border/60 bg-card/50 px-3 py-2 text-xs text-muted-foreground hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5 transition-all"
+                    >
+                      <s.icon className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-blue-400 transition-colors" />
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -158,33 +167,31 @@ export default function AIChat() {
             key={msg.id}
             className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
           >
-            <span
-              className={`text-xs mb-1 ${
-                msg.role === "user" ? "text-muted-foreground" : "text-blue-400"
-              }`}
-            >
-              {msg.role === "user" ? "You" : "Cerberus"}
+            <span className={`text-xs mb-1 font-medium ${msg.role === "user" ? "text-muted-foreground" : "text-blue-400"}`}>
+              {msg.role === "user" ? "You" : "AI Builder"}
             </span>
             <div
               className={
                 msg.role === "user"
-                  ? "ml-auto max-w-[85%] bg-slate-800 rounded-xl p-3 px-4 text-sm"
-                  : "max-w-[85%] bg-slate-900 border border-blue-900/50 rounded-xl p-3 px-4 text-sm"
+                  ? "ml-auto max-w-[85%] bg-slate-800 rounded-2xl p-4 text-sm"
+                  : "max-w-[85%] bg-slate-900/80 border border-blue-900/30 rounded-2xl p-4 text-sm"
               }
             >
               {msg.role === "assistant" ? (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
+                    p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
+                    strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                    em: ({ children }) => <em className="text-muted-foreground italic">{children}</em>,
                     code: ({ children, className }) => {
                       const isInline = !className;
                       return isInline ? (
-                        <code className="bg-slate-800 px-1 py-0.5 rounded text-xs">{children}</code>
+                        <code className="bg-slate-800 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
                       ) : (
-                        <code className={`block bg-slate-800 p-2 rounded text-xs overflow-x-auto mb-2 ${className ?? ""}`}>
+                        <code className={`block bg-slate-800 p-3 rounded-lg text-xs overflow-x-auto mb-2 font-mono ${className ?? ""}`}>
                           {children}
                         </code>
                       );
@@ -194,57 +201,55 @@ export default function AIChat() {
                   {msg.content}
                 </ReactMarkdown>
               ) : (
-                msg.content
+                <p className="leading-relaxed">{msg.content}</p>
               )}
             </div>
           </div>
         ))}
 
-        {/* Typing indicator */}
-        {isLoading && (
+        {/* Generating indicator */}
+        {isGenerating && (
           <div className="flex flex-col items-start">
-            <span className="text-xs mb-1 text-blue-400">Cerberus</span>
-            <div className="max-w-[85%] bg-slate-900 border border-blue-900/50 rounded-xl p-3 px-4 text-sm">
-              <div className="flex space-x-1">
-                <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:300ms]" />
+            <span className="text-xs mb-1 font-medium text-blue-400">AI Builder</span>
+            <div className="max-w-[85%] bg-slate-900/80 border border-blue-900/30 rounded-2xl p-4 text-sm">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
+                <span className="text-muted-foreground">Generating strategy...</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Error banner */}
-        {error && (
+        {error && !messages.some(m => m.content.includes("Generation failed")) && (
           <div className="text-xs text-red-400 text-center py-1">{error}</div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ---- Input area ---- */}
-      <div className="border-t border-slate-700/60 p-4 bg-slate-900/40">
-        <div className="relative">
+      {/* Input area */}
+      <div className="border-t border-border p-4 bg-card/30">
+        <div className="relative max-w-3xl mx-auto">
           <textarea
-            className="w-full resize-none rounded-xl border border-slate-600/50 bg-slate-800/60 px-4 py-3 pr-12 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 focus:outline-none transition-colors"
-            rows={4}
-            placeholder="Describe your trading strategy — e.g. &quot;Momentum strategy on AAPL using RSI and MACD with tight stops&quot;"
+            className="w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 pr-14 text-sm placeholder:text-muted-foreground/60 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 focus:outline-none transition-colors"
+            rows={3}
+            placeholder="Describe your strategy — e.g. &quot;Build a momentum strategy on AAPL using RSI and MACD with 2% stop loss&quot;"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isLoading}
+            disabled={isGenerating}
           />
           <button
-            className="absolute right-3 bottom-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 p-2 text-white transition-colors"
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            aria-label="Send message"
+            className="absolute right-3 bottom-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-muted disabled:text-muted-foreground p-2.5 text-white transition-colors"
+            onClick={() => handleGenerate()}
+            disabled={isGenerating || !input.trim()}
+            aria-label="Generate strategy"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
-        <p className="text-[10px] text-slate-500 mt-1.5 pl-1">
-          Enter to send &middot; Shift+Enter for new line
+        <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+          Enter to generate &middot; Shift+Enter for new line
         </p>
       </div>
     </div>

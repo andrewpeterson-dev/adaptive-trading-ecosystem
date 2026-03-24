@@ -57,7 +57,7 @@ const nextConfig = {
     const apiUrl =
       process.env.API_URL ||
       (process.env.NODE_ENV === "production"
-        ? "https://api-production-3b8df.up.railway.app"
+        ? "https://your-api.railway.app"
         : "http://localhost:8000");
     return [
       {

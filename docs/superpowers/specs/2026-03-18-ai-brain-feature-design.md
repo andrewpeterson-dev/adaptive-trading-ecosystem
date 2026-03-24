@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-18
 **Status:** Draft
-**Author:** Andrew Peterson + Claude
+**Author:** Developer + Claude
 
 ## Overview
 

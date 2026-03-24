@@ -53,3 +53,9 @@ Thumbs.db
 .vercel
 .env*.local
 .superpowers/
+
+# Tracked junk / local-only
+did.bin
+.streamlit/
+.claude/
+.railway-trigger

@@ -14,7 +14,7 @@ The Adaptive Trading Ecosystem dashboard is completely open — no login, no use
 2. Email + password authentication with email verification
 3. Per-user data isolation — users never see each other's data
 4. Encrypted storage of broker API keys (Alpaca, Webull)
-5. Admin dashboard for platform owner (Andrew)
+5. Admin dashboard for the platform owner
 
 ## Architecture
 

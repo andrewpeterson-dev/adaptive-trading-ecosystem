@@ -434,7 +434,7 @@ docker compose exec postgres psql -U trader -d trading_ecosystem \
 # Run backtest (replace 1 with actual id)
 TOKEN=$(python3 -c "
 import urllib.request, json
-data = json.dumps({'email': 'apetersongroup@gmail.com', 'password': 'AnDrEw12345!'}).encode()
+data = json.dumps({'email': 'test@example.com', 'password': 'YourPasswordHere!'}).encode()
 req = urllib.request.Request('http://localhost:8000/api/auth/login', data=data, headers={'Content-Type': 'application/json'})
 with urllib.request.urlopen(req) as r:
     print(json.load(r)['token'])
