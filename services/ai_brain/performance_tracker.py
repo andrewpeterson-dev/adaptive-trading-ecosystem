@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime
-from typing import Optional
 
 import structlog
-from sqlalchemy import select, func, and_
+from sqlalchemy import select
 
 from db.database import get_session
 from db.cerberus_models import BotModelPerformance
