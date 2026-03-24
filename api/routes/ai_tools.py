@@ -629,6 +629,8 @@ async def list_bots(request: Request):
                     "currentVersion": _version_to_dict(version) if version else None,
                     "latestDecision": latest_decision_dict,
                     "allocatedCapital": bot.allocated_capital,
+                    "executionMode": (bot.ai_brain_config or {}).get("execution_mode", "manual") if bot.ai_brain_config else "manual",
+                    "primaryModel": ((bot.ai_brain_config or {}).get("model_config") or {}).get("primary_model") if bot.ai_brain_config else None,
                 }
             )
 

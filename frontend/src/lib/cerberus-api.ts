@@ -65,6 +65,8 @@ export interface BotSummary {
   currentVersion: BotVersionSummary | null;
   latestDecision: BotLatestDecision | null;
   allocatedCapital: number | null;
+  executionMode?: "manual" | "ai_assisted" | "ai_driven";
+  primaryModel?: string | null;
 }
 
 export interface BotVersionSummary {

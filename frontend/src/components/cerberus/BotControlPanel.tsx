@@ -264,6 +264,12 @@ export function BotControlPanel() {
                         label={bot.status}
                         pulse={bot.status === "running"}
                       />
+                      {bot.executionMode && bot.executionMode !== "manual" && (
+                        <Badge variant="info">
+                          {bot.executionMode === "ai_driven" ? "AI Brain" : "AI Assist"}
+                          {bot.primaryModel ? ` · ${bot.primaryModel}` : ""}
+                        </Badge>
+                      )}
                       {bot.latestDecision && (
                         <>
                           <Badge
