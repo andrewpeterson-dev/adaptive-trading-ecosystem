@@ -219,7 +219,7 @@ class Settings(BaseSettings):
     use_sqlite: bool = True  # Use SQLite for local dev (no PostgreSQL needed)
 
     # --- CORS ---
-    cors_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002"  # Comma-separated allowed origins
+    cors_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002,https://adaptive-trading-ecosystem.vercel.app"  # Comma-separated allowed origins
 
     # --- Autonomous Loop ---
     auto_loop_enabled: bool = False
