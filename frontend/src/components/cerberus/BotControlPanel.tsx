@@ -114,6 +114,14 @@ export function BotControlPanel() {
         config.overrideLevel,
         config.allocatedCapital,
         config.extendedHours,
+        config.aiBrainConfig ? {
+          execution_mode: config.overrideLevel === "full" ? "ai_driven" : "ai_assisted",
+          model_config: { primary_model: config.aiBrainConfig.primaryModel },
+          data_sources: config.aiBrainConfig.dataSources,
+          trading_thesis: config.aiBrainConfig.tradingThesis,
+          comparison_models: config.aiBrainConfig.comparisonModels,
+        } : undefined,
+        config.aggressiveness,
       );
       setBots((prev) =>
         prev.map((item) =>
