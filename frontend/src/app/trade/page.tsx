@@ -6,6 +6,7 @@ import { Loader2, RefreshCw, Settings, Unplug } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SubNav } from "@/components/layout/SubNav";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { TradingWorkspace } from "@/components/trading/TradingWorkspace";
 import { useTradeStore } from "@/stores/trade-store";
 import { useTradingMode } from "@/hooks/useTradingMode";
@@ -66,23 +67,23 @@ export default function TradePage() {
 
   if (error && !account) {
     return (
-      <div className="space-y-4 py-32 text-center">
-        <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-border/50 bg-muted/50">
-          <Unplug className="h-6 w-6 text-muted-foreground/60" />
+      <div className="app-page">
+        <div className="app-panel">
+          <EmptyState
+            icon={<Unplug className="h-5 w-5 text-muted-foreground/70" />}
+            title="No broker connected"
+            description="Connect Alpaca or Webull to start trading. Account data, positions, and trade history will appear here."
+            action={
+              <Link
+                href="/settings/api-connections"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                Connect Broker
+              </Link>
+            }
+          />
         </div>
-        <div>
-          <h2 className="text-base font-semibold">No broker connected</h2>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-            Connect Alpaca or Webull to start trading. Account data, positions, and trade history will appear here.
-          </p>
-        </div>
-        <Link
-          href="/settings/api-connections"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          <Settings className="h-4 w-4" />
-          Connect Broker
-        </Link>
       </div>
     );
   }
