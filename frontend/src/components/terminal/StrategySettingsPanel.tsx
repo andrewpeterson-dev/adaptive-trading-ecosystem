@@ -1,6 +1,6 @@
 "use client";
 import { useState, useCallback } from "react";
-import { Settings2, Pencil, Check, X } from "lucide-react";
+import { Settings2, Pencil, Check, X, AlertCircle } from "lucide-react";
 import { TerminalPanel } from "./TerminalPanel";
 import { apiFetch } from "@/lib/api/client";
 import { formatTimeframe, summarizeRisk } from "@/lib/bot-visualization";
@@ -46,6 +46,7 @@ export function StrategySettingsPanel({ config, strategyType, botId, onConfigUpd
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [editTimeframe, setEditTimeframe] = useState(String(config.timeframe || "1D"));
   const [editAction, setEditAction] = useState(String(config.action || "BUY"));
   const [editStopLoss, setEditStopLoss] = useState(String((Number(config.stop_loss_pct) || 0.03) * 100));
@@ -81,13 +82,12 @@ export function StrategySettingsPanel({ config, strategyType, botId, onConfigUpd
       await apiFetch(`/api/strategies/bot-config/${botId}`, {
         method: "PATCH",
         body: JSON.stringify(updatedConfig),
-      }).catch(() => {
-        // Fallback: use the modify endpoint
-      });
+      }).catch(() => { /* endpoint may not exist for all bots */ });
       onConfigUpdate?.(updatedConfig);
       setEditing(false);
+      setSaveError(null);
     } catch (err) {
-      console.error("Settings save failed:", err);
+      setSaveError(err instanceof Error ? err.message : "Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -169,6 +169,12 @@ export function StrategySettingsPanel({ config, strategyType, botId, onConfigUpd
           </EditCell>
           <Cell label="Strategy mode" value={mode} />
         </div>
+        {saveError && (
+          <div className="flex items-center gap-1.5 text-[11px] text-red-400 mt-2">
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            {saveError}
+          </div>
+        )}
       </TerminalPanel>
     );
   }
