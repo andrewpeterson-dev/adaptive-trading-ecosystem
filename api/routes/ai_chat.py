@@ -213,6 +213,14 @@ async def stream(websocket: WebSocket, thread_id: str):
                 )
                 continue
 
+            # Match the HTTP endpoint's 20,000 char limit to prevent
+            # DoS via oversized payloads and LLM cost amplification.
+            if len(message) > 20_000:
+                await websocket.send_json(
+                    {"type": "error", "data": {"message": "Message exceeds 20,000 character limit"}}
+                )
+                continue
+
             try:
                 _apply_rate_limit("ai:stream:user", str(user_id), limit=30, window_seconds=60)
                 _apply_rate_limit("ai:stream:ip", _client_ip(websocket), limit=60, window_seconds=60)

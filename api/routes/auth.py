@@ -213,6 +213,10 @@ def _verification_response(
     *,
     message: str,
 ) -> JSONResponse:
+    import os as _os
+    # Never leak raw tokens in production responses — they enable account takeover.
+    _is_prod = bool(_os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RENDER"))
+    preview_url = None if _is_prod else dispatch.preview_url
     return JSONResponse(
         status_code=status.HTTP_202_ACCEPTED,
         content={
@@ -220,7 +224,7 @@ def _verification_response(
             "verification_required": True,
             "email": email,
             "email_sent": dispatch.delivered,
-            "development_verification_url": dispatch.preview_url,
+            "development_verification_url": preview_url,
             "message": message,
         },
     )
@@ -511,10 +515,12 @@ async def request_password_reset(body: PasswordResetRequest, request: Request):
     if reset_token:
         dispatch = await send_password_reset_email(email, reset_token)
 
+    import os as _os
+    _is_prod = bool(_os.environ.get("RAILWAY_ENVIRONMENT") or _os.environ.get("RENDER"))
     return {
         "success": True,
         "email_sent": dispatch.delivered,
-        "development_reset_url": dispatch.preview_url,
+        "development_reset_url": None if _is_prod else dispatch.preview_url,
         "message": "If an account matches that email, password reset instructions have been sent.",
     }
 

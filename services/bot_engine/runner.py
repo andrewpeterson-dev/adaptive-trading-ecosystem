@@ -235,6 +235,8 @@ class BotRunner:
         timeframe = config.get("timeframe", "1D")
         agg_scale = _AGGRESSIVENESS_SCALES.get(aggressiveness, _AGGRESSIVENESS_SCALES[2])
         position_size_pct = config.get("position_size_pct", 5.0) * agg_scale["size_multiplier"]
+        # Hard cap: even at max aggressiveness, never risk more than 25% per trade
+        position_size_pct = min(position_size_pct, 25.0)
         strategy_type = config.get("strategy_type", "manual")
         extended_hours = bool(config.get("extended_hours", False))
 
@@ -280,11 +282,11 @@ class BotRunner:
             exec_mode = brain_config.get("execution_mode", "manual")
 
             if exec_mode in ("ai_driven", "ai_assisted"):
-                # In ai_assisted mode, only proceed if rules triggered
-                if exec_mode == "ai_assisted" and conditions:
-                    # Fetch bars for first symbol to check conditions
-                    if symbols:
-                        _bars = await self._fetch_bars(symbols[0], timeframe)
+                # In ai_assisted mode, only proceed with symbols where rules triggered
+                if exec_mode == "ai_assisted" and conditions and symbols:
+                    approved_symbols = []
+                    for _sym in symbols:
+                        _bars = await self._fetch_bars(_sym, timeframe)
                         if _bars and len(_bars) >= 50:
                             _ind_vals = compute_indicators(_bars, [
                                 {"indicator": c["indicator"], "params": c.get("params", {})}
@@ -292,10 +294,15 @@ class BotRunner:
                             ])
                             _ind_vals["CLOSE"] = float(_bars[-1].get("close", 0) or 0)
                             _passed, _reasons = evaluate_conditions(conditions, _ind_vals)
-                            if not _passed:
-                                logger.info("ai_assisted_conditions_not_met", bot_id=str(bot.id), bot_name=bot.name, symbol=symbols[0], reasons=_reasons)
-                                self._last_eval[bot.id] = datetime.utcnow()
-                                return
+                            if _passed:
+                                approved_symbols.append(_sym)
+                            else:
+                                logger.info("ai_assisted_conditions_not_met", bot_id=str(bot.id), bot_name=bot.name, symbol=_sym, reasons=_reasons)
+                    if not approved_symbols:
+                        self._last_eval[bot.id] = datetime.utcnow()
+                        return
+                    # Narrow the universe to only approved symbols
+                    symbols = approved_symbols
 
                 # Auto-route: pick best model if enabled
                 model_override = None
@@ -971,53 +978,98 @@ class BotRunner:
     async def _build_risk_context(self, bot: CerberusBot) -> dict:
         from db.models import PaperPortfolio, PaperPosition, PaperTrade
 
+        trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
+        is_live = trading_mode == "live"
+
         positions: dict[str, dict[str, float]] = {}
         total_equity = 0.0
         daily_pnl_pct = 0.0
 
-        async with get_session() as session:
-            portfolio_result = await session.execute(
-                select(PaperPortfolio).where(PaperPortfolio.user_id == bot.user_id)
-            )
-            portfolio = portfolio_result.scalar_one_or_none()
-
-            position_result = await session.execute(
-                select(PaperPosition).where(PaperPosition.user_id == bot.user_id)
-            )
-            portfolio_positions = list(position_result.scalars().all())
-
-            for position in portfolio_positions:
-                mark_price = float(position.current_price or position.avg_entry_price or 0.0)
-                positions[position.symbol.upper()] = {
-                    "quantity": float(position.quantity or 0.0),
-                    "mark_price": mark_price,
-                }
-
-            if portfolio:
-                positions_value = sum(
-                    abs(float(position.quantity or 0.0))
-                    * float(position.current_price or position.avg_entry_price or 0.0)
-                    for position in portfolio_positions
+        if is_live:
+            # LIVE mode: fetch real equity from broker, not paper portfolio.
+            # This ensures drawdown checks and exposure calculations use
+            # the actual account state, not stale paper data.
+            try:
+                broker = await self._resolve_broker(bot.user_id)
+                if broker == "webull":
+                    clients = await self._get_webull_clients(bot.user_id, mode="live")
+                    if clients:
+                        summary = clients.account.get_summary()
+                        if summary:
+                            total_equity = summary.net_liquidation or summary.total_market_value or 0.0
+                        wb_positions = clients.account.get_positions()
+                        for pos in wb_positions:
+                            positions[pos.symbol.upper()] = {
+                                "quantity": abs(float(pos.quantity)),
+                                "mark_price": float(pos.last_price),
+                            }
+                    else:
+                        raise RuntimeError("No Webull credentials for live risk context")
+                else:
+                    alpaca_client = self._get_alpaca_client(paper=False)
+                    loop = asyncio.get_running_loop()
+                    account = await loop.run_in_executor(None, alpaca_client.get_account)
+                    total_equity = float(account.equity)
+                    alpaca_positions = await loop.run_in_executor(None, alpaca_client.get_all_positions)
+                    for pos in alpaca_positions:
+                        positions[pos.symbol.upper()] = {
+                            "quantity": abs(float(pos.qty)),
+                            "mark_price": float(pos.current_price),
+                        }
+            except Exception as e:
+                logger.error(
+                    "live_risk_context_failed_falling_back_to_paper",
+                    bot_id=bot.id,
+                    error=str(e),
                 )
-                total_equity = float(portfolio.cash or 0.0) + positions_value
+                # Fall back to paper data rather than skipping risk checks entirely
+                is_live = False
 
-                start_of_day = datetime.utcnow().replace(
-                    hour=0,
-                    minute=0,
-                    second=0,
-                    microsecond=0,
+        if not is_live:
+            # Paper mode (or live fallback): use paper portfolio
+            async with get_session() as session:
+                portfolio_result = await session.execute(
+                    select(PaperPortfolio).where(PaperPortfolio.user_id == bot.user_id)
                 )
-                trade_result = await session.execute(
-                    select(PaperTrade.pnl).where(
-                        PaperTrade.user_id == bot.user_id,
-                        PaperTrade.exit_time.is_not(None),
-                        PaperTrade.exit_time >= start_of_day,
+                portfolio = portfolio_result.scalar_one_or_none()
+
+                position_result = await session.execute(
+                    select(PaperPosition).where(PaperPosition.user_id == bot.user_id)
+                )
+                portfolio_positions = list(position_result.scalars().all())
+
+                for position in portfolio_positions:
+                    mark_price = float(position.current_price or position.avg_entry_price or 0.0)
+                    positions[position.symbol.upper()] = {
+                        "quantity": float(position.quantity or 0.0),
+                        "mark_price": mark_price,
+                    }
+
+                if portfolio:
+                    positions_value = sum(
+                        abs(float(position.quantity or 0.0))
+                        * float(position.current_price or position.avg_entry_price or 0.0)
+                        for position in portfolio_positions
                     )
-                )
-                realized_today = sum(float(row[0] or 0.0) for row in trade_result.all())
-                initial_capital = float(portfolio.initial_capital or 0.0)
-                if initial_capital > 0:
-                    daily_pnl_pct = realized_today / initial_capital * 100.0
+                    total_equity = float(portfolio.cash or 0.0) + positions_value
+
+                    start_of_day = datetime.utcnow().replace(
+                        hour=0,
+                        minute=0,
+                        second=0,
+                        microsecond=0,
+                    )
+                    trade_result = await session.execute(
+                        select(PaperTrade.pnl).where(
+                            PaperTrade.user_id == bot.user_id,
+                            PaperTrade.exit_time.is_not(None),
+                            PaperTrade.exit_time >= start_of_day,
+                        )
+                    )
+                    realized_today = sum(float(row[0] or 0.0) for row in trade_result.all())
+                    initial_capital = float(portfolio.initial_capital or 0.0)
+                    if initial_capital > 0:
+                        daily_pnl_pct = realized_today / initial_capital * 100.0
 
         vix = await self._fetch_reference_price("^VIX")
         return {
@@ -1145,8 +1197,16 @@ class BotRunner:
                             mode=trading_mode,
                         )
                     except Exception as e:
+                        if not is_paper:
+                            # LIVE: do NOT fall back — leaves Webull position open
+                            # but that is safer than opening on wrong broker.
+                            logger.error(
+                                "webull_live_exit_failed",
+                                bot_id=bot.id, symbol=symbol, error=str(e),
+                            )
+                            continue
                         logger.warning(
-                            "webull_exit_failed_falling_back",
+                            "webull_paper_exit_failed_falling_back",
                             bot_id=bot.id, symbol=symbol, error=str(e),
                         )
                 if trade_result is None:
@@ -1531,13 +1591,22 @@ class BotRunner:
                         mode=trading_mode,
                     )
                 except Exception as e:
+                    if not is_paper:
+                        # LIVE mode: do NOT fall back to a different broker —
+                        # Alpaca is a separate account with different positions/margin.
+                        logger.error(
+                            "webull_live_order_failed",
+                            bot_id=bot.id,
+                            symbol=symbol,
+                            error=str(e),
+                        )
+                        return None
                     logger.warning(
-                        "webull_order_failed_falling_back",
+                        "webull_paper_order_failed_falling_back",
                         bot_id=bot.id,
                         symbol=symbol,
                         error=str(e),
                     )
-                    # Fall back to Alpaca
                     used_broker = "alpaca"
 
             if order is None:

@@ -66,7 +66,6 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
           model_name: "manual",
           order_type: "market",
           limit_price: price,
-          user_confirmed: true,
         }),
       });
 

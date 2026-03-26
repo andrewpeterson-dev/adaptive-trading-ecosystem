@@ -462,12 +462,15 @@ class ReasoningEngine:
         # Always apply size reductions from guardrails
         if soft.reduce_size < size_adj:
             size_adj = soft.reduce_size
-        # Only apply guardrail delays if the LLM didn't approve the trade
-        # with reasonable confidence — the LLM already evaluated the events.
-        if decision in ("EXECUTE", "REDUCE_SIZE") and confidence >= 0.4:
-            # LLM considered events and chose to proceed — respect that decision.
-            # Still apply size reductions above but don't block the trade.
-            pass
+        # Apply guardrail delays unless the LLM approved with high confidence.
+        # Previous threshold (0.4) was too low — a weak/hallucinated LLM response
+        # could neutralize all soft guardrail delays including high-impact events.
+        if decision in ("EXECUTE", "REDUCE_SIZE") and confidence >= 0.8:
+            # LLM is highly confident after evaluating events — allow reduced delay.
+            # Still apply at least half the guardrail delay for defense-in-depth.
+            half_delay = soft.delay_seconds // 2
+            if half_delay > delay:
+                delay = half_delay
         elif soft.delay_seconds > delay:
             delay = soft.delay_seconds
         if soft.reasons:

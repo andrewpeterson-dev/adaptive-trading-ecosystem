@@ -92,12 +92,16 @@ export async function logout(): Promise<void> {
     } catch {
       // ignore storage access errors
     }
+    // Clear both cookie names — middleware checks "access_token"
+    document.cookie = "access_token=; path=/; max-age=0; SameSite=Strict";
+    document.cookie = "auth_token=; path=/; max-age=0; SameSite=Strict";
   }
-  document.cookie = "auth_token=; path=/; max-age=0";
   try {
     await apiFetch("/api/auth/logout", { method: "DELETE" });
   } catch {
     // Even if the session is already invalid, continue to the login screen.
   }
-  window.location.href = "/login";
+  if (typeof window !== "undefined") {
+    window.location.href = "/login";
+  }
 }

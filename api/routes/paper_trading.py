@@ -257,9 +257,12 @@ async def execute_paper_trade(request: Request, req: PaperTradeRequest):
         raise HTTPException(status_code=400, detail="quantity must be positive")
 
     async with get_session() as session:
-        # Load portfolio
+        # Load portfolio with row-level lock to prevent concurrent trades
+        # from reading the same cash balance (double-spend race condition).
         result = await session.execute(
-            select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+            select(PaperPortfolio)
+            .where(PaperPortfolio.user_id == user_id)
+            .with_for_update()
         )
         portfolio = result.scalar_one_or_none()
 

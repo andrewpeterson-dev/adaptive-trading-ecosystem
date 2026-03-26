@@ -31,9 +31,14 @@ class ConfirmationService:
         from services.ai_core.proposals.trade_proposal_service import TradeProposalService
 
         async with get_session() as session:
-            stmt = select(CerberusTradeProposal).where(
-                CerberusTradeProposal.id == proposal_id,
-                CerberusTradeProposal.user_id == user_id,
+            # Lock the proposal row to prevent concurrent confirmations (TOCTOU race).
+            stmt = (
+                select(CerberusTradeProposal)
+                .where(
+                    CerberusTradeProposal.id == proposal_id,
+                    CerberusTradeProposal.user_id == user_id,
+                )
+                .with_for_update()
             )
             result = await session.execute(stmt)
             proposal = result.scalar_one_or_none()
@@ -50,55 +55,38 @@ class ConfirmationService:
                 proposal.status = ProposalStatus.EXPIRED
                 raise ValueError("Proposal has expired")
 
-        # Re-run risk checks
-        svc = TradeProposalService()
-        risk_result = await svc._run_risk_checks(user_id, proposal.proposal_json)
+            # Re-run risk checks while still holding the lock
+            svc = TradeProposalService()
+            risk_result = await svc._run_risk_checks(user_id, proposal.proposal_json)
 
-        if risk_result.get("blocked"):
-            # Update proposal status to rejected
-            async with get_session() as session:
-                stmt = select(CerberusTradeProposal).where(
-                    CerberusTradeProposal.id == proposal_id,
-                    CerberusTradeProposal.user_id == user_id,
+            if risk_result.get("blocked"):
+                proposal.status = ProposalStatus.REJECTED
+                proposal.risk_json = risk_result
+                # Session commits on exit, releasing the lock
+                logger.warning(
+                    "confirmation_blocked",
+                    proposal_id=proposal_id,
+                    reason=risk_result.get("reason"),
                 )
-                result = await session.execute(stmt)
-                p = result.scalar_one()
-                p.status = ProposalStatus.REJECTED
-                p.risk_json = risk_result
+                return {
+                    "proposal_id": proposal_id,
+                    "status": "blocked",
+                    "risk": risk_result,
+                }
 
-            logger.warning(
-                "confirmation_blocked",
+            # Generate confirmation token
+            token, token_hash = self._generate_token()
+
+            confirmation = CerberusTradeConfirmation(
+                id=str(uuid.uuid4()),
                 proposal_id=proposal_id,
-                reason=risk_result.get("reason"),
+                user_id=user_id,
+                confirmation_token_hash=token_hash,
+                status="pending",
             )
-            return {
-                "proposal_id": proposal_id,
-                "status": "blocked",
-                "risk": risk_result,
-            }
 
-        # Generate confirmation token
-        token, token_hash = self._generate_token()
-
-        confirmation = CerberusTradeConfirmation(
-            id=str(uuid.uuid4()),
-            proposal_id=proposal_id,
-            user_id=user_id,
-            confirmation_token_hash=token_hash,
-            status="pending",
-        )
-
-        async with get_session() as session:
-            # Update proposal status
-            stmt = select(CerberusTradeProposal).where(
-                CerberusTradeProposal.id == proposal_id,
-                CerberusTradeProposal.user_id == user_id,
-            )
-            result = await session.execute(stmt)
-            p = result.scalar_one()
-            p.status = ProposalStatus.CONFIRMED
-            p.risk_json = risk_result
-
+            proposal.status = ProposalStatus.CONFIRMED
+            proposal.risk_json = risk_result
             session.add(confirmation)
 
         logger.info("proposal_confirmed", proposal_id=proposal_id, user_id=user_id)
