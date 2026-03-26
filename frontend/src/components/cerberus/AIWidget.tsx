@@ -140,6 +140,15 @@ export function AIWidget() {
   }, []);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeCerberus();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, closeCerberus]);
+
+  useEffect(() => {
     if (isOpen && activeThreadId && messages.length === 0) {
       getThreadMessages(activeThreadId)
         .then((fetched) => {

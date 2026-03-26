@@ -33,14 +33,16 @@ const MessageBubble = memo(function MessageBubble({ msg }: { msg: ConversationMe
         className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-sm ${
           msg.role === 'user'
             ? 'bg-primary text-primary-foreground rounded-br-md'
-            : 'bg-muted/80 text-foreground rounded-bl-md'
+            : msg.role === 'system'
+              ? 'bg-red-500/10 border border-red-500/20 text-red-400 rounded-bl-md'
+              : 'bg-muted/80 text-foreground rounded-bl-md'
         }`}
       >
         {msg.role === 'user' ? (
           <p className="whitespace-pre-wrap">{msg.contentMd}</p>
         ) : (
-          <div className="cerberus-md prose prose-sm prose-invert max-w-none
-            [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5
+          <div className="cerberus-md prose prose-sm dark:prose-invert max-w-none
+            [&_p]:my-1 [&_p]:text-foreground [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_li]:text-foreground
             [&_strong]:text-foreground [&_strong]:font-semibold
             [&_code]:text-xs [&_code]:bg-background/50 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded
             [&_pre]:bg-background/50 [&_pre]:rounded-lg [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto

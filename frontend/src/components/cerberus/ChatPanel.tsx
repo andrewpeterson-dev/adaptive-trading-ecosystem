@@ -74,7 +74,7 @@ export function ChatPanel() {
         error instanceof Error ? error.message : 'Unknown error';
       addMessage({
         id: `error-${Date.now()}`,
-        role: 'assistant',
+        role: 'system',
         contentMd: `Something went wrong: ${detail}`,
         structuredJson: null,
         modelName: null,
