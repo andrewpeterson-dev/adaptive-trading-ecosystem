@@ -12,15 +12,31 @@ interface TerminalPanelProps {
 
 export function TerminalPanel({ title, icon, accent = "text-sky-400", children, actions, compact = false, className = "" }: TerminalPanelProps) {
   return (
-    <div className={`h-full flex flex-col rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-border/40 px-4 py-2.5 shrink-0">
-        <div className="flex items-center gap-2">
+    <div className={`terminal-panel h-full flex flex-col overflow-hidden ${className}`}>
+      {/* Scanline overlay */}
+      <div className="terminal-scanlines pointer-events-none absolute inset-0 z-10" />
+
+      {/* Header bar */}
+      <div className="terminal-header flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2.5">
+          {/* Window dots */}
+          <div className="flex items-center gap-[5px]">
+            <span className="terminal-dot terminal-dot--red" />
+            <span className="terminal-dot terminal-dot--yellow" />
+            <span className="terminal-dot terminal-dot--green" />
+          </div>
+          <span className="terminal-separator" />
           {icon && <span className={accent}>{icon}</span>}
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</span>
+          <span className="terminal-title">{title}</span>
         </div>
-        {actions && <div className="flex items-center gap-1.5">{actions}</div>}
+        <div className="flex items-center gap-2">
+          {actions && <div className="flex items-center gap-1.5">{actions}</div>}
+          <span className="terminal-cursor" />
+        </div>
       </div>
-      <div className={`flex-1 overflow-auto ${compact ? "p-3" : "p-4"}`}>
+
+      {/* Body */}
+      <div className={`terminal-body flex-1 overflow-auto ${compact ? "p-3" : "p-4"}`}>
         {children}
       </div>
     </div>

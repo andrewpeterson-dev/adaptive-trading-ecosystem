@@ -879,6 +879,146 @@
   animation: page-fade-in 0.3s ease-out forwards;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   TERMINAL PANEL — trading-terminal-style chrome
+   ══════════════════════════════════════════════════════════════════════ */
+
+.terminal-panel {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background:
+    linear-gradient(180deg, hsl(222 28% 9% / 0.98), hsl(225 25% 7% / 0.98));
+  box-shadow:
+    0 24px 48px -20px hsl(220 80% 3% / 0.7),
+    inset 0 1px 0 hsl(0 0% 100% / 0.04),
+    0 0 0 1px hsl(var(--border) / 0.12);
+  overflow: hidden;
+}
+
+/* Subtle scanline overlay — barely-there CRT texture */
+.terminal-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    hsl(0 0% 0% / 0.03) 2px,
+    hsl(0 0% 0% / 0.03) 4px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* Header bar */
+.terminal-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
+  background:
+    linear-gradient(180deg, hsl(222 24% 12% / 0.95), hsl(224 22% 10% / 0.95));
+  position: relative;
+  z-index: 2;
+}
+
+/* macOS-style window dots */
+.terminal-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.8;
+  transition: opacity 150ms ease;
+}
+
+.terminal-panel:hover .terminal-dot {
+  opacity: 1;
+}
+
+.terminal-dot--red {
+  background: #ff5f57;
+  box-shadow: 0 0 4px #ff5f57aa;
+}
+
+.terminal-dot--yellow {
+  background: #febc2e;
+  box-shadow: 0 0 4px #febc2eaa;
+}
+
+.terminal-dot--green {
+  background: #28c840;
+  box-shadow: 0 0 4px #28c840aa;
+}
+
+/* Pipe separator between dots and title */
+.terminal-separator {
+  display: block;
+  width: 1px;
+  height: 12px;
+  background: hsl(var(--border) / 0.4);
+  margin: 0 2px;
+}
+
+/* Title text */
+.terminal-title {
+  font-family: var(--font-mono), "Berkeley Mono", "SF Mono", "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Blinking cursor in the header */
+.terminal-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  background: hsl(var(--primary) / 0.6);
+  border-radius: 1px;
+  animation: terminal-blink 1.2s step-end infinite;
+}
+
+@keyframes terminal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Body area */
+.terminal-body {
+  position: relative;
+  z-index: 2;
+  background: hsl(225 25% 7% / 0.3);
+}
+
+/* Accent glow on panel top edge */
+.terminal-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.25), transparent);
+  z-index: 3;
+}
+
+/* Subtle side glow when hovered */
+.terminal-panel:hover {
+  border-color: hsl(var(--border) / 0.7);
+  box-shadow:
+    0 24px 48px -20px hsl(220 80% 3% / 0.7),
+    inset 0 1px 0 hsl(0 0% 100% / 0.05),
+    0 0 0 1px hsl(var(--primary) / 0.08),
+    0 0 24px -8px hsl(var(--primary) / 0.06);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .terminal-cursor { animation: none; opacity: 0.6; }
+  .terminal-scanlines { display: none; }
+}
+
 @media (max-width: 1023px) {
   .mobile-bottom-tabs {
     position: fixed;
