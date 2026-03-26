@@ -210,7 +210,7 @@ export default function ModelsPage() {
                 Preview
               </span>
             </div>
-            <p className="text-sm text-slate-400 leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Regime detection and allocation recommendations will populate after the AI models have sufficient market data to analyze.
             </p>
             <div className="grid grid-cols-3 gap-2 opacity-30 pointer-events-none">
@@ -250,7 +250,7 @@ export default function ModelsPage() {
             </div>
           ) : (
             <div className="mt-4 space-y-3">
-              <p className="text-sm text-slate-400 leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 Ensemble allocation weights appear here once models are trained and contributing predictions.
               </p>
               <div className="space-y-3 opacity-30 pointer-events-none">
@@ -299,7 +299,7 @@ export default function ModelsPage() {
               <Brain className="h-4 w-4" />
               Capital Allocation
             </div>
-            <p className="text-sm text-slate-400 leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Capital allocation appears here after portfolio weights are calculated from model outputs and risk constraints.
             </p>
             <div className="rounded-xl border border-dashed border-border/50 bg-muted/10 p-4 opacity-30 pointer-events-none">

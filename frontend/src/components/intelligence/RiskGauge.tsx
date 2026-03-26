@@ -53,7 +53,7 @@ export function RiskGauge() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-sky-400/5 border border-dashed border-sky-400/20 mx-auto">
               <ShieldAlert className="h-4 w-4 text-sky-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Risk scoring is temporarily unavailable. It refreshes automatically during market hours.
             </p>
           </div>

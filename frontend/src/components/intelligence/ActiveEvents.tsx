@@ -81,7 +81,7 @@ export function ActiveEvents() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
               <Zap className="h-4 w-4 text-amber-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Market events are temporarily unavailable. They refresh automatically during trading hours.
             </p>
             <button
@@ -96,7 +96,7 @@ export function ActiveEvents() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
               <Zap className="h-4 w-4 text-amber-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Market events (FOMC announcements, earnings surprises, sector moves) will appear here as they are detected during trading hours.
             </p>
           </div>

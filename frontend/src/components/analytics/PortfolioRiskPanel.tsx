@@ -135,7 +135,7 @@ export function PortfolioRiskPanel() {
               <div className="text-base font-mono tabular-nums font-semibold">8.70%</div>
             </div>
           </div>
-          <p className="text-xs text-slate-400 text-center leading-relaxed">
+          <p className="text-xs text-muted-foreground text-center leading-relaxed">
             Risk metrics populate once you have open positions. Deploy a strategy to see VaR, Beta, CVaR, and drawdown analytics.
           </p>
         </div>

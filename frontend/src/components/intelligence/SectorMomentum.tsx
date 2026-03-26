@@ -55,7 +55,7 @@ export function SectorMomentum() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-violet-400/5 border border-dashed border-violet-400/20 mx-auto">
               <BarChart3 className="h-4 w-4 text-violet-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Sector momentum data is temporarily unavailable. This updates automatically during market hours.
             </p>
             <button
@@ -70,7 +70,7 @@ export function SectorMomentum() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-violet-400/5 border border-dashed border-violet-400/20 mx-auto">
               <BarChart3 className="h-4 w-4 text-violet-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Sector momentum tracking activates during market hours with real-time ETF data.
             </p>
             <div className="space-y-2 opacity-30 pointer-events-none pt-1">

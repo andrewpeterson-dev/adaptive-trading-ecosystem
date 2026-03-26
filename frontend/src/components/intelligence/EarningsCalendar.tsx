@@ -44,7 +44,7 @@ export function EarningsCalendar() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
               <Calendar className="h-4 w-4 text-amber-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Earnings calendar is temporarily unavailable. Data refreshes automatically when the context monitor runs.
             </p>
           </div>
@@ -53,7 +53,7 @@ export function EarningsCalendar() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-amber-400/5 border border-dashed border-amber-400/20 mx-auto">
               <Calendar className="h-4 w-4 text-amber-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               No upcoming earnings events found. Earnings data refreshes automatically when the context monitor runs.
             </p>
             <div className="space-y-2 opacity-30 pointer-events-none pt-1">
