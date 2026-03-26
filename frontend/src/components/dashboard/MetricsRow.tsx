@@ -140,8 +140,8 @@ export function MetricsRow({
     {
       label: "Max Drawdown",
       icon: ArrowDownRight,
-      value: `-${(maxDrawdown * 100).toFixed(1)}%`,
-      valueColor: "text-red-400",
+      value: maxDrawdown > 0 ? `-${(maxDrawdown * 100).toFixed(1)}%` : "0.0%",
+      valueColor: maxDrawdown > 0 ? "text-red-400" : "text-muted-foreground",
     },
     {
       label: "Exposure",

@@ -135,16 +135,19 @@ function Tabs({
 // Cerberus Chip
 // ---------------------------------------------------------------------------
 
-function CerberusChip() {
+function CerberusChip({ mode, isHalted, activeBots }: { mode: string; isHalted: boolean; activeBots: number }) {
+  const statusLabel = isHalted ? "Halted" : activeBots > 0 ? `${activeBots} bot${activeBots !== 1 ? "s" : ""} active` : "Idle";
+  const statusColor = isHalted ? "bg-red-400/70" : activeBots > 0 ? "bg-emerald-400/70" : "bg-amber-400/50";
+
   return (
     <div className="flex items-center gap-3 ml-auto w-fit rounded-full border border-border/30 cerberus-chip px-3.5 py-1.5 mt-2">
       <div className="signal-bars flex items-end gap-[2px]">
-        <span className="block h-[5px] w-[2px] rounded-full bg-emerald-400/70" />
-        <span className="block h-[8px] w-[2px] rounded-full bg-emerald-400/50" />
-        <span className="block h-[11px] w-[2px] rounded-full bg-emerald-400/35" />
+        <span className={`block h-[5px] w-[2px] rounded-full ${statusColor}`} />
+        <span className={`block h-[8px] w-[2px] rounded-full ${statusColor} opacity-70`} />
+        <span className={`block h-[11px] w-[2px] rounded-full ${statusColor} opacity-50`} />
       </div>
       <span className="text-[10px] font-mono text-muted-foreground/50">
-        Cerberus &bull; Structure stable &bull; Regime: Normal
+        Cerberus &bull; {mode === "live" ? "Live" : "Paper"} &bull; {statusLabel}
       </span>
     </div>
   );
@@ -398,7 +401,7 @@ export default function DashboardPage() {
         winRate={winRate ?? 0}
         maxDrawdown={risk?.current_drawdown_pct ?? 0}
         exposure={account ? (account.portfolio_value || 0) / (account.equity || 1) : 0}
-        tradesToday={risk?.trades_this_hour ?? activeBots.length}
+        tradesToday={risk?.trades_this_hour ?? 0}
         tradeHistory={tradeHistory}
         realizedPnlUnavailable={!account?.realized_pnl && account?.realized_pnl !== 0}
         winRateUnavailable={winRate === null}
@@ -420,7 +423,7 @@ export default function DashboardPage() {
         <div className="app-panel overflow-hidden">
           <PortfolioEquityChart height={400} />
         </div>
-        <CerberusChip />
+        <CerberusChip mode={mode} isHalted={risk?.is_halted ?? false} activeBots={activeBots.length} />
       </section>
 
       {/* ═══════════════════════════════════════════════════════════
@@ -445,7 +448,7 @@ export default function DashboardPage() {
             </div>
             <div className="p-3">
               {aiTab === "reasoning" && <AIReasoningPanel decision={latestDecision} />}
-              {aiTab === "scanner" && <AIScannerPanel totalWatching={positions.length} signals={[]} />}
+              {aiTab === "scanner" && <AIScannerPanel totalWatching={bots.length} />}
               {aiTab === "strategy" && <StrategyPanel strategies={strategies} />}
             </div>
           </div>
@@ -475,7 +478,10 @@ export default function DashboardPage() {
               )}
               {riskTab === "sentiment" && <MarketMoodWidget />}
               {riskTab === "exposure" && (
-                <PortfolioRiskDashPanel totalExposure={risk?.current_exposure_pct ?? 0} />
+                <PortfolioRiskDashPanel
+                  totalExposure={risk?.current_exposure_pct ?? 0}
+                  riskBudgetUsed={risk ? (risk.current_drawdown_pct / (risk.max_drawdown_limit_pct || 1)) : undefined}
+                />
               )}
             </div>
           </div>

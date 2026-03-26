@@ -106,15 +106,13 @@ export function MarketIntelligenceBar({
         <Segment title="Market Trend" value={"\u2014"} dimmed />
       )}
 
-      {/* Volatility */}
-      {volatility && volColor ? (
+      {/* Volatility — only render when data is available */}
+      {volatility && volColor && (
         <Segment
           title="Volatility"
           value={`VIX: ${volatility.vix.toFixed(1)} (${volatility.level.charAt(0).toUpperCase() + volatility.level.slice(1)})`}
           valueColor={volColor}
         />
-      ) : (
-        <Segment title="Volatility" value={"\u2014"} dimmed />
       )}
 
       {/* Sentiment */}
@@ -128,8 +126,8 @@ export function MarketIntelligenceBar({
         <Segment title="Sentiment" value={"\u2014"} dimmed />
       )}
 
-      {/* Best Sector */}
-      {bestSector ? (
+      {/* Best Sector — only render when data is available */}
+      {bestSector && (
         <Segment
           title="Best Sector"
           value={
@@ -140,8 +138,6 @@ export function MarketIntelligenceBar({
           }
           valueColor="text-foreground"
         />
-      ) : (
-        <Segment title="Best Sector" value={"\u2014"} dimmed />
       )}
 
       {/* Strategy Status */}
