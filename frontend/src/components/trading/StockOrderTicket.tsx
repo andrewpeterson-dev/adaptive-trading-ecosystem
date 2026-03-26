@@ -369,7 +369,7 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
         </div>
 
         {triedSubmit && Object.keys(validationErrors).length > 0 && (
-          <div className="rounded-[22px] border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <div className="rounded-[22px] border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-200">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <div className="space-y-1">
@@ -414,10 +414,10 @@ export function StockOrderTicket({ onOrderPlaced, isPaperMode }: StockOrderTicke
           <div
             className={`rounded-[22px] border px-4 py-4 text-sm ${
               feedback.status === "filled"
-                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-100"
+                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
                 : feedback.status === "pending"
-                  ? "border-amber-500/25 bg-amber-500/10 text-amber-100"
-                  : "border-red-500/25 bg-red-500/10 text-red-100"
+                  ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-200"
+                  : "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-200"
             }`}
           >
             <div className="flex items-center gap-2 font-semibold uppercase tracking-[0.16em]">
