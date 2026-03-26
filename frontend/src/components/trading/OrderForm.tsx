@@ -65,11 +65,11 @@ export function OrderForm({ onOrderPlaced, isPaperMode }: OrderFormProps) {
           strength: 1.0,
           model_name: "manual",
           order_type: "market",
-          limit_price: price,
         }),
       });
 
       setSuccess(`${direction === "long" ? "Buy" : "Sell"} ${qty} ${sym} submitted`);
+      setTimeout(() => setSuccess(null), 4000);
       setSymbol("");
       setQuantity("");
       setPrice(null);
