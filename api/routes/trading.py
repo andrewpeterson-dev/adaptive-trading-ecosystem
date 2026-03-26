@@ -16,7 +16,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from config.settings import get_settings, TradingMode
 from db.database import get_session
@@ -27,6 +27,7 @@ from db.models import (
     PaperPosition,
     PaperTrade,
     PaperTradeStatus,
+    PortfolioSnapshot,
     SystemEventType,
     Trade,
     TradeDirection,
@@ -35,6 +36,7 @@ from db.models import (
     TradingModel,
     UserApiConnection,
     UserApiSettings,
+    UserRiskLimits,
 )
 from db.encryption import decrypt_value
 from risk.manager import RiskManager
@@ -1682,20 +1684,104 @@ async def get_risk_summary(request: Request):
         }
 
     if user_id:
+        # Calculate real risk metrics from paper portfolio
+        drawdown_pct = 0.0
+        exposure_pct = 0.0
+        open_positions_count = 0
+        peak_equity = 0.0
+        total_equity = 0.0
+        is_halted = False
+        halt_reason = None
+        trades_this_hour = 0
+        risk_events_count = 0
+
+        try:
+            async with get_session() as session:
+                # Portfolio and positions
+                port_result = await session.execute(
+                    select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+                )
+                portfolio = port_result.scalar_one_or_none()
+                if portfolio:
+                    pos_result = await session.execute(
+                        select(PaperPosition).where(PaperPosition.portfolio_id == portfolio.id)
+                    )
+                    positions = pos_result.scalars().all()
+                    positions_value = sum(
+                        (p.current_price or p.avg_entry_price) * abs(p.quantity) * _position_multiplier(p.symbol)
+                        for p in positions
+                    )
+                    total_equity = portfolio.cash + positions_value
+                    open_positions_count = len(positions)
+                    exposure_pct = (positions_value / total_equity) if total_equity > 0 else 0.0
+
+                # Peak equity from snapshots
+                peak_result = await session.execute(
+                    select(PortfolioSnapshot.total_equity)
+                    .where(
+                        PortfolioSnapshot.user_id == user_id,
+                        PortfolioSnapshot.mode == TradingModeEnum.PAPER,
+                    )
+                    .order_by(PortfolioSnapshot.total_equity.desc())
+                    .limit(1)
+                )
+                peak_row = peak_result.scalar_one_or_none()
+                initial_cap = portfolio.initial_capital if portfolio else 100_000.0
+                peak_equity = float(peak_row) if peak_row else initial_cap
+                if peak_equity > 0 and total_equity > 0:
+                    drawdown_pct = max(0.0, (peak_equity - total_equity) / peak_equity)
+
+                # Kill switch
+                risk_result = await session.execute(
+                    select(UserRiskLimits).where(
+                        UserRiskLimits.user_id == user_id,
+                        UserRiskLimits.mode == TradingModeEnum.PAPER,
+                    )
+                )
+                risk_limits = risk_result.scalar_one_or_none()
+                if risk_limits and risk_limits.kill_switch_active:
+                    is_halted = True
+                    halt_reason = "Kill switch active"
+
+                # Trades in last hour
+                from datetime import timedelta
+                one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+                from db.cerberus_models import CerberusTrade
+                trades_result = await session.execute(
+                    select(func.count(CerberusTrade.id)).where(
+                        CerberusTrade.user_id == user_id,
+                        CerberusTrade.created_at >= one_hour_ago,
+                    )
+                )
+                trades_this_hour = trades_result.scalar() or 0
+
+                # Recent risk events (last 24h)
+                from db.models import RiskEvent
+                one_day_ago = datetime.utcnow() - timedelta(hours=24)
+                re_result = await session.execute(
+                    select(func.count(RiskEvent.id)).where(
+                        RiskEvent.timestamp >= one_day_ago,
+                    )
+                )
+                risk_events_count = re_result.scalar() or 0
+        except Exception as exc:
+            logger.warning("risk_summary_paper_error", user_id=user_id, error=str(exc))
+
         return {
-            "is_halted": False,
-            "halt_reason": None,
-            "current_drawdown_pct": 0.0,
+            "is_halted": is_halted,
+            "halt_reason": halt_reason,
+            "current_drawdown_pct": round(drawdown_pct, 4),
             "max_drawdown_limit": settings.max_drawdown_pct,
             "max_drawdown_limit_pct": settings.max_drawdown_pct,
-            "current_exposure_pct": 0.0,
+            "current_exposure_pct": round(exposure_pct, 4),
             "max_exposure_limit_pct": settings.max_portfolio_exposure_pct,
-            "trades_last_hour": 0,
-            "trades_this_hour": 0,
+            "trades_last_hour": trades_this_hour,
+            "trades_this_hour": trades_this_hour,
             "max_trades_per_hour": settings.max_trades_per_hour,
-            "peak_equity": 0,
-            "open_positions": 0,
-            "recent_risk_events": 0,
+            "peak_equity": round(peak_equity, 2),
+            "open_positions": open_positions_count,
+            "recent_risk_events": risk_events_count,
+            "equity": round(total_equity, 2),
             "mode": mode.value,
         }
     try:

@@ -299,8 +299,12 @@ class ConfirmationService:
         current_price = await _fetch_current_price(symbol)
 
         async with get_session() as session:
+            # Lock the portfolio row to prevent concurrent proposals from
+            # reading the same cash balance (double-spend race condition).
             result = await session.execute(
-                select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
+                select(PaperPortfolio)
+                .where(PaperPortfolio.user_id == user_id)
+                .with_for_update()
             )
             portfolio = result.scalar_one_or_none()
             if not portfolio:

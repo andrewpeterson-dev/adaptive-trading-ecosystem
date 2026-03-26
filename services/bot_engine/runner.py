@@ -1687,8 +1687,12 @@ class BotRunner:
     async def _sync_paper_portfolio(
         self, user_id: int, symbol: str, side: str, quantity: float, price: float
     ) -> None:
-        """Sync a bot trade to the paper portfolio so the dashboard reflects it."""
-        from db.models import PaperPortfolio, PaperPosition
+        """Sync a bot trade to the paper portfolio so the dashboard reflects it.
+
+        Creates PaperTrade records so bot-originated trades appear in trade
+        history and realized P&L calculations.
+        """
+        from db.models import PaperPortfolio, PaperPosition, PaperTrade, PaperTradeStatus, TradeDirection
         async with get_session() as session:
             result = await session.execute(
                 select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
@@ -1711,7 +1715,14 @@ class BotRunner:
 
             if side.upper() == "BUY":
                 cost = price * quantity
-                portfolio.cash = max(0, portfolio.cash - cost)
+                if cost > portfolio.cash:
+                    logger.warning(
+                        "paper_insufficient_cash",
+                        user_id=user_id, symbol=symbol,
+                        cost=cost, cash=portfolio.cash,
+                    )
+                    return  # Reject: insufficient paper funds
+                portfolio.cash -= cost
                 if position and position.quantity > 0:
                     total_cost = (position.avg_entry_price * position.quantity) + cost
                     position.quantity += quantity
@@ -1724,14 +1735,37 @@ class BotRunner:
                         avg_entry_price=price, current_price=price,
                     )
                     session.add(position)
+
+                # Record entry trade
+                trade = PaperTrade(
+                    portfolio_id=portfolio.id, user_id=user_id,
+                    symbol=symbol, direction=TradeDirection.LONG,
+                    quantity=quantity, entry_price=price,
+                    status=PaperTradeStatus.OPEN,
+                )
+                session.add(trade)
+
             else:  # SELL
                 if position and position.quantity > 0:
                     sell_qty = min(quantity, position.quantity)
                     proceeds = price * sell_qty
+                    avg_cost = position.avg_entry_price
+                    pnl = round((price - avg_cost) * sell_qty, 2)
                     portfolio.cash += proceeds
                     position.quantity -= sell_qty
                     if position.quantity <= 0.0001:
                         await session.delete(position)
+
+                    # Record closed trade with P&L
+                    trade = PaperTrade(
+                        portfolio_id=portfolio.id, user_id=user_id,
+                        symbol=symbol, direction=TradeDirection.SHORT,
+                        quantity=sell_qty, entry_price=avg_cost,
+                        exit_price=price, pnl=pnl,
+                        status=PaperTradeStatus.CLOSED,
+                        exit_time=datetime.utcnow(),
+                    )
+                    session.add(trade)
 
         logger.info(
             "paper_portfolio_synced",
@@ -1756,7 +1790,7 @@ class BotRunner:
 
     async def _take_portfolio_snapshot(self, user_id: int) -> None:
         """Record a portfolio equity snapshot for the equity curve chart."""
-        from db.models import PaperPortfolio, PaperPosition, PortfolioSnapshot
+        from db.models import PaperPortfolio, PaperPosition, PaperTrade, PortfolioSnapshot
         async with get_session() as session:
             result = await session.execute(
                 select(PaperPortfolio).where(PaperPortfolio.user_id == user_id)
@@ -1791,17 +1825,44 @@ class BotRunner:
                 for p in positions
             )
 
+            # Calculate realized P&L from closed trades today
+            from db.models import PaperTrade
+            start_of_day = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            trade_result = await session.execute(
+                select(PaperTrade.pnl).where(
+                    PaperTrade.user_id == user_id,
+                    PaperTrade.exit_time.is_not(None),
+                    PaperTrade.exit_time >= start_of_day,
+                )
+            )
+            realized_pnl = sum(float(row[0] or 0.0) for row in trade_result.all())
+
+            # Calculate drawdown from peak equity
+            peak_result = await session.execute(
+                select(PortfolioSnapshot.total_equity)
+                .where(
+                    PortfolioSnapshot.user_id == user_id,
+                    PortfolioSnapshot.mode == TradingModeEnum.PAPER,
+                )
+                .order_by(PortfolioSnapshot.total_equity.desc())
+                .limit(1)
+            )
+            peak_row = peak_result.scalar_one_or_none()
+            peak_equity = float(peak_row) if peak_row else float(portfolio.initial_capital or total_equity)
+            drawdown_pct = ((peak_equity - total_equity) / peak_equity * 100) if peak_equity > 0 else 0.0
+            drawdown_pct = max(0.0, drawdown_pct)
+
             snapshot = PortfolioSnapshot(
                 timestamp=datetime.utcnow(),
                 total_equity=total_equity,
                 cash=portfolio.cash,
                 positions_value=positions_value,
                 unrealized_pnl=unrealized_pnl,
-                realized_pnl=0,
+                realized_pnl=realized_pnl,
                 num_open_positions=len(positions),
                 exposure_pct=(positions_value / total_equity * 100) if total_equity > 0 else 0,
-                drawdown_pct=0,
-                mode="paper",
+                drawdown_pct=drawdown_pct,
+                mode=TradingModeEnum.PAPER,
                 user_id=user_id,
             )
             session.add(snapshot)
@@ -1809,8 +1870,9 @@ class BotRunner:
     def _get_alpaca_client(self, paper: bool = True):
         """Get Alpaca trading client for the given mode.
 
-        Caches one client per mode (paper vs live) so repeated calls
-        within the same mode are fast.
+        Uses dedicated paper/live API keys when available, falling back
+        to the generic alpaca_api_key for backwards compatibility.
+        Caches one client per mode so repeated calls are fast.
         """
         if not hasattr(self, "_alpaca_clients"):
             self._alpaca_clients: dict[bool, object] = {}
@@ -1819,9 +1881,15 @@ class BotRunner:
             from config.settings import get_settings
             from alpaca.trading.client import TradingClient
             settings = get_settings()
+            if paper:
+                api_key = settings.paper_api_key or settings.alpaca_api_key
+                secret_key = settings.paper_secret_key or settings.alpaca_secret_key
+            else:
+                api_key = settings.live_api_key or settings.alpaca_api_key
+                secret_key = settings.live_secret_key or settings.alpaca_secret_key
             self._alpaca_clients[paper] = TradingClient(
-                settings.alpaca_api_key,
-                settings.alpaca_secret_key,
+                api_key,
+                secret_key,
                 paper=paper,
             )
         return self._alpaca_clients[paper]

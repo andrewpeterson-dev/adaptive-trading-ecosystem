@@ -150,6 +150,30 @@ async def _get_or_create_portfolio(user_id: int) -> dict:
         )
         positions = pos_result.scalars().all()
 
+        # Refresh current prices so P&L and equity are accurate
+        for p in positions:
+            try:
+                contract_meta = parse_occ_contract_symbol(p.symbol)
+                if contract_meta:
+                    snapshot = await fetch_option_snapshot(
+                        underlying=contract_meta["underlying"],
+                        expiration=contract_meta["expiration"],
+                        strike=float(contract_meta["strike"]),
+                        option_type=contract_meta["option_type"],
+                        contract_symbol=p.symbol,
+                    )
+                    current = _option_mark(snapshot or {})
+                    if current and current > 0:
+                        p.current_price = current
+                else:
+                    current = await _fetch_current_price(p.symbol)
+                    p.current_price = current
+                p.unrealized_pnl = _position_unrealized_pnl(
+                    p.symbol, p.avg_entry_price, p.current_price, p.quantity,
+                )
+            except Exception:
+                pass  # Keep stale price rather than fail the entire portfolio
+
         positions_value = sum(
             _position_market_value(
                 p.symbol,
