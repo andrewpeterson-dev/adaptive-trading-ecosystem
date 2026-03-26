@@ -56,7 +56,7 @@ export function HoldingsTable({ onTickersReady }: HoldingsTableProps) {
       const pos = data.positions || [];
       setPositions(pos);
       if (onTickersReady && pos.length > 0) {
-        const tickers = [...new Set(pos.map((p) => p.symbol))];
+        const tickers = Array.from(new Set(pos.map((p) => p.symbol)));
         onTickersReady(tickers);
       }
     } catch {
