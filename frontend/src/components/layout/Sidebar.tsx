@@ -327,7 +327,7 @@ export function Sidebar() {
 
       {/* Mobile bottom tab bar */}
       <nav className="mobile-bottom-tabs lg:hidden">
-        {ALL_NAV_ITEMS.slice(0, 5).map((item) => {
+        {ALL_NAV_ITEMS.map((item) => {
           const active = isActive(item);
           const Icon = item.icon;
           return (
