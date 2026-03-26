@@ -441,8 +441,8 @@ export default function DashboardPage() {
 
       {/* ── PRIMARY CHART ─────────────────────────────────────────── */}
       <section className="dashboard-chart-hero">
-        <div className="app-panel" style={{ minHeight: 440, overflow: "visible" }}>
-          <PortfolioEquityChart height={360} />
+        <div className="app-panel" style={{ minHeight: 480, overflow: "visible" }}>
+          <PortfolioEquityChart height={400} />
         </div>
         <CerberusChip mode={mode} isHalted={risk?.is_halted ?? false} activeBots={activeBots.length} />
       </section>

@@ -329,11 +329,11 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
 
         {data.length > 0 && (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={strokeColor} stopOpacity={isFlat ? 0.15 : 0.25} />
-                  <stop offset="95%" stopColor={strokeColor} stopOpacity={isFlat ? 0.05 : 0} />
+                  <stop offset="5%" stopColor={strokeColor} stopOpacity={isFlat ? 0.18 : 0.30} />
+                  <stop offset="95%" stopColor={strokeColor} stopOpacity={isFlat ? 0.06 : 0.02} />
                 </linearGradient>
               </defs>
 
@@ -346,19 +346,20 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
               <XAxis
                 dataKey="date"
                 tickFormatter={(d: string) => formatDateLabel(d, period)}
-                tick={{ fill: textColor, fontSize: 10 }}
+                tick={{ fill: textColor, fontSize: 11 }}
                 axisLine={{ stroke: gridColor }}
                 tickLine={false}
                 minTickGap={50}
+                dy={4}
               />
 
               <YAxis
                 tickFormatter={formatDollar}
-                tick={{ fill: textColor, fontSize: 10 }}
+                tick={{ fill: textColor, fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 domain={yDomain}
-                width={60}
+                width={65}
               />
 
               <Tooltip
