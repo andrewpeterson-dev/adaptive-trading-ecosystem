@@ -254,6 +254,8 @@ async def _ensure_reasoning_schema() -> None:
             add_column_if_missing("users", "subscription_tier", "VARCHAR(16) DEFAULT 'free' NOT NULL")
             add_column_if_missing("cerberus_bots", "allocated_capital", "FLOAT")
             add_column_if_missing("cerberus_bots", "reasoning_model_config", "JSON")
+            add_column_if_missing("cerberus_bots", "ai_brain_config", "JSON")
+            add_column_if_missing("cerberus_bots", "auto_route_enabled", "BOOLEAN DEFAULT FALSE")
             add_column_if_missing("cerberus_bot_versions", "universe_config", "JSON")
             add_column_if_missing("cerberus_bot_versions", "override_level", "VARCHAR(16) DEFAULT 'soft'")
             add_column_if_missing("trading_models", "mode", "VARCHAR(8) DEFAULT 'paper' NOT NULL")
