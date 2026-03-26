@@ -404,7 +404,7 @@ export function RiskLimitsConfig() {
         </div>
 
         {error && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/8 px-3 py-2 text-xs text-red-300 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/8 px-3 py-2 text-xs text-red-500 dark:text-red-300 animate-in fade-in slide-in-from-top-1 duration-200">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
             {error}
           </div>
