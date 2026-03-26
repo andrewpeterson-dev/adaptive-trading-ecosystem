@@ -29,11 +29,10 @@ function getRiskLevel(summary: RiskSummaryExtended): {
   label: string;
   variant: "success" | "warning" | "danger";
 } {
-  if (summary.is_halted) return { label: "Halted", variant: "danger" };
-  const drawdownRatio =
-    summary.max_drawdown_limit > 0
-      ? summary.current_drawdown_pct / summary.max_drawdown_limit
-      : 0;
+  if (summary?.is_halted) return { label: "Halted", variant: "danger" };
+  const drawdownPct = summary?.current_drawdown_pct ?? 0;
+  const drawdownLimit = summary?.max_drawdown_limit ?? 0;
+  const drawdownRatio = drawdownLimit > 0 ? drawdownPct / drawdownLimit : 0;
   if (drawdownRatio > 0.8) return { label: "Critical", variant: "danger" };
   if (drawdownRatio > 0.5) return { label: "Elevated", variant: "warning" };
   return { label: "Contained", variant: "success" };
@@ -66,7 +65,8 @@ export default function RiskPage() {
 
       if (eventsRes.status === "fulfilled") {
         const data = eventsRes.value;
-        setEvents((data as any).events || (data as any) || []);
+        const raw = (data as any)?.events ?? data;
+        setEvents(Array.isArray(raw) ? raw : []);
         hasData = true;
       }
 

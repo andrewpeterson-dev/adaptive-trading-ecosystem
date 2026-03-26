@@ -151,8 +151,21 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
         const res = await apiFetch<EquityHistoryResponse>(
           `/api/trading/equity-history?period=${p}&mode=${mode}`,
         );
-        setData(res.points || []);
-        setInitialCapital(res.initial_capital || 0);
+        const points = res.points || [];
+        const ic = res.initial_capital || 100_000;
+        setInitialCapital(ic);
+        // If backend returns no points, synthesize a flat line at initial capital
+        // so the chart always shows something meaningful
+        if (points.length === 0 && ic > 0) {
+          const now = new Date();
+          const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          setData([
+            { date: dayAgo.toISOString(), equity: ic },
+            { date: now.toISOString(), equity: ic },
+          ]);
+        } else {
+          setData(points);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load equity data");
       } finally {
@@ -201,7 +214,7 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
   }, [data]);
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex flex-col gap-2" style={{ minHeight: height + 60 }}>
       {/* Header — equity value as the hero number */}
       <div className="flex items-end justify-between px-4 pt-3 pb-1">
         <div className="flex items-baseline gap-4">
@@ -248,7 +261,7 @@ export function PortfolioEquityChart({ height = 520 }: PortfolioEquityChartProps
       </div>
 
       {/* Chart */}
-      <div className="relative flex-1 overflow-hidden rounded-md chart-alive" style={{ minHeight: height }}>
+      <div className="relative rounded-md chart-alive" style={{ height: height, overflow: "visible" }}>
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

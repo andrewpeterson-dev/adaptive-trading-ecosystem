@@ -342,9 +342,9 @@ export function DrawdownMonitor() {
         </div>
 
         {/* Active restrictions */}
-        {data.restrictions.length > 0 && (
+        {(data.restrictions ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {data.restrictions.map((r) => (
+            {(data.restrictions ?? []).map((r) => (
               <Badge key={r} variant="danger" className="text-[9px] py-0.5 px-2">
                 {r}
               </Badge>

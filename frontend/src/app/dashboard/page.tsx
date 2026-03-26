@@ -35,6 +35,7 @@ import {
   StrategyPanel,
   EquityCurvePanel,
   PortfolioRiskDashPanel,
+  PaperModeBanner,
 } from "@/components/dashboard";
 import { PortfolioEquityChart } from "@/components/dashboard/PortfolioEquityChart";
 import { MarketMoodWidget } from "@/components/dashboard/MarketMoodWidget";
@@ -226,9 +227,12 @@ export default function DashboardPage() {
   const [riskTab, setRiskTab] = useState("metrics");
 
   const fetchAll = useCallback(async () => {
+    // Hard timeout: exit loading state after 10s regardless of pending requests
+    const loadingTimeout = new Promise<void>((resolve) => setTimeout(resolve, 10_000));
+
     try {
       const q = `?mode=${mode}`;
-      const [accRes, posRes, ordRes, riskRes, eqRes, moodRes, botsRes, stratRes, decisionRes] = await Promise.allSettled([
+      const fetchPromise = Promise.allSettled([
         apiFetch<Account>(`/api/trading/account${q}`),
         apiFetch<{ positions: Position[] }>(`/api/trading/positions${q}`),
         apiFetch<{ orders: Order[] }>(`/api/trading/orders${q}`),
@@ -236,9 +240,22 @@ export default function DashboardPage() {
         apiFetch<any>(`/api/dashboard/equity-curve${q}`),
         apiFetch<MarketMoodData>(`/api/sentiment/market-mood/overview`),
         apiFetch<BotSummaryData[]>(`/api/ai/tools/bots`),
-        apiFetch<any[]>(`/api/strategies`),
+        apiFetch<{ strategies: any[] } | any[]>(`/api/strategies/list`),
         apiFetch<any>(`/api/reasoning/latest`),
       ]);
+
+      // Race: either all settle or 10s passes — either way, exit loading state
+      const raceResult = await Promise.race([
+        fetchPromise.then((results) => ({ settled: true as const, results })),
+        loadingTimeout.then(() => ({ settled: false as const })),
+      ]);
+
+      if (!raceResult.settled) {
+        // Timed out — exit loading with whatever partial data we have
+        return;
+      }
+
+      const [accRes, posRes, ordRes, riskRes, eqRes, moodRes, botsRes, stratRes, decisionRes] = raceResult.results;
 
       if (accRes.status === "fulfilled") { setAccount(accRes.value); setError(false); } else { setError(true); }
       if (posRes.status === "fulfilled") setPositions(posRes.value.positions || []);
@@ -257,7 +274,8 @@ export default function DashboardPage() {
       if (moodRes.status === "fulfilled") setMarketMood(moodRes.value);
       if (botsRes.status === "fulfilled") setBots(botsRes.value || []);
       if (stratRes.status === "fulfilled") {
-        const raw = Array.isArray(stratRes.value) ? stratRes.value : [];
+        const val = stratRes.value;
+        const raw = Array.isArray(val) ? val : Array.isArray((val as any)?.strategies) ? (val as any).strategies : [];
         setStrategies(raw.map((s: any) => ({
           id: String(s.id),
           name: s.name || "Unnamed",
@@ -392,6 +410,9 @@ export default function DashboardPage() {
         </button>
       </div>
 
+      {/* ── PAPER PORTFOLIO (only visible in paper mode) ──────────── */}
+      <PaperModeBanner />
+
       {/* ── METRICS ───────────────────────────────────────────────── */}
       <MetricsRow
         totalPnl={totalPnl}
@@ -420,8 +441,8 @@ export default function DashboardPage() {
 
       {/* ── PRIMARY CHART ─────────────────────────────────────────── */}
       <section className="dashboard-chart-hero">
-        <div className="app-panel overflow-hidden">
-          <PortfolioEquityChart height={400} />
+        <div className="app-panel" style={{ minHeight: 440, overflow: "visible" }}>
+          <PortfolioEquityChart height={360} />
         </div>
         <CerberusChip mode={mode} isHalted={risk?.is_halted ?? false} activeBots={activeBots.length} />
       </section>

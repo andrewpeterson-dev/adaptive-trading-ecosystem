@@ -14,10 +14,16 @@ import {
 interface CategoryScore {
   strategy_type: string;
   score: number;
-  win_rate: number;
-  roi: number;
-  num_trades: number;
-  status: string;
+  // API fields
+  roi_component?: number;
+  win_rate_component?: number;
+  total_trades?: number;
+  is_blocked?: boolean;
+  // Legacy fields (kept for compatibility)
+  win_rate?: number;
+  roi?: number;
+  num_trades?: number;
+  status?: string;
 }
 
 interface CategoryScoresResponse {
@@ -58,7 +64,7 @@ function ScoreRow({
   cat: CategoryScore;
   animate: boolean;
 }) {
-  const isBlocked = cat.score < 30;
+  const isBlocked = cat.is_blocked ?? cat.score < 30;
   const scoreColor = getScoreColor(cat.score);
   const fillPct = Math.min(cat.score, 100);
   const [displayWidth, setDisplayWidth] = useState(animate ? 0 : fillPct);
@@ -113,19 +119,20 @@ function ScoreRow({
       </div>
 
       {/* Stats line */}
-      <div className="flex items-center gap-2 text-[9px] text-muted-foreground font-mono">
-        <span>{cat.num_trades} trades</span>
-        <span className="text-muted-foreground/30">|</span>
-        <span>{(cat.win_rate * 100).toFixed(0)}% win rate</span>
-        <span className="text-muted-foreground/30">|</span>
-        <span
-          className="transition-colors duration-300"
-          style={{ color: cat.roi >= 0 ? "#4ade80" : "#ef4444" }}
-        >
-          {cat.roi >= 0 ? "+" : ""}
-          {cat.roi.toFixed(1)}% ROI
-        </span>
-      </div>
+      {(() => {
+        const numTrades = cat.total_trades ?? cat.num_trades ?? 0;
+        const winRatePct = (cat.win_rate_component != null ? cat.win_rate_component : (cat.win_rate ?? 0)) * (cat.win_rate_component != null ? 100 / Math.max(cat.score, 1) : 100);
+        const roiVal = cat.roi_component ?? cat.roi ?? 0;
+        return (
+          <div className="flex items-center gap-2 text-[9px] text-muted-foreground font-mono">
+            <span>{numTrades} trades</span>
+            <span className="text-muted-foreground/30">|</span>
+            <span>{roiVal >= 0 ? "+" : ""}{roiVal.toFixed(1)}% ROI</span>
+            <span className="text-muted-foreground/30">|</span>
+            <span>Score: {cat.score.toFixed(0)}/100</span>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -215,7 +222,7 @@ export function CategoryScoring() {
             <Badge variant="neutral" className="text-[9px] py-0.5">
               Blocked below 30 / 100
             </Badge>
-            {data.blocked_count > 0 && (
+            {(data.blocked_count ?? 0) > 0 && (
               <Badge variant="danger" className="text-[9px] py-0.5">
                 {data.blocked_count} blocked
               </Badge>
@@ -224,7 +231,7 @@ export function CategoryScoring() {
         </div>
       </SurfaceHeader>
       <SurfaceBody className="p-3 space-y-2.5">
-        {data.scores.length === 0 ? (
+        {(data.scores ?? []).length === 0 ? (
           <div className="app-empty">
             <div className="app-empty-icon">
               <BarChart3 className="h-5 w-5 text-muted-foreground/60" />
@@ -235,7 +242,7 @@ export function CategoryScoring() {
             </p>
           </div>
         ) : (
-          data.scores.map((cat) => (
+          (data.scores ?? []).map((cat) => (
             <ScoreRow key={cat.strategy_type} cat={cat} animate={mounted} />
           ))
         )}
