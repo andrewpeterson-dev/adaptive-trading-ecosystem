@@ -52,10 +52,10 @@ export function BotActivityFeed() {
     const base = getMarketWebSocketBase();
     if (!base) return;
 
-    const token = document.cookie
-      .split("; ")
-      .find((c) => c.startsWith("access_token="))
-      ?.split("=")[1];
+    const token =
+      document.cookie.split("; ").find((c) => c.startsWith("access_token="))?.split("=")[1]
+      || localStorage.getItem("access_token")
+      || localStorage.getItem("token");
     if (!token) return;
 
     const ws = new WebSocket(`${base}/market?token=${encodeURIComponent(token)}`);
@@ -105,7 +105,7 @@ export function BotActivityFeed() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-muted/20 border border-dashed border-border/50 mx-auto">
               <Activity className="h-4 w-4 text-muted-foreground/40" />
             </div>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
               {connected
                 ? "Listening for bot activity. Trade executions, safety blocks, and candidate signals will appear here in real time."
                 : "Connecting to the live activity stream..."}

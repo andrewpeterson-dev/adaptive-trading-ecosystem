@@ -35,7 +35,7 @@ function parseSentimentEvents(events: MarketEvent[]): TickerSentiment[] {
 const SENTIMENT_COLORS = {
   bullish: { bg: "bg-emerald-400/10", border: "border-emerald-400/20", text: "text-emerald-400" },
   bearish: { bg: "bg-rose-400/10", border: "border-rose-400/20", text: "text-rose-400" },
-  neutral: { bg: "bg-slate-400/10", border: "border-slate-400/20", text: "text-slate-400" },
+  neutral: { bg: "bg-slate-400/10", border: "border-slate-400/20", text: "text-muted-foreground" },
 };
 
 export function SentimentTicker() {
@@ -68,7 +68,7 @@ export function SentimentTicker() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-cyan-400/5 border border-dashed border-cyan-400/20 mx-auto">
               <MessageCircle className="h-4 w-4 text-cyan-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Sentiment data is temporarily unavailable. It updates every 2 minutes during market hours.
             </p>
           </div>
@@ -77,7 +77,7 @@ export function SentimentTicker() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-cyan-400/5 border border-dashed border-cyan-400/20 mx-auto">
               <MessageCircle className="h-4 w-4 text-cyan-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Market sentiment data updates every 2 minutes during market hours. Check back when markets are open.
             </p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3 opacity-30 pointer-events-none pt-1">

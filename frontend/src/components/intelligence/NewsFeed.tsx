@@ -51,7 +51,7 @@ export function NewsFeed() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-blue-400/5 border border-dashed border-blue-400/20 mx-auto">
               <Newspaper className="h-4 w-4 text-blue-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               News feed is temporarily unavailable. Headlines stream automatically during market hours.
             </p>
           </div>
@@ -60,7 +60,7 @@ export function NewsFeed() {
             <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-blue-400/5 border border-dashed border-blue-400/20 mx-auto">
               <Newspaper className="h-4 w-4 text-blue-400/40" />
             </div>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
               Financial news headlines will stream here during market hours. The feed aggregates from multiple sources and highlights tickers relevant to your watchlist.
             </p>
           </div>
