@@ -202,7 +202,7 @@ class PositionManager:
         exit_price: float,
         detail: str = "",
     ) -> None:
-        """Close a position: update DB record and notify via the activity bus."""
+        """Close a position: submit exit order to broker, update DB, sync paper portfolio."""
         entry_price = float(trade.entry_price or 0)
         quantity = float(trade.quantity or 0)
         is_long = (trade.side or "buy").lower() in ("buy", "long")
@@ -250,8 +250,58 @@ class PositionManager:
             db_trade.notes = detail or db_trade.notes
             db_trade.payload_json = payload
 
-        # Clean up tracker state
+        # Submit the exit order to the broker via BotRunner (reuse its order routing)
         symbol = (trade.symbol or "").upper()
+        exit_side = "SELL" if is_long else "BUY"
+        try:
+            from services.bot_engine.runner import BotRunner
+            runner = BotRunner()
+            bot = None
+            if trade.bot_id:
+                async with get_session() as session:
+                    bot_result = await session.execute(
+                        select(CerberusBot).where(CerberusBot.id == trade.bot_id)
+                    )
+                    bot = bot_result.scalar_one_or_none()
+            if bot:
+                from db.models import UserTradingSession, TradingModeEnum
+                async with get_session() as session:
+                    ts_result = await session.execute(
+                        select(UserTradingSession).where(UserTradingSession.user_id == trade.user_id)
+                    )
+                    ts = ts_result.scalar_one_or_none()
+                is_paper = not (ts and ts.active_mode == TradingModeEnum.LIVE)
+                broker = await runner._resolve_broker(trade.user_id)
+                if broker == "webull":
+                    try:
+                        trading_mode = "paper" if is_paper else "live"
+                        await runner._submit_webull_order(
+                            user_id=trade.user_id, symbol=symbol, side=exit_side,
+                            quantity=int(quantity), mode=trading_mode,
+                        )
+                    except Exception as e:
+                        if not is_paper:
+                            logger.error("position_monitor_webull_exit_failed", trade_id=trade.id, error=str(e))
+                        else:
+                            await runner._submit_alpaca_order(
+                                symbol=symbol, side=exit_side, quantity=int(quantity), paper=True,
+                            )
+                else:
+                    await runner._submit_alpaca_order(
+                        symbol=symbol, side=exit_side, quantity=int(quantity), paper=is_paper,
+                    )
+                # Sync paper portfolio
+                if is_paper:
+                    await runner._sync_paper_portfolio(trade.user_id, symbol, exit_side, int(quantity), exit_price)
+                logger.info("position_monitor_broker_exit_submitted", trade_id=trade.id, symbol=symbol, side=exit_side, broker=broker)
+        except Exception as exc:
+            logger.error(
+                "position_monitor_broker_exit_failed",
+                trade_id=trade.id, symbol=symbol, error=str(exc),
+                hint="CerberusTrade marked closed but broker position may still be open",
+            )
+
+        # Clean up tracker state
         self._stop_tracker.reset(symbol)
 
         logger.info(
