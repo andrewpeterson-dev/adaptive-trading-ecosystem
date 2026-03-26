@@ -272,10 +272,10 @@ export function BrokerForm({ broker }: BrokerFormProps) {
       </div>
 
       {saveStatus === "success" && (
-        <p className="text-xs text-emerald-300">Credentials saved and encrypted.</p>
+        <p className="text-xs text-emerald-500 dark:text-emerald-400">Credentials saved and encrypted.</p>
       )}
       {(saveStatus === "error" || testStatus === "error") && errorMsg && (
-        <p className="text-xs text-red-300">{errorMsg}</p>
+        <p className="text-xs text-red-500 dark:text-red-400">{errorMsg}</p>
       )}
 
       <div className="flex flex-wrap items-center gap-3">
