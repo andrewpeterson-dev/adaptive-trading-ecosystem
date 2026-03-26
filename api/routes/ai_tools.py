@@ -840,6 +840,7 @@ async def deploy_bot(bot_id: str, request: Request, body: Optional[DeployBotRequ
             version.config_json = config
         bot.learning_enabled = bool((config.get("learning") or {}).get("enabled", False))
         bot.status = BotStatus.RUNNING
+        await session.flush()
 
     logger.info("bot_deployed", bot_id=bot_id, user_id=user_id, allocated_capital=body.allocated_capital)
     return {"bot_id": bot_id, "status": "running"}

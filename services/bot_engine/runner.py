@@ -264,8 +264,12 @@ class BotRunner:
             return
 
         # Check if market is open (extended_hours bots get 4AM-8PM ET window)
-        if not self._is_market_open(extended_hours=extended_hours):
-            logger.debug("bot_skipped_market_closed", bot_id=str(bot.id), bot_name=bot.name, extended_hours=extended_hours)
+        # Paper mode bots always use extended hours — simulated trades can happen anytime
+        trading_mode = await self._resolve_trading_mode(bot.user_id, bot_id=bot.id)
+        is_paper = trading_mode == "paper"
+        effective_extended = extended_hours or is_paper
+        if not self._is_market_open(extended_hours=effective_extended):
+            logger.debug("bot_skipped_market_closed", bot_id=str(bot.id), bot_name=bot.name, extended_hours=effective_extended, is_paper=is_paper)
             return
 
         # Rate limit: don't evaluate same bot more than once per timeframe interval
