@@ -72,8 +72,8 @@ interface RebalancePlan {
   tax_loss_harvest_count: number;
 }
 
-export function PortfolioOptimizer() {
-  const [tickers, setTickers] = useState("SPY,QQQ,IWM,TLT,GLD,VNQ");
+export function PortfolioOptimizer({ initialTickers }: { initialTickers?: string } = {}) {
+  const [tickers, setTickers] = useState(initialTickers || "SPY,QQQ,IWM,TLT,GLD,VNQ");
   const [method, setMethod] = useState("max_sharpe");
   const [maxWeight, setMaxWeight] = useState(0.25);
   const [lookbackDays, setLookbackDays] = useState(252);
