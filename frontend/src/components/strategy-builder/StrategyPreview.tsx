@@ -192,7 +192,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
         {viewMode === "json" ? (
           /* JSON View */
           <div className="app-card p-4">
-            <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap overflow-x-auto leading-relaxed">
+            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap overflow-x-auto leading-relaxed">
               {JSON.stringify(schemaOutput, null, 2)}
             </pre>
           </div>
@@ -233,7 +233,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
                     <div key={group.id}>
                       {gi > 0 && <span className="block text-amber-500 font-bold text-[10px] my-1 uppercase">or</span>}
                       {group.conditions.filter(c => c.indicator).map((cond, ci) => (
-                        <div key={cond.id} className="flex items-center gap-1.5 text-slate-300">
+                        <div key={cond.id} className="flex items-center gap-1.5 text-foreground">
                           {ci > 0 && <span className="text-emerald-500 font-bold text-[10px] uppercase">and</span>}
                           <span className="font-mono">{formatCondition(cond)}</span>
                         </div>
@@ -257,7 +257,7 @@ export default function StrategyPreview({ activeMode, onModeSwitch }: StrategyPr
                     <div key={group.id}>
                       {gi > 0 && <span className="block text-amber-500 font-bold text-[10px] my-1 uppercase">or</span>}
                       {group.conditions.filter(c => c.indicator).map((cond, ci) => (
-                        <div key={cond.id} className="flex items-center gap-1.5 text-slate-300">
+                        <div key={cond.id} className="flex items-center gap-1.5 text-foreground">
                           {ci > 0 && <span className="text-emerald-500 font-bold text-[10px] uppercase">and</span>}
                           <span className="font-mono">{formatCondition(cond)}</span>
                         </div>

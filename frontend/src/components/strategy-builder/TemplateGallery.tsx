@@ -67,19 +67,24 @@ export default function TemplateGallery({ onModeSwitch }: TemplateGalleryProps) 
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setIsLoading(true);
+      setLoadError(null);
       try {
         const data = await apiFetch<{ templates: TemplateData[] }>(
           "/api/strategies/templates",
           { cacheTtlMs: 30_000 },
         );
         if (!cancelled) setTemplates(data.templates ?? []);
-      } catch {
-        if (!cancelled) setTemplates([]);
+      } catch (err) {
+        if (!cancelled) {
+          setTemplates([]);
+          setLoadError(err instanceof Error ? err.message : "Failed to load templates");
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -198,7 +203,15 @@ export default function TemplateGallery({ onModeSwitch }: TemplateGalleryProps) 
 
       {/* Card grid */}
       <div className="flex-1 overflow-y-auto px-6 pb-6">
-        {isLoading ? (
+        {loadError ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-3">
+              <Search className="w-5 h-5 text-red-400" />
+            </div>
+            <p className="text-sm text-red-400">Failed to load templates</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">{loadError}</p>
+          </div>
+        ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="app-card p-5 animate-pulse space-y-3">
