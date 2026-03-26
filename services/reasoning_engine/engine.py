@@ -158,10 +158,14 @@ class ReasoningEngine:
         # Fetch open positions across all bots for correlation risk check
         open_positions = await self._get_open_positions_with_sector(bot.user_id)
 
+        # Count consecutive losses for this bot (losing streak guard)
+        consecutive_losses = await self._count_consecutive_losses(bot.id)
+
         # Soft guardrails
         soft = await check_soft_guardrails(
             vix=vix, events=events_dicts, symbol=symbol,
             ai_confidence=llm_result.get("confidence", 0.7),
+            consecutive_losses=consecutive_losses,
             override_level=override_level,
             open_positions=open_positions,
         )
@@ -174,6 +178,31 @@ class ReasoningEngine:
             override_level=override_level,
             events=events_dicts,
         )
+
+    async def _count_consecutive_losses(self, bot_id: str) -> int:
+        """Count how many of the bot's most recent closed trades are losses."""
+        from db.cerberus_models import CerberusTrade
+        try:
+            async with get_session() as session:
+                result = await session.execute(
+                    select(CerberusTrade.gross_pnl)
+                    .where(
+                        CerberusTrade.bot_id == bot_id,
+                        CerberusTrade.exit_ts.is_not(None),
+                    )
+                    .order_by(CerberusTrade.exit_ts.desc())
+                    .limit(10)
+                )
+                rows = result.all()
+            count = 0
+            for (pnl,) in rows:
+                if (pnl or 0) < 0:
+                    count += 1
+                else:
+                    break
+            return count
+        except Exception:
+            return 0
 
     async def _get_open_positions_with_sector(self, user_id: int) -> list[dict]:
         """Fetch open trades across all bots for this user, with sector info."""

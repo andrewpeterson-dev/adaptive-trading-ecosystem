@@ -8,8 +8,14 @@ import structlog
 from sqlalchemy import select, and_, func
 from db.database import get_session
 
+import time as _time
+
 logger = structlog.get_logger(__name__)
 VIX_THRESHOLDS = {"normal": (0, 18), "elevated": (18, 25), "high": (25, 40), "extreme": (40, float("inf"))}
+
+# SPY circuit breaker cache: (timestamp, change_pct)
+_spy_circuit_cache: Tuple[float, Optional[float]] = (0.0, None)
+_SPY_CIRCUIT_CACHE_TTL = 120  # 2 minutes
 
 def classify_vix(vix: float) -> str:
     for label, (lo, hi) in VIX_THRESHOLDS.items():
@@ -312,16 +318,24 @@ async def check_hard_blockers(vix=None, events=None, symbol="", portfolio_exposu
         result.reduce_size, result.drawdown_level = min(result.reduce_size, 0.5), DRAWDOWN_LEVEL_REDUCE
         result.reasons.append(f"Daily loss {daily_pnl_pct:.1f}% exceeds {thresholds['drawdown_reduce_pct']:.1f}%")
     loop = asyncio.get_running_loop()
-    try:
-        import yfinance as yf
-        hist = await loop.run_in_executor(None, lambda: yf.Ticker("SPY").history(period="1d", interval="1m"))
-        if len(hist) >= 2:
-            chg = ((hist["Close"].iloc[-1] - hist["Open"].iloc[0]) / hist["Open"].iloc[0]) * 100
-            if chg < -7.0:
-                result.blocked = True
-                result.reasons.append(f"Circuit breaker: SPY down {abs(chg):.1f}%")
-    except Exception as exc:
-        logger.warning("circuit_breaker_check_failed", symbol="SPY", error=str(exc))
+    # SPY circuit breaker — cached to avoid redundant API calls across bots
+    global _spy_circuit_cache
+    now = _time.time()
+    if now - _spy_circuit_cache[0] < _SPY_CIRCUIT_CACHE_TTL and _spy_circuit_cache[1] is not None:
+        spy_chg = _spy_circuit_cache[1]
+    else:
+        spy_chg = None
+        try:
+            import yfinance as yf
+            hist = await loop.run_in_executor(None, lambda: yf.Ticker("SPY").history(period="1d", interval="1m"))
+            if len(hist) >= 2:
+                spy_chg = ((hist["Close"].iloc[-1] - hist["Open"].iloc[0]) / hist["Open"].iloc[0]) * 100
+            _spy_circuit_cache = (now, spy_chg)
+        except Exception as exc:
+            logger.warning("circuit_breaker_check_failed", symbol="SPY", error=str(exc))
+    if spy_chg is not None and spy_chg < -7.0:
+        result.blocked = True
+        result.reasons.append(f"Circuit breaker: SPY down {abs(spy_chg):.1f}%")
     try:
         import yfinance as yf
         info, full = await loop.run_in_executor(None, lambda s=symbol: (yf.Ticker(s).fast_info, yf.Ticker(s).info or {}))
