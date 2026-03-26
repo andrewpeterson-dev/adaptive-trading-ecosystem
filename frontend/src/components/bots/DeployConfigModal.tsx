@@ -498,6 +498,7 @@ export function DeployConfigModal({
                           type="checkbox"
                           checked={dataSources.includes(src.value)}
                           onChange={(e) => {
+                            if (!e.target.checked && dataSources.length <= 1) return;
                             setDataSources(
                               e.target.checked
                                 ? [...dataSources, src.value]

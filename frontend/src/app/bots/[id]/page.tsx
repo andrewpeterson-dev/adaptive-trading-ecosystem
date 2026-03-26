@@ -215,7 +215,7 @@ export default function BotDetailPage() {
           </div>
           <div className="text-right shrink-0">
             <div className={`text-2xl font-bold font-mono ${totalPnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-              {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(2)}
+              {totalPnl >= 0 ? "+$" : "-$"}{Math.abs(totalPnl).toFixed(2)}
             </div>
             <div className="text-[10px] text-muted-foreground">
               {(perf.open_count ?? 0)} open &middot; {(perf.closed_count ?? 0)} closed
