@@ -90,7 +90,7 @@ export function SentimentPanel() {
           <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-muted/30 border border-dashed border-border/50 mx-auto">
             <Newspaper className="h-4 w-4 text-muted-foreground/40" />
           </div>
-          <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+          <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
             Market sentiment data updates every 60 seconds during market hours. Check back when markets are open.
           </p>
         </div>
@@ -112,7 +112,6 @@ export function SentimentPanel() {
           {/* Per-Ticker Sentiment */}
           <div className="space-y-2">
             {Object.entries(report.ticker_sentiments ?? {}).map(([ticker, data]) => {
-              const pctPos = ((data.score + 5) / 10) * 100;
               return (
                 <div key={ticker} className="flex items-center gap-2">
                   <span className="w-12 text-xs font-mono font-medium text-right shrink-0">
