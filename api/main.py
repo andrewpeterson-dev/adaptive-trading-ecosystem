@@ -241,9 +241,14 @@ app.add_middleware(JWTAuthMiddleware)
 
 _settings = get_settings()
 _cors_origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
+# Allow Vercel preview deployments if any configured origin is on vercel.app
+_vercel_regex = None
+if any("vercel.app" in o for o in _cors_origins):
+    _vercel_regex = r"https://.*\.vercel\.app"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=_vercel_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
