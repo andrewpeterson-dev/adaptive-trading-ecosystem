@@ -99,7 +99,15 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     } catch (err) {
       console.error("Aggressiveness update failed:", err);
       setAggressiveness(prev);
-      setError(err instanceof ApiError && err.status === 401 ? "Session expired — please log in again" : "Save failed");
+      setError(
+        err instanceof ApiError
+          ? err.status === 401
+            ? "Session expired — please log in again"
+            : err.message || `Save failed (${err.status})`
+          : err instanceof Error
+            ? err.message
+            : "Save failed"
+      );
     } finally {
       setAggSaving(false);
     }
@@ -130,7 +138,15 @@ export function CapitalPanel({ detail, onDetailUpdate }: CapitalPanelProps) {
     } catch (err) {
       console.error("Override level update failed:", err);
       setOverrideLevel(prev);
-      setError(err instanceof ApiError && err.status === 401 ? "Session expired — please log in again" : "Save failed");
+      setError(
+        err instanceof ApiError
+          ? err.status === 401
+            ? "Session expired — please log in again"
+            : err.message || `Save failed (${err.status})`
+          : err instanceof Error
+            ? err.message
+            : "Save failed"
+      );
     } finally {
       setOverrideSaving(false);
     }
