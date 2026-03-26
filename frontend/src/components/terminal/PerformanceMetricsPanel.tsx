@@ -20,7 +20,7 @@ function Metric({ label, value, color, show = true }: { label: string; value: st
 }
 
 export function PerformanceMetricsPanel({ detail }: PerformanceMetricsPanelProps) {
-  const stats = computeBotStats(detail, 100000);
+  const stats = computeBotStats(detail, detail.allocatedCapital ?? 100000);
   const perf = detail.performance;
   const unrealized = perf.unrealized_pnl ?? 0;
   const realized = perf.realized_pnl ?? 0;
@@ -32,7 +32,7 @@ export function PerformanceMetricsPanel({ detail }: PerformanceMetricsPanelProps
   return (
     <TerminalPanel title="Performance" icon={<BarChart3 className="h-3.5 w-3.5" />} accent="text-emerald-400">
       <div className="grid grid-cols-2 gap-2">
-        <Metric label="Total P&L" value={`$${totalPnl.toFixed(2)}`} color={totalPnl >= 0 ? "text-emerald-400" : "text-rose-400"} />
+        <Metric label="Total P&L" value={`${totalPnl >= 0 ? "+$" : "-$"}${Math.abs(totalPnl).toFixed(2)}`} color={totalPnl >= 0 ? "text-emerald-400" : "text-rose-400"} />
         <Metric label="Win Rate" value={hasClosed ? formatPercent(stats.winRatePct, 1, false) : "N/A"} color={hasClosed ? (stats.winRatePct >= 50 ? "text-emerald-400" : "text-rose-400") : "text-muted-foreground"} />
         <Metric label="Open" value={String(openCount)} />
         <Metric label="Total Trades" value={String(stats.tradeCount)} />
